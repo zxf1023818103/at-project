@@ -1,0 +1,3 @@
+[submodule "ameba-rtos"]
+	path = ameba-rtos
+	url = https://github.com/zxf1023818103/ameba-rtos.git
