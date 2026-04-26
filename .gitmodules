@@ -12,3 +12,7 @@
 [submodule "platform/ameba-rtos-d"]
 	path = platform/ameba-rtos-d
 	url = https://github.com/zxf1023818103/ameba-rtos-d.git
+[submodule "platform/bouffalo_sdk"]
+	path = platform/bouffalo_sdk
+	url = https://github.com/zxf1023818103/bouffalo_sdk.git
+	branch = at
