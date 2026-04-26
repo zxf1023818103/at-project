@@ -9,3 +9,6 @@
 [submodule "platform/toolchain_gcc_t-head_linux"]
 	path = platform/toolchain_gcc_t-head_linux
 	url = https://github.com/bouffalolab/toolchain_gcc_t-head_linux.git
+[submodule "platform/ameba-rtos-d"]
+	path = platform/ameba-rtos-d
+	url = https://github.com/zxf1023818103/ameba-rtos-d.git

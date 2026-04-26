@@ -365,6 +365,8 @@ void __throw_bad_function_call() { my_assert("__throw_bad_function_call" == null
 } // namespace std
 #endif // defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616
 
+// platform_stdlib_rtl8721d.h defines rand→Rand which breaks std::rand() in C++ headers
+#undef rand
 #include <memory>
 #include <cstdint>
 #include <cstdio>
