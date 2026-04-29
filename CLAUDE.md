@@ -55,3 +55,29 @@ Preprocessor symbols that identify platforms:
 - Ameba newer: `CONFIG_PLATFORM_AMEBALITE`, `CONFIG_PLATFORM_AMEBASMART`, `CONFIG_AMEBADPLUS`, `CONFIG_AMEBAGREEN2`
 
 `src/bouffalo.mk` sets BL602-SDK component flags and per-chip `CPPFLAGS` macros for the BL602 Make build.
+
+## BL602 Hardware / Debug Setup
+
+- **JLink probe**: S/N `601023163`, JTAG mode, identifies as RISC-V (`-device RISC-V`; `device BL602` is rejected by JLink V9.38a). `JTAGConf 0 0` for `-noir`-style chain (matches `start-gdb-server` Make target).
+- **UART0 console**: COM64 on host @ **2 Mbps**, 8N1.
+- **UART1 (test/secondary)**: GPIO4 TX / GPIO3 RX, COM16 on host @ 115200, 8N1.
+- **Reset via nTRST** (no power cycle): JLink commander `ClrTRST; Sleep 100; SetTRST` — does not require/leave the CPU halted.
+
+## BL602 SDK Pitfalls (learned the hard way)
+
+### ROM/RAM FreeRTOS StreamBuffer struct mismatch
+`platform/BL602_SDK/components/platform/soc/bl602/bl602/evb/ld/flash_rom.ld` `PROVIDE`s many FreeRTOS symbols at fixed BL602 boot-ROM addresses (e.g. `xStreamBufferSend = 0x210167a8`, `xStreamBufferReceive = 0x210169ae`). The ROM was compiled against an older FreeRTOS whose `StreamBuffer_t` field layout differs from the SDK's current `freertos_riscv_ram` source. Mixing them — buffer created by RAM `xStreamBufferGenericCreate`, written by ROM `xStreamBufferSend`, drained by RAM `xStreamBufferReceiveFromISR` — yields field-offset-mismatched reads, garbage pointers, and a misaligned-load that secondary-faults inside the misaligned trap handler (`mcause=5` Load access fault, `mepc` inside `misaligned_load_trap`). Symptom: chip crashes/reboots in a tight loop the first time the StreamBuffer is used.
+
+**Fix in `project/bl602/Makefile`**: wrap the FreeRTOS RAM library with `--whole-archive` so its strong symbols beat the ROM PROVIDEs:
+```make
+LDFLAGS := $(subst -lfreertos_riscv_ram,--whole-archive -lfreertos_riscv_ram --no-whole-archive,$(LDFLAGS))
+```
+Targeted alternatives (link only `stream_buffer.o` directly, or `--allow-multiple-definition`) snowball: `stream_buffer.o`'s undefined refs (`xTaskNotifyWait`, `vTaskSuspendAll`, `xTaskResumeAll`, `vTaskSetTimeOutState`, `xTaskCheckForTimeOut`, `xTaskNotifyStateClear`, `vEnvironmentCall`) are not in the ROM PROVIDE list, so they pull `tasks.o` from the archive, whose strong defs of `vTaskDelay`/`xTaskCreate`/etc. then beat the ROM PROVIDEs and produce a half-RAM-half-ROM FreeRTOS that diverges and runs off into the weeds (PC ends up in random non-code addresses). Don't go halfway — `--whole-archive` is the consistent choice.
+
+### `bl_uart_init()` does not install the UART IRQ vector
+`bl_uart_init()` in `components/platform/hosal/bl602_hal/bl_uart.c` masks all UART interrupts and does **not** call `bl_irq_register(UARTx_IRQn, UARTx_IRQHandler)`. Calling `bl_uart_int_tx_enable()` afterwards only sets the TX FIFO interrupt enable bit on the UART peripheral; the IRQ controller has no handler to dispatch to, so the TX interrupt is silently dropped, the consumer ISR never runs, and any task blocked on `xStreamBufferSend` waits forever (visible via JLink as the AppTask suspended in `xTaskNotifyWait`).
+
+To use UART interrupts (TX or RX notify callbacks), call `bl_uart_int_enable(id)` once after `bl_uart_init()` — that registers `UARTx_IRQHandler`. If only TX is wanted, follow with `bl_uart_int_rx_disable(id)` / `bl_uart_int_tx_disable(id)` to clear the masks; xsputn-style code should manage TX enable on its own.
+
+### `bl_uart_init()` first-call clock-divider switch corrupts in-flight UART bytes
+`bl_uart_init()` guards a `static uint8_t uart_clk_init` and on first call runs `GLB_Set_UART_CLK(1, HBN_UART_CLK_160M, 3)`, which reprograms the **shared** UART clock divider for both UART0 and UART1. If UART0 (the console) has bytes in its TX FIFO/shifter at that moment, the bit clock mid-byte changes and the receiver decodes garbage for several bytes (typical symptom: a few characters in a `printf` banner come out as `??`). Do `bl_uart_init()` *before* any `printf` you care about, or otherwise drain the console first.
