@@ -7,6 +7,12 @@
 #include "BluetoothTask.h"
 #include "BluetoothField.h"
 #include "MacAddress.h"
+#if defined BL602 || defined BL702
+#include "Bl602UartStreamBuf.h"
+extern "C" {
+#include <bl_uart.h>
+}
+#endif // defined BL602 || defined BL702
 
 namespace at {
 
@@ -269,5 +275,37 @@ void testBluetoothTask1() {
     }
     getLogger()->logFormat(Logger::INFO, "========= Bluetooth Task Test 1 Finished =========");
 }
+
+#if defined BL602 || defined BL702
+void testBl602UartOutStream1() {
+    constexpr uint8_t  kUartId = 1;
+    constexpr uint8_t  kTxPin  = 4;
+    constexpr uint8_t  kRxPin  = 3;
+    constexpr uint32_t kBaud   = 115200;
+
+    printf("\n%s\n", "========= Bl602UartOutStream Test 1 Started =========");
+    {
+        bl_uart_init(kUartId, kTxPin, kRxPin, 255, 255, kBaud);
+        bl_uart_int_enable(kUartId);
+
+        Bl602UartOutStream uart(kUartId);
+        uart << "Hello from Bl602UartOutStream\r\n";
+        uart << "decimal=" << 12345 << " hex=0x" << hex << setw(4) << setfill('0') << 0xDEAD << "\r\n";
+        uart.flush();
+
+        for (int i = 0; i < 16; ++i) {
+            uart << "line " << i << " padded=" << setw(3) << setfill(' ') << (i * 7) << "\r\n";
+        }
+        uart.flush();
+
+        string burst(200, 'A');
+        uart << "burst: " << burst << "\r\n";
+        uart.flush();
+
+        ::vTaskDelay(pdMS_TO_TICKS(500));
+    }
+    printf("\n%s\n", "========= Bl602UartOutStream Test 1 Finished =========");
+}
+#endif // defined BL602 || defined BL702
 
 }  // namespace at
