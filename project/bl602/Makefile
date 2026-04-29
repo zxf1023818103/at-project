@@ -77,6 +77,13 @@ ifeq ($(CONFIG_BLECONTROLLER_LIB),all)
 LDFLAGS := $(filter-out $(addprefix -l$(BLECONTROLLER_LIB_PREFIX), $(filter-out $(BLECONTROLLER_LIB_DEFAULT), $(BLECONTROLLER_LIBS))), $(LDFLAGS))
 endif
 
+# 用 --whole-archive 整体拉入 libfreertos_riscv_ram.a，让 RAM 版本的强符号
+# 覆盖 flash_rom.ld 中 PROVIDE 的 ROM 符号。
+# 起因：ROM/RAM 的 StreamBuffer_t 结构布局不一致，混用 ROM xStreamBufferSend
+# 与 RAM xStreamBufferReceiveFromISR/Create 会读错字段、产生非法指针、
+# 触发 misaligned/load access fault。整体切到 RAM 版以保持内部布局一致。
+LDFLAGS := $(subst -lfreertos_riscv_ram,--whole-archive -lfreertos_riscv_ram --no-whole-archive,$(LDFLAGS))
+
 CPPFLAGS += -DMBEDTLS_CIPHER_MODE_CFB
 
 clean:
@@ -128,3 +135,12 @@ flash_bin: all_binaries
 	@md5sum $(BUILD_DIR_BASE)/whole_flash_data.bin
 
 .DEFAULT_GOAL := flash_bin
+
+flash: flash_bin
+	@powershell.exe -NoProfile -WorkingDirectory "C:\\MCU_Tools\\bl602_flash_download_tool" -Command ".\\bflb_iot_tool.exe --chipname $(CHIP) --firmware //wsl.localhost/Ubuntu-24.04$(realpath $(BUILD_DIR_BASE)/whole_flash_data.bin) --interface JLink --single --port 601023163"
+
+start-gdb-server:
+	@powershell.exe -NoProfile -WorkingDirectory "C:\\Program Files\\SEGGER\\JLink_V938a" -Command ".\\JLinkGDBServerCL.exe -select USB -device RISC-V -endian little -if JTAG -speed auto -noir -noLocalhostOnly -nologtofile -port 3333 -SWOPort 2332 -TelnetPort 2333"
+
+gdb:
+	$(CONFIG_TOOLPREFIX)gdb --init-command=$(BL60X_SDK_PATH)/tools/debug/602/602_gdb.init $(BUILD_DIR_BASE)/at.elf 

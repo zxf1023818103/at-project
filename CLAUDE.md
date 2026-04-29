@@ -22,6 +22,8 @@ Platform SDKs are managed as git submodules under `platform/`. Run `git submodul
 - Build: `cd project/bl602 && make`
 - Output: `project/bl602/build_out/whole_flash_data.bin`
 - Config: `project/bl602/proj_config.mk`
+- Flash: `cd project/bl602 && make -j flash`
+- Debug: `cd project/bl602 && make start-gdb-server`
 
 ### Realtek Ameba D (RTL8721D / RTL8710C)
 - SDK: `platform/ameba-rtos-d` (Make, dual-core: KM0 LP + KM4 HP)

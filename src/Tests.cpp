@@ -283,11 +283,12 @@ void testBl602UartOutStream1() {
     constexpr uint8_t  kRxPin  = 3;
     constexpr uint32_t kBaud   = 115200;
 
+    // 在打印 banner 之前先 init，避免 bl_uart_init() 首次调用切换 UART 时钟
+    // 分频时打断 UART0 上 banner 字节的飞行，导致 banner 出现乱码。
+    bl_uart_init(kUartId, kTxPin, kRxPin, 255, 255, kBaud);
+
     printf("\n%s\n", "========= Bl602UartOutStream Test 1 Started =========");
     {
-        bl_uart_init(kUartId, kTxPin, kRxPin, 255, 255, kBaud);
-        bl_uart_int_enable(kUartId);
-
         Bl602UartOutStream uart(kUartId);
         uart << "Hello from Bl602UartOutStream\r\n";
         uart << "decimal=" << 12345 << " hex=0x" << hex << setw(4) << setfill('0') << 0xDEAD << "\r\n";

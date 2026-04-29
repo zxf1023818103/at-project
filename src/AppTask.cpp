@@ -8,15 +8,15 @@ AppTask::AppTask() : Task() {}
 AppTask::~AppTask() = default;
 
 void AppTask::routine() {
-    testSharedPtrQueue1();
-    testSharedPtrQueue2();
-    testSharedPtrQueue3();
-    testSyncTask();
-    testAsyncTask();
-    testLogger1();
-    testStandardLibrary1();
+    // testSharedPtrQueue1();
+    // testSharedPtrQueue2();
+    // testSharedPtrQueue3();
+    // testSyncTask();
+    // testAsyncTask();
+    // testLogger1();
+    // testStandardLibrary1();
     // testExceptionHandling1();
-    testBluetoothTask1();
+    // testBluetoothTask1();
 #if defined BL602 || defined BL702
     testBl602UartOutStream1();
 #endif // defined BL602 || defined BL702

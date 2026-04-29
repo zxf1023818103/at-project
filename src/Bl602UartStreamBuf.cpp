@@ -11,6 +11,11 @@ Bl602UartStreamBuf::Bl602UartStreamBuf(uint8_t uartId)
     : m_id(uartId), m_stream(xStreamBufferCreate(kStreamBufSize, 1)) {
     setp(m_putBuf, m_putBuf + kPutBufSize);
     bl_uart_int_tx_notify_register(m_id, txIsr, this);
+    // bl_uart_init() 不安装 UART IRQ 向量；调用 bl_uart_int_enable() 注册
+    // UARTx_IRQHandler 并使能中断分发，再关掉 RX/TX 掩码，由 xsputn 按需打开 TX。
+    bl_uart_int_enable(m_id);
+    bl_uart_int_rx_disable(m_id);
+    bl_uart_int_tx_disable(m_id);
 }
 
 Bl602UartStreamBuf::~Bl602UartStreamBuf() {
