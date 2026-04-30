@@ -24,6 +24,7 @@ jobs:
             display: BL602
             submodules: |
               platform/BL602_SDK
+              platform/bouffalo_sdk
               platform/toolchain_gcc_t-head_linux
             project_dir: project/bl602
             build_cmd: make
@@ -143,7 +144,11 @@ jobs:
           # the venv. cmake then runs axf2bin.py with the system python3 and
           # fails on `Miss module: json5`. Install requirements to system
           # python so any python interpreter cmake picks finds them.
-          sudo pip3 install --break-system-packages -r platform/ameba-rtos/tools/requirements.txt
+          # --ignore-installed: requirements.txt pins cryptography==3.4.8 but
+          # the runner has cryptography 41.0.7 from apt; pip can't uninstall
+          # it (no RECORD file) so we just shadow it.
+          sudo pip3 install --break-system-packages --ignore-installed \
+            -r platform/ameba-rtos/tools/requirements.txt
 
       - name: Cache RTK toolchain (Ameba newer)
         if: matrix.id == 'amebadplus' || matrix.id == 'amebagreen2'
