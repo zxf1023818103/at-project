@@ -28,18 +28,15 @@ jobs:
               platform/toolchain_gcc_t-head_linux
             project_dir: project/bl602
             build_cmd: make
-            artifact_globs: |
-              project/bl602/build_out/whole_flash_data.bin
-              project/bl602/build_out/whole_img.bin
-              project/bl602/build_out/whole_img_boot2.bin
-              project/bl602/build_out/firmware.bin
+            merged: project/bl602/build_out/whole_flash_data.bin
+            raw: |
               project/bl602/build_out/at.bin
-              project/bl602/build_out/at.flash.bin
-              project/bl602/build_out/bootinfo.bin
-              project/bl602/build_out/bootinfo_boot2.bin
-              project/bl602/build_out/bootinfo_pt.bin
-              project/bl602/build_out/FW_OTA.bin
+              platform/bouffalo_sdk/tools/bflb_tools/bouffalo_flash_cube/chips/bl602/boot2/boot2.bin
+              platform/bouffalo_sdk/tools/bflb_tools/bouffalo_flash_cube/chips/bl602/partition/partition_cfg.toml
+              platform/bouffalo_sdk/tools/bflb_tools/bouffalo_flash_cube/chips/bl602/device_tree/bl_factory_params.dts
+            ota: |
               project/bl602/build_out/FW_OTA.bin.xz
+            elf: |
               project/bl602/build_out/at.elf
 
           - id: bl616
@@ -49,22 +46,15 @@ jobs:
               platform/toolchain_gcc_t-head_linux
             project_dir: project/bl616
             build_cmd: make
-            artifact_globs: |
-              project/bl616/build/build_out/whole_flash_data.bin
-              project/bl616/build/build_out/whole_img.bin
-              project/bl616/build/build_out/whole_img_boot2.bin
-              project/bl616/build/build_out/firmware.bin
+            merged: project/bl616/build/build_out/whole_flash_data.bin
+            raw: |
               project/bl616/build/build_out/at_bl616.bin
-              project/bl616/build/build_out/img.bin
-              project/bl616/build/build_out/img_boot2.bin
-              project/bl616/build/build_out/img_pt.bin
-              project/bl616/build/build_out/boot2.bin
-              project/bl616/build/build_out/partition.bin
-              project/bl616/build/build_out/bootinfo.bin
-              project/bl616/build/build_out/bootinfo_boot2.bin
-              project/bl616/build/build_out/bootinfo_pt.bin
-              project/bl616/build/build_out/FW_OTA.bin
+              platform/bouffalo_sdk/tools/bflb_tools/bouffalo_flash_cube/chips/bl616/boot2/boot2.bin
+              platform/bouffalo_sdk/tools/bflb_tools/bouffalo_flash_cube/chips/bl616/partition/partition_cfg.toml
+              platform/bouffalo_sdk/tools/bflb_tools/bouffalo_flash_cube/chips/bl616/device_tree/bl_factory_params.dts
+            ota: |
               project/bl616/build/build_out/FW_OTA.bin.xz
+            elf: |
               project/bl616/build/build_out/at_bl616.elf
 
           - id: amebad
@@ -73,14 +63,16 @@ jobs:
               platform/ameba-rtos-d
             project_dir: project/amebad
             build_cmd: make
-            artifact_globs: |
-              project/amebad/out/Image_All.bin
+            merged: project/amebad/out/Image_All.bin
+            raw: |
               project/amebad/out/km0_boot_all.bin
               project/amebad/out/km4_boot_all.bin
               project/amebad/out/km0_km4_image2.bin
+            ota: |
               project/amebad/out/OTA_All.bin
-              platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_lp/asdk/image/target_img2.axf
-              platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_hp/asdk/image/target_img2.axf
+            elf: |
+              platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_lp/asdk/image/target_img2.axf=>target_img2_lp.axf
+              platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_hp/asdk/image/target_img2.axf=>target_img2_hp.axf
 
           - id: amebadplus
             display: Ameba Dplus (RTL8711Dx)
@@ -88,13 +80,15 @@ jobs:
               platform/ameba-rtos
             project_dir: project/ameba
             build_cmd: bash -lc "source env.sh && make amebadplus"
-            artifact_globs: |
-              project/ameba/build_RTL8711Dx/Image_All.bin
+            merged: project/ameba/build_RTL8711Dx/Image_All.bin
+            raw: |
               project/ameba/build_RTL8711Dx/km4_boot_all.bin
               project/ameba/build_RTL8711Dx/km0_km4_app.bin
+            ota: |
               project/ameba/build_RTL8711Dx/ota_all.bin
-              project/ameba/build_RTL8711Dx/build/project_km0/image/target_img2.axf
-              project/ameba/build_RTL8711Dx/build/project_km4/image/target_img2.axf
+            elf: |
+              project/ameba/build_RTL8711Dx/build/project_km0/image/target_img2.axf=>target_img2_km0.axf
+              project/ameba/build_RTL8711Dx/build/project_km4/image/target_img2.axf=>target_img2_km4.axf
 
           - id: amebagreen2
             display: Ameba Green 2 (RTL8711F)
@@ -102,13 +96,15 @@ jobs:
               platform/ameba-rtos
             project_dir: project/ameba
             build_cmd: bash -lc "source env.sh && make amebagreen2"
-            artifact_globs: |
-              project/ameba/build_RTL8711F/Image_All.bin
+            merged: project/ameba/build_RTL8711F/Image_All.bin
+            raw: |
               project/ameba/build_RTL8711F/amebagreen2_boot.bin
               project/ameba/build_RTL8711F/amebagreen2_app.bin
+            ota: |
               project/ameba/build_RTL8711F/ota_all.bin
-              project/ameba/build_RTL8711F/build/project_km4ns/image/target_img2.axf
-              project/ameba/build_RTL8711F/build/project_km4tz/image/target_img2.axf
+            elf: |
+              project/ameba/build_RTL8711F/build/project_km4ns/image/target_img2.axf=>target_img2_km4ns.axf
+              project/ameba/build_RTL8711F/build/project_km4tz/image/target_img2.axf=>target_img2_km4tz.axf
 
     steps:
       - name: Checkout (no submodules)
@@ -164,6 +160,16 @@ jobs:
           path: platform/ameba-rtos-d/project/realtek_amebaD_va0_example/toolchain
           key: asdk-amebad-${{ hashFiles('platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_hp/asdk/Makefile.include.gen') }}
 
+      - name: Compute artifact name
+        id: name
+        run: |
+          # at-<id>-<branch>-<sha7>; sanitize "/" in branch (e.g. release/x → release_x).
+          ref="${GITHUB_REF_NAME//\//_}"
+          short="${GITHUB_SHA:0:7}"
+          tag="at-${{ matrix.id }}-${ref}-${short}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Artifact tag: $tag"
+
       - name: Build
         run: |
           set -e
@@ -172,32 +178,71 @@ jobs:
 
       - name: Stage artifact files
         run: |
-          set -e
-          STAGE="$RUNNER_TEMP/at-${{ matrix.id }}"
-          mkdir -p "$STAGE"
-          missing=0
-          while IFS= read -r f; do
-            [ -z "$f" ] && continue
-            if compgen -G "$f" > /dev/null; then
-              for m in $f; do
-                cp -v --parents "$m" "$STAGE/" 2>/dev/null || cp -v "$m" "$STAGE/"
-              done
+          set -euo pipefail
+          STAGE="$RUNNER_TEMP/${{ steps.name.outputs.tag }}"
+          mkdir -p "$STAGE/raw"
+
+          # Copy "src=>dest" or "src" into a directory, flattening to basename
+          # (or the override name) — never preserves the source's path.
+          stage_into() {
+            local dest_dir="$1"
+            local entry="$2"
+            local src dst
+            if [[ "$entry" == *"=>"* ]]; then
+              src="${entry%%=>*}"
+              dst="${entry##*=>}"
             else
-              echo "::warning::missing artifact path: $f"
-              missing=$((missing + 1))
+              src="$entry"
+              dst="$(basename "$entry")"
             fi
+            if [ ! -e "$src" ]; then
+              echo "::warning::missing artifact: $src"
+              return 0
+            fi
+            cp -v "$src" "$dest_dir/$dst"
+          }
+
+          # Merged firmware → root, plus its MD5 next to it.
+          merged='${{ matrix.merged }}'
+          if [ -e "$merged" ]; then
+            base="$(basename "$merged")"
+            cp -v "$merged" "$STAGE/$base"
+            ( cd "$STAGE" && md5sum "$base" > "$base.md5" )
+            cat "$STAGE/$base.md5"
+          else
+            echo "::error::merged firmware missing: $merged"
+            exit 1
+          fi
+
+          # OTA + ELF/AXF → root.
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            stage_into "$STAGE" "$line"
           done <<'EOF'
-          ${{ matrix.artifact_globs }}
+          ${{ matrix.ota }}
+          ${{ matrix.elf }}
           EOF
-          echo "$missing artifact paths missing (warnings above)"
-          ls -lR "$STAGE"
-          tar -czf "$RUNNER_TEMP/at-${{ matrix.id }}.tar.gz" -C "$RUNNER_TEMP" "at-${{ matrix.id }}"
+
+          # Raw firmware → raw/.
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            stage_into "$STAGE/raw" "$line"
+          done <<'EOF'
+          ${{ matrix.raw }}
+          EOF
+
+          echo "::group::Tarball contents"
+          ( cd "$RUNNER_TEMP" && find "${{ steps.name.outputs.tag }}" -type f | sort )
+          echo "::endgroup::"
+
+          tar -czf "$RUNNER_TEMP/${{ steps.name.outputs.tag }}.tar.gz" \
+            -C "$RUNNER_TEMP" "${{ steps.name.outputs.tag }}"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: at-${{ matrix.id }}
-          path: ${{ runner.temp }}/at-${{ matrix.id }}.tar.gz
+          name: ${{ steps.name.outputs.tag }}
+          path: ${{ runner.temp }}/${{ steps.name.outputs.tag }}.tar.gz
           if-no-files-found: error
           retention-days: 30
 
@@ -226,16 +271,12 @@ jobs:
           body: |
             Auto-built from `${{ github.ref_name }}` @ `${{ github.sha }}`.
 
-            Artifacts:
-            - `at-bl602.tar.gz` — Bouffalo BL602
-            - `at-bl616.tar.gz` — Bouffalo BL616 / BL618
-            - `at-amebad.tar.gz` — Realtek Ameba D (RTL8721D / RTL8710C)
-            - `at-amebadplus.tar.gz` — Realtek Ameba Dplus (RTL8711Dx)
-            - `at-amebagreen2.tar.gz` — Realtek Ameba Green 2 (RTL8711F)
-
-            Each tarball contains: 合成固件 (Image_All.bin / whole_flash_data.bin),
-            原始固件 (用于合成的 bin), OTA 固件 (FW_OTA.xz / OTA_All.bin / ota_all.bin),
-            ELF / AXF 文件.
+            每个 tarball 内布局：
+            - 根目录：合成固件（`Image_All.bin` / `whole_flash_data.bin`）+ 同名
+              `*.md5`、OTA（`FW_OTA.bin.xz` / `OTA_All.bin` / `ota_all.bin`）、
+              ELF / AXF。
+            - `raw/` 子目录：用于合成的原始 bin，以及 BL602 / BL616 还附带
+              `boot2.bin`、`partition_cfg.toml`、`bl_factory_params.dts`。
           prerelease: true
           files: release/*.tar.gz
         env:
