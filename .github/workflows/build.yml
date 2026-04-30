@@ -180,7 +180,7 @@ jobs:
         run: |
           set -euo pipefail
           STAGE="$RUNNER_TEMP/${{ steps.name.outputs.tag }}"
-          mkdir -p "$STAGE/raw"
+          mkdir -p "$STAGE/raw" "$STAGE/elf"
 
           # Copy "src=>dest" or "src" into a directory, flattening to basename
           # (or the override name) — never preserves the source's path.
@@ -214,21 +214,21 @@ jobs:
             exit 1
           fi
 
-          # OTA + ELF/AXF → root.
+          # ELF/AXF → elf/.
           while IFS= read -r line; do
             [ -z "$line" ] && continue
-            stage_into "$STAGE" "$line"
+            stage_into "$STAGE/elf" "$line"
           done <<'EOF'
-          ${{ matrix.ota }}
           ${{ matrix.elf }}
           EOF
 
-          # Raw firmware → raw/.
+          # Raw firmware + OTA → raw/.
           while IFS= read -r line; do
             [ -z "$line" ] && continue
             stage_into "$STAGE/raw" "$line"
           done <<'EOF'
           ${{ matrix.raw }}
+          ${{ matrix.ota }}
           EOF
 
           echo "::group::Tarball contents"
@@ -290,11 +290,12 @@ jobs:
             Auto-built from `${{ github.ref_name }}` @ `${{ github.sha }}`.
 
             每个 tarball 内布局：
-            - 根目录：合成固件（`Image_All.bin` / `whole_flash_data.bin`）+ 同名
-              `*.md5`、OTA（`FW_OTA.bin.xz` / `OTA_All.bin` / `ota_all.bin`）、
-              ELF / AXF。
-            - `raw/` 子目录：用于合成的原始 bin，以及 BL602 / BL616 还附带
+            - 根目录：合成固件（`Image_All.bin` / `whole_flash_data.bin`）+
+              同名 `*.md5`。
+            - `raw/` 子目录：用于合成的原始 bin、OTA（`FW_OTA.bin.xz` /
+              `OTA_All.bin` / `ota_all.bin`）；BL602 / BL616 还附带
               `boot2.bin`、`partition_cfg.toml`、`bl_factory_params.dts`。
+            - `elf/` 子目录：ELF / AXF（含调试符号）。
           prerelease: true
           files: release/*.tar.gz
         env:
