@@ -1,0 +1,236 @@
+name: build
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.display }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: bl602
+            display: BL602
+            submodules: |
+              platform/BL602_SDK
+              platform/toolchain_gcc_t-head_linux
+            project_dir: project/bl602
+            build_cmd: make
+            artifact_globs: |
+              project/bl602/build_out/whole_flash_data.bin
+              project/bl602/build_out/whole_img.bin
+              project/bl602/build_out/whole_img_boot2.bin
+              project/bl602/build_out/firmware.bin
+              project/bl602/build_out/at.bin
+              project/bl602/build_out/at.flash.bin
+              project/bl602/build_out/bootinfo.bin
+              project/bl602/build_out/bootinfo_boot2.bin
+              project/bl602/build_out/bootinfo_pt.bin
+              project/bl602/build_out/FW_OTA.bin
+              project/bl602/build_out/FW_OTA.bin.xz
+              project/bl602/build_out/at.elf
+
+          - id: bl616
+            display: BL616 / BL618
+            submodules: |
+              platform/bouffalo_sdk
+              platform/toolchain_gcc_t-head_linux
+            project_dir: project/bl616
+            build_cmd: make
+            artifact_globs: |
+              project/bl616/build/build_out/whole_flash_data.bin
+              project/bl616/build/build_out/whole_img.bin
+              project/bl616/build/build_out/whole_img_boot2.bin
+              project/bl616/build/build_out/firmware.bin
+              project/bl616/build/build_out/at_bl616.bin
+              project/bl616/build/build_out/img.bin
+              project/bl616/build/build_out/img_boot2.bin
+              project/bl616/build/build_out/img_pt.bin
+              project/bl616/build/build_out/boot2.bin
+              project/bl616/build/build_out/partition.bin
+              project/bl616/build/build_out/bootinfo.bin
+              project/bl616/build/build_out/bootinfo_boot2.bin
+              project/bl616/build/build_out/bootinfo_pt.bin
+              project/bl616/build/build_out/FW_OTA.bin
+              project/bl616/build/build_out/FW_OTA.bin.xz
+              project/bl616/build/build_out/at_bl616.elf
+
+          - id: amebad
+            display: Ameba D (RTL8721D / RTL8710C)
+            submodules: |
+              platform/ameba-rtos-d
+            project_dir: project/amebad
+            build_cmd: make
+            artifact_globs: |
+              project/amebad/out/Image_All.bin
+              project/amebad/out/km0_boot_all.bin
+              project/amebad/out/km4_boot_all.bin
+              project/amebad/out/km0_km4_image2.bin
+              project/amebad/out/OTA_All.bin
+              platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_lp/asdk/image/target_img2.axf
+              platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_hp/asdk/image/target_img2.axf
+
+          - id: amebadplus
+            display: Ameba Dplus (RTL8711Dx)
+            submodules: |
+              platform/ameba-rtos
+            project_dir: project/ameba
+            build_cmd: bash -lc "source env.sh && make amebadplus"
+            artifact_globs: |
+              project/ameba/build_RTL8711Dx/Image_All.bin
+              project/ameba/build_RTL8711Dx/km4_boot_all.bin
+              project/ameba/build_RTL8711Dx/km0_km4_app.bin
+              project/ameba/build_RTL8711Dx/ota_all.bin
+              project/ameba/build_RTL8711Dx/build/project_km0/image/target_img2.axf
+              project/ameba/build_RTL8711Dx/build/project_km4/image/target_img2.axf
+
+          - id: amebagreen2
+            display: Ameba Green 2 (RTL8711F)
+            submodules: |
+              platform/ameba-rtos
+            project_dir: project/ameba
+            build_cmd: bash -lc "source env.sh && make amebagreen2"
+            artifact_globs: |
+              project/ameba/build_RTL8711F/Image_All.bin
+              project/ameba/build_RTL8711F/amebagreen2_boot.bin
+              project/ameba/build_RTL8711F/amebagreen2_app.bin
+              project/ameba/build_RTL8711F/ota_all.bin
+              project/ameba/build_RTL8711F/build/project_km4ns/image/target_img2.axf
+              project/ameba/build_RTL8711F/build/project_km4tz/image/target_img2.axf
+
+    steps:
+      - name: Checkout (no submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Init required submodules
+        run: |
+          set -e
+          while IFS= read -r path; do
+            [ -z "$path" ] && continue
+            echo "::group::submodule update --init --recursive $path"
+            git submodule update --init --recursive --depth 1 "$path"
+            echo "::endgroup::"
+          done <<'EOF'
+          ${{ matrix.submodules }}
+          EOF
+
+      - name: Install host build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build python3 python3-pip python3-venv \
+            ragel xz-utils ccache gcc-multilib
+
+      - name: Install Python deps (Ameba newer)
+        if: matrix.id == 'amebadplus' || matrix.id == 'amebagreen2'
+        run: |
+          # env.sh creates a venv and pip-installs requirements on first source.
+          # Pre-create it here so the build step doesn't refetch on cache miss.
+          cd platform/ameba-rtos
+          python3 -m venv .venv
+          ./.venv/bin/pip install --upgrade pip
+          ./.venv/bin/pip install -r tools/requirements.txt
+
+      - name: Cache RTK toolchain (Ameba newer)
+        if: matrix.id == 'amebadplus' || matrix.id == 'amebagreen2'
+        uses: actions/cache@v4
+        with:
+          path: /opt/rtk-toolchain
+          key: rtk-toolchain-${{ hashFiles('platform/ameba-rtos/env.sh') }}
+
+      - name: Cache ASDK toolchain (Ameba D)
+        if: matrix.id == 'amebad'
+        uses: actions/cache@v4
+        with:
+          path: platform/ameba-rtos-d/project/realtek_amebaD_va0_example/toolchain
+          key: asdk-amebad-${{ hashFiles('platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_hp/asdk/Makefile.include.gen') }}
+
+      - name: Build
+        run: |
+          set -e
+          cd "${{ matrix.project_dir }}"
+          ${{ matrix.build_cmd }}
+
+      - name: Stage artifact files
+        run: |
+          set -e
+          STAGE="$RUNNER_TEMP/at-${{ matrix.id }}"
+          mkdir -p "$STAGE"
+          missing=0
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            if compgen -G "$f" > /dev/null; then
+              for m in $f; do
+                cp -v --parents "$m" "$STAGE/" 2>/dev/null || cp -v "$m" "$STAGE/"
+              done
+            else
+              echo "::warning::missing artifact path: $f"
+              missing=$((missing + 1))
+            fi
+          done <<'EOF'
+          ${{ matrix.artifact_globs }}
+          EOF
+          echo "$missing artifact paths missing (warnings above)"
+          ls -lR "$STAGE"
+          tar -czf "$RUNNER_TEMP/at-${{ matrix.id }}.tar.gz" -C "$RUNNER_TEMP" "at-${{ matrix.id }}"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: at-${{ matrix.id }}
+          path: ${{ runner.temp }}/at-${{ matrix.id }}.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Publish rolling release
+    needs: build
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Flatten tarballs
+        run: |
+          mkdir -p release
+          find dist -type f -name '*.tar.gz' -exec mv -t release {} +
+          ls -l release
+
+      - name: Publish/update rolling "latest" prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest build (${{ github.sha }})
+          body: |
+            Auto-built from `${{ github.ref_name }}` @ `${{ github.sha }}`.
+
+            Artifacts:
+            - `at-bl602.tar.gz` — Bouffalo BL602
+            - `at-bl616.tar.gz` — Bouffalo BL616 / BL618
+            - `at-amebad.tar.gz` — Realtek Ameba D (RTL8721D / RTL8710C)
+            - `at-amebadplus.tar.gz` — Realtek Ameba Dplus (RTL8711Dx)
+            - `at-amebagreen2.tar.gz` — Realtek Ameba Green 2 (RTL8711F)
+
+            Each tarball contains: 合成固件 (Image_All.bin / whole_flash_data.bin),
+            原始固件 (用于合成的 bin), OTA 固件 (FW_OTA.xz / OTA_All.bin / ota_all.bin),
+            ELF / AXF 文件.
+          prerelease: true
+          files: release/*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
