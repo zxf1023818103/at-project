@@ -263,6 +263,24 @@ jobs:
           find dist -type f -name '*.tar.gz' -exec mv -t release {} +
           ls -l release
 
+      - name: Delete previous "latest" assets
+        # 文件名带 sha，每次 build 名字都会变；不删的话 release 页会堆历史
+        # 资产。tag 不存在（首次发布）时静默跳过。
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          if gh release view latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release view latest --repo "$GITHUB_REPOSITORY" --json assets \
+              --jq '.assets[].name' \
+            | while IFS= read -r asset; do
+                [ -z "$asset" ] && continue
+                echo "deleting $asset"
+                gh release delete-asset latest "$asset" \
+                  --repo "$GITHUB_REPOSITORY" --yes || true
+              done
+          fi
+
       - name: Publish/update rolling "latest" prerelease
         uses: softprops/action-gh-release@v2
         with:
