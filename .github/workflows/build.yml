@@ -137,12 +137,13 @@ jobs:
       - name: Install Python deps (Ameba newer)
         if: matrix.id == 'amebadplus' || matrix.id == 'amebagreen2'
         run: |
-          # env.sh creates a venv and pip-installs requirements on first source.
-          # Pre-create it here so the build step doesn't refetch on cache miss.
-          cd platform/ameba-rtos
-          python3 -m venv .venv
-          ./.venv/bin/pip install --upgrade pip
-          ./.venv/bin/pip install -r tools/requirements.txt
+          # env.sh tries to create its own .venv, but on a fresh runner where
+          # /opt/rtk-toolchain doesn't exist yet update_prebuilts() returns 1
+          # *after* `rm -rf $BASE_DIR/.venv`, so env.sh exits before re-creating
+          # the venv. cmake then runs axf2bin.py with the system python3 and
+          # fails on `Miss module: json5`. Install requirements to system
+          # python so any python interpreter cmake picks finds them.
+          sudo pip3 install --break-system-packages -r platform/ameba-rtos/tools/requirements.txt
 
       - name: Cache RTK toolchain (Ameba newer)
         if: matrix.id == 'amebadplus' || matrix.id == 'amebagreen2'
