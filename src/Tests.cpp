@@ -8,7 +8,8 @@
 #include "BluetoothField.h"
 #include "MacAddress.h"
 #if defined BL602 || defined BL702
-#include "Bl602UartStreamBuf.h"
+#include "Bl602UartOutStream.h"
+#include "Bl602UartInStream.h"
 extern "C" {
 #include <bl_uart.h>
 }
@@ -306,6 +307,29 @@ void testBl602UartOutStream1() {
         ::vTaskDelay(pdMS_TO_TICKS(500));
     }
     printf("\n%s\n", "========= Bl602UartOutStream Test 1 Finished =========");
+}
+
+void testBl602UartInStream1() {
+    constexpr uint8_t  kUartId = 1;
+    constexpr uint8_t  kTxPin  = 4;
+    constexpr uint8_t  kRxPin  = 3;
+    constexpr uint32_t kBaud   = 115200;
+
+    bl_uart_init(kUartId, kTxPin, kRxPin, 255, 255, kBaud);
+
+    printf("\n%s\n", "========= Bl602UartInStream Test 1 Started =========");
+    {
+        Bl602UartOutStream out(kUartId);
+        Bl602UartInStream  in(kUartId);
+        out << "Echo test: type a line ending with '\\n' (max 64 chars)\r\n";
+        out.flush();
+
+        string line;
+        getline(in, line);
+        out << "Got " << line.size() << " bytes: " << line << "\r\n";
+        out.flush();
+    }
+    printf("\n%s\n", "========= Bl602UartInStream Test 1 Finished =========");
 }
 #endif // defined BL602 || defined BL702
 

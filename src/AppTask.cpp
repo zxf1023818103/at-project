@@ -19,6 +19,7 @@ void AppTask::routine() {
     // testBluetoothTask1();
 #if defined BL602 || defined BL702
     testBl602UartOutStream1();
+    testBl602UartInStream1();
 #endif // defined BL602 || defined BL702
 }
 

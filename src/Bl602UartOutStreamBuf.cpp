@@ -1,24 +1,23 @@
 #if defined BL602 || defined BL702
 
-#include "Bl602UartStreamBuf.h"
+#include "Bl602UartOutStreamBuf.h"
 extern "C" {
 #include <bl_uart.h>
 }
 
 namespace at {
 
-Bl602UartStreamBuf::Bl602UartStreamBuf(uint8_t uartId)
+Bl602UartOutStreamBuf::Bl602UartOutStreamBuf(uint8_t uartId)
     : m_id(uartId), m_stream(xStreamBufferCreate(kStreamBufSize, 1)) {
     setp(m_putBuf, m_putBuf + kPutBufSize);
     bl_uart_int_tx_notify_register(m_id, txIsr, this);
     // bl_uart_init() 不安装 UART IRQ 向量；调用 bl_uart_int_enable() 注册
     // UARTx_IRQHandler 并使能中断分发，再关掉 RX/TX 掩码，由 xsputn 按需打开 TX。
     bl_uart_int_enable(m_id);
-    bl_uart_int_rx_disable(m_id);
     bl_uart_int_tx_disable(m_id);
 }
 
-Bl602UartStreamBuf::~Bl602UartStreamBuf() {
+Bl602UartOutStreamBuf::~Bl602UartOutStreamBuf() {
     sync();
     bl_uart_int_tx_disable(m_id);
     bl_uart_int_tx_notify_unregister(m_id, txIsr, this);
@@ -29,8 +28,8 @@ Bl602UartStreamBuf::~Bl602UartStreamBuf() {
 // relying on the hardware to fire the next interrupt when the FIFO is ready.
 // On empty, the disable+recheck pair closes the race with a producer that
 // may have written and re-enabled the interrupt during the read.
-void Bl602UartStreamBuf::txIsr(void *arg) {
-    auto      *self  = static_cast<Bl602UartStreamBuf *>(arg);
+void Bl602UartOutStreamBuf::txIsr(void *arg) {
+    auto      *self  = static_cast<Bl602UartOutStreamBuf *>(arg);
     BaseType_t woken = pdFALSE;
     uint8_t    byte;
     if (xStreamBufferReceiveFromISR(self->m_stream, &byte, 1, &woken) == 1) {
@@ -44,7 +43,7 @@ void Bl602UartStreamBuf::txIsr(void *arg) {
     portYIELD_FROM_ISR(woken);
 }
 
-int Bl602UartStreamBuf::flushPutArea() {
+int Bl602UartOutStreamBuf::flushPutArea() {
     char  *base = pbase();
     size_t len  = static_cast<size_t>(pptr() - base);
     if (len == 0) return 0;
@@ -54,7 +53,7 @@ int Bl602UartStreamBuf::flushPutArea() {
     return (sent == len) ? 0 : -1;
 }
 
-int Bl602UartStreamBuf::overflow(int c) {
+int Bl602UartOutStreamBuf::overflow(int c) {
     if (flushPutArea() != 0) return traits_type::eof();
     if (!traits_type::eq_int_type(c, traits_type::eof())) {
         *pptr() = traits_type::to_char_type(c);
@@ -63,22 +62,17 @@ int Bl602UartStreamBuf::overflow(int c) {
     return traits_type::not_eof(c);
 }
 
-int Bl602UartStreamBuf::sync() {
+int Bl602UartOutStreamBuf::sync() {
     return flushPutArea();
 }
 
-std::streamsize Bl602UartStreamBuf::xsputn(const char_type *s, std::streamsize n) {
+std::streamsize Bl602UartOutStreamBuf::xsputn(const char_type *s, std::streamsize n) {
     if (flushPutArea() != 0) return 0;
     size_t sent = xStreamBufferSend(m_stream, s, static_cast<size_t>(n), portMAX_DELAY);
     if (sent > 0) {
         bl_uart_int_tx_enable(m_id);
     }
     return static_cast<std::streamsize>(sent);
-}
-
-Bl602UartOutStream::Bl602UartOutStream(uint8_t uartId)
-    : std::ostream(nullptr), m_buf(uartId) {
-    rdbuf(&m_buf);
 }
 
 }  // namespace at

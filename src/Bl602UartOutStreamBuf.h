@@ -2,7 +2,6 @@
 #if defined BL602 || defined BL702
 
 #include <cstdint>
-#include <ostream>
 #include <streambuf>
 
 #include <FreeRTOS.h>
@@ -10,13 +9,13 @@
 
 namespace at {
 
-class Bl602UartStreamBuf : public std::streambuf {
+class Bl602UartOutStreamBuf : public std::streambuf {
 public:
     static constexpr size_t kStreamBufSize = 256;
     static constexpr size_t kPutBufSize    = 64;
 
-    explicit Bl602UartStreamBuf(uint8_t uartId);
-    ~Bl602UartStreamBuf();
+    explicit Bl602UartOutStreamBuf(uint8_t uartId);
+    ~Bl602UartOutStreamBuf();
 
 protected:
     int             overflow(int c) override;
@@ -30,14 +29,6 @@ private:
 
     static void txIsr(void *arg);
     int         flushPutArea();
-};
-
-class Bl602UartOutStream : public std::ostream {
-public:
-    explicit Bl602UartOutStream(uint8_t uartId);
-
-private:
-    Bl602UartStreamBuf m_buf;
 };
 
 }  // namespace at
