@@ -18,8 +18,8 @@ void AppTask::routine() {
     // testExceptionHandling1();
     // testBluetoothTask1();
 #if defined BL602 || defined BL702
-    testBl602UartOutStream1();
-    testBl602UartInStream1();
+    testBflbUartOutStream1();
+    testBflbUartInStream1();
 #endif // defined BL602 || defined BL702
 }
 

@@ -12,8 +12,8 @@ void testStandardLibrary1();
 void testBluetoothTask1();
 
 #if defined BL602 || defined BL702
-void testBl602UartOutStream1();
-void testBl602UartInStream1();
+void testBflbUartOutStream1();
+void testBflbUartInStream1();
 #endif // defined BL602 || defined BL702
 
 }  // namespace at

@@ -1,11 +1,11 @@
 #if defined BL602 || defined BL702
 
-#include "Bl602UartOutStream.h"
+#include "BflbUartInStream.h"
 
 namespace at {
 
-Bl602UartOutStream::Bl602UartOutStream(uint8_t uartId)
-    : std::ostream(nullptr), m_buf(uartId) {
+BflbUartInStream::BflbUartInStream(struct bflb_device_s *dev)
+    : std::istream(nullptr), m_buf(dev) {
     rdbuf(&m_buf);
 }
 

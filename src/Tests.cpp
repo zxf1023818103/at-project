@@ -8,11 +8,10 @@
 #include "BluetoothField.h"
 #include "MacAddress.h"
 #if defined BL602 || defined BL702
-#include "Bl602UartOutStream.h"
-#include "Bl602UartInStream.h"
-extern "C" {
-#include <bl_uart.h>
-}
+#include "BflbUartOutStream.h"
+#include "BflbUartInStream.h"
+#include <bflb_gpio.h>
+#include <bflb_uart.h>
 #endif // defined BL602 || defined BL702
 
 namespace at {
@@ -278,20 +277,36 @@ void testBluetoothTask1() {
 }
 
 #if defined BL602 || defined BL702
-void testBl602UartOutStream1() {
-    constexpr uint8_t  kUartId = 1;
-    constexpr uint8_t  kTxPin  = 4;
-    constexpr uint8_t  kRxPin  = 3;
-    constexpr uint32_t kBaud   = 115200;
+namespace {
 
-    // 在打印 banner 之前先 init，避免 bl_uart_init() 首次调用切换 UART 时钟
-    // 分频时打断 UART0 上 banner 字节的飞行，导致 banner 出现乱码。
-    bl_uart_init(kUartId, kTxPin, kRxPin, 255, 255, kBaud);
+constexpr uint8_t  kTxPin = 4;
+constexpr uint8_t  kRxPin = 3;
+constexpr uint32_t kBaud  = 115200;
 
-    printf("\n%s\n", "========= Bl602UartOutStream Test 1 Started =========");
+struct bflb_device_s *initUart1() {
+    auto *gpio = bflb_device_get_by_name("gpio");
+    bflb_gpio_uart_init(gpio, kTxPin, GPIO_UART_FUNC_UART1_TX);
+    bflb_gpio_uart_init(gpio, kRxPin, GPIO_UART_FUNC_UART1_RX);
+
+    auto *uart = bflb_device_get_by_name("uart1");
+    struct bflb_uart_config_s cfg = {};
+    cfg.baudrate  = kBaud;
+    cfg.data_bits = UART_DATA_BITS_8;
+    cfg.stop_bits = UART_STOP_BITS_1;
+    cfg.parity    = UART_PARITY_NONE;
+    bflb_uart_init(uart, &cfg);
+    return uart;
+}
+
+}  // namespace
+
+void testBflbUartOutStream1() {
+    auto *uartDev = initUart1();
+
+    printf("\n%s\n", "========= BflbUartOutStream Test 1 Started =========");
     {
-        Bl602UartOutStream uart(kUartId);
-        uart << "Hello from Bl602UartOutStream\r\n";
+        BflbUartOutStream uart(uartDev);
+        uart << "Hello from BflbUartOutStream\r\n";
         uart << "decimal=" << 12345 << " hex=0x" << hex << setw(4) << setfill('0') << 0xDEAD << "\r\n";
         uart.flush();
 
@@ -306,21 +321,16 @@ void testBl602UartOutStream1() {
 
         ::vTaskDelay(pdMS_TO_TICKS(500));
     }
-    printf("\n%s\n", "========= Bl602UartOutStream Test 1 Finished =========");
+    printf("\n%s\n", "========= BflbUartOutStream Test 1 Finished =========");
 }
 
-void testBl602UartInStream1() {
-    constexpr uint8_t  kUartId = 1;
-    constexpr uint8_t  kTxPin  = 4;
-    constexpr uint8_t  kRxPin  = 3;
-    constexpr uint32_t kBaud   = 115200;
+void testBflbUartInStream1() {
+    auto *uartDev = initUart1();
 
-    bl_uart_init(kUartId, kTxPin, kRxPin, 255, 255, kBaud);
-
-    printf("\n%s\n", "========= Bl602UartInStream Test 1 Started =========");
+    printf("\n%s\n", "========= BflbUartInStream Test 1 Started =========");
     {
-        Bl602UartOutStream out(kUartId);
-        Bl602UartInStream  in(kUartId);
+        BflbUartOutStream out(uartDev);
+        BflbUartInStream  in(uartDev);
         out << "Echo test: type a line ending with '\\n' (max 64 chars)\r\n";
         out.flush();
 
@@ -329,7 +339,7 @@ void testBl602UartInStream1() {
         out << "Got " << line.size() << " bytes: " << line << "\r\n";
         out.flush();
     }
-    printf("\n%s\n", "========= Bl602UartInStream Test 1 Finished =========");
+    printf("\n%s\n", "========= BflbUartInStream Test 1 Finished =========");
 }
 #endif // defined BL602 || defined BL702
 

@@ -47,18 +47,34 @@ int write_fast_connect_data_to_flash(unsigned int offer_ip, unsigned int server_
 #endif // defined CONFIG_PLATFORM_AMEBALITE || defined CONFIG_PLATFORM_AMEBASMART || defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2
 
 #if defined BL602 || defined BL702
-static void event_cb_wifi_event(input_event_t *event, void *private_data) {
+static void event_cb_wifi_event(async_input_event_t event, void *private_data) {
     (void) private_data;
     void wifi_event_handler(uint32_t code, uint32_t code2);
     wifi_event_handler(event->code, 0);
 }
 
-static void board_init(void) {
-    bl_sys_init();
+// async_event has no internal worker thread; it drains its queue when notify_cb fires.
+// Defer the drain to the FreeRTOS timer daemon via xTimerPendFunctionCall (same pattern
+// as components/wireless/wifi4/wifi4_adapter/bflb_adapter/plat_bouffalo_sdk.c).
+static void async_event_dispatch(void *arg1, uint32_t arg2) {
+    (void) arg1;
+    (void) arg2;
+    vTaskSuspendAll();
+    async_event_loop();
+    xTaskResumeAll();
+}
+
+static void async_event_wake(void) {
+    TickType_t wait = (xTimerGetTimerDaemonTaskHandle() == xTaskGetCurrentTaskHandle())
+                          ? 0
+                          : portMAX_DELAY;
+    xTimerPendFunctionCall(async_event_dispatch, nullptr, 0, wait);
 }
 #endif // defined BL602 || defined BL702
 
-#if defined BL606P || defined BL808 || defined BL616
+#if defined BL606P || defined BL808 || defined BL616 || defined BL616CL
+extern void wifi_main(void *param);
+
 static int hal_wifi_start_firmware_task(void) {
     /* enable wifi clock */
     GLB_PER_Clock_UnGate(GLB_AHB_CLOCK_IP_WIFI_PHY | GLB_AHB_CLOCK_IP_WIFI_MAC_PHY | GLB_AHB_CLOCK_IP_WIFI_PLATFORM);
@@ -73,21 +89,22 @@ static int hal_wifi_start_firmware_task(void) {
 
     return 0;
 }
-#endif // defined BL606P || defined BL808 || defined BL616
+#endif // defined BL606P || defined BL808 || defined BL616 || defined BL616CL
 
-#if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616
+#if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
 void wifi_event_handler(uint32_t code, uint32_t code2) {
     (void) code2;
     switch (code) {
         case CODE_WIFI_ON_INIT_DONE: {
             printf("[APP] [EVT] %s, CODE_WIFI_ON_INIT_DONE\n", __func__);
-            wifi_conf_t conf = { .country_code = "CN" };
 #if defined BL602 || defined BL702
+            wifi_conf_t conf = { .country_code = "CN" };
             wifi_mgmr_start_background(&conf);
 #endif // defined BL602 || defined BL702
-#if defined BL606P || defined BL808 || defined BL616
-            wifi_mgmr_init(&conf);
-#endif // defined BL606P || defined BL808 || defined BL616
+#if defined BL606P || defined BL808 || defined BL616 || defined BL616CL
+            wifi_mgmr_init();
+            wifi_mgmr_set_country_code((char *)"CN");
+#endif // defined BL606P || defined BL808 || defined BL616 || defined BL616CL
             break;
         }
         case CODE_WIFI_ON_MGMR_DONE: {
@@ -133,36 +150,43 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
     }
 }
 
+#if defined BL602 || defined BL702
+extern void wifi_task_create(void);
+#endif
+
 static void on_tcpip_init_done(void *arg) {
     LWIP_UNUSED_ARG(arg);
 #if defined BL602 || defined BL702
-    aos_post_event(EV_WIFI, CODE_WIFI_ON_INIT_DONE, 0);
+    // wifi_task_create() starts the wifi_main thread (which services the IPC
+    // command queue used by wifi_mgmr) AND posts CODE_WIFI_ON_INIT_DONE
+    // internally. Without this, bl_send_reset() etc. enqueue commands that
+    // nothing processes and block forever on the event-group ACK.
+    wifi_task_create();
 #endif // defined BL602 || defined BL702
 }
 
 int main(void) {
     board_init();
+#if defined BL606P || defined BL808 || defined BL616 || defined BL616CL
     hal_wifi_start_firmware_task();
+#endif // defined BL606P || defined BL808 || defined BL616 || defined BL616CL
 #if defined BL602 || defined BL702
-    aos_register_event_filter(EV_WIFI, event_cb_wifi_event, NULL);
+    async_event_init(async_event_wake);
+    async_register_event_filter(EV_WIFI, event_cb_wifi_event, NULL);
 #endif // defined BL602 || defined BL702
-#if defined BL606P || defined BL808 || defined BL616
     if (0 != rfparam_init(0, NULL, 0)) {
         printf("rfparam_init() failed\n");
         return 0;
     }
     bflb_mtd_init();
-#endif // defined BL606P || defined BL808 || defined BL616
     easyflash_init();
     tcpip_init(on_tcpip_init_done, NULL);
 
-#if defined BL606P || defined BL808 || defined BL616
     vTaskStartScheduler();
     while (1) {}
-#endif // defined BL606P || defined BL808 || defined BL616
     return 0;
 }
-#endif // defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616
+#endif // defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
 
 #if defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C
 void app_pre_example(void) {
@@ -179,10 +203,10 @@ void app_pre_example(void) {
 
 } // extern "C"
 
-#if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616
+#if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
 namespace std {
 
 void __throw_bad_function_call() { my_assert("__throw_bad_function_call" == nullptr); }
 
 } // namespace std
-#endif // defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616
+#endif // defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL

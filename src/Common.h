@@ -54,7 +54,7 @@ extern write_reconnect_ptr p_roaming_start_callback;
 #include <wifi_fast_connect.h>
 #endif // defined CONFIG_PLATFORM_AMEBALITE || defined CONFIG_PLATFORM_AMEBASMART || defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2
 
-#if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616
+#if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
 #include <easyflash.h>
 #include <wifi_mgmr_ext.h>
 #include <bluetooth.h>
@@ -72,24 +72,29 @@ extern write_reconnect_ptr p_roaming_start_callback;
 
 #define HI_WORD(x) ((uint8_t)((x & 0xFF00) >> 8))
 #define LO_WORD(x) ((uint8_t)(x))
-#endif // defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616
+#endif // defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
 
 #if defined BL602 || defined BL702
-#include <aos/kernel.h>
-#include <aos/yloop.h>
-#include <event_device.h>
-#include <bl_sys.h>
-#include <hal_wifi.h>
+#include <async_event.h>
+#include <timers.h>
+#include <bflb_irq.h>
+#include <bflb_uart.h>
+#include <bflb_gpio.h>
+#include <board.h>
+#include <bflb_mtd.h>
+#include <rfparam_adapter.h>
 #include <ble_lib_api.h>
-#include <uuid.h>
 #endif // defined BL602 || defined BL702
 
-#if defined BL606P || defined BL808 || defined BL616
-#include <mem.h>
+#if defined BL606P || defined BL808 || defined BL616 || defined BL616CL
 #include <wifi_mgmr.h>
 #include <bl_fw_api.h>
 #include <bflb_irq.h>
+#if defined BL616CL
+#include <bl616cl_glb.h>
+#else
 #include <bl616_glb.h>
+#endif
 #include <rfparam_adapter.h>
 #include <board.h>
 #include <bflb_mtd.h>
@@ -97,7 +102,7 @@ extern write_reconnect_ptr p_roaming_start_callback;
 #include <bt_uuid.h>
 #define WIFI_STACK_SIZE  (1536)
 #define TASK_PRIORITY_FW (16)
-#endif // defined BL606P || defined BL808 || defined BL616
+#endif // defined BL606P || defined BL808 || defined BL616 || defined BL616CL
 
 #if defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C || defined CONFIG_PLATFORM_AMEBALITE || defined CONFIG_PLATFORM_AMEBASMART || defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2
 

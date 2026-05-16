@@ -12,7 +12,7 @@
 #include "CallbackTaskSharedPtrIoQueue.h"
 #endif
 
-#if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616
+#if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
 #include "SharedPtrQueue.h"
 #endif
 
@@ -147,7 +147,7 @@ public:
 
 #endif // realtek platforms
 
-#if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616
+#if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
 
 class LowerBluetoothTask : public Task {
 private:

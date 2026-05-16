@@ -2,10 +2,6 @@
 	path = platform/ameba-rtos
 	url = https://github.com/zxf1023818103/ameba-rtos.git
 	branch = at
-[submodule "platform/BL602_SDK"]
-	path = platform/BL602_SDK
-	url = https://github.com/zxf1023818103/BL602_SDK.git
-	branch = at
 [submodule "platform/toolchain_gcc_t-head_linux"]
 	path = platform/toolchain_gcc_t-head_linux
 	url = https://github.com/bouffalolab/toolchain_gcc_t-head_linux.git
@@ -15,4 +11,4 @@
 [submodule "platform/bouffalo_sdk"]
 	path = platform/bouffalo_sdk
 	url = https://github.com/zxf1023818103/bouffalo_sdk.git
-	branch = at
+	branch = at-v2.3.26

@@ -407,15 +407,15 @@ void LowerBluetoothTask::sendCallback(shared_ptr<AbstractCallbackTask> callback)
 
 #endif // realtek platforms
 
-#if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616
+#if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
 
 LowerBluetoothTask::LowerBluetoothTask(string deviceName) : Task(), m_callbackQueue(API_TASK_IO_MSG_QUEUE_SIZE) {
 #if defined BL602 || defined BL702
     ::ble_controller_init(configMAX_PRIORITIES - 1);
 #endif // defined BL602 || defined BL702
-#if defined BL606P || defined BL808 || defined BL616
+#if defined BL606P || defined BL808 || defined BL616 || defined BL616CL
     ::btble_controller_init(configMAX_PRIORITIES - 1);
-#endif // defined BL606P || defined BL808 || defined BL616
+#endif // defined BL606P || defined BL808 || defined BL616 || defined BL616CL
     ::hci_driver_init();
     ::bt_enable(nullptr);
 

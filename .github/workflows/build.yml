@@ -23,39 +23,58 @@ jobs:
           - id: bl602
             display: BL602
             submodules: |
-              platform/BL602_SDK
               platform/bouffalo_sdk
               platform/toolchain_gcc_t-head_linux
-            project_dir: project/bl602
-            build_cmd: make
-            merged: project/bl602/build_out/whole_flash_data.bin
+            project_dir: project/bouffalo
+            build_cmd: make CHIP=bl602 BOARD=bl602dk
+            merged: project/bouffalo/build_bl602/build_out/whole_flash_data.bin
             raw: |
-              project/bl602/build_out/at.bin
-              platform/bouffalo_sdk/tools/bflb_tools/bouffalo_flash_cube/chips/bl602/boot2/boot2.bin
-              platform/bouffalo_sdk/tools/bflb_tools/bouffalo_flash_cube/chips/bl602/partition/partition_cfg.toml
-              platform/bouffalo_sdk/tools/bflb_tools/bouffalo_flash_cube/chips/bl602/device_tree/bl_factory_params.dts
+              project/bouffalo/build_bl602/build_out/at_bl602.bin
+              project/bouffalo/build_bl602/build_out/boot2_bl602_release_v8.1.3.bin
+              project/bouffalo/build_bl602/build_out/mfg_bl602_gu_2e8b4aa47_40m_v2.90.bin
+              platform/bouffalo_sdk/bsp/board/bl602dk/config/partition_cfg_2M.toml
+              platform/bouffalo_sdk/bsp/board/bl602dk/config/bl_factory_params_IoTKitA_40M.dts
             ota: |
-              project/bl602/build_out/FW_OTA.bin.xz
+              project/bouffalo/build_bl602/build_out/at_bl602.xz.ota
             elf: |
-              project/bl602/build_out/at.elf
+              project/bouffalo/build_bl602/build_out/at_bl602.elf
 
           - id: bl616
             display: BL616 / BL618
             submodules: |
               platform/bouffalo_sdk
               platform/toolchain_gcc_t-head_linux
-            project_dir: project/bl616
-            build_cmd: make
-            merged: project/bl616/build/build_out/whole_flash_data.bin
+            project_dir: project/bouffalo
+            build_cmd: make CHIP=bl616 BOARD=bl616dk
+            merged: project/bouffalo/build_bl616/build_out/whole_flash_data.bin
             raw: |
-              project/bl616/build/build_out/at_bl616.bin
-              platform/bouffalo_sdk/tools/bflb_tools/bouffalo_flash_cube/chips/bl616/boot2/boot2.bin
-              platform/bouffalo_sdk/tools/bflb_tools/bouffalo_flash_cube/chips/bl616/partition/partition_cfg.toml
-              platform/bouffalo_sdk/tools/bflb_tools/bouffalo_flash_cube/chips/bl616/device_tree/bl_factory_params.dts
+              project/bouffalo/build_bl616/build_out/at_bl616.bin
+              project/bouffalo/build_bl616/build_out/boot2_bl616_isp_release_v8.1.8.bin
+              project/bouffalo/build_bl616/build_out/mfg_bl616_gu_ef9d197c5_v2.50.bin
+              platform/bouffalo_sdk/bsp/board/bl616dk/config/partition_cfg_4M.toml
+              platform/bouffalo_sdk/bsp/board/bl616dk/config/bl_factory_params_IoTKitA_auto.dts
             ota: |
-              project/bl616/build/build_out/FW_OTA.bin.xz
+              project/bouffalo/build_bl616/build_out/at_bl616.xz.ota
             elf: |
-              project/bl616/build/build_out/at_bl616.elf
+              project/bouffalo/build_bl616/build_out/at_bl616.elf
+
+          - id: bl616cl
+            display: BL616CL
+            submodules: |
+              platform/bouffalo_sdk
+              platform/toolchain_gcc_t-head_linux
+            project_dir: project/bouffalo
+            build_cmd: make CHIP=bl616cl BOARD=bl616cldk
+            merged: project/bouffalo/build_bl616cl/build_out/whole_flash_data.bin
+            raw: |
+              project/bouffalo/build_bl616cl/build_out/at_bl616cl.bin
+              project/bouffalo/build_bl616cl/build_out/boot2_bl616cl_isp_release_v8.2.1.bin
+              platform/bouffalo_sdk/bsp/board/bl616cldk/config/partition_cfg_4M.toml
+              platform/bouffalo_sdk/bsp/board/bl616cldk/config/bl_factory_params_IoTKitA_auto.dts
+            ota: |
+              project/bouffalo/build_bl616cl/build_out/at_bl616cl.xz.ota
+            elf: |
+              project/bouffalo/build_bl616cl/build_out/at_bl616cl.elf
 
           - id: amebad
             display: Ameba D (RTL8721D / RTL8710C)
