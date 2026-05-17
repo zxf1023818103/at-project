@@ -3,7 +3,10 @@ set(private_includes)                #private include directories, NOTE: relativ
 set(private_definitions)             #private definitions
 set(private_compile_options)         #private compile_options
 
-ameba_list_append(private_compile_options -std=c++17 -Wno-error=unused-function -Wno-register)
+ameba_list_append(private_compile_options
+    $<$<COMPILE_LANGUAGE:CXX>:-std=c++17>
+    $<$<COMPILE_LANGUAGE:CXX>:-Wno-error=unused-function>
+    $<$<COMPILE_LANGUAGE:CXX>:-Wno-register>)
 
 ameba_list_append(private_definitions KERNEL=1)
 

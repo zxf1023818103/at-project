@@ -7,12 +7,15 @@
 #include "BluetoothTask.h"
 #include "BluetoothField.h"
 #include "MacAddress.h"
-#if defined BL602 || defined BL702
-#include "BflbUartOutStream.h"
-#include "BflbUartInStream.h"
-#include <bflb_gpio.h>
-#include <bflb_uart.h>
-#endif // defined BL602 || defined BL702
+#include "Uart.h"
+#include "UartOutStream.h"
+#include "UartInStream.h"
+#if defined AT_UART_BACKEND_BFLB
+#  include <bflb_gpio.h>
+#  include <bflb_uart.h>
+#elif defined AT_UART_BACKEND_AMEBA
+#  include "UartAmebaGlue.h"
+#endif
 
 namespace at {
 
@@ -276,14 +279,27 @@ void testBluetoothTask1() {
     getLogger()->logFormat(Logger::INFO, "========= Bluetooth Task Test 1 Finished =========");
 }
 
-#if defined BL602 || defined BL702
 namespace {
 
-constexpr uint8_t  kTxPin = 4;
-constexpr uint8_t  kRxPin = 3;
-constexpr uint32_t kBaud  = 115200;
+constexpr uint32_t kBaud = 115200;
 
-struct bflb_device_s *initUart1() {
+#if defined AT_UART_BACKEND_BFLB
+// AT 串口 per doc/serial_config.md (UART1 on all Bouffalo chips).
+#  if defined BL602 || defined BL702
+constexpr uint8_t kTxPin = 16;
+constexpr uint8_t kRxPin = 7;
+#  elif defined BL616
+constexpr uint8_t kTxPin = 21;
+constexpr uint8_t kRxPin = 22;
+#  elif defined BL616CL
+constexpr uint8_t kTxPin = 34;
+constexpr uint8_t kRxPin = 35;
+#  else
+constexpr uint8_t kTxPin = 16;
+constexpr uint8_t kRxPin = 7;
+#  endif
+
+UartDevice *initUart() {
     auto *gpio = bflb_device_get_by_name("gpio");
     bflb_gpio_uart_init(gpio, kTxPin, GPIO_UART_FUNC_UART1_TX);
     bflb_gpio_uart_init(gpio, kRxPin, GPIO_UART_FUNC_UART1_RX);
@@ -297,16 +313,40 @@ struct bflb_device_s *initUart1() {
     bflb_uart_init(uart, &cfg);
     return uart;
 }
+#elif defined AT_UART_BACKEND_AMEBA
+// AT 串口 per doc/serial_config.md. Pin encoding: PORT_X<<5 | N (PA=0, PB=1).
+// SDK's serial_init routes to the right UART instance based on pin.
+#  if defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C
+// Ameba D: UART0, PB_1 / PB_2
+constexpr int kTxPin = (1 << 5) | 1;
+constexpr int kRxPin = (1 << 5) | 2;
+#  elif defined CONFIG_AMEBADPLUS
+// Ameba D+: UART1, PB_31 / PB_30
+constexpr int kTxPin = (1 << 5) | 31;
+constexpr int kRxPin = (1 << 5) | 30;
+#  elif defined CONFIG_AMEBAGREEN2
+// Ameba Green 2: UART1, PA_26 / PA_25
+constexpr int kTxPin = (0 << 5) | 26;
+constexpr int kRxPin = (0 << 5) | 25;
+#  else
+constexpr int kTxPin = (0 << 5) | 7;
+constexpr int kRxPin = (0 << 5) | 8;
+#  endif
+
+UartDevice *initUart() {
+    return at_uart_create(kTxPin, kRxPin, kBaud);
+}
+#endif
 
 }  // namespace
 
-void testBflbUartOutStream1() {
-    auto *uartDev = initUart1();
+void testUartOutStream1() {
+    auto *uartDev = initUart();
 
-    printf("\n%s\n", "========= BflbUartOutStream Test 1 Started =========");
+    printf("\n%s\n", "========= UartOutStream Test 1 Started =========");
     {
-        BflbUartOutStream uart(uartDev);
-        uart << "Hello from BflbUartOutStream\r\n";
+        UartOutStream uart(uartDev);
+        uart << "Hello from UartOutStream\r\n";
         uart << "decimal=" << 12345 << " hex=0x" << hex << setw(4) << setfill('0') << 0xDEAD << "\r\n";
         uart.flush();
 
@@ -321,16 +361,16 @@ void testBflbUartOutStream1() {
 
         ::vTaskDelay(pdMS_TO_TICKS(500));
     }
-    printf("\n%s\n", "========= BflbUartOutStream Test 1 Finished =========");
+    printf("\n%s\n", "========= UartOutStream Test 1 Finished =========");
 }
 
-void testBflbUartInStream1() {
-    auto *uartDev = initUart1();
+void testUartInStream1() {
+    auto *uartDev = initUart();
 
-    printf("\n%s\n", "========= BflbUartInStream Test 1 Started =========");
+    printf("\n%s\n", "========= UartInStream Test 1 Started =========");
     {
-        BflbUartOutStream out(uartDev);
-        BflbUartInStream  in(uartDev);
+        UartOutStream out(uartDev);
+        UartInStream  in(uartDev);
         out << "Echo test: type a line ending with '\\n' (max 64 chars)\r\n";
         out.flush();
 
@@ -339,8 +379,7 @@ void testBflbUartInStream1() {
         out << "Got " << line.size() << " bytes: " << line << "\r\n";
         out.flush();
     }
-    printf("\n%s\n", "========= BflbUartInStream Test 1 Finished =========");
+    printf("\n%s\n", "========= UartInStream Test 1 Finished =========");
 }
-#endif // defined BL602 || defined BL702
 
 }  // namespace at
