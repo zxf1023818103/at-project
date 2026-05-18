@@ -189,6 +189,12 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "Artifact tag: $tag"
 
+      - name: Generate ragel parsers
+        # src/*.rl → src/*.rl.cpp (gitignored). 每个 project 的构建系统都用
+        # GLOB / find 收集 src/*.cpp，所以必须先跑 ragel，否则
+        # AtCommandParser::process()/ctor 等符号会缺失。
+        run: make -C src
+
       - name: Build
         run: |
           set -e
