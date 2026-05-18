@@ -3,6 +3,8 @@
 #include "UartOutStreamBuf.h"
 #include "UartDispatch.h"
 
+#include <task.h>
+
 #if defined AT_UART_BACKEND_BFLB
 #  include <bflb_uart.h>
 #elif defined AT_UART_BACKEND_AMEBA
@@ -48,6 +50,10 @@ UartOutStreamBuf::UartOutStreamBuf(UartDevice *dev)
 
 UartOutStreamBuf::~UartOutStreamBuf() {
     sync();
+    // sync() waits for the StreamBuffer to drain, but the last byte may still
+    // be in the UART hardware TX FIFO. Pad ~10ms (≈115 byte-times at 115200)
+    // so it physically leaves the line before we disable the TX IRQ.
+    vTaskDelay(pdMS_TO_TICKS(10));
     disable_tx_irq(m_dev);
     UartDispatch::unregisterOut(m_dev);
     vStreamBufferDelete(m_stream);
@@ -85,7 +91,15 @@ int UartOutStreamBuf::overflow(int c) {
 }
 
 int UartOutStreamBuf::sync() {
-    return flushPutArea();
+    int rc = flushPutArea();
+    // Wait for the ISR to drain the StreamBuffer onto the UART FIFO. Without
+    // this, a flush() that's followed immediately by scope exit (~10us later)
+    // would tear down the StreamBuffer + TX IRQ while bytes are still queued,
+    // truncating the output to whatever made it into the hardware FIFO first.
+    while (xStreamBufferIsEmpty(m_stream) == pdFALSE) {
+        vTaskDelay(pdMS_TO_TICKS(1));
+    }
+    return rc;
 }
 
 std::streamsize UartOutStreamBuf::xsputn(const char_type *s, std::streamsize n) {
