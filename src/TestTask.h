@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Task.h"
+
 namespace at {
 
 void testAsyncTask();
@@ -13,5 +15,15 @@ void testBluetoothTask1();
 
 void testUartOutStream1();
 void testUartInStream1();
+
+class TestTask : public Task {
+public:
+    explicit TestTask();
+
+    virtual ~TestTask() override;
+
+protected:
+    virtual void routine() override;
+};
 
 }  // namespace at

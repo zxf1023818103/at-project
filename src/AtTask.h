@@ -4,11 +4,11 @@
 
 namespace at {
 
-class AppTask : public Task {
+class AtTask : public Task {
 public:
-    explicit AppTask();
+    explicit AtTask();
 
-    virtual ~AppTask() override;
+    virtual ~AtTask() override;
 
 protected:
     virtual void routine() override;

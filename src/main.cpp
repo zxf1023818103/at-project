@@ -1,12 +1,12 @@
 #include "Common.h"
-#include "AppTask.h"
+#include "AtTask.h"
 
 extern "C" {
 
 __attribute__((__weak__)) void *__dso_handle = (void *)&__dso_handle;
 
 int wifi_do_fast_connect(void) {
-    at::make_shared<at::AppTask>()->startAsync("AppTask", 256 * 12, 4);
+    at::make_shared<at::AtTask>()->startAsync("AtTask", 256 * 12, 4);
     return 0;
 }
 
