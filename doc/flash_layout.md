@@ -95,6 +95,51 @@ raw offset      size       region                          flash 保护
 
 LFS 大小不用单独改 —— [littlefs_adapter.c:10-11](../platform/ameba-rtos/component/file_system/littlefs/littlefs_adapter.c) 里 `LFS_FLASH_BASE_ADDR` / `LFS_FLASH_SIZE` 是变量，在 [vfs.c:218-222](../platform/ameba-rtos/component/file_system/vfs/vfs.c) 里从 `flash_get_layout_info(VFS1, ...)` 动态填值，跟着 Flash_Layout 走。
 
-## Bouffalo BL602 / BL616 / BL616CL
+## Bouffalo BL602 / BL616 / BL616CL (4 MB)
 
-待补 —— Bouffalo 由 `partition_cfg_*.toml` 决定，每块板的分区表在 `platform/bouffalo_sdk/bsp/board/<board>/config/`。
+布局由每块板的 `partition_cfg_4M.toml` 驱动（[bsp/board/bl602dk/](../platform/bouffalo_sdk/bsp/board/bl602dk/config/partition_cfg_4M.toml) / [bl616dk/](../platform/bouffalo_sdk/bsp/board/bl616dk/config/partition_cfg_4M.toml) / [bl616cldk/config/partition_cfg_4M.toml](../platform/bouffalo_sdk/bsp/board/bl616cldk/config/partition_cfg_4M.toml)），三块板用同一份地址：
+
+```
+raw offset      size       region                          flash 保护
+─────────────── ────────── ────────────────────────────── ───────────
+0x000000        0x00E000   Boot2          (   56 KB)       🔒 protected
+0x00E000        0x001000   PT0            (    4 KB)       🔒 protected
+0x00F000        0x001000   PT1            (    4 KB)       🔒 protected
+0x010000        0x178000   FW slot 0      ( 1504 KB)       🔒 protected
+0x188000        0x178000   FW slot 1      ( 1504 KB)       🔒 protected
+─── 0x300000: 写保护边界（CMP=1, TB=0, BP=1MB → 上 1 MB unprotected）───
+0x300000        0x100000   PSM (LittleFS) ( 1024 KB)       ✏️ writable
+0x400000                   flash end
+```
+
+总：56 + 4 + 4 + 2×1504 + 1024 = 4096 KB ✓
+
+**设计取舍**
+- 砍掉 SDK 默认的 mfg / media / DATA / factory / KEY 五个分区。前两个对我们的 AT 命令固件没用（mfg 是定频测试 fw，media 是 ROMFS 资源），后三个整个 SDK grep `"KEY" / "DATA" / "factory"` 都没人引用，是历史占位
+- 双 FW slot 对称 1504 KB，OTA 升级容量足够：BL602/616/616CL 当前 image 均 < 1 MB，余量 > 600 KB
+- BL616 / BL616CL 用 v2 dynamic mode，Boot2 进 PT 可 OTA；BL602 v1 legacy，Boot2 固定在 `0x0`，不进 PT
+- BL602 v1 toml 简洁（无 Boot2 / version 字段），BL616 / 616CL v2 toml 含 Boot2 entry + header/security flags
+
+### EasyFlash = LittleFS over PSM
+
+新 SDK 的 EasyFlash 接口（`ef_set_env_blob` / `ef_get_env_blob` / `ef_del_env`）已经**全部走 LittleFS 后端**，实现在 [components/fs/littlefs/easyflash_port/lfs_easyflash.c](../platform/bouffalo_sdk/components/fs/littlefs/easyflash_port/lfs_easyflash.c)。`lfs_xip_init({.partition_name = "PSM"})` 通过 MTD 按名字找 PSM 分区地址，所以 **toml 里 PSM 大小一改，LFS 跟着变，应用代码不动**。KV 数据落在 LFS 文件系统的 `/_ef4_kvs_/` 目录。BT 栈也走这条 API。
+
+**注意**：PSM 从默认 32 KB 扩到 1 MB，LFS 检测几何变更会触发重格式化，**已有 KV 数据全部清空**。
+
+### Flash 写保护
+
+机制和 Ameba 完全一致：`SR1 = 0x14` + `SR2 |= 0x40` ⇒ CMP=1, TB=0, BP[2:0]=101 ⇒ 顶 1 MB unprotected / 下 3 MB 写保护。
+
+[src/BoardFlashLock.cpp](../src/BoardFlashLock.cpp) 的 `#elif defined AT_UART_BACKEND_BFLB` 分支用 LHAL 的 `bflb_sflash_read_reg` / `bflb_sflash_write_reg`（在 [drivers/lhal/src/flash/bflb_sflash.h](../platform/bouffalo_sdk/drivers/lhal/src/flash/bflb_sflash.h)），`reg_index = 0/1` 分别对应 SR1/SR2（由 `flash_cfg->{read,write}_reg_cmd[]` 表驱动，跨 SoC 通用）。SR1+SR2 用 16-bit 原子写（cmd 0x01，2 字节），抄自 `bl602_sflash_ext.c:596` 的范式。
+
+调用时机：[src/main.cpp](../src/main.cpp) 的 BL `main()` 在 `board_init()` 之后、`bflb_mtd_init()` + `easyflash_init()` 之前调 `at::lockFirmwareFlash()`，保证 flash driver 已经初始化 + 没有任何 FW 写入操作发生。
+
+`unlockFirmwareFlash()` 仅作 OTA 流程预留，**当前不在任何地方调用**。
+
+### 相关 SDK 改动
+
+| 文件 | 改动 |
+|------|------|
+| [partition_cfg_4M.toml × 3](../platform/bouffalo_sdk/bsp/board/) | 整体重写：删 mfg/media/KEY/DATA/factory，PSM 扩到 1 MB @ `0x300000`，FW slot 对称 `0x10000 + 0x178000` / `0x188000 + 0x178000` |
+
+构建脚本（[project/bouffalo/tools/build_whole.py](../project/bouffalo/tools/build_whole.py)）按 GLOB 取唯一一份 `partition_cfg_*.toml`，不用动。

@@ -168,6 +168,10 @@ static void on_tcpip_init_done(void *arg) {
 
 int main(void) {
     board_init();
+    // Lock bottom 3 MB of flash against accidental writes; must run after
+    // flash driver init (board_init) and before anything that writes flash
+    // (OTA / EasyFlash). Top 1 MB stays writable for PSM (LittleFS).
+    at::lockFirmwareFlash();
 #if defined BL606P || defined BL808 || defined BL616 || defined BL616CL
     hal_wifi_start_firmware_task();
 #endif // defined BL606P || defined BL808 || defined BL616 || defined BL616CL

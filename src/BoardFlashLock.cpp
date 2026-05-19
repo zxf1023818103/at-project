@@ -142,6 +142,85 @@ void unlockFirmwareFlash() {
 
 }  // namespace at
 
+#elif defined AT_UART_BACKEND_BFLB
+
+#include <cstdint>
+#include <cstdio>
+
+extern "C" {
+// We only need spi_flash_cfg_type as opaque pointer here. Forward-declare
+// to avoid pulling in chip-specific headers (BL602/BL616/BL616CL each have
+// their own copy of the full struct definition).
+struct spi_flash_cfg_type;
+
+// LHAL flash APIs, signatures from drivers/lhal/include/bflb_flash.h and
+// drivers/lhal/src/flash/bflb_sflash.h. reg_index 0 → SR1, 1 → SR2 per the
+// flash_cfg->{read,write}_reg_cmd[] table populated by SDK init.
+void bflb_flash_get_cfg(uint8_t **cfg_addr, uint32_t *len);
+int bflb_sflash_read_reg(struct spi_flash_cfg_type *cfg, uint8_t reg_index,
+                         uint8_t *reg_value, uint8_t reg_len);
+int bflb_sflash_write_reg(struct spi_flash_cfg_type *cfg, uint8_t reg_index,
+                          uint8_t *reg_value, uint8_t reg_len);
+}
+
+namespace at {
+
+namespace {
+
+// SR1 / SR2 bit layout matches Ameba — same W25Q / GD25 family on Bouffalo
+// 4 MB SiP NORs. Lock values: SR1=0x14 (TB=0, BP[2:0]=101) + SR2 |= 0x40
+// (CMP=1) ⇒ "top 1 MB unprotected, bottom 3 MB write-locked".
+constexpr uint8_t kSr1Mask    = 0xFC;
+constexpr uint8_t kSr1Locked  = 0x14;
+constexpr uint8_t kSr2CmpBit  = 0x40;
+
+struct spi_flash_cfg_type *getFlashCfg() {
+    uint8_t *cfg = nullptr;
+    uint32_t len = 0;
+    bflb_flash_get_cfg(&cfg, &len);
+    return reinterpret_cast<struct spi_flash_cfg_type *>(cfg);
+}
+
+}  // namespace
+
+void lockFirmwareFlash() {
+    auto *cfg = getFlashCfg();
+    if (cfg == nullptr) return;
+
+    uint8_t sr1 = 0;
+    uint8_t sr2 = 0;
+    bflb_sflash_read_reg(cfg, 0, &sr1, 1);
+    bflb_sflash_read_reg(cfg, 1, &sr2, 1);
+
+    if (((sr1 & kSr1Mask) == kSr1Locked) && ((sr2 & kSr2CmpBit) != 0)) {
+        return;  // already locked
+    }
+
+    // Write SR1+SR2 atomically via the 0x01 Write-Status command (low byte =
+    // new SR1, high byte = new SR2). Pattern lifted from
+    // drivers/soc/bl602/std/src/bl602_sflash_ext.c:596.
+    uint16_t combined = static_cast<uint16_t>(kSr1Locked) |
+                        (static_cast<uint16_t>(sr2 | kSr2CmpBit) << 8);
+    bflb_sflash_write_reg(cfg, 0, reinterpret_cast<uint8_t *>(&combined), 2);
+
+    printf("[flash] firmware locked: SR1=0x%02x SR2=0x%02x\r\n",
+           static_cast<unsigned>(combined & 0xFF),
+           static_cast<unsigned>((combined >> 8) & 0xFF));
+}
+
+void unlockFirmwareFlash() {
+    auto *cfg = getFlashCfg();
+    if (cfg == nullptr) return;
+
+    uint8_t sr2 = 0;
+    bflb_sflash_read_reg(cfg, 1, &sr2, 1);
+    uint16_t combined = 0x0000u |
+                        (static_cast<uint16_t>(sr2 & ~kSr2CmpBit) << 8);
+    bflb_sflash_write_reg(cfg, 0, reinterpret_cast<uint8_t *>(&combined), 2);
+}
+
+}  // namespace at
+
 #else  // other platforms: no-op stubs
 
 namespace at {
