@@ -71,7 +71,78 @@ void unlockFirmwareFlash() {
 
 }  // namespace at
 
-#else  // non-Ameba D platforms: no-op stubs
+#elif defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2
+
+#include <cstdint>
+#include <cstdio>
+
+// On amebagreen2, flash_api.h transitively pulls in PeripheralNames.h whose
+// mbed enum initializers like `UART_0 = (int)UART0_DEV` aren't valid C++
+// constant expressions. Pre-define the guard to skip its body — we only
+// need FLASH_InitTypeDef from objects.h, not the mbed UART/SPI/I2C enums.
+#define MBED_PERIPHERALNAMES_H
+
+extern "C" {
+#include "ameba_soc.h"  // FLASH_RxCmd / FLASH_SetStatus / flash_init_para / FLASH_CMD_RDSR2
+#include "flash_api.h"  // flash_t / flash_get_status / flash_set_status
+}
+
+namespace at {
+
+namespace {
+
+// SR1 / SR2 bit layout is identical to W25Q / GD25 family on Ameba D. Locking
+// values are the same: SR1=0x14 (TB=0, BP[2:0]=101) + SR2 |= 0x40 (CMP=1)
+// ⇒ "top 1 MB unprotected, bottom 3 MB write-locked".
+constexpr uint8_t kSr1Mask         = 0xFC;
+constexpr uint8_t kSr1Locked       = 0x14;
+constexpr uint8_t kSr2CmpBit       = 0x40;
+
+uint8_t readStatus2() {
+    // flash_get_status2 is declared in flash_api.h but unimplemented in the
+    // new SDK as well; go raw with the chip-standard Read SR2 command.
+    uint8_t v = 0;
+    FLASH_RxCmd(FLASH_CMD_RDSR2, 1, &v);
+    return v;
+}
+
+uint8_t writeStatus2Cmd() {
+    // Runtime value from the SDK's flash auto-detect handles W25Q/GD25/MXIC
+    // correctly. Fall back to W25Q-standard 0x31 if unset.
+    uint8_t cmd = flash_init_para.FLASH_cmd_wr_status2;
+    return cmd != 0 ? cmd : 0x31;
+}
+
+}  // namespace
+
+void lockFirmwareFlash() {
+    flash_t flash;
+    int sr1 = flash_get_status(&flash);
+    uint8_t sr2 = readStatus2();
+    uint8_t sr2_desired = static_cast<uint8_t>(sr2 | kSr2CmpBit);
+
+    if (((sr1 & kSr1Mask) == kSr1Locked) && ((sr2 & kSr2CmpBit) != 0)) {
+        return;  // already locked
+    }
+    flash_set_status(&flash, kSr1Locked);
+    uint8_t cmd = writeStatus2Cmd();
+    FLASH_SetStatus(cmd, 1, &sr2_desired);
+    printf("[flash] firmware locked: SR1=0x%02x SR2=0x%02x (wr_cmd=0x%02x)\r\n",
+           kSr1Locked, sr2_desired, cmd);
+}
+
+void unlockFirmwareFlash() {
+    flash_t flash;
+    uint8_t sr2 = readStatus2();
+    uint8_t sr2_desired = static_cast<uint8_t>(sr2 & ~kSr2CmpBit);
+    flash_set_status(&flash, 0x00);
+    uint8_t cmd = writeStatus2Cmd();
+    FLASH_SetStatus(cmd, 1, &sr2_desired);
+}
+
+}  // namespace at
+
+#else  // other platforms: no-op stubs
 
 namespace at {
 

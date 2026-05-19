@@ -51,9 +51,49 @@ raw offset      size       region                          flash 保护
 
 `OTA_Region[1]` 和 `LS_IMG2_OTA2_ADDR` 两个值**必须严格同步**：前者是 boot ROM 启动时找 image2 用的，后者是应用层 OTA 升级写新 image 时找位置用的。任何一边没跟上，OTA 升级到 OTA2 后下次启动直接挂。
 
-## Ameba Dplus / Green 2
+## Ameba Dplus (RTL8711Dx, 4 MB) / Ameba Green 2 (RTL8711F, 4 MB)
 
-待补 —— 这两个 SoC 走 `platform/ameba-rtos` 的 partition system（不是 Ameba D 的硬编码地址），布局由 [project/ameba/prj.conf](../project/ameba/prj.conf) + `flash_xxx.json` 控制。当前默认布局没改过，OTA 默认 1 MB / slot。
+两个 SoC 走新 SDK [platform/ameba-rtos](../platform/ameba-rtos)，布局是硬编码在每个 SoC 自己的 `Flash_Layout[]` 数组里（不是 partition file 或 Kconfig 驱动）。bootloader 和应用层都通过 `flash_get_layout_info(region_type, &start, &end)` 查地址，**OTA 升级流程不像 Ameba D 那样有双源不一致风险**。
+
+两个 SoC 用 **同一张地址表**：
+
+```
+raw offset      size       region                          flash 保护
+─────────────── ────────── ────────────────────────────── ───────────
+0x000000        0x010000   IMG_BOOT          (   64 KB)    🔒 protected
+0x010000        0x170000   IMG_APP_OTA1      ( 1472 KB)    🔒 protected
+0x180000        0x010000   IMG_BOOT_OTA2     (   64 KB)    🔒 protected
+0x190000        0x170000   IMG_APP_OTA2      ( 1472 KB)    🔒 protected
+─── 0x300000: 写保护边界（CMP=1, TB=0, BP=1MB → 上 1 MB unprotected）───
+0x300000        0x100000   VFS1 / LittleFS   ( 1024 KB)    ✏️ writable
+0x400000                   flash end
+```
+
+总：64 + 1472 + 64 + 1472 + 1024 = 4096 KB ✓
+
+**设计取舍**
+
+- IMG_BOOT slot 64 KB —— SDK 默认 Dplus 80 KB / Green 2 256 KB 都过大。实测 `km4_boot_all.bin` (Dplus) ≈ 31 KB / `amebagreen2_boot.bin` ≈ 29 KB，64 KB slot 仍有 ~30 KB 余量供 bootloader 升级。Green 2 由此每个 boot slot 省 192 KB（×2 = 384 KB）。
+- IMG_APP_OTA × 2 各 1472 KB —— 比 Ameba D 的 1524 KB 略小（新 SDK 多了 IMG_BOOT_OTA2 这一块 64 KB），但仍宽裕：Dplus image 1337 KB → 135 KB 余量；Green 2 image 1143 KB → 329 KB 余量。
+- VFS1 落在 `0x300000-0x3FFFFF`，整 1 MB，与 Ameba D 完全一致 —— 写保护边界都在 3 MB 处。
+- **没有独立 FTL / settings 区**：新 SDK 的 BT FTL 在内部使用 VFS，WLAN fast-connect 已由 [src/main.cpp:42-48](../src/main.cpp#L42-L48) 接管成 no-op，不需要额外 sector。
+
+### Flash 写保护
+
+机制和 Ameba D 完全一致：`SR1 = 0x14` + `SR2 |= 0x40` ⇒ CMP=1, TB=0, BP[2:0]=101 ⇒ 顶 1 MB unprotected / 下 3 MB 写保护。
+
+`src/BoardFlashLock.cpp` 在 `#elif defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2` 分支里实现，通过 `ameba_soc.h` 的 `FLASH_RxCmd` / `FLASH_SetStatus` + `flash_init_para.FLASH_cmd_wr_status2`（运行时拿到 chip 特定的 Write SR2 命令，自动适配 MXIC / W25Q / GD25）。
+
+挂钩点是新 SDK 的 `_WEAK app_pre_example()`（在 KM4 main.c 早期调用，先于 WLAN/BT/OTA），由 [src/main.cpp](../src/main.cpp) 提供 strong override 调 `at::lockFirmwareFlash()`。
+
+### 相关 SDK 改动
+
+| 文件 | 改动 |
+|------|------|
+| [ameba_flashcfg.c (Dplus)](../platform/ameba-rtos/component/soc/usrcfg/amebadplus/ameba_flashcfg.c) | `Flash_Layout[]` 全部 5 条目重排成上表的地址 |
+| [ameba_flashcfg.c (Green2)](../platform/ameba-rtos/component/soc/usrcfg/amebagreen2/ameba_flashcfg.c) | 同上，与 Dplus 完全一样 |
+
+LFS 大小不用单独改 —— [littlefs_adapter.c:10-11](../platform/ameba-rtos/component/file_system/littlefs/littlefs_adapter.c) 里 `LFS_FLASH_BASE_ADDR` / `LFS_FLASH_SIZE` 是变量，在 [vfs.c:218-222](../platform/ameba-rtos/component/file_system/vfs/vfs.c) 里从 `flash_get_layout_info(VFS1, ...)` 动态填值，跟着 Flash_Layout 走。
 
 ## Bouffalo BL602 / BL616 / BL616CL
 

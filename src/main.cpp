@@ -206,6 +206,16 @@ void app_pre_example(void) {
 }
 #endif // defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C
 
+#if defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2
+// Overrides the SDK's _WEAK app_pre_example() in
+// component/soc/<soc>/main/km4*/src/main.c; runs before WLAN/BT/OTA init.
+// wifi_do_fast_connect() is __weak in the new SDK and auto-invoked by the
+// WLAN driver, so we don't have to manually register a callback like Ameba D.
+void app_pre_example(void) {
+    at::lockFirmwareFlash();
+}
+#endif // defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2
+
 } // extern "C"
 
 #if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
