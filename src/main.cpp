@@ -1,5 +1,6 @@
 #include "Common.h"
 #include "AtTask.h"
+#include "BoardFlashLock.h"
 
 extern "C" {
 
@@ -190,6 +191,10 @@ int main(void) {
 
 #if defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C
 void app_pre_example(void) {
+    // Lock the firmware flash region (bottom 3 MB) against accidental writes
+    // from glitches / brownouts. Must happen before WLAN / BT / OTA start.
+    at::lockFirmwareFlash();
+
     // Call back from wlan driver when rssi is lower than threshold
     // p_roaming_start_callback = wifi_roaming_start;
 
