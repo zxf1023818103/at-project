@@ -65,11 +65,15 @@ raw offset      size       region                          flash 保护
 0x180000        0x010000   IMG_BOOT_OTA2     (   64 KB)    🔒 protected
 0x190000        0x170000   IMG_APP_OTA2      ( 1472 KB)    🔒 protected
 ─── 0x300000: 写保护边界（CMP=1, TB=0, BP=1MB → 上 1 MB unprotected）───
-0x300000        0x100000   VFS1 / LittleFS   ( 1024 KB)    ✏️ writable
+0x300000        0x0FA000   VFS1 / LittleFS   ( 1000 KB)    ✏️ writable
+0x3FA000        0x006000   (reserved)        (   24 KB)    ✏️ writable
 0x400000                   flash end
 ```
 
-总：64 + 1472 + 64 + 1472 + 1024 = 4096 KB ✓
+总：64 + 1472 + 64 + 1472 + 1000 + 24 = 4096 KB ✓
+
+LFS 大小固定 1000 KB 与 Ameba D 对齐（让同一份 lfs 镜像可在三方共用，见
+[lfs.md](lfs.md)）。末尾 24 KB 暂不分配，留给将来可能的 settings sector。
 
 **设计取舍**
 
@@ -108,11 +112,15 @@ raw offset      size       region                          flash 保护
 0x010000        0x178000   FW slot 0      ( 1504 KB)       🔒 protected
 0x188000        0x178000   FW slot 1      ( 1504 KB)       🔒 protected
 ─── 0x300000: 写保护边界（CMP=1, TB=0, BP=1MB → 上 1 MB unprotected）───
-0x300000        0x100000   PSM (LittleFS) ( 1024 KB)       ✏️ writable
+0x300000        0x0FA000   PSM (LittleFS) ( 1000 KB)       ✏️ writable
+0x3FA000        0x006000   (reserved)     (   24 KB)       ✏️ writable
 0x400000                   flash end
 ```
 
-总：56 + 4 + 4 + 2×1504 + 1024 = 4096 KB ✓
+总：56 + 4 + 4 + 2×1504 + 1000 + 24 = 4096 KB ✓
+
+PSM 大小固定 1000 KB 与 Ameba D 对齐（让同一份 lfs 镜像可在三方共用，见
+[lfs.md](lfs.md)）。末尾 24 KB 暂不分配。
 
 **设计取舍**
 - 砍掉 SDK 默认的 mfg / media / DATA / factory / KEY 五个分区。前两个对我们的 AT 命令固件没用（mfg 是定频测试 fw，media 是 ROMFS 资源），后三个整个 SDK grep `"KEY" / "DATA" / "factory"` 都没人引用，是历史占位
