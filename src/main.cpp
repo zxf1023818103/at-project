@@ -1,5 +1,6 @@
 #include "Common.h"
 #include "AtTask.h"
+#include "TestTask.h"
 #include "BoardFlashLock.h"
 
 extern "C" {
@@ -7,7 +8,8 @@ extern "C" {
 __attribute__((__weak__)) void *__dso_handle = (void *)&__dso_handle;
 
 int wifi_do_fast_connect(void) {
-    at::make_shared<at::AtTask>()->startAsync("AtTask", 256 * 12, 4);
+    // at::make_shared<at::AtTask>()->startAsync("AtTask", 256 * 12, 4);
+    at::make_shared<at::TestTask>()->startAsync("TestTask", 256 * 12, 4);
     return 0;
 }
 
@@ -193,32 +195,25 @@ int main(void) {
 }
 #endif // defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
 
-#if defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C
+#if defined CONFIG_PLATFORM_AMEBALITE || defined CONFIG_PLATFORM_AMEBASMART || defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2 || defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C
 void app_pre_example(void) {
     // Lock the firmware flash region (bottom 3 MB) against accidental writes
     // from glitches / brownouts. Must happen before WLAN / BT / OTA start.
     at::lockFirmwareFlash();
+    at::unlockFirmwareFlash();
 
     // Call back from wlan driver when rssi is lower than threshold
     // p_roaming_start_callback = wifi_roaming_start;
 
+#if defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C
     // Call back from wlan driver after wlan init done
     p_wlan_init_done_callback = wifi_do_fast_connect;
 
     // Call back from application layer after wifi_connection success
     p_write_reconnect_ptr = wlan_write_reconnect_data_to_flash;
-}
 #endif // defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C
-
-#if defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2
-// Overrides the SDK's _WEAK app_pre_example() in
-// component/soc/<soc>/main/km4*/src/main.c; runs before WLAN/BT/OTA init.
-// wifi_do_fast_connect() is __weak in the new SDK and auto-invoked by the
-// WLAN driver, so we don't have to manually register a callback like Ameba D.
-void app_pre_example(void) {
-    at::lockFirmwareFlash();
 }
-#endif // defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2
+#endif // defined CONFIG_PLATFORM_AMEBALITE || defined CONFIG_PLATFORM_AMEBASMART || defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2 || defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C
 
 } // extern "C"
 

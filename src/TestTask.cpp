@@ -410,8 +410,9 @@ void TestTask::routine() {
     // testLogger1();
     // testStandardLibrary1();
     // testBluetoothTask1();
-    testUartOutStream1();
-    testUartInStream1();
+    // testUartOutStream1();
+    // testUartInStream1();
+    testFileSystem1();
 }
 
 }  // namespace at
