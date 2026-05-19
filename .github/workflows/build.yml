@@ -13,8 +13,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  lfs_image:
+    name: LFS image (project/lfs.bin)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout (no submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Init bouffalo_sdk (needed for mklfs)
+        run: git submodule update --init --depth 1 platform/bouffalo_sdk
+
+      - name: Generate lfs.bin
+        run: make -C project lfs_image
+
+      - name: Upload lfs.bin
+        uses: actions/upload-artifact@v4
+        with:
+          name: lfs-image
+          path: project/lfs.bin
+          if-no-files-found: error
+          retention-days: 30
+
   build:
     name: ${{ matrix.display }}
+    needs: lfs_image
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -34,6 +58,7 @@ jobs:
               project/bouffalo/build_bl602/build_out/mfg_bl602_gu_2e8b4aa47_40m_v2.90.bin
               platform/bouffalo_sdk/bsp/board/bl602dk/config/partition_cfg_2M.toml
               platform/bouffalo_sdk/bsp/board/bl602dk/config/bl_factory_params_IoTKitA_40M.dts
+              project/lfs.bin
             ota: |
               project/bouffalo/build_bl602/build_out/at_bl602.xz.ota
             elf: |
@@ -53,6 +78,7 @@ jobs:
               project/bouffalo/build_bl616/build_out/mfg_bl616_gu_ef9d197c5_v2.50.bin
               platform/bouffalo_sdk/bsp/board/bl616dk/config/partition_cfg_4M.toml
               platform/bouffalo_sdk/bsp/board/bl616dk/config/bl_factory_params_IoTKitA_auto.dts
+              project/lfs.bin
             ota: |
               project/bouffalo/build_bl616/build_out/at_bl616.xz.ota
             elf: |
@@ -71,6 +97,7 @@ jobs:
               project/bouffalo/build_bl616cl/build_out/boot2_bl616cl_isp_release_v8.2.1.bin
               platform/bouffalo_sdk/bsp/board/bl616cldk/config/partition_cfg_4M.toml
               platform/bouffalo_sdk/bsp/board/bl616cldk/config/bl_factory_params_IoTKitA_auto.dts
+              project/lfs.bin
             ota: |
               project/bouffalo/build_bl616cl/build_out/at_bl616cl.xz.ota
             elf: |
@@ -87,6 +114,7 @@ jobs:
               project/amebad/out/km0_boot_all.bin
               project/amebad/out/km4_boot_all.bin
               project/amebad/out/km0_km4_image2.bin
+              project/lfs.bin
             ota: |
               project/amebad/out/OTA_All.bin
             elf: |
@@ -103,6 +131,7 @@ jobs:
             raw: |
               project/ameba/build_RTL8711Dx/km4_boot_all.bin
               project/ameba/build_RTL8711Dx/km0_km4_app.bin
+              project/lfs.bin
             ota: |
               project/ameba/build_RTL8711Dx/ota_all.bin
             elf: |
@@ -119,6 +148,7 @@ jobs:
             raw: |
               project/ameba/build_RTL8711F/amebagreen2_boot.bin
               project/ameba/build_RTL8711F/amebagreen2_app.bin
+              project/lfs.bin
             ota: |
               project/ameba/build_RTL8711F/ota_all.bin
             elf: |
@@ -194,6 +224,15 @@ jobs:
         # GLOB / find 收集 src/*.cpp，所以必须先跑 ragel，否则
         # AtCommandParser::process()/ctor 等符号会缺失。
         run: make -C src
+
+      - name: Download lfs.bin (shared across all platforms)
+        # 由独立的 lfs_image job 生成；各 sub-make 直接读 project/lfs.bin，不
+        # 再依赖顶层 project/Makefile 触发 mklfs（Ameba job 不会拉 bouffalo_sdk
+        # submodule，所以本地没有 mklfs 二进制）。
+        uses: actions/download-artifact@v4
+        with:
+          name: lfs-image
+          path: project/
 
       - name: Build
         run: |
@@ -316,10 +355,12 @@ jobs:
 
             每个 tarball 内布局：
             - 根目录：合成固件（`Image_All.bin` / `whole_flash_data.bin`）+
-              同名 `*.md5`。
+              同名 `*.md5`。LFS 区已经预填，烧机后即可读取 `KV/` 内容。
             - `raw/` 子目录：用于合成的原始 bin、OTA（`FW_OTA.bin.xz` /
-              `OTA_All.bin` / `ota_all.bin`）；BL602 / BL616 还附带
-              `boot2.bin`、`partition_cfg.toml`、`bl_factory_params.dts`。
+              `OTA_All.bin` / `ota_all.bin`）、跨平台共用的 `lfs.bin`
+              （1000 KB，可单独烧到 `0x300000` 仅更新 KV 区）；BL602 /
+              BL616 还附带 `boot2.bin`、`partition_cfg.toml`、
+              `bl_factory_params.dts`。
             - `elf/` 子目录：ELF / AXF（含调试符号）。
           prerelease: true
           files: release/*.tar.gz
