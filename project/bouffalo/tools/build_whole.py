@@ -100,7 +100,15 @@ def main() -> None:
 
     src = args.sdk_base / "tools/bflb_tools/bouffalo_flash_cube/chips" / args.chip / "img_create/whole_flash_data.bin"
     dst = build_out / "whole_flash_data.bin"
-    dst.write_bytes(src.read_bytes())
+    data = src.read_bytes()
+    # Pad with 0xff to full 4 MB flash size so the merged image matches a raw
+    # `dd if=flash` dump byte-for-byte. Without this, BLFlashCommand stops at
+    # the last PT entry (PSM end @ 0x3FA000 with current toml), leaving the
+    # trailing 24 KB reserved sector out of the file.
+    FLASH_SIZE = 4 * 1024 * 1024
+    if len(data) < FLASH_SIZE:
+        data += b"\xff" * (FLASH_SIZE - len(data))
+    dst.write_bytes(data)
     print(f"wrote {dst}", file=sys.stderr)
 
 
