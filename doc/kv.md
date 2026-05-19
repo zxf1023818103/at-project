@@ -49,6 +49,40 @@ Ameba 两边的 `kv.c` 不做转义，直接 `sprintf("KV/%s", key)`。
 区，可以直接刷到 Ameba Dplus 对应分区，启动后 `rt_kv_get("hello", buf, 5)`
 能读到 `"world"`。
 
+## 预填 KV（出厂烧入）
+
+项目根有一份 [project/resource/](../project/resource/) 目录作为 lfs 镜像的根
+文件系统。`make -C project lfs_image` 把它整个打成 [project/lfs.bin](../project/lfs.bin)
+（1000 KB，参数见 [lfs.md](lfs.md)），各平台的合成固件构建会自动把
+lfs.bin 嵌到 raw offset `0x300000`，烧机后开机直接可用。
+
+预填一个 KV 的步骤：
+
+1. 在 `project/resource/KV/` 下放一个文件，**文件名 = key**，**文件内容 =
+   value**（不要加 header / CRC，littlefs 自己兜底）。例：
+   ```sh
+   echo -n "hello-world" > project/resource/KV/greeting
+   ```
+2. 运行 `make -C project <plat>`，lfs.bin 会被重新生成并嵌入合成固件。
+3. 烧入后从代码里读：
+   - Bouffalo：`size_t got; ef_get_env_blob("greeting", buf, sizeof(buf), &got);`
+   - Ameba：`int32_t got = rt_kv_get("greeting", buf, sizeof(buf));`
+
+### 自检函数
+
+[src/TestTask.cpp](../src/TestTask.cpp) 的 `at::testFileSystem1()` 会读
+`test_key_1` 校验跟预设字符串一致，再写 `test_key_2` 做一次 round-trip。它
+**不会被自动调用** —— 想跑就在 main 里手动调一次：
+
+```cpp
+at::testFileSystem1();
+```
+
+### mklfs 会把目录内所有文件打包
+
+包括 `resource/README.md`。它会出现在 lfs 镜像的根目录，但运行时 KV API 只
+看 `/KV/` 下面的文件，所以无影响（只占几个字节的 lfs 元数据）。
+
 ## 历史 KV 数据迁移（升级 SDK 时）
 
 升级前 Bouffalo 用的命名空间是 `/_ef4_kvs_`；升级后是 `/KV`。LFS 镜像里旧目录

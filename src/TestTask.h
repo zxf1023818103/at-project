@@ -16,6 +16,8 @@ void testBluetoothTask1();
 void testUartOutStream1();
 void testUartInStream1();
 
+void testFileSystem1();
+
 class TestTask : public Task {
 public:
     explicit TestTask();

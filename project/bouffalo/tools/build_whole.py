@@ -18,7 +18,7 @@ from pathlib import Path
 
 # pt_entry name → ini section name. Sections we emit with @partition refer to
 # the pt_table by name; BLFlashCommand looks the address up in partition.bin.
-SECTION_PT_ENTRY = {"FW": "FW", "mfg": "mfg"}
+SECTION_PT_ENTRY = {"FW": "FW", "mfg": "mfg", "PSM": "PSM"}
 
 
 def main() -> None:
@@ -68,6 +68,16 @@ def main() -> None:
             "",
             "[mfg]",
             "filedir = ./build_out/mfg*.bin",
+            "address = @partition",
+        ]
+    # PSM is the LittleFS region; we pre-fill it with project/lfs.bin so the
+    # merged whole_flash_data.bin already contains the KV image. See doc/lfs.md.
+    lfs_path = (build_dir / ".." / ".." / "lfs.bin").resolve()
+    if "PSM" in entry_names and lfs_path.is_file():
+        sections += [
+            "",
+            "[PSM]",
+            f"filedir = {lfs_path}",
             "address = @partition",
         ]
 

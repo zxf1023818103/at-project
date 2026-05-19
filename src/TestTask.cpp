@@ -12,6 +12,19 @@
 #include "UartInStream.h"
 #include "AtUartConfig.h"
 
+// rt_kv API lives in each Ameba SDK's <kv.h>; declare locally so we don't
+// have to wire kv.h into Common.h just for one test function.
+#if defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C \
+ || defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2
+extern "C" {
+    int32_t rt_kv_get(const char *key, void *buffer, int32_t len);
+    int32_t rt_kv_set(const char *key, const void *val, int32_t len);
+}
+#if defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C
+extern "C" void rt_kv_init(void);   // older Ameba D needs explicit init
+#endif
+#endif
+
 namespace at {
 
 void testAsyncTask() {
@@ -314,6 +327,74 @@ void testUartInStream1() {
         out.flush();
     }
     printf("\n%s\n", "========= UartInStream Test 1 Finished =========");
+}
+
+// Read the prefilled KV "test_key_1" (placed in project/resource/KV/test_key_1
+// and packed into lfs.bin by mklfs), then round-trip a fresh key. Verifies the
+// same lfs.bin reads correctly through EasyFlash on Bouffalo and rt_kv on
+// Ameba. Not wired into routine() automatically — call from main or any task
+// once boot finishes, e.g. `testFileSystem1();`.
+void testFileSystem1() {
+    static const char kExpectedKey[] = "test_key_1";
+    static const char kExpectedVal[] = "lfs-rocks";       // matches project/resource/KV/test_key_1
+    static const size_t kExpectedLen = sizeof(kExpectedVal) - 1;
+    static const char kRoundtripKey[] = "test_key_2";
+    static const char kRoundtripVal[] = "claude-was-here";
+    char buf[32] = {0};
+
+#if defined BL602 || defined BL702 || defined BL606P || defined BL808 \
+ || defined BL616 || defined BL616CL
+    size_t got = 0;
+    ef_get_env_blob(kExpectedKey, buf, sizeof(buf), &got);
+    printf("[lfs] ef_get_env_blob(%s) -> got=%u buf='%.*s'\n",
+           kExpectedKey, static_cast<unsigned>(got), static_cast<int>(got), buf);
+    if (got == kExpectedLen && memcmp(buf, kExpectedVal, kExpectedLen) == 0) {
+        printf("[lfs] PASS: prefilled KV matches\n");
+    } else {
+        printf("[lfs] FAIL: expected '%s' (%u bytes)\n",
+               kExpectedVal, static_cast<unsigned>(kExpectedLen));
+    }
+
+    ef_set_env_blob(kRoundtripKey, kRoundtripVal, ::strlen(kRoundtripVal));
+    ::memset(buf, 0, sizeof(buf));
+    ef_get_env_blob(kRoundtripKey, buf, sizeof(buf), &got);
+    printf("[lfs] round-trip %s -> got=%u buf='%.*s'\n",
+           kRoundtripKey, static_cast<unsigned>(got), static_cast<int>(got), buf);
+
+#elif defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C
+    rt_kv_init();
+    int32_t got = rt_kv_get(kExpectedKey, buf, sizeof(buf));
+    printf("[lfs] rt_kv_get(%s) -> rc=%d buf='%s'\n", kExpectedKey, static_cast<int>(got), buf);
+    if (memcmp(buf, kExpectedVal, kExpectedLen) == 0) {
+        printf("[lfs] PASS: prefilled KV matches\n");
+    } else {
+        printf("[lfs] FAIL: expected '%s'\n", kExpectedVal);
+    }
+
+    rt_kv_set(kRoundtripKey, kRoundtripVal, static_cast<int32_t>(::strlen(kRoundtripVal)));
+    ::memset(buf, 0, sizeof(buf));
+    rt_kv_get(kRoundtripKey, buf, sizeof(buf));
+    printf("[lfs] round-trip %s -> buf='%s'\n", kRoundtripKey, buf);
+
+#elif defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2
+    // VFS already mounted by SDK init; rt_kv_get/set go through VFS layer.
+    int32_t got = rt_kv_get(kExpectedKey, buf, sizeof(buf));
+    printf("[lfs] rt_kv_get(%s) -> rc=%d buf='%s'\n", kExpectedKey, static_cast<int>(got), buf);
+    if (memcmp(buf, kExpectedVal, kExpectedLen) == 0) {
+        printf("[lfs] PASS: prefilled KV matches\n");
+    } else {
+        printf("[lfs] FAIL: expected '%s'\n", kExpectedVal);
+    }
+
+    rt_kv_set(kRoundtripKey, kRoundtripVal, static_cast<int32_t>(::strlen(kRoundtripVal)));
+    ::memset(buf, 0, sizeof(buf));
+    rt_kv_get(kRoundtripKey, buf, sizeof(buf));
+    printf("[lfs] round-trip %s -> buf='%s'\n", kRoundtripKey, buf);
+
+#else
+    (void)buf;
+    printf("[lfs] testFileSystem1: no KV API on this platform\n");
+#endif
 }
 
 TestTask::TestTask() : Task() {}
