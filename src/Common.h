@@ -1,5 +1,9 @@
 #pragma once
 
+#ifdef __cplusplus
+static_assert(__cplusplus >= 201703L, "at-project requires C++17 or later");
+#endif
+
 #if defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C
 #define STD_PRINTF
 #endif // defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C

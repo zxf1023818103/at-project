@@ -7,11 +7,11 @@
 | 平台 | 架构 | GCC 版本 | 工具链 build | 项目强制 C | 项目强制 C++ | 默认 C | 默认 C++ | C++ 最高 |
 |---|---|---|---|---|---|---|---|---|
 | BL602 / BL616 / BL616CL | RV32 (T-Head) | 10.2.0 | Xuantie-900 V2.6.1 B-20220906 | `-std=gnu17` | `-std=gnu++17` | C17 | C++14 | C++20 |
-| Ameba D (RTL8721D / RTL8710C) | ARMv7E-M | 10.3.1 | Realtek ASDK 10.3.1 Build 4354 | — | — | C17 | C++14 | C++20 |
-| Ameba Dplus (RTL8711Dx) | ARMv8-M | 10.3.1 | Realtek ASDK 10.3.1 Build 4523 | — | `-std=c++11` | C17 | C++14 | C++20 |
-| Ameba Green2 (RTL8711F) | ARMv8-M | 12.3.1 | Realtek ASDK 12.3.1 Build 4568 | — | `-std=c++11` | C17 | C++17 | C++23 |
+| Ameba D (RTL8721D / RTL8710C) | ARMv7E-M | 10.3.1 | Realtek ASDK 10.3.1 Build 4354 | — | `-std=gnu++17` | C17 | C++14 | C++20 |
+| Ameba Dplus (RTL8711Dx) | ARMv8-M | 10.3.1 | Realtek ASDK 10.3.1 Build 4523 | — | `-std=gnu++17` | C17 | C++14 | C++20 |
+| Ameba Green2 (RTL8711F) | ARMv8-M | 12.3.1 | Realtek ASDK 12.3.1 Build 4568 | — | `-std=gnu++17` | C17 | C++17 | C++23 |
 
-"项目强制"指 SDK / 项目 CMake / Makefile 给所有 TU 显式追加的 `-std=` 标志。"默认 C/C++" 是不带 `-std=` 时编译器自身的默认值。
+"项目强制"指 SDK / 项目 CMake / Makefile 给所有 TU 显式追加的 `-std=` 标志。"默认 C/C++" 是不带 `-std=` 时编译器自身的默认值。所有平台 C++ 实际都按 C++17 编译；[src/Common.h](../src/Common.h) 顶部有 `static_assert(__cplusplus >= 201703L)` 兜底，任何平台再回到 C++11/14 会直接编不过。
 
 ## Bouffalo 系（BL602 / BL616 / BL616CL）
 
@@ -29,7 +29,7 @@ T-Head 提供的 RISC-V newlib 工具链，作为 git submodule 放在 `platform
 
 - 编译器：`platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_{hp,lp}/toolchain/linux/asdk-10.3.1/linux/newlib/bin/arm-none-eabi-{gcc,g++}`
 - `gcc --version`: `arm-none-eabi-gcc (Realtek ASDK-10.3.1 Build 4354) 10.3.1 20220117`
-- SDK 没有给所有 TU 强制 `-std=`，`src/main.cpp` 走编译器默认（C++14）
+- SDK 在 KM4/HP 的 [Makefile.include.gen:430](../platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_hp/asdk/Makefile.include.gen#L430) 给所有 `.cpp` 强制 `-std=gnu++17`（非 Matter 路径）；C 没有显式 `-std=`，跟编译器默认（C17）。KM0/LP 不编 C++ TU。
 
 ## Ameba Dplus（RTL8711Dx）和 Green2（RTL8711F）
 
@@ -42,10 +42,10 @@ T-Head 提供的 RISC-V newlib 工具链，作为 git submodule 放在 `platform
   - `arm-none-eabi-gcc (Realtek ASDK-12.3.1 Build 4568) 12.3.1 20251113`
   - 由 [platform/ameba-rtos/cmake/toolchain/ameba-toolchain-asdk-12.3.1.cmake](platform/ameba-rtos/cmake/toolchain/ameba-toolchain-asdk-12.3.1.cmake) 选用
 
-两个 SoC 共用同一份 SDK CMake，C++ 全局强制 `-std=c++11`（[platform/ameba-rtos/cmake/flags/common/compile_options.cmake:61](platform/ameba-rtos/cmake/flags/common/compile_options.cmake#L61)），所以即使 Green2 编译器默认 C++17，实际编译还是按 C++11 规则走。C 没有显式 `-std=`，跟编译器默认（C17）。
+两个 SoC 共用同一份 SDK CMake，C++ 全局强制 `-std=gnu++17`（[platform/ameba-rtos/cmake/flags/common/compile_options.cmake:61](../platform/ameba-rtos/cmake/flags/common/compile_options.cmake#L61)）。C 没有显式 `-std=`，跟编译器默认（C17）。
 
 ## 注意事项
 
-- Ameba 三个平台 C++ 都被 SDK 限到 ≤ C++11（D 因走默认而落到 C++14，仍远低于 Bouffalo 的 C++17）。`src/main.cpp` 共享一份代码，写跨平台代码时按 **C++11** 的语法可用面取最小公分母。
+- 所有平台 C++ 已统一到 `-std=gnu++17`。[src/Common.h](../src/Common.h) 顶部 `static_assert(__cplusplus >= 201703L)` 兜底，SDK 默认值哪天又被改回 C++11/14 会编译失败而不是静默回归。
 - Green2 工具链是 GCC 12.3，**比** Dplus / D 的 10.3 / Bouffalo 的 10.2 都新。诊断信息和警告会更严，迁移代码到 Green2 时可能见到老编译器没报过的 `-Wxxx`。
 - `/opt/rtk-toolchain/` 下的两套 ASDK 是 `source project/ameba/env.sh` 第一次跑时按需下载的，跟 SDK 仓库无强绑定 —— 换机器要重做一次。

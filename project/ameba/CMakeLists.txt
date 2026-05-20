@@ -4,7 +4,6 @@ set(private_definitions)             #private definitions
 set(private_compile_options)         #private compile_options
 
 ameba_list_append(private_compile_options
-    $<$<COMPILE_LANGUAGE:CXX>:-std=c++17>
     $<$<COMPILE_LANGUAGE:CXX>:-Wno-error=unused-function>
     $<$<COMPILE_LANGUAGE:CXX>:-Wno-register>)
 
