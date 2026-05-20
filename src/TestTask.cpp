@@ -20,9 +20,6 @@ extern "C" {
     int32_t rt_kv_get(const char *key, void *buffer, int32_t len);
     int32_t rt_kv_set(const char *key, const void *val, int32_t len);
 }
-#if defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C
-extern "C" void rt_kv_init(void);   // older Ameba D needs explicit init
-#endif
 #endif
 
 namespace at {
@@ -362,19 +359,25 @@ void testFileSystem1() {
            kRoundtripKey, static_cast<unsigned>(got), static_cast<int>(got), buf);
 
 #elif defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C
-    rt_kv_init();
-    int32_t got = rt_kv_get(kExpectedKey, buf, sizeof(buf));
-    printf("[lfs] rt_kv_get(%s) -> rc=%d buf='%s'\n", kExpectedKey, static_cast<int>(got), buf);
+    // 不调 rt_kv_init: 它无脑 mkdir("KV") 并打印 "mkdir kv failed, mayed already exist"，
+    // 我们的 lfs.bin 已经预置 KV/ 目录。rt_kv_set/get 内部自己会 lfs_mount。
+    // 传入的 len 必须等于实际字节数: rt_kv_get 用 res != len 判错，传 sizeof(buf)
+    // 会触发短读假报错。
+    int32_t got = rt_kv_get(kExpectedKey, buf, static_cast<int32_t>(kExpectedLen));
+    printf("[lfs] rt_kv_get(%s) -> rc=%d buf='%.*s'\n", kExpectedKey, static_cast<int>(got),
+           static_cast<int>(kExpectedLen), buf);
     if (memcmp(buf, kExpectedVal, kExpectedLen) == 0) {
         printf("[lfs] PASS: prefilled KV matches\n");
     } else {
         printf("[lfs] FAIL: expected '%s'\n", kExpectedVal);
     }
 
-    rt_kv_set(kRoundtripKey, kRoundtripVal, static_cast<int32_t>(::strlen(kRoundtripVal)));
+    const int32_t kRoundtripLen = static_cast<int32_t>(::strlen(kRoundtripVal));
+    rt_kv_set(kRoundtripKey, kRoundtripVal, kRoundtripLen);
     ::memset(buf, 0, sizeof(buf));
-    rt_kv_get(kRoundtripKey, buf, sizeof(buf));
-    printf("[lfs] round-trip %s -> buf='%s'\n", kRoundtripKey, buf);
+    rt_kv_get(kRoundtripKey, buf, kRoundtripLen);
+    printf("[lfs] round-trip %s -> buf='%.*s'\n", kRoundtripKey,
+           static_cast<int>(kRoundtripLen), buf);
 
 #elif defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2
     // VFS already mounted by SDK init; rt_kv_get/set go through VFS layer.
