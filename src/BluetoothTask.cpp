@@ -2,7 +2,7 @@
 
 namespace at {
 
-BluetoothTask::BluetoothTask(string deviceName) : LowerBluetoothTask(deviceName) {}
+BluetoothTask::BluetoothTask(string deviceName) : LowerBluetooth(deviceName) {}
 
 BluetoothTask::~BluetoothTask() = default;
 

@@ -1,22 +1,22 @@
-#include "LowerBluetoothTask.h"
-
-namespace at {
+#include "AmebaBluetooth.h"
 
 #if defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C || defined CONFIG_PLATFORM_AMEBALITE || defined CONFIG_PLATFORM_AMEBASMART || defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2
 
-bool LowerBluetoothTask::stackRunning() const {
+namespace at {
+
+bool AmebaBluetooth::stackRunning() const {
     ::T_GAP_DEV_STATE state;
     ::le_get_gap_param(GAP_PARAM_DEV_STATE, &state);
     return state.gap_init_state == GAP_INIT_STATE_STACK_READY;
 }
 
-void LowerBluetoothTask::waitForStackRunning() const {
+void AmebaBluetooth::waitForStackRunning() const {
     while (!stackRunning()) {
         ::vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
-::T_APP_RESULT LowerBluetoothTask::gapCallback(uint8_t type, void *args) {
+::T_APP_RESULT AmebaBluetooth::gapCallback(uint8_t type, void *args) {
     ::T_LE_CB_DATA *data = static_cast<::T_LE_CB_DATA*>(args);
     switch (type) {
 #if defined(F_BT_LE_4_2_DATA_LEN_EXT_SUPPORT) && F_BT_LE_4_2_DATA_LEN_EXT_SUPPORT
@@ -49,7 +49,7 @@ void LowerBluetoothTask::waitForStackRunning() const {
     return ::APP_RESULT_SUCCESS;
 }
 
-LowerBluetoothTask::LowerBluetoothTask(string deviceName)
+AmebaBluetooth::AmebaBluetooth(string deviceName)
     : Task(), m_eventQueue(API_TASK_GAP_MSG_QUEUE_SIZE), m_ioQueue(API_TASK_IO_MSG_QUEUE_SIZE) {
     my_assert(!stackRunning());
     ::bt_trace_init();
@@ -114,7 +114,7 @@ LowerBluetoothTask::LowerBluetoothTask(string deviceName)
     ::server_init(RTK_BT_GATTS_SERVICE_NUM - 2);
 }
 
-LowerBluetoothTask::~LowerBluetoothTask() {
+AmebaBluetooth::~AmebaBluetooth() {
     if (stackRunning()) {
 #if F_BT_DEINIT
         ::bte_deinit();
@@ -127,16 +127,16 @@ LowerBluetoothTask::~LowerBluetoothTask() {
     }
 }
 
-void LowerBluetoothTask::onDisconnected(uint8_t connId, uint16_t reason) {
+void AmebaBluetooth::onDisconnected(uint8_t connId, uint16_t reason) {
     getLogger()->logFormat(Logger::DEBUG, "onDisconnected connId=0x%X reason=0x%X", connId, reason);
 }
 
-void LowerBluetoothTask::onConnected(uint8_t connId) {
+void AmebaBluetooth::onConnected(uint8_t connId) {
     getLogger()->logFormat(Logger::DEBUG, "onConnected connId=0x%X", connId);
     ::le_adv_start();
 }
 
-bool LowerBluetoothTask::handleGapMessage(::T_IO_MSG *ioMsg) {
+bool AmebaBluetooth::handleGapMessage(::T_IO_MSG *ioMsg) {
     const char *gapAdvStateStrTbl[] = {
         "GAP_ADV_STATE_IDLE",
         "GAP_ADV_STATE_START",
@@ -303,7 +303,7 @@ bool LowerBluetoothTask::handleGapMessage(::T_IO_MSG *ioMsg) {
     return true;
 }
 
-void LowerBluetoothTask::routine() {
+void AmebaBluetooth::routine() {
     my_assert(::gap_start_bt_stack(m_eventQueue.handle(), m_ioQueue.handle(), m_eventQueue.length() + m_ioQueue.length()));
     for (;;) {
         uint8_t event = 0;
@@ -335,12 +335,12 @@ void LowerBluetoothTask::routine() {
     }
 }
 
-void LowerBluetoothTask::notify() {
+void AmebaBluetooth::notify() {
     uint8_t event = ::EVENT_IO_TO_APP;
     m_eventQueue.send(&event);
 }
 
-shared_ptr<MacAddress> LowerBluetoothTask::macAddressInternal() {
+shared_ptr<MacAddress> AmebaBluetooth::macAddressInternal() {
     auto macPtr = make_shared<MacAddress>();
     uint8_t mac[6];
     my_assert(::gap_get_param(GAP_PARAM_BD_ADDR, mac) == 0);
@@ -348,18 +348,18 @@ shared_ptr<MacAddress> LowerBluetoothTask::macAddressInternal() {
     return macPtr;
 }
 
-void LowerBluetoothTask::setDeviceNameInternal(string deviceName) {
+void AmebaBluetooth::setDeviceNameInternal(string deviceName) {
     if (deviceName.length() > GAP_DEVICE_NAME_LEN) {
         deviceName.resize(GAP_DEVICE_NAME_LEN);
     }
     ::gaps_set_parameter(GAPS_PARAM_DEVICE_NAME, deviceName.length(), const_cast<char*>(deviceName.c_str()));
 }
 
-bool LowerBluetoothTask::stopAdvertisingInternal() {
+bool AmebaBluetooth::stopAdvertisingInternal() {
     return ::le_adv_stop() == ::GAP_CAUSE_SUCCESS;
 }
 
-void LowerBluetoothTask::setAdvertisingParametersInternal(const struct bt_le_adv_param *param, bool hasScanResponseData) {
+void AmebaBluetooth::setAdvertisingParametersInternal(const struct bt_le_adv_param *param, bool hasScanResponseData) {
     uint8_t adv_direct_type = GAP_REMOTE_ADDR_LE_PUBLIC;
     ::le_adv_set_param(GAP_PARAM_ADV_DIRECT_ADDR_TYPE, sizeof(adv_direct_type), &adv_direct_type);
 
@@ -395,68 +395,16 @@ void LowerBluetoothTask::setAdvertisingParametersInternal(const struct bt_le_adv
     ::le_adv_set_param(GAP_PARAM_ADV_INTERVAL_MAX, sizeof(param->interval_max), const_cast<uint16_t*>(&param->interval_max));
 }
 
-void LowerBluetoothTask::waitForStart() const {
+void AmebaBluetooth::waitForStart() const {
     Task::waitForStart();
     waitForStackRunning();
 }
 
-void LowerBluetoothTask::sendCallback(shared_ptr<AbstractCallbackTask> callback) {
+void AmebaBluetooth::sendCallback(shared_ptr<AbstractCallbackTask> callback) {
     m_ioQueue.send(callback);
     notify();
 }
 
-#endif // realtek platforms
-
-#if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
-
-LowerBluetoothTask::LowerBluetoothTask(string deviceName) : Task(), m_callbackQueue(API_TASK_IO_MSG_QUEUE_SIZE) {
-#if defined BL602 || defined BL702
-    ::ble_controller_init(configMAX_PRIORITIES - 1);
-#endif // defined BL602 || defined BL702
-#if defined BL606P || defined BL808 || defined BL616 || defined BL616CL
-    ::btble_controller_init(configMAX_PRIORITIES - 1);
-#endif // defined BL606P || defined BL808 || defined BL616 || defined BL616CL
-    ::hci_driver_init();
-    ::bt_enable(nullptr);
-
-    setDeviceNameInternal(deviceName);
-}
-
-LowerBluetoothTask::~LowerBluetoothTask() {
-    ::bt_disable();
-}
-
-void LowerBluetoothTask::sendCallback(shared_ptr<AbstractCallbackTask> callback) {
-    m_callbackQueue.send(callback);
-}
-
-shared_ptr<MacAddress> LowerBluetoothTask::macAddressInternal() {
-    auto macPtr = make_shared<MacAddress>();
-    ::bt_addr_le_t local_addr;
-    my_assert(::bt_get_local_public_address(&local_addr) == 0);
-    reverse_copy(local_addr.a.val, local_addr.a.val + 6, begin(macPtr->address));
-    return macPtr;
-}
-
-void LowerBluetoothTask::setDeviceNameInternal(string deviceName) {
-    ::bt_set_name(deviceName.c_str());
-}
-
-bool LowerBluetoothTask::stopAdvertisingInternal() {
-    return ::bt_le_adv_stop() == 0;
-}
-
-void LowerBluetoothTask::routine() {
-    for (;;) {
-        auto callbackTaskPtr = m_callbackQueue.receive();
-        my_assert(callbackTaskPtr != nullptr);
-        callbackTaskPtr->startSync();
-        if (!callbackTaskPtr->success()) {
-            break;
-        }
-    }
-}
-
-#endif // bouffalo platforms
-
 }  // namespace at
+
+#endif // realtek platforms
