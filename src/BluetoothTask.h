@@ -31,7 +31,7 @@ struct BluetoothTask : public LowerBluetooth {
 
     shared_ptr<MacAddress> macAddress();
 
-    bool setDeviceName(string deviceName);
+    void setDeviceName(string deviceName);
 
     template<typename BluetoothFieldList>
     bool startAdvertising(const struct bt_le_adv_param &param, const BluetoothFieldList &ad, const BluetoothFieldList &sd) {

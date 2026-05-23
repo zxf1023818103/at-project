@@ -27,7 +27,7 @@ public:
 protected:
     shared_ptr<MacAddress> macAddressInternal();
 
-    bool setDeviceNameInternal(string deviceName);
+    void setDeviceNameInternal(string deviceName);
 
     template<typename BluetoothFieldIterator, typename OutputIterator>
     OutputIterator buildAdvertisingDataInternal(BluetoothFieldIterator inputBegin, size_t& remainingInputLength, OutputIterator outputBegin, size_t& remainingOutputLength) {

@@ -347,11 +347,13 @@ shared_ptr<MacAddress> AmebaBluetooth::macAddressInternal() {
     return macPtr;
 }
 
-bool AmebaBluetooth::setDeviceNameInternal(string deviceName) {
+void AmebaBluetooth::setDeviceNameInternal(string deviceName) {
     if (deviceName.length() > GAP_DEVICE_NAME_LEN) {
         deviceName.resize(GAP_DEVICE_NAME_LEN);
     }
-    return ::gaps_set_parameter(GAPS_PARAM_DEVICE_NAME, deviceName.length(), const_cast<char*>(deviceName.c_str())) == GAP_CAUSE_SUCCESS;
+    if (::gaps_set_parameter(GAPS_PARAM_DEVICE_NAME, deviceName.length(), const_cast<char*>(deviceName.c_str())) != GAP_CAUSE_SUCCESS) {
+        getLogger()->logFormat(Logger::WARN, "gaps_set_parameter(DEVICE_NAME) failed");
+    }
 }
 
 bool AmebaBluetooth::stopAdvertisingInternal() {

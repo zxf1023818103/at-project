@@ -19,9 +19,13 @@ shared_ptr<MacAddress> BluetoothTask::macAddress() {
     });
 }
 
-bool BluetoothTask::setDeviceName(string deviceName) {
-    return sendCallback<bool>([deviceName, this]() {
-        return setDeviceNameInternal(deviceName);
+void BluetoothTask::setDeviceName(string deviceName) {
+    // Stays sendCallback<void>: CallbackTask<bool> uses `false` as the
+    // "exit task" signal (see BluetoothTask::exit()), so any transient
+    // gaps_set_parameter / bt_set_name failure would terminate the BT
+    // routine. Log failures inside setDeviceNameInternal instead.
+    return sendCallback<void>([deviceName, this]() {
+        setDeviceNameInternal(deviceName);
     });
 }
 

@@ -47,7 +47,7 @@ protected:
 
     shared_ptr<MacAddress> macAddressInternal();
 
-    bool setDeviceNameInternal(string deviceName);
+    void setDeviceNameInternal(string deviceName);
 
     bool stopAdvertisingInternal();
 
