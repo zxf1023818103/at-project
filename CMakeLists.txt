@@ -10,5 +10,5 @@ project(at_project C CXX ASM)
 set(AT_PROJECT_ROOT ${CMAKE_CURRENT_LIST_DIR})
 list(APPEND CMAKE_MODULE_PATH ${AT_PROJECT_ROOT}/cmake)
 
-add_subdirectory(thirdparty)
+add_subdirectory(component)
 add_subdirectory(src)

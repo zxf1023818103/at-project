@@ -1,7 +1,7 @@
 include_guard()
 
-# Pulls in thirdparty/zlib (madler/zlib v1.3.1) as a static-only build.
-# Called both from thirdparty/CMakeLists.txt (auto enumeration) and from
+# Pulls in component/zlib (madler/zlib v1.3.1) as a static-only build.
+# Called both from component/CMakeLists.txt (auto enumeration) and from
 # the legacy project/ameba and project/bouffalo CMakeLists which can't
 # use the root CMakeLists.txt entry. include_guard() makes both paths
 # idempotent so a project that hits both never double-adds the target.
@@ -35,7 +35,7 @@ if(NOT DEFINED AT_PROJECT_ROOT)
     message(FATAL_ERROR "AT_PROJECT_ROOT must be set before including cmake/zlib.cmake")
 endif()
 
-add_subdirectory(${AT_PROJECT_ROOT}/thirdparty/zlib ${CMAKE_BINARY_DIR}/at_zlib_build EXCLUDE_FROM_ALL)
+add_subdirectory(${AT_PROJECT_ROOT}/component/zlib ${CMAKE_BINARY_DIR}/at_zlib_build EXCLUDE_FROM_ALL)
 
 # zlib's source uses constructs that trip the Ameba SDK's strict
 # -Wundef -Wall -Wextra -Werror flag stack (`#if BIG_ENDIAN`, signedness

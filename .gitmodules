@@ -12,10 +12,10 @@
 	path = platform/bouffalo_sdk
 	url = https://github.com/zxf1023818103/bouffalo_sdk.git
 	branch = at-v2.3.26
-[submodule "thirdparty/zlib"]
-	path = thirdparty/zlib
+[submodule "component/zlib"]
+	path = component/zlib
 	url = https://github.com/madler/zlib.git
-[submodule "thirdparty/freertos-kernel"]
-	path = thirdparty/freertos-kernel
+[submodule "component/freertos-kernel"]
+	path = component/freertos-kernel
 	url = https://github.com/FreeRTOS/FreeRTOS-Kernel.git
 	branch = main
