@@ -24,7 +24,7 @@ set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 # Make the compile checks fall back to STATIC_LIBRARY.
 set(CMAKE_TRY_COMPILE_TARGET_TYPE "STATIC_LIBRARY")
 
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/zlib ${CMAKE_BINARY_DIR}/at_zlib_build EXCLUDE_FROM_ALL)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../thirdparty/zlib ${CMAKE_BINARY_DIR}/at_zlib_build EXCLUDE_FROM_ALL)
 
 # zlib's source uses constructs that trip the Ameba SDK's strict
 # -Wundef -Wall -Wextra -Werror flag stack (`#if BIG_ENDIAN`, signedness

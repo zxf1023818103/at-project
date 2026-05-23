@@ -12,6 +12,6 @@
 	path = platform/bouffalo_sdk
 	url = https://github.com/zxf1023818103/bouffalo_sdk.git
 	branch = at-v2.3.26
-[submodule "src/zlib"]
-	path = src/zlib
+[submodule "thirdparty/zlib"]
+	path = thirdparty/zlib
 	url = https://github.com/madler/zlib.git
