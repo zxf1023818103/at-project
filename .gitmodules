@@ -15,3 +15,7 @@
 [submodule "thirdparty/zlib"]
 	path = thirdparty/zlib
 	url = https://github.com/madler/zlib.git
+[submodule "thirdparty/freertos-kernel"]
+	path = thirdparty/freertos-kernel
+	url = https://github.com/FreeRTOS/FreeRTOS-Kernel.git
+	branch = main
