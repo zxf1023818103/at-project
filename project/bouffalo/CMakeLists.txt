@@ -3,7 +3,8 @@ include(proj.conf)
 find_package(bouffalo_sdk REQUIRED HINTS $ENV{BL_SDK_BASE})
 sdk_add_include_directories(./include)
 
-set(SRC_DIR ${CMAKE_CURRENT_LIST_DIR}/../../src)
+set(AT_PROJECT_ROOT ${CMAKE_CURRENT_LIST_DIR}/../..)
+set(SRC_DIR ${AT_PROJECT_ROOT}/src)
 
 file(GLOB private_sources
     CONFIGURE_DEPENDS "${SRC_DIR}/*.cpp" "${SRC_DIR}/*.c"
@@ -12,5 +13,8 @@ file(GLOB private_sources
 project(at)
 target_sources(${proj_name}.elf PRIVATE ${private_sources})
 
-include(${SRC_DIR}/zlib.cmake)
-target_link_libraries(${proj_name}.elf PRIVATE zlibstatic)
+include(${AT_PROJECT_ROOT}/cmake/zlib.cmake)
+# Bouffalo SDK uses plain (no PRIVATE/PUBLIC) target_link_libraries on
+# the elf target inside extension.cmake; CMake requires all calls on a
+# given target to be the same style, so we stay plain too.
+target_link_libraries(${proj_name}.elf zlibstatic)

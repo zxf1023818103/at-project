@@ -1,6 +1,7 @@
-set(SRC_DIR ${CMAKE_CURRENT_LIST_DIR}/../../src)
+set(AT_PROJECT_ROOT ${CMAKE_CURRENT_LIST_DIR}/../..)
+set(SRC_DIR ${AT_PROJECT_ROOT}/src)
 include(${SRC_DIR}/sources.cmake)
-include(${SRC_DIR}/zlib.cmake)
+include(${AT_PROJECT_ROOT}/cmake/zlib.cmake)
 
 set(private_compile_options
     $<$<COMPILE_LANGUAGE:CXX>:-Wno-error=unused-function>
