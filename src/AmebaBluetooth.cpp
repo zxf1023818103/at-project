@@ -75,10 +75,10 @@ AmebaBluetooth::AmebaBluetooth(string deviceName)
     uint8_t preferAllPhy = 0;
     ::le_set_gap_param(GAP_PARAM_DEFAULT_PHYS_PREFER, sizeof preferAllPhy, &preferAllPhy);
 
-    uint8_t preferTxPhy = 1 | 1 << 1;
+    uint8_t preferTxPhy = 1 | (1 << 1);
     ::le_set_gap_param(GAP_PARAM_DEFAULT_TX_PHYS_PREFER, sizeof preferTxPhy, &preferTxPhy);
 
-    uint8_t preferRxPhy = 1 | 1 << 1;
+    uint8_t preferRxPhy = 1 | (1 << 1);
     ::le_set_gap_param(GAP_PARAM_DEFAULT_RX_PHYS_PREFER, sizeof preferRxPhy, &preferRxPhy);
 #endif
 
@@ -317,13 +317,12 @@ void AmebaBluetooth::routine() {
                     }
                 }
                 else if (ioMsg.type == ::IO_MSG_TYPE_QDECODE) {
-                    auto callbackPtrPtr = static_cast<shared_ptr<AbstractCallbackTask>*>(ioMsg.u.buf);
+                    unique_ptr<shared_ptr<AbstractCallbackTask>> callbackPtr(static_cast<shared_ptr<AbstractCallbackTask>*>(ioMsg.u.buf));
                     bool success = false;
-                    if (callbackPtrPtr != nullptr) {
-                        (*callbackPtrPtr)->startSync();
-                        success = (*callbackPtrPtr)->success();
+                    if (callbackPtr != nullptr) {
+                        (*callbackPtr)->startSync();
+                        success = (*callbackPtr)->success();
                     }
-                    delete callbackPtrPtr;
                     if (!success) {
                         break;
                     }
@@ -348,11 +347,11 @@ shared_ptr<MacAddress> AmebaBluetooth::macAddressInternal() {
     return macPtr;
 }
 
-void AmebaBluetooth::setDeviceNameInternal(string deviceName) {
+bool AmebaBluetooth::setDeviceNameInternal(string deviceName) {
     if (deviceName.length() > GAP_DEVICE_NAME_LEN) {
         deviceName.resize(GAP_DEVICE_NAME_LEN);
     }
-    ::gaps_set_parameter(GAPS_PARAM_DEVICE_NAME, deviceName.length(), const_cast<char*>(deviceName.c_str()));
+    return ::gaps_set_parameter(GAPS_PARAM_DEVICE_NAME, deviceName.length(), const_cast<char*>(deviceName.c_str())) == GAP_CAUSE_SUCCESS;
 }
 
 bool AmebaBluetooth::stopAdvertisingInternal() {

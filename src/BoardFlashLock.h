@@ -2,8 +2,8 @@
 
 namespace at {
 
-void lockFirmwareFlash();
+bool lockFirmwareFlash();
 
-void unlockFirmwareFlash();
+bool unlockFirmwareFlash();
 
 }  // namespace at

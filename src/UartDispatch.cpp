@@ -1,5 +1,6 @@
 #include "Uart.h"
 
+#include "Common.h"          // my_assert
 #include "UartDispatch.h"
 #include "UartInStreamBuf.h"
 #include "UartOutStreamBuf.h"
@@ -85,7 +86,8 @@ void UartDispatch::releaseIfEmpty(Slot *slot) {
 
 void UartDispatch::registerIn(UartDevice *dev, UartInStreamBuf *buf) {
     Slot *slot = findOrCreate(dev);
-    if (slot) slot->in = buf;
+    my_assert(slot != nullptr);  // kMaxSlots exhausted — bump in UartDispatch.h
+    slot->in = buf;
 }
 
 void UartDispatch::unregisterIn(UartDevice *dev) {
@@ -100,7 +102,8 @@ void UartDispatch::unregisterIn(UartDevice *dev) {
 
 void UartDispatch::registerOut(UartDevice *dev, UartOutStreamBuf *buf) {
     Slot *slot = findOrCreate(dev);
-    if (slot) slot->out = buf;
+    my_assert(slot != nullptr);  // kMaxSlots exhausted — bump in UartDispatch.h
+    slot->out = buf;
 }
 
 void UartDispatch::unregisterOut(UartDevice *dev) {

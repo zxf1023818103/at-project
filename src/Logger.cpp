@@ -2,28 +2,8 @@
 
 namespace at {
 
-Logger::Logger(size_t queueLength, Level level)
-    : Semaphore(), m_queue(queueLength), m_level(level) {
-    give();
-}
-
-void Logger::flush() {
-    take();
-    for (;;) {
-        auto buffer = m_queue.receive(0);
-        if (buffer != nullptr) {
-            char* p = static_cast<char*>(buffer.get());
-#if defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C || defined CONFIG_PLATFORM_AMEBALITE || defined CONFIG_PLATFORM_AMEBASMART || defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2
-            puts(p);
-#else
-            printf("%s\r\n", p);
-#endif
-        }
-        else {
-            break;
-        }
-    }
-    give();
+Logger::Logger(Level level) : m_mutex(), m_level(level) {
+    m_mutex.give();
 }
 
 const char* Logger::levelString(Level level) {
@@ -35,43 +15,38 @@ void Logger::setLevel(Level level) {
     m_level = level;
 }
 
-Logger::Level Logger::level() {
+Logger::Level Logger::level() const {
     return m_level;
 }
 
 void Logger::logFormat(Level level, const char *fmt, ...) {
-    if (level >= m_level) {
-        ::va_list ap1, ap2;
-        ::va_start(ap1, fmt);
-        ::va_copy(ap2, ap1);
-        const int expectedSize = ::vsnprintf(nullptr, 0, fmt, ap1);
-        ::va_end(ap1);
-        my_assert(expectedSize > 0);
-        size_t bufferSize = static_cast<size_t>(expectedSize) + 1;
-        shared_ptr<char[]> buffer(new char[bufferSize], [](char *p) { delete[] p; });
-        const int returnedSize = ::vsnprintf(buffer.get(), bufferSize, fmt, ap2);
-
-        (void) expectedSize;
-        (void) returnedSize;
-        my_assert(expectedSize == returnedSize);
-
-        m_queue.send(buffer);
-        flush();
-        va_end(ap2);
+    if (level < m_level) {
+        return;
     }
-}
 
-Logger::~Logger() {
-    flush();
-}
+    ::va_list ap1, ap2;
+    ::va_start(ap1, fmt);
+    ::va_copy(ap2, ap1);
+    const int expectedSize = ::vsnprintf(nullptr, 0, fmt, ap1);
+    ::va_end(ap1);
+    my_assert(expectedSize > 0);
+    const size_t bufferSize = static_cast<size_t>(expectedSize) + 1;
+    unique_ptr<char[]> buffer(new char[bufferSize]);
+    ::vsnprintf(buffer.get(), bufferSize, fmt, ap2);
+    ::va_end(ap2);
 
-static Logger *s_logger = nullptr;
+    m_mutex.take();
+#if defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C || defined CONFIG_PLATFORM_AMEBALITE || defined CONFIG_PLATFORM_AMEBASMART || defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2
+    puts(buffer.get());
+#else
+    printf("%s\r\n", buffer.get());
+#endif
+    m_mutex.give();
+}
 
 Logger *getLogger() {
-    if (s_logger == nullptr) {
-        s_logger = new Logger(1, Logger::DEBUG);
-    }
-    return s_logger;
+    static Logger logger(Logger::DEBUG);
+    return &logger;
 }
 
 }  // namespace at

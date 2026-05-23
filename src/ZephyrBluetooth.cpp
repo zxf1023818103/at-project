@@ -33,8 +33,8 @@ shared_ptr<MacAddress> ZephyrBluetooth::macAddressInternal() {
     return macPtr;
 }
 
-void ZephyrBluetooth::setDeviceNameInternal(string deviceName) {
-    ::bt_set_name(deviceName.c_str());
+bool ZephyrBluetooth::setDeviceNameInternal(string deviceName) {
+    return ::bt_set_name(deviceName.c_str()) == 0;
 }
 
 bool ZephyrBluetooth::stopAdvertisingInternal() {

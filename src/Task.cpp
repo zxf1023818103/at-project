@@ -77,7 +77,10 @@ Task::~Task() {
         // Task was never started
         return;
     }
-    m_exitedSemaphore.take();
+    if (!m_exitedSemaphore.take(5000)) {
+        printf("Task::~Task() waiting >5s for task exit\n");
+        m_exitedSemaphore.take();
+    }
 }
 
 }  // namespace at

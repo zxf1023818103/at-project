@@ -47,7 +47,7 @@ protected:
 
     shared_ptr<MacAddress> macAddressInternal();
 
-    void setDeviceNameInternal(string deviceName);
+    bool setDeviceNameInternal(string deviceName);
 
     bool stopAdvertisingInternal();
 
@@ -102,17 +102,17 @@ private:
 
         BluetoothAdvDataBufferSharedPtr adOutput = make_shared<BluetoothAdvDataBuffer>();
         size_t remainingAdOutputLength = size(*adOutput);
-        size_t remainingadLength = adLength;
+        size_t remainingAdLength = adLength;
         auto adOutputBegin = begin(*adOutput);
-        auto adOutputEnd = buildAdvertisingDataInternal(adBegin, remainingadLength, adOutputBegin, remainingAdOutputLength);
+        auto adOutputEnd = buildAdvertisingDataInternal(adBegin, remainingAdLength, adOutputBegin, remainingAdOutputLength);
         ::le_adv_set_param(GAP_PARAM_ADV_DATA, distance(adOutputBegin, adOutputEnd), data(*adOutput));
 
         if (sdLength > 0) {
             BluetoothAdvDataBufferSharedPtr sdOutput = make_shared<BluetoothAdvDataBuffer>();
             size_t remainingSdOutputLength = size(*sdOutput);
-            size_t remainingsdLength = sdLength;
+            size_t remainingSdLength = sdLength;
             auto sdOutputBegin = begin(*sdOutput);
-            auto sdOutputEnd = buildAdvertisingDataInternal(sdBegin, remainingsdLength, sdOutputBegin, remainingSdOutputLength);
+            auto sdOutputEnd = buildAdvertisingDataInternal(sdBegin, remainingSdLength, sdOutputBegin, remainingSdOutputLength);
             ::le_adv_set_param(GAP_PARAM_SCAN_RSP_DATA, distance(sdOutputBegin, sdOutputEnd), data(*sdOutput));
         }
     }

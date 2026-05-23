@@ -46,27 +46,43 @@ uint8_t readStatus2() {
 
 }  // namespace
 
-void lockFirmwareFlash() {
+bool lockFirmwareFlash() {
     flash_t flash;
     int sr1 = flash_get_status(&flash);
     uint8_t sr2 = readStatus2();
     uint8_t sr2_desired = static_cast<uint8_t>(sr2 | kSr2CmpBit);
 
     if (((sr1 & kSr1Mask) == kSr1Locked) && ((sr2 & kSr2CmpBit) != 0)) {
-        return;  // already locked
+        return true;  // already locked
     }
     flash_set_status(&flash, kSr1Locked);
     FLASH_SetStatus(kCmdWriteStatus2, 1, &sr2_desired);
+    const uint8_t verify_sr2 = readStatus2();
+    if ((static_cast<uint8_t>(flash_get_status(&flash)) & kSr1Mask) != kSr1Locked ||
+        (verify_sr2 & kSr2CmpBit) == 0) {
+        printf("[flash] firmware lock VERIFY FAILED: SR1 want=0x%02x got=0x%02x SR2 want=0x%02x got=0x%02x\r\n",
+               kSr1Locked, static_cast<unsigned>(flash_get_status(&flash)) & kSr1Mask,
+               sr2_desired, verify_sr2);
+        return false;
+    }
     printf("[flash] firmware locked: SR1=0x%02x SR2=0x%02x\r\n",
-           kSr1Locked, sr2_desired);
+           kSr1Locked, verify_sr2);
+    return true;
 }
 
-void unlockFirmwareFlash() {
+bool unlockFirmwareFlash() {
     flash_t flash;
     uint8_t sr2 = readStatus2();
     uint8_t sr2_desired = static_cast<uint8_t>(sr2 & ~kSr2CmpBit);
     flash_set_status(&flash, 0x00);
     FLASH_SetStatus(kCmdWriteStatus2, 1, &sr2_desired);
+    const uint8_t verify_sr2 = readStatus2();
+    if ((verify_sr2 & kSr2CmpBit) != 0) {
+        printf("[flash] firmware unlock VERIFY FAILED: SR2 want=0x%02x got=0x%02x\r\n",
+               sr2_desired, verify_sr2);
+        return false;
+    }
+    return true;
 }
 
 }  // namespace at
@@ -115,29 +131,45 @@ uint8_t writeStatus2Cmd() {
 
 }  // namespace
 
-void lockFirmwareFlash() {
+bool lockFirmwareFlash() {
     flash_t flash;
     int sr1 = flash_get_status(&flash);
     uint8_t sr2 = readStatus2();
     uint8_t sr2_desired = static_cast<uint8_t>(sr2 | kSr2CmpBit);
 
     if (((sr1 & kSr1Mask) == kSr1Locked) && ((sr2 & kSr2CmpBit) != 0)) {
-        return;  // already locked
+        return true;  // already locked
     }
     flash_set_status(&flash, kSr1Locked);
-    uint8_t cmd = writeStatus2Cmd();
+    const uint8_t cmd = writeStatus2Cmd();
     FLASH_SetStatus(cmd, 1, &sr2_desired);
+    const uint8_t verify_sr2 = readStatus2();
+    if ((static_cast<uint8_t>(flash_get_status(&flash)) & kSr1Mask) != kSr1Locked ||
+        (verify_sr2 & kSr2CmpBit) == 0) {
+        printf("[flash] firmware lock VERIFY FAILED: SR1 want=0x%02x got=0x%02x SR2 want=0x%02x got=0x%02x (wr_cmd=0x%02x)\r\n",
+               kSr1Locked, static_cast<unsigned>(flash_get_status(&flash)) & kSr1Mask,
+               sr2_desired, verify_sr2, cmd);
+        return false;
+    }
     printf("[flash] firmware locked: SR1=0x%02x SR2=0x%02x (wr_cmd=0x%02x)\r\n",
-           kSr1Locked, sr2_desired, cmd);
+           kSr1Locked, verify_sr2, cmd);
+    return true;
 }
 
-void unlockFirmwareFlash() {
+bool unlockFirmwareFlash() {
     flash_t flash;
     uint8_t sr2 = readStatus2();
     uint8_t sr2_desired = static_cast<uint8_t>(sr2 & ~kSr2CmpBit);
     flash_set_status(&flash, 0x00);
-    uint8_t cmd = writeStatus2Cmd();
+    const uint8_t cmd = writeStatus2Cmd();
     FLASH_SetStatus(cmd, 1, &sr2_desired);
+    const uint8_t verify_sr2 = readStatus2();
+    if ((verify_sr2 & kSr2CmpBit) != 0) {
+        printf("[flash] firmware unlock VERIFY FAILED: SR2 want=0x%02x got=0x%02x (wr_cmd=0x%02x)\r\n",
+               sr2_desired, verify_sr2, cmd);
+        return false;
+    }
+    return true;
 }
 
 }  // namespace at
@@ -183,9 +215,12 @@ struct spi_flash_cfg_type *getFlashCfg() {
 
 }  // namespace
 
-void lockFirmwareFlash() {
+bool lockFirmwareFlash() {
     auto *cfg = getFlashCfg();
-    if (cfg == nullptr) return;
+    if (cfg == nullptr) {
+        printf("[flash] firmware lock SKIPPED: getFlashCfg() returned null\r\n");
+        return false;
+    }
 
     uint8_t sr1 = 0;
     uint8_t sr2 = 0;
@@ -193,30 +228,49 @@ void lockFirmwareFlash() {
     bflb_sflash_read_reg(cfg, 1, &sr2, 1);
 
     if (((sr1 & kSr1Mask) == kSr1Locked) && ((sr2 & kSr2CmpBit) != 0)) {
-        return;  // already locked
+        return true;  // already locked
     }
 
-    // Write SR1+SR2 atomically via the 0x01 Write-Status command (low byte =
-    // new SR1, high byte = new SR2). Pattern lifted from
-    // drivers/soc/bl602/std/src/bl602_sflash_ext.c:596.
-    uint16_t combined = static_cast<uint16_t>(kSr1Locked) |
-                        (static_cast<uint16_t>(sr2 | kSr2CmpBit) << 8);
-    bflb_sflash_write_reg(cfg, 0, reinterpret_cast<uint8_t *>(&combined), 2);
+    // Write SR1+SR2 atomically via the 0x01 Write-Status command (byte 0 =
+    // new SR1, byte 1 = new SR2). Pattern lifted from
+    // drivers/soc/bl602/std/src/bl602_sflash_ext.c:596. Both target SoCs are
+    // little-endian, so a uint16_t reinterpret matches the {SR1, SR2} byte
+    // order the LHAL expects.
+    uint8_t sr_pair[2] = { kSr1Locked, static_cast<uint8_t>(sr2 | kSr2CmpBit) };
+    bflb_sflash_write_reg(cfg, 0, sr_pair, 2);
 
-    printf("[flash] firmware locked: SR1=0x%02x SR2=0x%02x\r\n",
-           static_cast<unsigned>(combined & 0xFF),
-           static_cast<unsigned>((combined >> 8) & 0xFF));
+    uint8_t verify_sr1 = 0, verify_sr2 = 0;
+    bflb_sflash_read_reg(cfg, 0, &verify_sr1, 1);
+    bflb_sflash_read_reg(cfg, 1, &verify_sr2, 1);
+    if ((verify_sr1 & kSr1Mask) != kSr1Locked || (verify_sr2 & kSr2CmpBit) == 0) {
+        printf("[flash] firmware lock VERIFY FAILED: SR1 want=0x%02x got=0x%02x SR2 want=0x%02x got=0x%02x\r\n",
+               sr_pair[0], verify_sr1, sr_pair[1], verify_sr2);
+        return false;
+    }
+    printf("[flash] firmware locked: SR1=0x%02x SR2=0x%02x\r\n", verify_sr1, verify_sr2);
+    return true;
 }
 
-void unlockFirmwareFlash() {
+bool unlockFirmwareFlash() {
     auto *cfg = getFlashCfg();
-    if (cfg == nullptr) return;
+    if (cfg == nullptr) {
+        printf("[flash] firmware unlock SKIPPED: getFlashCfg() returned null\r\n");
+        return false;
+    }
 
     uint8_t sr2 = 0;
     bflb_sflash_read_reg(cfg, 1, &sr2, 1);
-    uint16_t combined = 0x0000u |
-                        (static_cast<uint16_t>(sr2 & ~kSr2CmpBit) << 8);
-    bflb_sflash_write_reg(cfg, 0, reinterpret_cast<uint8_t *>(&combined), 2);
+    uint8_t sr_pair[2] = { 0x00, static_cast<uint8_t>(sr2 & ~kSr2CmpBit) };
+    bflb_sflash_write_reg(cfg, 0, sr_pair, 2);
+
+    uint8_t verify_sr2 = 0;
+    bflb_sflash_read_reg(cfg, 1, &verify_sr2, 1);
+    if ((verify_sr2 & kSr2CmpBit) != 0) {
+        printf("[flash] firmware unlock VERIFY FAILED: SR2 want=0x%02x got=0x%02x\r\n",
+               sr_pair[1], verify_sr2);
+        return false;
+    }
+    return true;
 }
 
 }  // namespace at
@@ -225,9 +279,9 @@ void unlockFirmwareFlash() {
 
 namespace at {
 
-void lockFirmwareFlash() {}
+bool lockFirmwareFlash() { return true; }
 
-void unlockFirmwareFlash() {}
+bool unlockFirmwareFlash() { return true; }
 
 }  // namespace at
 

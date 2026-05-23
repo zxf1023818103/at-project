@@ -1,13 +1,11 @@
 #pragma once
 
+#include "Common.h"
 #include "Semaphore.h"
-#include "SharedPtrQueue.h"
 
 namespace at {
 
-class Logger : protected Semaphore {
-    using LogQueue = SharedPtrQueue<char[]>;
-
+class Logger {
 public:
     enum Level {
         DEBUG,
@@ -16,26 +14,20 @@ public:
         ERROR,
     };
 
-    explicit Logger(size_t queueLength = 1, Level level = WARN);
+    explicit Logger(Level level = WARN);
 
-private:
-    const LogQueue m_queue;
-
-    Level m_level;
-
-protected:
-    virtual void flush();
-
-public:
     static const char* levelString(Level level);
 
     void setLevel(Level level);
 
-    Level level();
+    Level level() const;
 
     void logFormat(Level level, const char *fmt, ...);
 
-    virtual ~Logger() override;
+private:
+    Semaphore m_mutex;
+
+    Level m_level;
 };
 
 Logger *getLogger();

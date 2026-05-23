@@ -19,9 +19,9 @@ shared_ptr<MacAddress> BluetoothTask::macAddress() {
     });
 }
 
-void BluetoothTask::setDeviceName(string deviceName) {
-    return sendCallback<void>([deviceName, this]() {
-        setDeviceNameInternal(deviceName);
+bool BluetoothTask::setDeviceName(string deviceName) {
+    return sendCallback<bool>([deviceName, this]() {
+        return setDeviceNameInternal(deviceName);
     });
 }
 
