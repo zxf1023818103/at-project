@@ -1,0 +1,8 @@
+- [Project src wiring across platforms](project_src_wiring.md) — 每个 project/* 是怎么把 at-project/src 抓进 firmware 的（含 amebad 用 find 不用 GLOB 这条易踩坑）
+- [Unified UART abstraction preference](feedback_unified_uart_abstraction.md) — src/ 跨平台 HAL 类用一组 Uart*（内部 #ifdef）而非 BflbUart*+AmebaUart* 并列
+- [Ameba OpenOCD + gdb flashing](reference_ameba_openocd_flash.md) — 用 xPack openocd.exe + CMSIS-DAP + gdb-multiarch 从 WSL 烧 Ameba 板的整套路径与坑
+- [WSL → PowerShell serial testing](reference_wsl_powershell_serial.md) — 从 WSL 用 powershell.exe + System.IO.Ports.SerialPort 跑 AT/UART 验证；.ps1 可以放 /mnt/c 或 repo 内（用 \\wsl.localhost UNC）
+- [AmebaD ImageTool flash](reference_amebad_imagetool.md) — MP_ImageTool_1_N 烧 AmebaD 时 `-c AmebaD`（device 名，不是 RTL 型号），俩串口时序见 doc/ameba_image_download.md
+- [Ameba D flash layout & SDK gotchas](reference_amebad_flash_layout.md) — 4 MB 分区 + OTA_Region/LS_IMG2_OTAn_ADDR 双源、SDK 缺 flash_get_status2、LFS/FTL/settings 默认冲突等
+- [Cross-platform LFS image pipeline](project_lfs_image_pipeline.md) — 一份 project/lfs.bin 怎么烧到 6 个平台：mklfs 命令、嵌入合成固件的两种机制、CI 通过 artifact 分发 lfs.bin 避免 Ameba job 拉 bouffalo_sdk
+- [BluetoothTask sendCallback<bool> 陷阱](feedback_bluetooth_callback_bool_trap.md) — BT routine 把 callback 返回 false 当退出信号，业务失败别走 sendCallback<bool>
