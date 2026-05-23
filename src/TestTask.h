@@ -17,6 +17,7 @@ void testUartOutStream1();
 void testUartInStream1();
 
 void testFileSystem1();
+void testZlib1();
 
 class TestTask : public Task {
 public:

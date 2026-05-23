@@ -11,3 +11,6 @@ file(GLOB private_sources
 
 project(at)
 target_sources(${proj_name}.elf PRIVATE ${private_sources})
+
+include(${SRC_DIR}/zlib.cmake)
+target_link_libraries(${proj_name}.elf PRIVATE zlibstatic)

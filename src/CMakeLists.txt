@@ -3,8 +3,11 @@ project(at_user C CXX ASM)
 
 include(${CMAKE_CURRENT_LIST_DIR}/sources.cmake)
 
+include(${CMAKE_CURRENT_LIST_DIR}/zlib.cmake)
+
 add_library(at_user STATIC ${AT_USER_SOURCES})
 target_include_directories(at_user PUBLIC ${AT_USER_SRC_DIR})
+target_link_libraries(at_user PRIVATE zlibstatic)
 
 # Walk at_user's transitive link dependencies and collect every target whose
 # TYPE is STATIC_LIBRARY. The resulting absolute paths get written to
@@ -12,7 +15,7 @@ target_include_directories(at_user PUBLIC ${AT_USER_SRC_DIR})
 #
 # CMake is the source of truth here: in src/CMakeLists.txt you may add
 # `add_library(zlib STATIC ...)` (or `add_subdirectory(zlib)` etc.) and
-# wire it in via `target_link_libraries(at_user PRIVATE zlib)`, and the
+# wire it in via `target_link_libraries(at_user PRIVATE zlibstatic)`, and the
 # list will pick it up automatically.
 #
 # Consumers that don't drive linking themselves (notably the AmebaD SDK's

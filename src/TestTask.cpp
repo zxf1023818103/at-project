@@ -12,6 +12,8 @@
 #include "UartInStream.h"
 #include "AtUartConfig.h"
 
+#include <zlib.h>
+
 // rt_kv API lives in each Ameba SDK's <kv.h>; declare locally so we don't
 // have to wire kv.h into Common.h just for one test function.
 #if defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C \
@@ -400,6 +402,44 @@ void testFileSystem1() {
 #endif
 }
 
+void testZlib1() {
+    getLogger()->setLevel(Logger::DEBUG);
+    getLogger()->logFormat(Logger::INFO, "========= zlib Test 1 Started =========");
+
+    static const char src[] =
+        "Hello, zlib-ng! Hello, zlib-ng! Hello, zlib-ng! Hello, zlib-ng! "
+        "Hello, zlib-ng! Hello, zlib-ng! Hello, zlib-ng! Hello, zlib-ng!";
+    const uLong srcLen = static_cast<uLong>(sizeof(src) - 1);
+    getLogger()->logFormat(Logger::INFO, "zlibVersion()=%s srcLen=%lu", ::zlibVersion(), srcLen);
+
+    uLong compressedLen = ::compressBound(srcLen);
+    unique_ptr<Bytef[]> compressed(new Bytef[compressedLen]);
+    int ret = ::compress(compressed.get(), &compressedLen, reinterpret_cast<const Bytef*>(src), srcLen);
+    getLogger()->logFormat(Logger::INFO, "compress() ret=%d -> %lu bytes", ret, compressedLen);
+    if (ret != Z_OK) {
+        getLogger()->logFormat(Logger::ERROR, "compress() failed");
+        return;
+    }
+
+    uLong decompressedLen = srcLen;
+    unique_ptr<Bytef[]> decompressed(new Bytef[srcLen + 1]);
+    ret = ::uncompress(decompressed.get(), &decompressedLen, compressed.get(), compressedLen);
+    getLogger()->logFormat(Logger::INFO, "uncompress() ret=%d -> %lu bytes", ret, decompressedLen);
+    if (ret != Z_OK) {
+        getLogger()->logFormat(Logger::ERROR, "uncompress() failed");
+        return;
+    }
+
+    decompressed[decompressedLen] = 0;
+    if (decompressedLen == srcLen && ::memcmp(src, decompressed.get(), srcLen) == 0) {
+        getLogger()->logFormat(Logger::INFO, "roundtrip OK (ratio %lu/%lu = %lu%%)",
+            compressedLen, srcLen, (compressedLen * 100) / srcLen);
+    } else {
+        getLogger()->logFormat(Logger::ERROR, "roundtrip MISMATCH");
+    }
+    getLogger()->logFormat(Logger::INFO, "========= zlib Test 1 Finished =========");
+}
+
 TestTask::TestTask() : Task() {}
 
 TestTask::~TestTask() = default;
@@ -415,7 +455,8 @@ void TestTask::routine() {
     // testBluetoothTask1();
     // testUartOutStream1();
     // testUartInStream1();
-    testFileSystem1();
+    // testFileSystem1();
+    testZlib1();
 }
 
 }  // namespace at

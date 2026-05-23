@@ -1,5 +1,6 @@
 set(SRC_DIR ${CMAKE_CURRENT_LIST_DIR}/../../src)
 include(${SRC_DIR}/sources.cmake)
+include(${SRC_DIR}/zlib.cmake)
 
 set(private_compile_options
     $<$<COMPILE_LANGUAGE:CXX>:-Wno-error=unused-function>
@@ -32,3 +33,9 @@ ameba_add_internal_library(at_user
     p_COMPILE_OPTIONS
         ${private_compile_options}
 )
+
+# Pull zlib's headers and static archive into at_user. ameba_add_internal_library
+# wraps the real target name into ${c_CURRENT_TARGET_NAME} (e.g.
+# "at_user_target_img2_km4tz"); target_link_libraries on the bare "at_user"
+# fails because that name isn't a real target.
+target_link_libraries(${c_CURRENT_TARGET_NAME} PRIVATE zlibstatic)
