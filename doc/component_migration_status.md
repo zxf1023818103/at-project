@@ -1,21 +1,33 @@
-# Component-Migration Status (BL602)
+# Component-Migration Status
 
 记录 `experiment/driver-only` 当前的"已完成 / workaround / 未完成"状态，给下一段
-上下文做 handoff。最近的整合 commit 是 `f5fb94c experiment: project/bouffalo on
-chip-toolchain tree, BL602 builds e2e`。
+上下文做 handoff。
+
+**Branch head**: `3c8c342 project/bouffalo: use component/CMakeLists.txt's auto-enumeration`（往前数 7 个 commit 都是这一段会话做的；`f60760f` 之前是更早期 BL602 e2e 完工时的 baseline）。
 
 ## ✅ 已通
 
-`make CHIP=bl602 BOARD=bl602dk` 在 [project/bouffalo/](../project/bouffalo/) 干净
-end-to-end，产物：
-- `build_bl602/at_bl602.elf` (~1.2 MB)
-- `build_bl602/at_bl602_whole_flash_data.bin` (4 MB，包含 boot2 + 分区表 + 应用)
-- `at_bl602.{bin,bin.hash,xz,xz.hash,xz.ota,bin.ota,map}`
+**三平台 e2e build** 在 [project/bouffalo/](../project/bouffalo/) 都干净：
 
-构建走 chip-toolchain ([cmake/bl602-toolchain.cmake](../cmake/bl602-toolchain.cmake))
-驱动，完全不依赖 `platform/bouffalo_sdk/project.build`。bin 生成走
-`bflb_add_executable()` ([cmake/bflb_elf_to_bin.cmake](../cmake/bflb_elf_to_bin.cmake))
-的 custom-command sibling target，没有 Makefile postbuild python 步骤。
+| 平台 | 命令 | 产物 |
+|---|---|---|
+| bl602 / bl602dk | `make CHIP=bl602 BOARD=bl602dk` | `build_bl602/at_bl602_whole_flash_data.bin` (4 MB) |
+| bl616 / bl616dk | `make CHIP=bl616 BOARD=bl616dk` | `build_bl616/at_bl616.elf` |
+| bl616cl / bl616cldk | `make CHIP=bl616cl BOARD=bl616cldk` | `build_bl616cl/at_bl616cl.elf` |
+
+构建走 chip-toolchain（[cmake/bl602-toolchain.cmake](../cmake/bl602-toolchain.cmake) /
+[bl616-toolchain.cmake](../cmake/bl616-toolchain.cmake) /
+[bl616cl-toolchain.cmake](../cmake/bl616cl-toolchain.cmake)）驱动，完全不依赖
+`platform/bouffalo_sdk/project.build`。bin 生成走 `bflb_add_executable()`
+（[cmake/bflb_elf_to_bin.cmake](../cmake/bflb_elf_to_bin.cmake)）的 custom-command
+sibling target —— BL602 链 bin 产物，BL616/BL616CL 链只到 ELF（flash 工具
+pipeline 还没接）。
+
+**Project CMakeLists 干净度：** [project/bouffalo/CMakeLists.txt](../project/bouffalo/CMakeLists.txt)
+只有 `add_subdirectory(${AT_PROJECT_ROOT}/component …)` 一行拉 component tree（auto-loop
+via [component/CMakeLists.txt](../component/CMakeLists.txt)），然后 `target_link_libraries(at PRIVATE bouffalo_sdk)`
+一行 link。所有 cross-vendor lib + bridge + port adapter 都通过 bouffalo_sdk INTERFACE 一把
+stitch 进来（见 [project/bouffalo/CMakeLists.txt](../project/bouffalo/CMakeLists.txt) 的 foreach 块）。
 
 ## ⚠️ 已 workaround / 知道但没修
 
@@ -131,42 +143,47 @@ script 直接靠 `DEFINED(btble_controller_init) ? 32K : 0K` 自己判断，所�
 
 ## ❌ 还没干的、build 现在看不到但下一步会需要
 
-### BL616 / BL616CL 整条 build 链
-现在 [cmake/bl616-toolchain.cmake](../cmake/bl616-toolchain.cmake) 在；
-`make CHIP=bl616 BOARD=bl616dk` 当前能 configure 干净、bouffalo_sdk 核心组件
-（bflb_lhal / bl616_std / bflb_sysinit / freertos / lwipcore / mbedtls /
-bflb_log / bflb_mm / bflb_sys / bflb_mbedtls_hw_acc / 等）也能编过 —— 这一步要
-[component/bouffalo_sdk/bflb_lhal/CMakeLists.txt](../component/bouffalo_sdk/bflb_lhal/CMakeLists.txt)
-里 derive `APP_VER_X/Y/Z` 三个宏（`bflb_common.c` 在 BL616/BL616CL/BL702L/BL618DG
-路径下用 `app_ver` 结构体硬引用，BL602 路径上有 `#if defined(BL616)|...` 保护所以
-没踩到；现在的逻辑是镜像 upstream `bouffalo_sdk/bsp/CMakeLists.txt` 从
-`PROJECT_SDK_VERSION` 推出 x.y.z）。 但卡在：
+### BL616 / BL616CL 抽的还不完整
+e2e build 通了，但走的是 **wl80211 路径**（不是 wifi6/fhost；用户明确：
+"这两个平台的 wifi6 驱动都用 wl80211，不要再用 fhost 了"），只抽了一个 variant：
 
-- **`bflb_power_mgmt/pm_manager.c`** 找不到 `<lwip/tcpip.h>`、
-  `<wifi_mgmr_ext.h>`、`<bl_lp.h>`。
-  lwip include path 需要在 [component/bouffalo_sdk/bflb_power_mgmt/CMakeLists.txt](../component/bouffalo_sdk/bflb_power_mgmt/CMakeLists.txt)
-  里 `target_link_libraries(... PUBLIC lwipcore)` 一行解掉。
-  `wifi_mgmr_ext.h` 是 **wifi6 的** header（[platform/bouffalo_sdk/components/wireless/wifi6/fhost/include/wifi_mgmr_ext.h](../platform/bouffalo_sdk/components/wireless/wifi6/fhost/include/wifi_mgmr_ext.h)），
-  下一项的衍生问题。
+- **macsw 只有 default variant**：
+  [component/bouffalo_sdk/macsw/lib/](../component/bouffalo_sdk/macsw/lib/) 只 copy 了
+  `libmacsw_{bl616,bl616cl}_default.a` + `libmacsw_config_{bl616,bl616cl}_default.a`。
+  upstream 还有 `coex` / `bridge` / `ack` 等其他 variant
+  （[platform/bouffalo_sdk/components/wireless/macsw/lib/](../platform/bouffalo_sdk/components/wireless/macsw/lib/) 一共 16 个 .a）。要的话往
+  lib/ 加 + 扩 [component/bouffalo_sdk/macsw/CMakeLists.txt](../component/bouffalo_sdk/macsw/CMakeLists.txt)
+  里 FATAL_ERROR 的 available variants 列表即可。
 
-- **wifi6 / macsw 完全没抽**。[platform/bouffalo_sdk/components/wireless/wifi6/](../platform/bouffalo_sdk/components/wireless/wifi6/)
-  26 MB，[platform/bouffalo_sdk/components/wireless/macsw/](../platform/bouffalo_sdk/components/wireless/macsw/)
-  71 MB，五个 CMakeLists 入口：`wifi6/`, `wifi6/wpa_supplicant/`,
-  `wifi6/wifi6_lwip_adapter/`, `wifi6/fhost_config/`, `wifi6/macsw_os_adapter/`。
-  这是 BL616 build 链的真正瓶颈，按 wifi4 的抽法（已 done 的参考实现在
-  [component/bouffalo_sdk/wifi4/](../component/bouffalo_sdk/wifi4/)）整一遍是
-  下一段独立工作。`proj.conf` 里 BL616 / BL616CL 块设的
-  `CONFIG_WIFI6 y` `CONFIG_FHOST y` `CONFIG_MACSW_SELECT default` 都跟这个相关。
+- **wl80211 prebuilt 跳了 BL618DG**：只 copy 了 bl616 / bl616cl 的；BL618DG 整体不支持
+  （多核 SoC，[component/bouffalo_sdk/bflb_ipc_rpmsg_ops/](../component/bouffalo_sdk/bflb_ipc_rpmsg_ops/) 的 OpenAMP
+  dep 也没抽过来）。
 
-- `bouffalo_sdk/CMakeLists.txt` 已经 conditionally `add_subdirectory(wifi6)`
-  的入口还没添（参考 wifi4 的 `if(CONFIG_WIFI4 AND "${BOUFFALO_CHIP}" STREQUAL "bl602")`
-  分支）。
+- **wl80211 net80211 源码 port 跳了**：upstream
+  [platform/bouffalo_sdk/components/wireless/wl80211/src/net80211/](../platform/bouffalo_sdk/components/wireless/wl80211/src/net80211/)
+  是一份正在做的 FreeBSD net80211 port（per upstream `wl80211/CLAUDE.md`：所有文件都
+  能编但功能没验证）。我们这边用 prebuilt `.a`，没抽 net80211 树。要切到 source build
+  整树搬过来即可。
+
+- **CONFIG_PM_MANAGER 默认 OFF**：[component/bouffalo_sdk/bflb_power_mgmt/CMakeLists.txt](../component/bouffalo_sdk/bflb_power_mgmt/CMakeLists.txt)
+  里 `pm_manager.c` + `clock_manager.c` 都 gate 到 `CONFIG_PM_MANAGER`（默认 OFF）。
+  pm_manager.c 之前因为找不到 `<wifi_mgmr_ext.h>` 卡了一阵子；现在 wl80211 抽过来了，
+  技术上应该能 link 了 —— 但 audit 时这俩文件在我们 tree 里**零调用者**
+  （唯一 consumer 是 tickless_accurate.c，它自己也 gate 着），所以 gate 关着。要做
+  BT/Wi-Fi PS 联合的 tickless idle 才需要打开。
+
+- **BL616/BL616CL flash pipeline 没接**：BL602 build 直接得
+  `at_bl602_whole_flash_data.bin`（通过 `BLFlashCommand --build`），BL616/BL616CL
+  只到 `.elf`。[cmake/bflb_elf_to_bin.cmake](../cmake/bflb_elf_to_bin.cmake) 里只有
+  BL602 的 post-proc 分支；BL616/BL616CL 用 [tool/bflb_tools/](../tool/bflb_tools/) 里
+  对应的工具就行，要扩 cmake 分支。
 
 复现命令：
 ```sh
-cd project/bouffalo && rm -rf build_bl616 && make CHIP=bl616 BOARD=bl616dk
+cd project/bouffalo
+make CHIP=bl616   BOARD=bl616dk        # ELF
+make CHIP=bl616cl BOARD=bl616cldk      # ELF
 ```
-当前会停在 `bflb_power_mgmt/pm_manager.c:5: fatal error: lwip/tcpip.h: No such file or directory`。
 
 ### `bflb_ipc_rpmsg_ops`
 [component/bouffalo_sdk/bflb_ipc_rpmsg_ops/CMakeLists.txt](../component/bouffalo_sdk/bflb_ipc_rpmsg_ops/CMakeLists.txt)
@@ -197,21 +214,81 @@ main.cpp 里加 `CONFIG_BLUETOOTH` 编译开关。
 
 ```sh
 cd project/bouffalo
-make CHIP=bl602 BOARD=bl602dk        # ~30s 全量重建
-ls -lh build_bl602/at_bl602*.bin
+make CHIP=bl602   BOARD=bl602dk
+make CHIP=bl616   BOARD=bl616dk
+make CHIP=bl616cl BOARD=bl616cldk
 ```
 
-预期（CONFIG_ROMAPI y / LTO off / ITCM 16K / DTCM 48K — 全部 upstream 默认）：
-- `at_bl602_whole_flash_data.bin` 约 4.0 MB（含 boot2 + 分区表 + 应用 + lfs）
-- `xip_memory: 778748 B / 1 MB (74.27%)`
-- `itcm_memory: 7924 B / 16 KB (48.36%)`
-- `dtcm_memory: 1028 B / 48 KB (2.09%)`
-- `ram_wifi: 35824 B / 40 KB (87.46%)`
+三平台同时编（独立 build dir）：
+```sh
+(rm -rf build_bl602   && make CHIP=bl602   BOARD=bl602dk) &
+(rm -rf build_bl616   && make CHIP=bl616   BOARD=bl616dk) &
+(rm -rf build_bl616cl && make CHIP=bl616cl BOARD=bl616cldk) &
+wait
+```
 
-参考 upstream `examples/wifi/sta/wifi_tcp` 例子（同样 wifi4 + lwip + freertos
-工作量）跑出来：
-- `xip_memory: 465648 B / 1 MB (44.41%)` — 比我们小是因为没 BT stack + mbedtls +
-  cjson + zlib + lfs；
-- `itcm_memory: 3884 B / 16 KB (23.71%)` — ROMAPI 同样开，差距主要在我们多链了
-  bflb_uart/bflb_gpio/bflb_mtimer/bflb_irq/bflb_sflash/bflb_sf_ctrl 一些没被
-  romapi cover 的 TCM-marked 函数。
+预期 memory layout（`-O3` Release + ROMAPI on for BL602 + wl80211 path for BL616/CL）：
+
+| 区域 | bl602/bl602dk | bl616/bl616dk | bl616cl/bl616cldk |
+|---|---|---|---|
+| fw_header | 176 B / 4 KB (4.30%) | 256 B / 4 KB (6.25%) | 256 B / 4 KB (6.25%) |
+| rom_header | — | 4638 B / 6 KB (75.49%) | 4674 B / 6 KB (76.07%) |
+| xip / rom | 588356 B / 1 MB (56.11%) | 589953 B / 4 MB (14.07%) | 531145 B / 4 MB (12.66%) |
+| itcm_memory | 3900 B / 16 KB (23.80%) | — | — |
+| dtcm_memory | 1028 B / 48 KB (2.09%) | — | — |
+| ram | 53152 B / 176 KB (29.49%) | 92640 B / 319 KB (28.36%) | 68912 B / 223 KB (30.18%) |
+| ram_wifi | 35824 B / 40 KB (87.46%) | 36128 B / 128 KB (27.56%) | 36128 B / 144 KB (24.50%) |
+| hbn / ram_psram | — | 128 B / 4 KB + 0/4MB | 0 B (512 B 区) + 0/4MB |
+
+参考 upstream `examples/wifi/sta/wifi_tcp` BL602 build（同样 wifi4 + lwip + freertos
+工作量）跑出来 `itcm_memory: 3884 B / 16 KB`，跟我们 3900 B 同等量级 —— 不再有差距，
+因为 ROMAPI 开了 + `-O3` 后基本对齐 upstream 配置。
+
+## Session 2026-05-24 改动一览（按 commit 先到后）
+
+`3c8c342 project/bouffalo: use component/CMakeLists.txt's auto-enumeration`
+- 项目 CMakeLists 改成单行 `add_subdirectory(component)`，靠 [component/CMakeLists.txt](../component/CMakeLists.txt) 的 auto-loop 拉所有 component
+- 补了缺失的 [cmake/bouffalo_sdk.cmake](../cmake/bouffalo_sdk.cmake) + [cmake/lwip_dhcpd.cmake](../cmake/lwip_dhcpd.cmake) glue
+- 把 [cmake/lwip.cmake](../cmake/lwip.cmake) / [cmake/mbedtls.cmake](../cmake/mbedtls.cmake) / [cmake/lfs_easyflash.cmake](../cmake/lfs_easyflash.cmake) 里硬 FATAL 依赖检查换成 `include()` 自包含（include_guard 保证 idempotent），auto-loop alphabetical 顺序也能跑通
+
+`ea7e068 project/bouffalo: collapse app link list, stitch project-level libs into bouffalo_sdk`
+- App 那 14 个 explicit link 折成 `target_link_libraries(at PRIVATE bouffalo_sdk)`
+- bflb_*_port + cross-vendor wrappers + bridges 用 foreach + `if(TARGET)` 一把 stitch 进 bouffalo_sdk INTERFACE
+
+`6e426b9 bl616/bl616cl: extract wl80211 + macsw + bl_wpa_supplicant + rfparam, e2e build`
+- 主要内容：从 `platform/bouffalo_sdk/components/wireless/` 抽 wl80211 + macsw + bl_wpa_supplicant 三个 component；从 `drivers/rfparam` 抽 rfparam
+- adjacent fix：bflb_power_mgmt gate pm_manager 到 CONFIG_PM_MANAGER（+ empty.c stub 保 lib 非空）/ bflb_lwip_port PBUF_LINK_ENCAPSULATION_HLEN 48→388 / bl616_board_config + bl616cl_board_config 给 .ld.in 传 CONFIG_WIFI6 / 加 CONSOLE_UART_BAUDRATE 默认 / bflb_queue + bflb_tree 加 forwarder header
+- `CMAKE_BUILD_TYPE=Release` 默认 → 修 BL616 rom_header overflow + 顺带 BL602 ITCM 7924→3900 / xip -24.7%
+- proj.conf BL616/BL616CL 块 drop CONFIG_FHOST / CONFIG_MACSW_SELECT，改用 CONFIG_WL80211 + CONFIG_BL_WPA_SUPPLICANT + CONFIG_MACSW_SELECT=default
+
+`5511970 bl602: enable CONFIG_ROMAPI to bring ITCM back to upstream 16K default`
+- 真因 = ROMAPI 没开（BL602 BootROM 在 0x21010800 维护 jump table，SDK 通过 BFLB_USE_ROM_DRIVER 把 bl602_aon/common/ef_ctrl/sf_cfg_ext/sflash_ext/xip_sflash_ext 里 `ATTR_TCM_SECTION` 函数 ifdef 出去，留 10-byte thunk）
+- 中间走过的弯路（rodata pointer table / LTO）也都在 doc/ITCM 那段记了
+
+`3a7b3ec component/bouffalo_sdk: wire BL616 / BL616CL BT profiles + APP_VER macros`
+- bflb_zypher_bluetooth/config 加 ble1m10s1bredr0 / m2s1 profile + BL616CL 的 EM_SIZE defsym
+- bflb_lhal 从 PROJECT_SDK_VERSION 推 APP_VER_X/Y/Z
+
+## 下次继续要看的（按重要性）
+
+1. **BL616/BL616CL flash pipeline**：现在 build 只到 `.elf`，跑不上板。要给 [cmake/bflb_elf_to_bin.cmake](../cmake/bflb_elf_to_bin.cmake) 加 BL616 / BL616CL 分支（用 [tool/bflb_tools/](../tool/bflb_tools/) 里对应工具）。
+2. **`src/main.cpp` BL616/BL616CL 路径**：现在能编只是因为它 include 的 `wifi_mgmr.h` / `bl_fw_api.h` / `btble_lib_api.h` 都 wire 上了，**runtime 没验过**。第一次上板要看哪些 init 顺序 / GPIO 引脚 / UART 配置要调。
+3. **打开 `CONFIG_PM_MANAGER` 试一下**：BL616 上 wl80211 + lwip 都齐了，pm_manager.c 现在应该能 link，只是没人 call。如果要 BT/Wi-Fi PS 联合 tickless，需要打开 + 接 tickless_accurate。
+4. **`CONFIG_SHELL=n`** 仍然关着；要打开得抽 `platform/bouffalo_sdk/components/shell/`（参考 bflb_mm/mm_debug.c 用 shell.h 那条）。
+5. **CI 没接** BL616 / BL616CL；目前只有 BL602 在 CI 走 build。要加 matrix job + artifact upload。
+
+## 重启 build 准备清单（新机器 / fresh clone）
+
+```sh
+git clone <repo>
+cd at-project
+git checkout experiment/driver-only
+git submodule update --init --recursive    # 一定要 --recursive，submodule 里还有 nested
+cd project/bouffalo
+make CHIP=bl602 BOARD=bl602dk             # 验证：~30s 全量重建，产物 build_bl602/
+make CHIP=bl616 BOARD=bl616dk             # 验证：~60s，build_bl616/at_bl616.elf
+make CHIP=bl616cl BOARD=bl616cldk
+```
+
+Toolchain 自带（platform/toolchain_gcc_t-head_linux 是 submodule），不需要装系统 RISC-V gcc。
+CMake 要 ≥ 3.16（实测 3.28.3 OK，CMP0156 那段 doc 提到 3.29+ 时序无关）。
