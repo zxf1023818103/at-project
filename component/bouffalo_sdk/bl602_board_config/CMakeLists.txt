@@ -20,6 +20,18 @@ target_include_directories(bl602_board_config PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
+# board.c's bflb_board_init() configures UART0 at CONFIG_CONSOLE_UART_BAUDRATE.
+# The SDK's Kconfig defaults this to 2000000 on the bl602dk (matches the
+# CLAUDE.md note about UART0 console @ 2 Mbps). Honour an externally-set
+# value (e.g. from a project's proj.conf via -D) but fall back here so
+# the lib compiles standalone.
+if(NOT DEFINED CONFIG_CONSOLE_UART_BAUDRATE)
+    set(CONFIG_CONSOLE_UART_BAUDRATE 2000000)
+endif()
+target_compile_definitions(bl602_board_config PRIVATE
+    "CONFIG_CONSOLE_UART_BAUDRATE=${CONFIG_CONSOLE_UART_BAUDRATE}"
+)
+
 # board.c / board_gpio.c #include lhal headers (bflb_uart.h, bflb_gpio.h, …).
 # PUBLIC so consumers that pull in this OBJECT lib also see lhal.
 target_link_libraries(bl602_board_config PUBLIC bflb_lhal bflb_mm)

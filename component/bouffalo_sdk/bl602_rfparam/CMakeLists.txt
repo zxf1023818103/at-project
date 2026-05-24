@@ -7,9 +7,10 @@
 #   bl602_std    — bl602_aon.h, bl602_hbn.h
 #   bl602_phyrf  — phy_trpc.h, wl_api.h
 #   bflb_log     — log.h
-#   FreeRTOS     — FreeRTOS.h, portable.h (consumer must link a FreeRTOS
-#                  target separately; we don't pull it in here so a
-#                  non-RTOS build of bl602_rfparam stays an opt-in choice).
+#   FreeRTOS     — FreeRTOS.h, portable.h (rfparam_adapter.c needs these
+#                  at COMPILE time, so we have to link a FreeRTOS target
+#                  here — non-RTOS builds of bl602_rfparam aren't real,
+#                  the SDK's own use of this lib is RTOS-only).
 
 add_library(bl602_rfparam STATIC
     rfparam_adapter.c
@@ -24,6 +25,7 @@ target_link_libraries(bl602_rfparam PUBLIC
     bl602_std
     bl602_phyrf
     bflb_log
+    bflb_freertos_port
 )
 
 if(CONFIG_RFPARAM_TLV_FIXED_ADDRESS)

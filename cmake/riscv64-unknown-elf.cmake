@@ -129,7 +129,13 @@ set(CMAKE_CXX_EXTENSIONS        ON)
 # initialisation — overwrite rather than concatenate. Chip toolchains then
 # append -march/-mabi/-mtune once on top.
 set(CMAKE_C_FLAGS_INIT   "${_bouffalo_common_flags_str}")
-set(CMAKE_CXX_FLAGS_INIT "${_bouffalo_common_flags_str} -nostdlib -frtti -fno-exceptions")
+# -frtti + -fno-exceptions: C++ runtime knobs the SDK uses. Note: do NOT
+# pass -nostdlib here — these flags propagate to the link step too (the
+# final ELF is linked through g++ when there are any .cpp TUs), and
+# -nostdlib at link suppresses both libgcc (for __udivdi3 / __floatsidf
+# / __adddf3) and libc/newlib (for malloc/free that bflb_libc's
+# port_memory uses).
+set(CMAKE_CXX_FLAGS_INIT "${_bouffalo_common_flags_str} -frtti -fno-exceptions")
 set(CMAKE_ASM_FLAGS_INIT "${_bouffalo_common_flags_str}")
 
 set(_bouffalo_link_flags

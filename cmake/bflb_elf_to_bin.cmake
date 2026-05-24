@@ -60,6 +60,19 @@ function(bflb_add_executable TARGET)
         SUFFIX ".elf"
     )
 
+    # No --whole-archive wrapping today. The legacy SDK uses
+    # -Wl,--whole-archive around its SDK libs to keep `.itcm_region`
+    # at ~4 KB (the LDS wildcards otherwise snowball to ~24 KB via
+    # bl602_*.o(.rodata) function-pointer tables that keep their .text
+    # alive through gc-sections). Reproducing it under CMake 3.28 needs
+    # link-line de-dup (CMP0156 is 3.29+), reconciling
+    # bflb_mbedtls_port/bignum.c vs upstream library/bignum.c (full
+    # mbedtls_mpi_* overlap), and feature-unification across cascading
+    # INTERFACE umbrellas. We hit each of those in turn; the project's
+    # bl<chip>_flash.ld bumps ITCM 16K → 24K as the simpler workaround
+    # for now. See cmake/at_dedup_link_libs.cmake (which stays in-tree
+    # as a starting point) for the dedup helper.
+
     # ${_base}.elf is already produced by add_executable() above — leaving it
     # out of OUTPUT avoids a "multiple rules produce …" error from ninja.
     set(_outputs

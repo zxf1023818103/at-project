@@ -43,6 +43,7 @@ target_sources(bflb_lhal PRIVATE
     src/bflb_irq.c
     src/bflb_l1c.c
     src/bflb_mtimer.c
+    src/bl_rand_stub.c
 )
 
 if("${BOUFFALO_CHIP}" STREQUAL "bl602")
@@ -128,8 +129,13 @@ endif()
 
 # lhal #includes chip-specific register headers (bl602_glb.h, bl616_reset.h, …)
 # from bl<chip>_std. PUBLIC so consumers of lhal can see them too.
-# bflb_autoconf prepends -include autoconf.h to every TU.
-target_link_libraries(bflb_lhal PUBLIC ${BOUFFALO_CHIP}_std bflb_autoconf)
+# bflb_autoconf prepends -include autoconf.h to every TU. bflb_sec_mutex.c
+# pulls FreeRTOS for its critical-section helpers.
+target_link_libraries(bflb_lhal PUBLIC
+    ${BOUFFALO_CHIP}_std
+    bflb_autoconf
+    bflb_freertos_port
+)
 
 target_sources(bflb_lhal PRIVATE config/${BOUFFALO_CHIP}/device_table.c)
 

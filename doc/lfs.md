@@ -1,7 +1,57 @@
 # LittleFS
 
-三方平台共用同一份 littlefs（v2.8.0 + Realtek `LFS_ERR_NOTFMT` 补丁），并约定
-**同一份 lfs 镜像可以烧到任一平台**。本文档记录使这件事成立所需的全部参数。
+三方平台共用同一份 littlefs，约定 **同一份 lfs 镜像可以烧到任一平台**。本文档
+记录使这件事成立所需的全部参数，并把三家平台跟上游公版的差异列清楚。
+
+## 跟上游公版的关系
+
+三家 SDK 里 lfs.h 的 `LFS_VERSION` 宏都是 `0x00020008`（即"2.8.0"），但实际
+源码包含了上游 v2.8.1 / v2.8.2 的两个补丁，所以本仓库 `component/littlefs/`
+submodule 直接 **pin 在 v2.8.2** —— 这是跟三家 SDK 实际行为最匹配、vendor
+补丁面积最小的对齐点。
+
+从 v2.8.2 出发，剩下的差异如下（基于 `diff -u` 实测，全部限定在
+`lfs.c` / `lfs.h` / `lfs_util.h` 三个文件，`lfs_util.c` 三家无修改）：
+
+### Bouffalo + Realtek 两家都打的补丁（vendor 共识）
+
+- **`strcpy(info->name, "...") → strlcpy(info->name, "...", sizeof(info->name))`** —
+  `lfs.c` 里 3 处往 `lfs_info::name`（定长缓冲）写常量字符串的地方。源串本身
+  都很短（`"/"`, `"."`, `".."`），功能上等价；纯粹是改成防御性写法，跟磁盘
+  格式无关。
+- **`\n` → `\r\n`** —— `lfs_util.h` 里的 `LFS_TRACE` / `LFS_DEBUG` /
+  `LFS_WARN` / `LFS_ERROR` 四个宏共 16 行字符常量。串口 terminal 的 CRLF
+  约定，跟磁盘格式无关。
+
+### Realtek 独有的补丁（Bouffalo 没有）
+
+`lfs.h`：
+- 新增 `LFS_ERR_NOTFMT = -10` 枚举值。
+
+`lfs.c`：在 `lfs_dir_fetchmatch()` 扫盘逻辑里加了"全 `0xff` 擦除态"探测，
+约 6 行：
+- 函数开头声明 `uint32_t fmt_flag = 0;`
+- 扫到 `tag == 0xffffffff` 时把 `fmt_flag = 1`
+- 整段扫描结束如果只见到擦除态，就 `return LFS_ERR_NOTFMT;` 而不是
+  原本的"目录损坏"错误
+
+让 `lfs_mount()` 能区分"空白介质"和"真损坏"两种情况，上层可以据此走自动
+格式化路径。
+
+### 平台间冗余
+
+`platform/ameba-rtos/` 和 `platform/ameba-rtos-d/` 里的 lfs 源码 **逐字节
+相同**（同一份 Realtek 拷贝），跟 `platform/bouffalo_sdk/` 的差别只有上面
+"Realtek 独有补丁"那 6+1 行。Bouffalo 没有 `LFS_ERR_NOTFMT`，因为它的
+adapter 走自己的"FNF 自动 format"逻辑。
+
+### 我们这边怎么处理
+
+`component/littlefs/` submodule 锁在 v2.8.2，**不上游补丁、不 fork**。Vendor
+那点 strlcpy / CRLF / NOTFMT 差异都不影响磁盘格式（`disk version` 仍是 2.1），
+所以 mount / 读写其它平台写出来的镜像完全兼容。需要 Realtek 那个"空白介质
+自动 format" 行为时，由 adapter 层 wrap `lfs_mount` 的返回值，自己判断
+"corrupt + 全 ff" 来触发，避免改动公版源码。
 
 ## 镜像几何（image geometry）
 

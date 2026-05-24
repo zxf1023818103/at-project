@@ -58,7 +58,47 @@ add_subdirectory(bflb_partition)
 add_subdirectory(bflb_mtd)
 add_subdirectory(bflb_sys)
 add_subdirectory(bflb_async_event)
-add_subdirectory(bflb_power_mgmt)
+# bflb_power_mgmt is a BL616+ thing (clock_manager + pm_manager + tickless
+# stack built around the LP-fw framework). BL602 predates all of this —
+# its bl_lp.h has no chip-specific impl, several SDK symbols
+# (iot2lp_para, HBN_*) don't exist on BL602, and bouffalo's BL602 power-
+# mgmt path goes through wifi_hosal's own bflb_pm.c. Skip the lib on
+# BL602 to avoid pulling in code that won't compile.
+if(NOT "${BOUFFALO_CHIP}" STREQUAL "bl602")
+    add_subdirectory(bflb_power_mgmt)
+endif()
+# Bouffalo's lwIP port layer (arch + lwipopts.h + ethernetif + sys_arch).
+# Always built — cmake/lwip.cmake hard-requires this target, and a few
+# bflb_* libs include lwipopts.h transitively. Lib is tiny when nothing
+# pulls it.
+add_subdirectory(bflb_lwip_port)
+
+# Bouffalo's littlefs XIP-flash backend (lfs_xip_init + the four lfs_config
+# read/prog/erase/sync callbacks). Always built so cmake/littlefs.cmake
+# can find a backend; tiny when nothing links it.
+add_subdirectory(bflb_littlefs_port)
+
+# mbedtls port surface — split into config (headers) + port (runtime
+# glue) + hw_acc (HACC-backed alt impls). Always built (cheap when
+# nothing references them); cmake/mbedtls.cmake hard-requires config +
+# port targets when wiring upstream mbedtls. hw_acc is consumed via the
+# MBEDTLS_*_ALT mechanism, so its sources only get linked in if a
+# consumer's call into upstream mbedcrypto pulls them in.
+add_subdirectory(bflb_mbedtls_config)
+add_subdirectory(bflb_mbedtls_port)
+add_subdirectory(bflb_mbedtls_hw_acc)
+# Utility libs ported one-by-one from
+# platform/bouffalo_sdk/components/utils/. All are header-only INTERFACEs
+# or small STATIC libs; pull them all in unconditionally — they're tiny
+# and consumers opt-in via target_link_libraries.
+add_subdirectory(bflb_libc)
+add_subdirectory(bflb_getopt)
+add_subdirectory(bflb_list)
+add_subdirectory(bflb_queue)
+add_subdirectory(bflb_tree)
+add_subdirectory(bflb_ring_buffer)
+add_subdirectory(bflb_math)
+add_subdirectory(bflb_coredump)
 add_subdirectory(${BOUFFALO_CHIP}_board_config)
 
 # phyrf only matters when RF/Wi-Fi is enabled. rfparam (BL602-only in this
@@ -72,6 +112,23 @@ if(CONFIG_RF)
     endif()
 endif()
 
+# wifi4 — Wi-Fi 4 stack. BL602-only (BL616 / BL616CL use wifi6, which
+# hasn't been extracted yet). The umbrella here just pulls the subtree in;
+# the wifi4 dir's own CMakeLists adds the six sublibs and defines the
+# `wifi4` INTERFACE roll-up.
+if(CONFIG_WIFI4 AND "${BOUFFALO_CHIP}" STREQUAL "bl602")
+    add_subdirectory(wifi4)
+endif()
+
+# bflb_zypher_bluetooth — Bouffalo's Zephyr-derived BLE host + the
+# chip-specific (prebuilt) controller .a. Gated on CONFIG_BLUETOOTH;
+# currently wired for BL602 (m1s1 controller profile) only — BL616 /
+# BL616CL prebuilts are present but the profile-config defs aren't
+# translated yet.
+if(CONFIG_BLUETOOTH)
+    add_subdirectory(bflb_zypher_bluetooth)
+endif()
+
 add_library(bouffalo_sdk INTERFACE)
 target_link_libraries(bouffalo_sdk INTERFACE
     bflb_autoconf
@@ -79,6 +136,7 @@ target_link_libraries(bouffalo_sdk INTERFACE
     bflb_freertos_port
     ${BOUFFALO_CHIP}_std
     bflb_lhal
+    bflb_libc
     bflb_mm
     bflb_log
     bflb_block_pool
@@ -87,12 +145,16 @@ target_link_libraries(bouffalo_sdk INTERFACE
     bflb_mtd
     bflb_sys
     bflb_async_event
-    bflb_power_mgmt
     ${BOUFFALO_CHIP}_board_config
     # bflb_sysinit comes last so its archive is scanned AFTER bl<chip>_std,
     # which is the only thing that references sysinit_run_all.
     bflb_sysinit
 )
+
+# Optional: BL616+ power management (excluded on BL602 — see above).
+if(TARGET bflb_power_mgmt)
+    target_link_libraries(bouffalo_sdk INTERFACE bflb_power_mgmt)
+endif()
 
 # OBJECT libraries don't propagate their object files transitively through an
 # INTERFACE intermediary — CMake only auto-extracts $<TARGET_OBJECTS:...> when
@@ -108,4 +170,8 @@ if(CONFIG_RF)
     if("${BOUFFALO_CHIP}" STREQUAL "bl602")
         target_link_libraries(bouffalo_sdk INTERFACE bl602_rfparam)
     endif()
+endif()
+
+if(CONFIG_WIFI4 AND "${BOUFFALO_CHIP}" STREQUAL "bl602")
+    target_link_libraries(bouffalo_sdk INTERFACE wifi4)
 endif()

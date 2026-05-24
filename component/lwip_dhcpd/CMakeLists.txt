@@ -14,3 +14,10 @@ add_library(lwip_dhcpd STATIC
 target_include_directories(lwip_dhcpd PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}"
 )
+
+# Real-target deps — wire them directly now that both are extracted into
+# the component/ tree as proper CMake libraries.
+target_link_libraries(lwip_dhcpd PUBLIC
+    lwipcore
+    freertos_kernel
+)

@@ -1,29 +1,54 @@
-SDK_DEMO_PATH ?= $(realpath .)
-BL_SDK_BASE ?= $(realpath ../../platform/bouffalo_sdk)
+# project/bouffalo — thin wrapper that drives cmake against the
+# chip-toolchain-aware CMakeLists.txt. The legacy Makefile (delegating
+# to platform/bouffalo_sdk/project.build with a post-build python step)
+# is preserved as Makefile.legacy.
+#
+# Usage:
+#   make CHIP=<bl602|bl616|bl616cl> [BOARD=<board>]
+#
+# The build directory is build_<CHIP>/ at the project root. The ELF
+# lands at build_<CHIP>/at.elf (CMake's default location for the
+# `at` target). bflb_add_executable in cmake/bflb_elf_to_bin.cmake then
+# generates build_<CHIP>/at_<CHIP>_whole_flash_data.bin as part of the
+# build — no separate postbuild step needed.
 
-export BL_SDK_BASE
-
-export PATH:=$(realpath $(BL_SDK_BASE)/../toolchain_gcc_t-head_$(shell uname | cut -d '_' -f1 | tr '[:upper:]' '[:lower:]')/bin):$(PATH)
+AT_PROJECT_ROOT := $(realpath ../..)
 
 ifndef CHIP
-$(error CHIP is not set. Usage: make CHIP=<bl602|bl616|bl616cl> BOARD=<bl602dk|bl616dk|bl616cldk>)
+$(error CHIP is not set. Usage: make CHIP=<bl602|bl616|bl616cl> [BOARD=<board>])
 endif
-BOARD ?= $(CHIP)dk
-CROSS_COMPILE ?= riscv64-unknown-elf-
 
+BOARD     ?= $(CHIP)dk
 BUILD_DIR ?= build_$(CHIP)
 
-.DEFAULT_GOAL := postbuild
+# Pick the riscv toolchain bundled with the Bouffalo SDK submodule.
+TOOLCHAIN_BIN := $(realpath $(AT_PROJECT_ROOT)/platform/toolchain_gcc_t-head_linux/bin)
+export PATH := $(TOOLCHAIN_BIN):$(PATH)
 
-# add custom cmake definition
-#cmake_definition+=-Dxxx=sss
+CHIP_TOOLCHAIN := $(AT_PROJECT_ROOT)/cmake/$(CHIP)-toolchain.cmake
 
-include $(BL_SDK_BASE)/project.build
+GENERATOR ?= Ninja
+CMAKE     ?= cmake
 
-postbuild: $(BUILD_DIR)
-	@python3 ../../tool/bflb_elf_to_bin.py \
-	    --chip $(CHIP) \
-	    --board $(BOARD) \
-	    --build-dir $(BUILD_DIR) \
-	    --lfs-bin $(SDK_DEMO_PATH)/../lfs.bin
-	@md5sum $(BUILD_DIR)/at_$(CHIP)_whole_flash_data.bin
+.PHONY: all configure build clean distclean
+
+all: build
+
+$(BUILD_DIR)/CMakeCache.txt: CMakeLists.txt proj.conf
+	$(CMAKE) -S . -B $(BUILD_DIR) -G "$(GENERATOR)" \
+	    -DCMAKE_TOOLCHAIN_FILE=$(CHIP_TOOLCHAIN) \
+	    -DBOUFFALO_BOARD=$(BOARD)
+
+configure: $(BUILD_DIR)/CMakeCache.txt
+
+build: configure
+	$(CMAKE) --build $(BUILD_DIR)
+	@if [ -f $(BUILD_DIR)/at_$(CHIP)_whole_flash_data.bin ]; then \
+	    md5sum $(BUILD_DIR)/at_$(CHIP)_whole_flash_data.bin; \
+	fi
+
+clean:
+	@if [ -d $(BUILD_DIR) ]; then $(CMAKE) --build $(BUILD_DIR) --target clean; fi
+
+distclean:
+	rm -rf $(BUILD_DIR)

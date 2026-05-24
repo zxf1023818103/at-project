@@ -23,3 +23,14 @@
 	path = component/lwip
 	url = https://github.com/zxf1023818103/lwip.git
 	branch = bouffalo-port
+[submodule "component/cjson"]
+	path = component/cjson
+	url = https://github.com/DaveGamble/cJSON.git
+[submodule "component/mbedtls"]
+	path = component/mbedtls
+	url = https://github.com/Mbed-TLS/mbedtls.git
+	branch = v3.6.4
+[submodule "component/littlefs"]
+	path = component/littlefs
+	url = https://github.com/littlefs-project/littlefs.git
+	branch = v2.8.2
