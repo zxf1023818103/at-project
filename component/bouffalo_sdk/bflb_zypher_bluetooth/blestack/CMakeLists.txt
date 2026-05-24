@@ -125,7 +125,12 @@ if(BFLB_BT_SMP)
 endif()
 
 if(BFLB_BT_CONN)
-    target_compile_definitions(bflb_zypher_bluetooth_blestack PUBLIC CONFIG_BT_CONN)
+    # CONFIG_BT_CONN's *value* (1 / 2 / 10 / …) is per-profile and set by
+    # bflb_zypher_bluetooth_config (config/CMakeLists.txt). Defining it
+    # bare here too caused "CONFIG_BT_CONN redefined" on every TU under
+    # bl616 / bl616cl (config target sets =10 / =2, this one sets it to 1).
+    # Leave the BFLB_BT_CONN gate (selects sources) but skip the
+    # -DCONFIG_BT_CONN — the profile target is authoritative.
 endif()
 
 if(BFLB_BT_SETTINGS)

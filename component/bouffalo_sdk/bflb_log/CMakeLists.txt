@@ -22,5 +22,14 @@ target_include_directories(bflb_log PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
+# log.h / bflb_dbg.h use `#if (CONFIG_LOG_LEVEL >= N)` unconditionally,
+# which under -Wundef warns when CONFIG_LOG_LEVEL is absent. Provide a
+# sane default (0 = errors only) so the macro is always defined for any
+# consumer including these headers. Override at the consumer / proj.conf
+# level if a different level is desired.
+target_compile_definitions(bflb_log PUBLIC
+    CONFIG_LOG_LEVEL=0
+)
+
 # log.c #includes bflb_uart.h from lhal.
 target_link_libraries(bflb_log PUBLIC bflb_lhal)

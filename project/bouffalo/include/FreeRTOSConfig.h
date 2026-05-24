@@ -41,12 +41,17 @@
  *----------------------------------------------------------*/
 #include "stdio.h"
 
+/* The build also passes -DconfigMTIME(CMP)_BASE_ADDRESS=... via
+ * bflb_freertos_port; guard with #ifndef so this header doesn't redefine
+ * (was firing -Wmacro-redefined ~42×/build before guard). */
+#ifndef configMTIME_BASE_ADDRESS
 #if defined(BL602) || defined(BL702) || defined(BL702L)
 #define configMTIME_BASE_ADDRESS    (0x02000000UL + 0xBFF8UL)
 #define configMTIMECMP_BASE_ADDRESS (0x02000000UL + 0x4000UL)
 #else
 #define configMTIME_BASE_ADDRESS    (0xE0000000UL + 0xBFF8UL)
 #define configMTIMECMP_BASE_ADDRESS (0xE0000000UL + 0x4000UL)
+#endif
 #endif
 
 #define configSUPPORT_STATIC_ALLOCATION         1

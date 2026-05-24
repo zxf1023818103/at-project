@@ -270,6 +270,7 @@ int wl80211_lwip_init(void)
     status = netifapi_netif_add(&vif2netif[WL80211_VIF_AP], (const ip4_addr_t *)NULL, (const ip4_addr_t *)NULL,
                                 (const ip4_addr_t *)NULL, (void *)WL80211_VIF_AP, wl80211_netif_init, tcpip_input);
     assert(status == ERR_OK);
+    (void)status;
 
     return 0;
 }

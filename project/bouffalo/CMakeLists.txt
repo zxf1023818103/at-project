@@ -118,4 +118,13 @@ target_link_libraries(at PRIVATE bouffalo_sdk)
 target_link_options(at PRIVATE
     -Wl,--start-group
     -Wl,-Map=$<TARGET_FILE_BASE_NAME:at>.map
+    # The toolchain enables -flto on link, which makes gcc replay
+    # compilation of every TU in the prebuilt vendor archives
+    # (libwl80211_${chip}.a / libphyrf_${chip}.a — both shipped by the
+    # SDK as LTO-fat .a, with jenkins-build paths baked into DWARF).
+    # That replay surfaces -Wmaybe-uninitialized in upstream TUs
+    # (cntrl.c / ap.c / scan.c / phy.h) we can't touch. Quiet them at
+    # link only — compile-time -Wmaybe-uninitialized stays on for our
+    # own sources.
+    -Wno-maybe-uninitialized
 )

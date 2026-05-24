@@ -17,12 +17,16 @@
 add_library(bflb_zypher_bluetooth_config INTERFACE)
 
 # Always-on for any BLE build (mirrors ble_common.cmake's unconditional
-# defs).
+# defs). CONFIG_BLE_USING_DYNAMIC_RAM mirrors upstream
+# ble_common.cmake's `sdk_ifndef(CONFIG_BLE_USING_DYNAMIC_RAM 0)` — needed
+# because blestack code uses `#if (CONFIG_BLE_USING_DYNAMIC_RAM)`
+# unguarded, which under -Wundef warns when the macro is just absent.
 target_compile_definitions(bflb_zypher_bluetooth_config INTERFACE
     CONFIG_BLE
     CONFIG_BLE_ENABLE
     BFLB_BLE
     CONFIG_FREERTOS
+    CONFIG_BLE_USING_DYNAMIC_RAM=0
 )
 # Note on BL_MCU_SDK: bl_port.c does ship a Sec_Eng_Trng-based bl_rand
 # under #if defined(BL_MCU_SDK), which looks like the obvious switch to

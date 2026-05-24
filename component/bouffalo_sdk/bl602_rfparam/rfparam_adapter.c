@@ -428,6 +428,12 @@ static int hal_board_load_rftv_info(uint32_t rftlv_addr)
 #ifdef CONFIG_BLE_ENABLE
         ble_controller_set_tx_pwr(pwr_table_ble);
 #endif
+    /* pwr_table_ble's only readers (rfparam_printf above + the
+     * BLE branch) get preprocessed away when CONFIG_LOG_LEVEL<5 and
+     * CONFIG_BLE_ENABLE is undef'd in this TU (this lib does not pull
+     * bflb_zypher_bluetooth_config). Keep the assignment for whoever
+     * does define them, suppress the unused warning otherwise. */
+    (void)pwr_table_ble;
 
     vPortFree(p_buffer);
 

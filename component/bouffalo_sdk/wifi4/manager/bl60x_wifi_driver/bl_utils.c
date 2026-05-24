@@ -201,7 +201,7 @@ struct wifi_pkt {
     uint16_t len[4];
 };
 
-static void dump_pkt_infor(struct hw_rxhdr *hw_rxhdr)
+__attribute__((unused)) static void dump_pkt_infor(struct hw_rxhdr *hw_rxhdr)
 {
 #define PACKET_TEST_INTERVAL     (4 * 1000)
     int16_t freq_offset = 0;

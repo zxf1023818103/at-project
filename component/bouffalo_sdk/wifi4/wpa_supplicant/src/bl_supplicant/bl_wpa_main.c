@@ -199,6 +199,7 @@ void wpa_sta_config(wifi_connect_parm_t *parm)
     wpa_config_profile(parm);
     ret = wpa_config_bss(parm);
     WPA_ASSERT(ret == 0);
+    (void)ret;
 }
 
 void wpa_sta_connect(wifi_connect_parm_t *parm)

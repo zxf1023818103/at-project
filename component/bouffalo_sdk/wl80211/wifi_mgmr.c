@@ -580,6 +580,14 @@ int wifi_mgmr_sta_scan(const wifi_mgmr_scan_params_t *config)
 
 static void auth_cipher_convert(struct wl80211_scan_result_item *result, uint8_t *auth, uint8_t *cipher)
 {
+    /* The HAS_RSN / HAS_WPA branches below can leave *auth / *cipher
+     * unwritten (e.g. RSN flag set but no key_mgmt match), which the
+     * later TEST_WPA_RSN read uses uninitialised — caught by -O3
+     * -Wmaybe-uninitialized (it propagates to wifi_mgmr_cipher_to_str
+     * via inlining too). Seed sane defaults. */
+    *auth = WIFI_EVENT_BEACON_IND_AUTH_OPEN;
+    *cipher = WIFI_EVENT_BEACON_IND_CIPHER_NONE;
+
     if (result->flags & WL80211_SCAN_AP_RESULT_FLAGS_HAS_RSN) {
         if (result->key_mgmt & (WPA_KEY_MGMT_PSK | WPA_KEY_MGMT_PSK_SHA256)) {
             *auth = WIFI_EVENT_BEACON_IND_AUTH_WPA2_PSK;
