@@ -99,32 +99,27 @@ target_include_directories(at PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/include
 )
 
-# Linker pulls everything the project actually consumes. bouffalo_sdk
-# (INTERFACE) carries the core HAL + bl<chip>_board_config (which sets
-# the linker script + -ufw_header link options). wifi4 / bflb_zypher_bluetooth
-# are umbrella INTERFACEs that link their sublibs.
-target_link_libraries(at PRIVATE
-    bouffalo_sdk
-    bflb_lwip_port
-    bflb_littlefs_port
-    bflb_mbedtls_port
-    lwipcore
-    lwip_dhcpd
-    mbedtls
-    mbedcrypto
-    mbedx509
-    cjson
-    cjson_utils
-    littlefs
-    lfs_easyflash
-    zlibstatic
-)
-if(TARGET wifi4)
-    target_link_libraries(at PRIVATE wifi4)
-endif()
-if(TARGET bflb_zypher_bluetooth)
-    target_link_libraries(at PRIVATE bflb_zypher_bluetooth)
-endif()
+# Stitch the project-level libs (port adapters + upstream submodule
+# wrappers + Bouffalo bridges) into the bouffalo_sdk umbrella here, so
+# the app below only needs `target_link_libraries(at PRIVATE bouffalo_sdk)`.
+# Has to happen after all add_subdirectory / include() above — the
+# umbrella subdir runs first (it defines bflb_*_port, which the
+# cmake/*.cmake glue then consumes via the port's lwipopts.h /
+# mbedtls_config.h), so we can only know which TARGETs exist now.
+foreach(_lib IN ITEMS
+        bflb_lwip_port bflb_littlefs_port bflb_mbedtls_port
+        lwipcore lwip_dhcpd
+        mbedtls mbedcrypto mbedx509
+        cjson cjson_utils
+        littlefs lfs_easyflash
+        zlibstatic
+        bflb_zypher_bluetooth)
+    if(TARGET ${_lib})
+        target_link_libraries(bouffalo_sdk INTERFACE ${_lib})
+    endif()
+endforeach()
+
+target_link_libraries(at PRIVATE bouffalo_sdk)
 
 # Open a linker group so all archives that follow get rescanned until
 # no new undefined references resolve. The bouffalo_sdk pieces have
@@ -133,26 +128,7 @@ endif()
 # pulling memset/strlen, libfirmware.a ↔ wifi4_manager, etc.) that a
 # single-pass scan can't resolve. GNU ld auto-closes the group at
 # end-of-line.
-#
-# Note on legacy SDK alignment: the upstream Bouffalo SDK uses
-# -Wl,--whole-archive around its SDK libs in extension.cmake, which
-# keeps `.itcm_region` at ~4 KB instead of our ~24 KB (the LDS's
-# bl602_*.o(.rodata) wildcards otherwise snowball). Reproducing that
-# under CMake 3.28 requires (a) link-line de-duplication (CMP0156 only
-# lands in 3.29+), (b) reconciling Bouffalo's port/bignum.c with
-# upstream's library/bignum.c (both define every mbedtls_mpi_* symbol),
-# and (c) feature-unification across multiple cascading paths through
-# INTERFACE umbrellas. We tried it and hit (a)+(c) repeatedly even after
-# clearing (b). Left as a follow-up: the ITCM region was bumped 16K→24K
-# in component/bouffalo_sdk/bl602_board_config/bl602_flash.ld to absorb
-# the difference.
 target_link_options(at PRIVATE
     -Wl,--start-group
-    -Wl,-Map=$<TARGET_FILE_BASE_NAME:at>.map
-)
-
-# Map file for debug/inspection. -Wl,-Map=…/at_bl602.map lands next to
-# the ELF.
-target_link_options(at PRIVATE
     -Wl,-Map=$<TARGET_FILE_BASE_NAME:at>.map
 )
