@@ -1,0 +1,6 @@
+# BLFlashCommand transient output (written into chips/<chip>/img_create/ on each --build).
+# bflb_elf_to_bin.py reads it back from there but the file isn't part of the source tree.
+bflb_tools/bouffalo_flash_cube/chips/*/img_create/whole_flash_data.bin
+bflb_tools/bouffalo_flash_cube/chips/*/img_create/whole_flash_data.bin.hash
+bflb_tools/bouffalo_flash_cube/chips/*/img_create/whole_img.pack
+bflb_tools/bouffalo_flash_cube/log/

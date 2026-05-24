@@ -68,7 +68,7 @@ rt_kv_get` 能读的 KV。
 每个平台的合成固件（whole_flash_data.bin / Image_All.bin）已经把 lfs 区那
 1000 KB 一起打包，烧机后开机就能用 —— 不再是空白擦除态。
 
-- **Bouffalo**：[project/bouffalo/tools/build_whole.py](../project/bouffalo/tools/build_whole.py)
+- **Bouffalo**：[tool/bflb_elf_to_bin.py](../tool/bflb_elf_to_bin.py)
   把 PSM 当作普通 partition 段交给 `BLFlashCommand --build`
 - **Ameba D**：[project/amebad/Makefile](../project/amebad/Makefile) 用 `dd` 把 `../lfs.bin` 拼到 `seek=0x300000`
 - **Ameba Dplus / Green2**：[project/ameba/Makefile](../project/ameba/Makefile) 同上

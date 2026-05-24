@@ -21,9 +21,9 @@ BUILD_DIR ?= build_$(CHIP)
 include $(BL_SDK_BASE)/project.build
 
 postbuild: $(BUILD_DIR)
-	@python3 tools/elf_to_bin.py \
+	@python3 ../../tool/bflb_elf_to_bin.py \
 	    --chip $(CHIP) \
 	    --board $(BOARD) \
 	    --build-dir $(BUILD_DIR) \
 	    --lfs-bin $(SDK_DEMO_PATH)/../lfs.bin
-	@md5sum $(BUILD_DIR)/build_out/whole_flash_data.bin
+	@md5sum $(BUILD_DIR)/at_$(CHIP)_whole_flash_data.bin

@@ -17,5 +17,5 @@
 	url = https://github.com/madler/zlib.git
 [submodule "component/freertos-kernel"]
 	path = component/freertos-kernel
-	url = https://github.com/FreeRTOS/FreeRTOS-Kernel.git
-	branch = main
+	url = https://github.com/zxf1023818103/FreeRTOS-Kernel.git
+	branch = bouffalo-port
