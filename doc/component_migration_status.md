@@ -85,27 +85,59 @@ bignum.c 加回 bflb_mbedtls_port。
 `components/shell/` 还没抽，开启会让 `bflb_mm/mm_debug.c` 报 `shell.h: No such
 file or directory`。Shell 抽过来后改回 `y` 即可。
 
-### `bflb_zypher_bluetooth` 只覆盖 BL602 + m1s1
+### `bflb_zypher_bluetooth` profile-defs
 [component/bouffalo_sdk/bflb_zypher_bluetooth/config/CMakeLists.txt](../component/bouffalo_sdk/bflb_zypher_bluetooth/config/CMakeLists.txt)
-对 `BOUFFALO_CHIP` ∉ {bl602} 直接 FATAL_ERROR。BL616/BL616CL 的
-`btblecontroller` 头文件 + 预编译 `.a` 已经 copy 过来了（在
-`bflb_zypher_bluetooth/btblecontroller/`），需要补的是：
-1. `config/CMakeLists.txt` 里 BL616 / BL616CL 的 `_check_conflict`-equivalent 配置块（
-   参考 [platform/bouffalo_sdk/components/wireless/bluetooth/ble_common_readonly.cmake](../platform/bouffalo_sdk/components/wireless/bluetooth/ble_common_readonly.cmake)
-   里对应 `${CONFIG_BTBLECONTROLLER_LIB}` 的 if-else 块）
-2. `blestack/CMakeLists.txt` 里 BFLB_BT_* 选项默认值可能要按 chip 调整
+已经 wire 了三套 profile：
+- bl602 + `m1s1`
+- bl616 + `ble1m10s1bredr0`（10 conn / all roles / BLE-only）
+- bl616cl + `m2s1`（2 conn / all roles / EM=16K）
+
+BL616CL 还多一条 `-Wl,--defsym,__LD_CONFIG_EM_SIZE=16` 的 link option，因为
+`bl616cl_common.ld.in` 读 `__LD_CONFIG_EM_SIZE` 决定 `__EM_SIZE`；BL616 的 ld
+script 直接靠 `DEFINED(btble_controller_init) ? 32K : 0K` 自己判断，所以不需要
+额外 defsym。
+
+加新 profile 时：参考 [platform/bouffalo_sdk/components/wireless/bluetooth/ble_common_readonly.cmake](../platform/bouffalo_sdk/components/wireless/bluetooth/ble_common_readonly.cmake)
+对应的 `_check_conflict` 块，在 config/CMakeLists.txt 里把 `CONFIG_BT_*` 一并 emit。`blestack/CMakeLists.txt` 里 BFLB_BT_* 选项默认值目前对三个芯片都成立，没有 chip-specific 分支。
 
 ## ❌ 还没干的、build 现在看不到但下一步会需要
 
 ### BL616 / BL616CL 整条 build 链
-现在 [cmake/bl616-toolchain.cmake](../cmake/bl616-toolchain.cmake) 在；跑
-`make CHIP=bl616` 会卡在多个点：
-- `bflb_zypher_bluetooth/config` FATAL（见上）
-- `wifi6` 完全没抽（component/bouffalo_sdk/ 没有 wifi6 子目录），
-  `bouffalo_sdk/CMakeLists.txt` 没 wire wifi6
-- `bflb_power_mgmt` 只在非 BL602 链入，可能还需要 LP framework 相关配套
-- `proj.conf` 里 BL616 / BL616CL 块设了 `CONFIG_FHOST y` `CONFIG_MACSW_SELECT
-  default` — 这俩组件还没抽
+现在 [cmake/bl616-toolchain.cmake](../cmake/bl616-toolchain.cmake) 在；
+`make CHIP=bl616 BOARD=bl616dk` 当前能 configure 干净、bouffalo_sdk 核心组件
+（bflb_lhal / bl616_std / bflb_sysinit / freertos / lwipcore / mbedtls /
+bflb_log / bflb_mm / bflb_sys / bflb_mbedtls_hw_acc / 等）也能编过 —— 这一步要
+[component/bouffalo_sdk/bflb_lhal/CMakeLists.txt](../component/bouffalo_sdk/bflb_lhal/CMakeLists.txt)
+里 derive `APP_VER_X/Y/Z` 三个宏（`bflb_common.c` 在 BL616/BL616CL/BL702L/BL618DG
+路径下用 `app_ver` 结构体硬引用，BL602 路径上有 `#if defined(BL616)|...` 保护所以
+没踩到；现在的逻辑是镜像 upstream `bouffalo_sdk/bsp/CMakeLists.txt` 从
+`PROJECT_SDK_VERSION` 推出 x.y.z）。 但卡在：
+
+- **`bflb_power_mgmt/pm_manager.c`** 找不到 `<lwip/tcpip.h>`、
+  `<wifi_mgmr_ext.h>`、`<bl_lp.h>`。
+  lwip include path 需要在 [component/bouffalo_sdk/bflb_power_mgmt/CMakeLists.txt](../component/bouffalo_sdk/bflb_power_mgmt/CMakeLists.txt)
+  里 `target_link_libraries(... PUBLIC lwipcore)` 一行解掉。
+  `wifi_mgmr_ext.h` 是 **wifi6 的** header（[platform/bouffalo_sdk/components/wireless/wifi6/fhost/include/wifi_mgmr_ext.h](../platform/bouffalo_sdk/components/wireless/wifi6/fhost/include/wifi_mgmr_ext.h)），
+  下一项的衍生问题。
+
+- **wifi6 / macsw 完全没抽**。[platform/bouffalo_sdk/components/wireless/wifi6/](../platform/bouffalo_sdk/components/wireless/wifi6/)
+  26 MB，[platform/bouffalo_sdk/components/wireless/macsw/](../platform/bouffalo_sdk/components/wireless/macsw/)
+  71 MB，五个 CMakeLists 入口：`wifi6/`, `wifi6/wpa_supplicant/`,
+  `wifi6/wifi6_lwip_adapter/`, `wifi6/fhost_config/`, `wifi6/macsw_os_adapter/`。
+  这是 BL616 build 链的真正瓶颈，按 wifi4 的抽法（已 done 的参考实现在
+  [component/bouffalo_sdk/wifi4/](../component/bouffalo_sdk/wifi4/)）整一遍是
+  下一段独立工作。`proj.conf` 里 BL616 / BL616CL 块设的
+  `CONFIG_WIFI6 y` `CONFIG_FHOST y` `CONFIG_MACSW_SELECT default` 都跟这个相关。
+
+- `bouffalo_sdk/CMakeLists.txt` 已经 conditionally `add_subdirectory(wifi6)`
+  的入口还没添（参考 wifi4 的 `if(CONFIG_WIFI4 AND "${BOUFFALO_CHIP}" STREQUAL "bl602")`
+  分支）。
+
+复现命令：
+```sh
+cd project/bouffalo && rm -rf build_bl616 && make CHIP=bl616 BOARD=bl616dk
+```
+当前会停在 `bflb_power_mgmt/pm_manager.c:5: fatal error: lwip/tcpip.h: No such file or directory`。
 
 ### `bflb_ipc_rpmsg_ops`
 [component/bouffalo_sdk/bflb_ipc_rpmsg_ops/CMakeLists.txt](../component/bouffalo_sdk/bflb_ipc_rpmsg_ops/CMakeLists.txt)

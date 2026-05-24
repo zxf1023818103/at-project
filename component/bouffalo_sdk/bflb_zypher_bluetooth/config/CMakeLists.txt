@@ -5,7 +5,9 @@
 # actually needed for the controller profiles we support.
 #
 # Profiles wired today:
-#   bl602 / CONFIG_BLECONTROLLER_LIB=m1s1  (single connection, central+peripheral)
+#   bl602   / CONFIG_BLECONTROLLER_LIB=m1s1               (1 conn, central+peripheral)
+#   bl616   / CONFIG_BTBLECONTROLLER_LIB=ble1m10s1bredr0  (10 conn, BLE-only, all roles)
+#   bl616cl / CONFIG_BTBLECONTROLLER_LIB=m2s1             (2 conn, all roles, EM=16K)
 #
 # Add more profiles by extending the chip+lib if/elseif chain. The
 # corresponding _check_conflict block in
@@ -67,10 +69,70 @@ if("${BOUFFALO_CHIP}" STREQUAL "bl602")
             "bflb_zypher_bluetooth: BL602 controller profile "
             "'${CONFIG_BLECONTROLLER_LIB}' not yet wired (only m1s1).")
     endif()
-elseif("${BOUFFALO_CHIP}" STREQUAL "bl616" OR
-       "${BOUFFALO_CHIP}" STREQUAL "bl616cl")
-    message(FATAL_ERROR
-        "bflb_zypher_bluetooth: ${BOUFFALO_CHIP} profile-defs not wired yet "
-        "(add the matching _check_conflict block from "
-        "ble_common_readonly.cmake).")
+elseif("${BOUFFALO_CHIP}" STREQUAL "bl616")
+    if(NOT DEFINED CONFIG_BTBLECONTROLLER_LIB)
+        set(CONFIG_BTBLECONTROLLER_LIB "ble1m10s1bredr0")
+    endif()
+    if("${CONFIG_BTBLECONTROLLER_LIB}" STREQUAL "ble1m10s1bredr0")
+        # From ble_common_readonly.cmake: bl616 + ble1m10s1bredr0 profile.
+        # CONFIG_BLE_PDS implies CONFIG_HW_SEC_ENG_DISABLE (see
+        # ble_common.cmake's sdk_add_compile_definitions_ifdef line).
+        # CONFIG_EM_SIZE=32 is not propagated as a compile def — the
+        # BL616 ld script hardcodes __EM_SIZE = 32K when the controller
+        # symbol btble_controller_init is defined (see
+        # bl616_common.ld.in), which happens once we link the prebuilt
+        # btblecontroller .a below.
+        target_compile_definitions(bflb_zypher_bluetooth_config INTERFACE
+            CONFIG_BT_CONN=10
+            CONFIG_CON=10
+            CONFIG_BLE_TX_BUFF_DATA=10
+            CONFIG_BLE_PDS
+            CONFIG_HW_SEC_ENG_DISABLE
+            CONFIG_BT_ALLROLES
+            CONFIG_BT_CENTRAL
+            CONFIG_BT_PERIPHERAL
+            CONFIG_BT_OBSERVER
+            CONFIG_BT_BROADCASTER
+            CONFIG_DISABLE_BT_HOST_PRIVACY
+            CONFIG_DISABLE_BLE_CONTROLLER_TEST_MODE
+        )
+    else()
+        message(FATAL_ERROR
+            "bflb_zypher_bluetooth: BL616 controller profile "
+            "'${CONFIG_BTBLECONTROLLER_LIB}' not yet wired "
+            "(only ble1m10s1bredr0).")
+    endif()
+elseif("${BOUFFALO_CHIP}" STREQUAL "bl616cl")
+    if(NOT DEFINED CONFIG_BTBLECONTROLLER_LIB)
+        set(CONFIG_BTBLECONTROLLER_LIB "m2s1")
+    endif()
+    if("${CONFIG_BTBLECONTROLLER_LIB}" STREQUAL "m2s1")
+        # From ble_common_readonly.cmake: bl616cl + m2s1 profile.
+        # CONFIG_EM_SIZE=16 must be propagated to the linker on BL616CL
+        # (bl616cl_common.ld.in reads __LD_CONFIG_EM_SIZE — unlike
+        # BL616 where __EM_SIZE is hardcoded to 32K based on a controller
+        # symbol presence).
+        target_compile_definitions(bflb_zypher_bluetooth_config INTERFACE
+            CONFIG_BT_CONN=2
+            CONFIG_CON=2
+            CONFIG_BLE_TX_BUFF_DATA=4
+            CONFIG_BLE_PDS
+            CONFIG_HW_SEC_ENG_DISABLE
+            CONFIG_BT_ALLROLES
+            CONFIG_BT_CENTRAL
+            CONFIG_BT_PERIPHERAL
+            CONFIG_BT_OBSERVER
+            CONFIG_BT_BROADCASTER
+            CONFIG_DISABLE_BT_HOST_PRIVACY
+            CONFIG_DISABLE_BLE_CONTROLLER_TEST_MODE
+        )
+        target_link_options(bflb_zypher_bluetooth_config INTERFACE
+            "-Wl,--defsym,__LD_CONFIG_EM_SIZE=16"
+        )
+    else()
+        message(FATAL_ERROR
+            "bflb_zypher_bluetooth: BL616CL controller profile "
+            "'${CONFIG_BTBLECONTROLLER_LIB}' not yet wired "
+            "(only m2s1).")
+    endif()
 endif()

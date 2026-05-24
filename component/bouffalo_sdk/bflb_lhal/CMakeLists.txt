@@ -144,6 +144,34 @@ string(TOUPPER ${BOUFFALO_CHIP} _bflb_lhal_chipname)
 target_compile_definitions(bflb_lhal PUBLIC ${_bflb_lhal_chipname})
 unset(_bflb_lhal_chipname)
 
+# APP_VER_X/Y/Z — bflb_common.c's app_ver struct (compiled on BL616 /
+# BL616CL / BL702L / BL618DG; gated out on BL602) needs these as compile
+# defs. Upstream derives them in bouffalo_sdk/bsp/CMakeLists.txt from
+# PROJECT_SDK_VERSION; mirror that here so the lhal sources see them.
+# PROJECT_SDK_VERSION is set by the project (project/bouffalo/CMakeLists.txt
+# defaults it to 0.0.0 if undefined).
+string(REGEX MATCH "^([0-9]+)\\.([0-9]+)\\.([0-9]+)$" _matched_ver "${PROJECT_SDK_VERSION}")
+if(NOT _matched_ver)
+    message(FATAL_ERROR "bflb_lhal: PROJECT_SDK_VERSION '${PROJECT_SDK_VERSION}' must be x.y.z (each <255)")
+endif()
+string(REGEX MATCHALL "[0-9]+" _ver_parts "${_matched_ver}")
+list(GET _ver_parts 0 _ver_x)
+list(GET _ver_parts 1 _ver_y)
+list(GET _ver_parts 2 _ver_z)
+if(NOT (_ver_x LESS 255 AND _ver_y LESS 255 AND _ver_z LESS 255))
+    message(FATAL_ERROR "bflb_lhal: PROJECT_SDK_VERSION components must each be <255 (got ${PROJECT_SDK_VERSION})")
+endif()
+target_compile_definitions(bflb_lhal PUBLIC
+    APP_VER_X=${_ver_x}
+    APP_VER_Y=${_ver_y}
+    APP_VER_Z=${_ver_z}
+)
+unset(_matched_ver)
+unset(_ver_parts)
+unset(_ver_x)
+unset(_ver_y)
+unset(_ver_z)
+
 # Prebuilt PKA static library for the active chip.
 target_link_libraries(bflb_lhal PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src/pka/libpka_${BOUFFALO_CHIP}.a"
