@@ -34,6 +34,19 @@ if(CONFIG_PM_MANAGER)
         clock_manager.c
         pm_manager.c
     )
+    # pm_manager.c pulls in <lwip/tcpip.h>, <wifi_mgmr_ext.h>; clock_manager.c
+    # pulls in "easyflash.h". Each lib's PUBLIC include dirs propagate here.
+    # Pick the wifi mgmr by CONFIG_* (TARGET check would be order-dependent on
+    # add_subdirectory: bflb_power_mgmt runs before wifi4/wl80211 alphabetically).
+    target_link_libraries(bflb_power_mgmt PRIVATE
+        lwipcore
+        lfs_easyflash
+    )
+    if(CONFIG_WL80211)
+        target_link_libraries(bflb_power_mgmt PRIVATE wl80211)
+    elseif(CONFIG_WIFI4)
+        target_link_libraries(bflb_power_mgmt PRIVATE wifi4_manager)
+    endif()
 endif()
 
 if(CONFIG_TICKLESS_EXT)
