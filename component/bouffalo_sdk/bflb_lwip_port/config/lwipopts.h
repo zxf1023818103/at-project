@@ -352,7 +352,17 @@ a lot of data that needs to be copied, this should be set high. */
 #define MEMP_MEM_MALLOC                 0
 #define LWIP_SUPPORT_CUSTOM_PBUF        1
 
+/* PBUF_LINK_ENCAPSULATION_HLEN — pre-link headroom in every PBUF. wl80211
+ * (BL616 / BL616CL) builds struct wl80211_mac_tx_desc here and static-asserts
+ * the size; upstream `examples/wifi/sta/wifi_tcp/lwipopts_user.h` bumps it to
+ * 388 for that reason. Wifi4 on BL602 only needs the original 48. Gate on
+ * BL616 / BL616CL so other chips keep the smaller default (saves per-PBUF
+ * RAM). */
+#if defined(BL616) || defined(BL616CL)
+#define PBUF_LINK_ENCAPSULATION_HLEN    388u
+#else
 #define PBUF_LINK_ENCAPSULATION_HLEN    48u
+#endif
 
 #define LWIP_RAW                        1
 

@@ -1,27 +1,40 @@
 # bflb_power_mgmt — clock manager + power manager + (optional) tickless-idle
 # stack. Extracted from bouffalo_sdk/components/os/power_mgmt.
 #
-# The SDK CMakeLists had four config flags:
+# Config flags:
+#   CONFIG_PM_MANAGER         -> pulls in pm_manager.c + clock_manager.c
+#                                (NEW — see comment below; default OFF on our
+#                                tree because both files are dead weight for the
+#                                current scope and pm_manager.c hard-depends on
+#                                wifi6's wifi_mgmr_ext.h which isn't extracted).
 #   CONFIG_TICKLESS_EXT       -> pulls in tickless.c / tickless_hook.c / rc32k_trim.c
 #   CONFIG_TICKLESS_ACCURATE  -> pulls in tickless_accurate.c + a chunk of -D flags
 #                                (LP_APP, configUSE_TICKLESS_IDLE=1, …) and the
-#                                chip-specific MTIME / MTIMECMP base addresses
+#                                chip-specific MTIME / MTIMECMP base addresses.
+#                                NOTE: tickless_accurate.c calls pm_sleep_check_dispatch()
+#                                from pm_manager.c, so CONFIG_TICKLESS_ACCURATE
+#                                requires CONFIG_PM_MANAGER too.
 #   CONFIG_ACTIVE_CRYSTAL     -> adds -DCFG_ACTIVE_CRYSTAL
 #   CONFIG_DCDC_ENABLE        -> only meaningful on bl616; flips PM_PDS_LDO_LEVEL_RT_DEFAULT
 #
-# All preserved here. The bl702 / bl702l / bl618dg MTIME branches have been
-# dropped to match the umbrella's bl602/bl616/bl616cl-only scope.
+# The bl702 / bl702l / bl618dg MTIME branches have been dropped to match the
+# umbrella's bl602/bl616/bl616cl-only scope.
 #
-# Heavy dep surface: pm_manager.c / clock_manager.c #include FreeRTOS.h,
-# lwip headers, wifi_mgmr / btble / easyflash / macsw / board_rf headers.
-# We only know how to link the chip layer ourselves; everything else has to
-# come from consumer-side wiring (FreeRTOS + middleware) before this lib
-# will actually compile clean.
+# Heavy dep surface (gated): pm_manager.c #include's lwip + <wifi_mgmr_ext.h>
+# (wifi6/fhost header); clock_manager.c #include's "easyflash.h" + "bl_lp.h".
+# Until wifi6 is extracted we keep CONFIG_PM_MANAGER off and the lib only
+# carries the optional tickless* sources. Audit done at the time of gating:
+# `pm_manager_*` / `clock_source_read` had zero callers in the extracted tree
+# (only consumer was tickless_accurate.c, which is already gated).
 
-add_library(bflb_power_mgmt STATIC
-    clock_manager.c
-    pm_manager.c
-)
+add_library(bflb_power_mgmt STATIC empty.c)
+
+if(CONFIG_PM_MANAGER)
+    target_sources(bflb_power_mgmt PRIVATE
+        clock_manager.c
+        pm_manager.c
+    )
+endif()
 
 if(CONFIG_TICKLESS_EXT)
     target_sources(bflb_power_mgmt PRIVATE

@@ -112,12 +112,36 @@ if(CONFIG_RF)
     endif()
 endif()
 
-# wifi4 — Wi-Fi 4 stack. BL602-only (BL616 / BL616CL use wifi6, which
-# hasn't been extracted yet). The umbrella here just pulls the subtree in;
-# the wifi4 dir's own CMakeLists adds the six sublibs and defines the
-# `wifi4` INTERFACE roll-up.
+# wifi4 — Wi-Fi 4 stack. BL602-only (BL616 / BL616CL use wifi6 via the
+# wl80211 + macsw + bl_wpa_supplicant trio below). The umbrella here just
+# pulls the subtree in; the wifi4 dir's own CMakeLists adds the six
+# sublibs and defines the `wifi4` INTERFACE roll-up.
 if(CONFIG_WIFI4 AND "${BOUFFALO_CHIP}" STREQUAL "bl602")
     add_subdirectory(wifi4)
+endif()
+
+# Wi-Fi 6 stack on BL616 / BL616CL: three coupled components.
+#   wl80211 — Bouffalo's 802.11 driver + wifi_mgmr API surface.
+#   macsw   — MAC software layer (prebuilt .a per chip × variant +
+#             macsw_plat.c shim).
+#   bl_wpa_supplicant — Bouffalo port of wpa_supplicant.
+# CONFIG_WIFI6 is the umbrella switch in proj.conf (matches upstream).
+# CONFIG_WL80211 + CONFIG_BL_WPA_SUPPLICANT are individually gated to
+# mirror upstream's Kconfig but in practice on this fork the three move
+# together; we wire them inside the same CONFIG_WIFI6 block.
+if(CONFIG_WIFI6 AND ("${BOUFFALO_CHIP}" STREQUAL "bl616" OR
+                    "${BOUFFALO_CHIP}" STREQUAL "bl616cl"))
+    add_subdirectory(macsw)
+    add_subdirectory(bl_wpa_supplicant)
+    if(CONFIG_WL80211)
+        add_subdirectory(wl80211)
+    endif()
+endif()
+
+# Generic RF parameter loader for non-BL602 chips (BL602 uses its own
+# bl602_rfparam component, wired above). Gated on CONFIG_RF + chip.
+if(CONFIG_RF AND NOT ("${BOUFFALO_CHIP}" STREQUAL "bl602"))
+    add_subdirectory(rfparam)
 endif()
 
 # bflb_zypher_bluetooth — Bouffalo's Zephyr-derived BLE host + the
@@ -174,4 +198,19 @@ endif()
 
 if(CONFIG_WIFI4 AND "${BOUFFALO_CHIP}" STREQUAL "bl602")
     target_link_libraries(bouffalo_sdk INTERFACE wifi4)
+endif()
+
+if(CONFIG_WIFI6 AND ("${BOUFFALO_CHIP}" STREQUAL "bl616" OR
+                    "${BOUFFALO_CHIP}" STREQUAL "bl616cl"))
+    target_link_libraries(bouffalo_sdk INTERFACE
+        macsw
+        bl_wpa_supplicant
+    )
+    if(TARGET wl80211)
+        target_link_libraries(bouffalo_sdk INTERFACE wl80211)
+    endif()
+endif()
+
+if(TARGET rfparam)
+    target_link_libraries(bouffalo_sdk INTERFACE rfparam)
 endif()

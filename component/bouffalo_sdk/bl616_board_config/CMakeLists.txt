@@ -34,6 +34,16 @@ target_include_directories(bl616_board_config PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
+# board.c #include lhal headers; mirror bl602_board_config's UART-baud
+# default (upstream lives in defconfig, our extracted tree treats it as
+# an opt-in here).
+if(NOT DEFINED CONFIG_CONSOLE_UART_BAUDRATE)
+    set(CONFIG_CONSOLE_UART_BAUDRATE 2000000)
+endif()
+target_compile_definitions(bl616_board_config PUBLIC
+    "CONFIG_CONSOLE_UART_BAUDRATE=${CONFIG_CONSOLE_UART_BAUDRATE}"
+)
+
 # board.c / board_gpio.c / board_flash_psram.c #include lhal headers
 # (bflb_uart.h, bflb_gpio.h, bflb_clock.h, …). PUBLIC so consumers that
 # pull in this OBJECT lib also see lhal.
@@ -45,11 +55,23 @@ target_link_libraries(bl616_board_config PUBLIC bflb_lhal bflb_mm)
 set(_ld_in "${CMAKE_CURRENT_LIST_DIR}/bl616_common.ld.in")
 set(_ld    "${CMAKE_CURRENT_BINARY_DIR}/linker.ld")
 
+# CONFIG_WIFI6 changes WRAM_LENGTH default 64K -> 160K in the template
+# (and ram_wifi sits inside WRAM). CONFIG_LPAPP / CONFIG_PSRAM also have
+# `#if defined` branches. Propagate the ones the project sets in proj.conf
+# as -D flags to the cpp pass; the template's #ifndef-guarded defaults
+# cover the rest.
+set(_ld_cpp_defs "")
+foreach(_flag IN ITEMS CONFIG_WIFI6 CONFIG_WLAN CONFIG_PSRAM CONFIG_LPAPP)
+    if(${_flag})
+        list(APPEND _ld_cpp_defs "-D${_flag}=1")
+    endif()
+endforeach()
+
 add_custom_command(
     OUTPUT "${_ld}"
-    COMMAND "${CMAKE_C_COMPILER}" -E -P -x assembler-with-cpp "${_ld_in}" -o "${_ld}"
+    COMMAND "${CMAKE_C_COMPILER}" -E -P -x assembler-with-cpp ${_ld_cpp_defs} "${_ld_in}" -o "${_ld}"
     DEPENDS "${_ld_in}"
-    COMMENT "Expanding ${CMAKE_CURRENT_LIST_DIR}/bl616_common.ld.in -> linker.ld"
+    COMMENT "Expanding ${CMAKE_CURRENT_LIST_DIR}/bl616_common.ld.in -> linker.ld (defs: ${_ld_cpp_defs})"
     VERBATIM
 )
 add_custom_target(bl616_board_config_linker_script DEPENDS "${_ld}")
