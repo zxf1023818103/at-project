@@ -31,6 +31,12 @@ if(NOT DEFINED AT_PROJECT_ROOT)
     message(FATAL_ERROR "AT_PROJECT_ROOT must be set before including cmake/mbedtls.cmake")
 endif()
 
+# bflb_mbedtls_config / port / hw_acc all live inside bouffalo_sdk; their
+# headers (MBEDTLS_CONFIG_FILE, platform glue) feed into upstream
+# mbedcrypto compilation. Pull via the glue file — include_guard() makes
+# this idempotent so any call order works.
+include(${AT_PROJECT_ROOT}/cmake/bouffalo_sdk.cmake)
+
 # Strip upstream's testing scaffolding and install/export — none of it
 # makes sense on bare metal.
 set(ENABLE_TESTING       OFF CACHE BOOL "" FORCE)

@@ -59,26 +59,13 @@ endif()
 # Component tree
 # ---------------------------------------------------------------------------
 
-# bouffalo_sdk umbrella: core HAL + std + sysinit + freertos_port +
-# log/mm/sys/mtd/partition + bl<chip>_phyrf/rfparam/board_config + …
-# pulled in transitively. Conditionally adds wifi4 when CONFIG_WIFI4 is
-# on (BL602 only — wifi6 not extracted yet).
-add_subdirectory(${AT_PROJECT_ROOT}/component/bouffalo_sdk
-                 ${CMAKE_BINARY_DIR}/component/bouffalo_sdk)
-
-# Cross-vendor library submodules (each cmake/<name>.cmake is the
-# native-CMake glue that wraps the upstream submodule for our toolchain).
-include(${AT_PROJECT_ROOT}/cmake/lwip.cmake)
-include(${AT_PROJECT_ROOT}/cmake/mbedtls.cmake)
-include(${AT_PROJECT_ROOT}/cmake/littlefs.cmake)
-include(${AT_PROJECT_ROOT}/cmake/cjson.cmake)
-include(${AT_PROJECT_ROOT}/cmake/zlib.cmake)
-
-# Bouffalo-side bridges that sit at component/ top level (siblings to
-# the upstream submodules they wrap).
-add_subdirectory(${AT_PROJECT_ROOT}/component/lwip_dhcpd
-                 ${CMAKE_BINARY_DIR}/component/lwip_dhcpd)
-include(${AT_PROJECT_ROOT}/cmake/lfs_easyflash.cmake)
+# component/CMakeLists.txt enumerates every subdir of component/ and
+# pulls each in via its matching cmake/<name>.cmake glue. Each glue
+# file uses include_guard() and pulls its own deps (e.g. cmake/lwip.cmake
+# pulls cmake/bouffalo_sdk.cmake for the bflb_lwip_port headers), so a
+# single add_subdirectory is enough — no need to hand-list libs here.
+add_subdirectory(${AT_PROJECT_ROOT}/component
+                 ${CMAKE_BINARY_DIR}/component)
 
 # ---------------------------------------------------------------------------
 # Application

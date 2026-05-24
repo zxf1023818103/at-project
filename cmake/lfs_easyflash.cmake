@@ -18,11 +18,10 @@ if(NOT DEFINED AT_PROJECT_ROOT)
     message(FATAL_ERROR "AT_PROJECT_ROOT must be set before including cmake/lfs_easyflash.cmake")
 endif()
 
-if(NOT TARGET littlefs)
-    message(FATAL_ERROR
-        "cmake/lfs_easyflash.cmake: littlefs target missing. "
-        "Include cmake/littlefs.cmake before lfs_easyflash.cmake.")
-endif()
+# Hard prereqs — pull them via their glue files. include_guard() makes
+# this idempotent so any call order works.
+include(${AT_PROJECT_ROOT}/cmake/littlefs.cmake)        # littlefs target
+include(${AT_PROJECT_ROOT}/cmake/bouffalo_sdk.cmake)    # bflb_littlefs_port + bflb_log targets
 
 add_subdirectory(${AT_PROJECT_ROOT}/component/lfs_easyflash
                  ${CMAKE_BINARY_DIR}/at_lfs_easyflash_build

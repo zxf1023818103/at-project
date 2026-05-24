@@ -20,12 +20,10 @@ if(NOT DEFINED AT_PROJECT_ROOT)
     message(FATAL_ERROR "AT_PROJECT_ROOT must be set before including cmake/lwip.cmake")
 endif()
 
-if(NOT TARGET bflb_lwip_port)
-    message(FATAL_ERROR
-        "cmake/lwip.cmake: bflb_lwip_port target is missing. "
-        "Include component/bouffalo_sdk before lwip.cmake — the port "
-        "layer carries lwipopts.h and the arch headers lwip needs.")
-endif()
+# bflb_lwip_port (lwipopts.h + arch headers) lives inside bouffalo_sdk.
+# Pull it via the glue file — include_guard() makes this idempotent so
+# any call order works.
+include(${AT_PROJECT_ROOT}/cmake/bouffalo_sdk.cmake)
 
 # Filelists wants LWIP_DIR pointing at the submodule root.
 set(LWIP_DIR "${AT_PROJECT_ROOT}/component/lwip")
