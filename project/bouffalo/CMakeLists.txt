@@ -106,6 +106,17 @@ foreach(_lib IN ITEMS
     endif()
 endforeach()
 
+# Close the linker group opened in target_link_options below. Append
+# `-Wl,--end-group` as the LAST entry of bouffalo_sdk's INTERFACE link
+# list so that when `at` links against bouffalo_sdk, the .a expansion
+# emits the close-marker as the final token after every transitively-
+# pulled archive. (Putting it directly in target_link_libraries(at ...)
+# instead lands it BEFORE the INTERFACE expansion in the link line —
+# wrong position, still warns.) Without it ld warns "missing
+# --end-group; added as last command line option" — the group still
+# closes (ld auto-appends), but the warning is noise.
+target_link_libraries(bouffalo_sdk INTERFACE -Wl,--end-group)
+
 target_link_libraries(at PRIVATE bouffalo_sdk)
 
 # Open a linker group so all archives that follow get rescanned until
@@ -113,8 +124,8 @@ target_link_libraries(at PRIVATE bouffalo_sdk)
 # cyclic references across archives (bl602_std ↔ bflb_sysinit,
 # wifi4_manager ↔ wifi4_wpa_supplicant, libc nuttx-stdlib ↔ everything
 # pulling memset/strlen, libfirmware.a ↔ wifi4_manager, etc.) that a
-# single-pass scan can't resolve. GNU ld auto-closes the group at
-# end-of-line.
+# single-pass scan can't resolve. --end-group closes via the
+# bouffalo_sdk INTERFACE-link trick above.
 target_link_options(at PRIVATE
     -Wl,--start-group
     -Wl,-Map=$<TARGET_FILE_BASE_NAME:at>.map
