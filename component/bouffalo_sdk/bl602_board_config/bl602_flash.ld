@@ -27,16 +27,8 @@ MEMORY
 {
     fw_header_memory  (rx)  : ORIGIN = 0x23000000 - 0x1000, LENGTH = 4K
     xip_memory  (rx)  : ORIGIN = 0x23000000, LENGTH = 1024K
-    /* ITCM bumped from 16K to 24K (and dtcm correspondingly trimmed by
-     * 8K) — the combined wifi4 + Zephyr BT + lwIP + mbedtls + littlefs
-     * pull more .rodata into .itcm_region (the SDK's flash routine /
-     * sclock_rlt rodata, plus chip-specific bl602_*.o.rodata) than the
-     * upstream SDK's 16K could hold. DTCM uses ~1KB of the 48K it had,
-     * so giving 8K back keeps DTCM at a comfortable 40K. ITCM and DTCM
-     * are adjacent slices of the same physical SRAM, so the address
-     * arithmetic stays consistent. */
-    itcm_memory (rx)  : ORIGIN = 0x22010000, LENGTH = 24K
-    dtcm_memory (rx)  : ORIGIN = 0x42016000, LENGTH = 40K
+    itcm_memory (rx)  : ORIGIN = 0x22010000, LENGTH = 16K
+    dtcm_memory (rx)  : ORIGIN = 0x42014000, LENGTH = 48K
     ram_memory  (!rx) : ORIGIN = 0x42020000, LENGTH = 176K
     ram_wifi    (wxa) : ORIGIN = 0x42042000 - __EM_SIZE, LENGTH = (8K + 104K - 64K - 8K) /*leave 8K left for BLE*/
 }

@@ -19,22 +19,51 @@ end-to-end，产物：
 
 ## ⚠️ 已 workaround / 知道但没修
 
-### ITCM 16K → 24K
-[component/bouffalo_sdk/bl602_board_config/bl602_flash.ld](../component/bouffalo_sdk/bl602_board_config/bl602_flash.ld)
-把 `itcm_memory` 从 16K bump 到 24K，从 DTCM 借了 8K（DTCM 之前只用 1 KB，富余）。
+### ~~ITCM 16K → 24K → 32K~~ → **回到 16K 默认（CONFIG_ROMAPI y）**
+[project/bouffalo/proj.conf](../project/bouffalo/proj.conf) 的 BL602 块加了
+`set(CONFIG_ROMAPI y)`。
+[component/bouffalo_sdk/bl602_std/CMakeLists.txt](../component/bouffalo_sdk/bl602_std/CMakeLists.txt)
+看到这个 flag 就：
+1. 把 `src/bl602_romapi.c` 加进 source 列表
+2. 给整个 lib 加 `BFLB_USE_ROM_DRIVER` 编译宏
 
-**根因：** legacy SDK 在链接行上用
-`-Wl,--whole-archive ${SDK_LIBS} -Wl,--no-whole-archive` 把所有 SDK 静态库整组
-强拉进 ELF；接着 `-Wl,--gc-sections + -flto` 在能看到完整候选集的情况下把不可达
-段（包括各种 `.rodata`-with-function-pointer-tables）全部裁掉，最终 `.itcm_region`
-只有 ~4 KB。
+`bl602_aon.c` / `bl602_common.c` / `bl602_ef_ctrl.c` / `bl602_sf_cfg_ext.c` /
+`bl602_sflash_ext.c` / `bl602_xip_sflash_ext.c` 里所有 `ATTR_TCM_SECTION`
+函数都被 `#ifndef BFLB_USE_ROM_DRIVER` 包着 —— 一旦定义这个宏，整段 full C
+实现被 ifdef 出去，留下的是 `bl602_romapi.c` 里 `__ALWAYS_INLINE` 的 10-byte
+thunk，做的事情就是 `(BL_Err_Type(*)(void))ROM_APITABLE[index]()`。BL602
+BootROM 在 `0x21010800` 维护了一张 API jump table，所有 PDS / XIP / flash /
+EF / SF-cfg 的 HAL routine 实际驻留 ROM，不占 ITCM。
 
-我们的 build 走 lazy linking + `--start-group`：LDS 的
-`*bl602_*.o*(.rodata*)` 通配在每个被拉进来的 .o 上单独触发，匹配上来的 rodata
-里嵌着函数指针表，让 gc-sections 把对应 `.text.tcm_code.*` 保活下来，雪球滚到
-~24 KB。
+**实测效果：**
+| 区域 | 修前 | 修后 |
+|---|---|---|
+| itcm_memory | 23956 B / 24 KB (97.48%) | **7924 B / 16 KB (48.36%)** |
+| dtcm_memory | 1028 B / 40 KB | 1028 B / 48 KB (默认) |
+| xip_memory | 779252 B / 1 MB | 778748 B / 1 MB |
 
-**为什么没采用 legacy 路径：** 三层问题缠一起：
+`bl602_flash.ld` ITCM/DTCM 已经还原到 upstream 默认（16K / 48K）。
+
+**走过的弯路（留给以后避坑）：**
+1. 先怀疑 LDS 里 `*bl602_*.o*(.rodata*)` 通配让 rodata 函数指针表保活
+   `*(.tcm_code.*)` → 抓 map 验证那十几条 wildcard 在我们 build 里**匹配字节
+   数都是 0**，假设不成立。
+2. 再怀疑没上 LTO 导致 chain endpoint 丢不掉 → 上 LTO（compile 加 `-flto=auto`
+   + AR 换 `gcc-ar`），ITCM 只从 23956 → 23860（-96 B），证明 LTO 也不是关键。
+3. 跑 upstream `examples/wifi/sta/wifi_tcp` 例子量到 ITCM 3884 B / 16 KB
+   (23.71%)，对比 map 看到 upstream 里 `AON_LowPower_Enter_PDS0` 等是从
+   `bl602_romapi.c.obj` 的 0xa 字节 thunk 来的，我们这边是从 `bl602_aon.c.obj`
+   的 0xa8 字节完整实现来的 —— 锁定差异来源 BFLB_USE_ROM_DRIVER 这个 define。
+   `bl602_aon.c` 里所有函数都用 `#ifndef BFLB_USE_ROM_DRIVER` 包着；upstream
+   `project.build:110` 默认 `CONFIG_ROMAPI ?= y` 自动启用，我们 proj.conf 没
+   设过这一条。
+4. 一并把 LTO 关了（compile 端 `-flto=auto` + `gcc-ar` 那两行 revert 掉）。
+   失去 ITCM 这个诱因之后，LTO 剩 0.91% 的 xip 收益（同样 16K ITCM + ROMAPI
+   下 LTO on/off 实测 xip 771692 → 778748 = -7056 B），不值 build-time 增加
+   + 多套 ar wrapper 维护成本。LTO 要重启的话，已经 verify 过 `-flto=auto` +
+   `riscv64-unknown-elf-gcc-ar/gcc-ranlib` 这组就能跑通。
+
+**遗留 dedup / WHOLE_ARCHIVE 工作（跟 ITCM 没关，但场子还在）：**
 1. CMake 3.28 没有 `CMP0156`（链接行去重 policy，3.29+ 才落地）。我们的 INTERFACE
    伞型库 cascading 会把同一 `.a` 在 `LINK_LIBRARIES` 里塞 2–3 次，
    `--whole-archive` 下每次都会 force-include 整个 archive 的 `.vector`/`.init`
@@ -46,7 +75,7 @@ end-to-end，产物：
    个 `mbedtls_mpi_*`），SDK 是靠条件编译选其一；upstream 的 CMakeLists 无条件
    编译 bignum.c，没有干净的关闭开关。
 
-留下的入口：
+留下的入口（如果以后真要做 whole-archive 一致性）：
 - [cmake/at_dedup_link_libs.cmake](../cmake/at_dedup_link_libs.cmake) — 递归
   walk `INTERFACE_LINK_LIBRARIES` 的 dedup helper，路径正确但目前没人调用。
 - [cmake/bflb_elf_to_bin.cmake](../cmake/bflb_elf_to_bin.cmake) 里的 comment 标
@@ -164,25 +193,6 @@ src/main.cpp 在 BL602 路径下直接 #include 一堆 Bouffalo Zephyr BT 头（
 如果未来要做 BT-disabled build（比如 BL616 上某些 SKU），需要在 Common.h /
 main.cpp 里加 `CONFIG_BLUETOOTH` 编译开关。
 
-## 链接行去重 / WHOLE_ARCHIVE 重启清单
-
-如果有人重新挑起 ITCM 对齐这件事，按这个顺序走：
-
-1. **CMake 升到 3.29+** 后 `cmake_policy(SET CMP0156 NEW)` 可用；这会自动消掉
-   cascading INTERFACE 重复。
-2. 给 [cmake/mbedtls.cmake](../cmake/mbedtls.cmake) 加 mbedcrypto 的 post-build
-   `ar d $<TARGET_FILE:mbedcrypto> bignum.c.obj`（带 chip-条件保护，避免在
-   `CONFIG_MBEDTLS_BIGNUM_USE_HW=n` 时把上游 bignum 也删掉）。
-3. 把 `bignum.c` 加回 [component/bouffalo_sdk/bflb_mbedtls_port/CMakeLists.txt](../component/bouffalo_sdk/bflb_mbedtls_port/CMakeLists.txt)。
-4. 用 [cmake/at_dedup_link_libs.cmake](../cmake/at_dedup_link_libs.cmake)
-   生成 deduped 列表，喂给 `$<LINK_LIBRARY:WHOLE_ARCHIVE,…>` —— CMP0156 NEW
-   会让 CMake 不再把 cascading 重复也包成新的 `--whole-archive` 段。
-5. 在 [cmake/riscv64-unknown-elf.cmake](../cmake/riscv64-unknown-elf.cmake) 重新
-   注册 `CMAKE_<LANG>_LINK_LIBRARY_USING_WHOLE_ARCHIVE`（commit 里已经把这段
-   删掉了，因为没用上；保留 git history 里就行）。
-6. 验证 `.itcm_region` 回落到 ~4 KB，然后把 [bl602_flash.ld](../component/bouffalo_sdk/bl602_board_config/bl602_flash.ld)
-   ITCM 改回 16K、DTCM 改回 48K。
-
 ## 验收用命令
 
 ```sh
@@ -191,6 +201,17 @@ make CHIP=bl602 BOARD=bl602dk        # ~30s 全量重建
 ls -lh build_bl602/at_bl602*.bin
 ```
 
-预期：
+预期（CONFIG_ROMAPI y / LTO off / ITCM 16K / DTCM 48K — 全部 upstream 默认）：
 - `at_bl602_whole_flash_data.bin` 约 4.0 MB（含 boot2 + 分区表 + 应用 + lfs）
-- `itcm_memory: 23956 B / 24 KB (97.48%)` 在内存使用报告里
+- `xip_memory: 778748 B / 1 MB (74.27%)`
+- `itcm_memory: 7924 B / 16 KB (48.36%)`
+- `dtcm_memory: 1028 B / 48 KB (2.09%)`
+- `ram_wifi: 35824 B / 40 KB (87.46%)`
+
+参考 upstream `examples/wifi/sta/wifi_tcp` 例子（同样 wifi4 + lwip + freertos
+工作量）跑出来：
+- `xip_memory: 465648 B / 1 MB (44.41%)` — 比我们小是因为没 BT stack + mbedtls +
+  cjson + zlib + lfs；
+- `itcm_memory: 3884 B / 16 KB (23.71%)` — ROMAPI 同样开，差距主要在我们多链了
+  bflb_uart/bflb_gpio/bflb_mtimer/bflb_irq/bflb_sflash/bflb_sf_ctrl 一些没被
+  romapi cover 的 TCM-marked 函数。
