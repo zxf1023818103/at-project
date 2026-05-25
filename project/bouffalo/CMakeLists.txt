@@ -14,7 +14,7 @@
 # at_<chip>_whole_flash_data.bin in one go — no separate Makefile
 # postbuild step needed.
 
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.19)
 
 # Default build type: Release (-O3 -DNDEBUG). Without it CMake leaves
 # CMAKE_<LANG>_FLAGS_<TYPE> unset and code compiles -O0, which:
@@ -87,10 +87,3 @@ target_include_directories(at PRIVATE
 )
 
 target_link_libraries(at PRIVATE bouffalo_sdk)
-
-# Closes the --start-group bouffalo_sdk opens on its INTERFACE link
-# options + emits the .map file. Has to run AFTER add_subdirectory above
-# so every external lib (cjson / lwip / mbedtls / …) has already stitched
-# itself into the umbrella from its own cmake/<name>.cmake — that
-# guarantees --end-group lands past every archive ld needs to resolve.
-bouffalo_sdk_finalize_link(at)

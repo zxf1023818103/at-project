@@ -60,6 +60,15 @@ function(bflb_add_executable TARGET)
         SUFFIX ".elf"
     )
 
+    # Always emit a linker .map next to the ELF — debugging/sizing without
+    # one is painful and it costs nothing. Lives here (not in the SDK
+    # umbrella's INTERFACE link options) because $<TARGET_PROPERTY:OUTPUT_NAME>
+    # would resolve at the wrong time for a transitive INTERFACE setting on
+    # consumers that haven't run set_target_properties yet.
+    target_link_options(${TARGET} PRIVATE
+        "-Wl,-Map=${_base}.map"
+    )
+
     # No --whole-archive wrapping today. The legacy SDK uses
     # -Wl,--whole-archive around its SDK libs to keep `.itcm_region`
     # at ~4 KB (the LDS wildcards otherwise snowball to ~24 KB via

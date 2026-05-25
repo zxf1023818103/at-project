@@ -16,28 +16,26 @@ endif()
 add_subdirectory(${AT_PROJECT_ROOT}/component/bouffalo_sdk
                  ${CMAKE_BINARY_DIR}/component/bouffalo_sdk)
 
-# Close the linker group opened on bouffalo_sdk's INTERFACE link options +
-# write a .map. Call this from the consuming project AFTER all external
-# libs (cjson / lwip / mbedtls / …) have stitched themselves into the
-# umbrella from their own cmake/<name>.cmake — the only ordering that puts
-# `-Wl,--end-group` past every archive ld needs to resolve.
+# Auto-close the link group bouffalo_sdk's INTERFACE link options open.
+# `-Wl,--end-group` is smuggled in as a library entry so CMake appends
+# it to INTERFACE_LINK_LIBRARIES (which gets emitted AFTER the link
+# options block where --start-group sits, and after every archive the
+# umbrella transitively pulls). Putting it in target_link_options would
+# lump it together with --start-group before any libraries — wrong slot,
+# group never opens.
 #
-# Idempotent on the umbrella side (--end-group goes in exactly once via a
-# GLOBAL property guard) but per-executable on the consumer side (every
-# linked target gets its own -Wl,-Map=<target>.map).
-function(bouffalo_sdk_finalize_link target)
-    target_link_options(${target} PRIVATE
-        -Wl,-Map=$<TARGET_FILE_BASE_NAME:${target}>.map
-    )
-    get_property(_grp_closed GLOBAL PROPERTY BOUFFALO_SDK_GROUP_CLOSED)
-    if(NOT _grp_closed)
-        # `-Wl,--end-group` smuggled in as a library entry so CMake appends
-        # it to INTERFACE_LINK_LIBRARIES (which gets emitted AFTER the link
-        # options block where --start-group sits, and after every archive
-        # the umbrella transitively pulls). Putting it in
-        # target_link_options would lump it together with --start-group
-        # before any libraries — wrong slot, group never opens.
-        target_link_libraries(bouffalo_sdk INTERFACE -Wl,--end-group)
-        set_property(GLOBAL PROPERTY BOUFFALO_SDK_GROUP_CLOSED TRUE)
-    endif()
+# The cmake_language(DEFER) call schedules the append for the very end
+# of the top-level project's CMakeLists.txt scope. That ordering matters:
+# external libs (cjson / lwip / mbedtls / …) stitch themselves into
+# bouffalo_sdk's INTERFACE_LINK_LIBRARIES from their own cmake/<name>.cmake
+# glue (auto-enumerated by component/CMakeLists.txt). Deferring to project
+# scope guarantees `-Wl,--end-group` is the very last entry in the list,
+# past every archive ld needs to resolve.
+#
+# Consumer side is now a one-liner: target_link_libraries(<exe> PRIVATE bouffalo_sdk).
+# No finalize call needed.
+function(_bouffalo_sdk_close_link_group)
+    target_link_libraries(bouffalo_sdk INTERFACE -Wl,--end-group)
 endfunction()
+cmake_language(DEFER DIRECTORY ${CMAKE_SOURCE_DIR}
+    CALL _bouffalo_sdk_close_link_group)
