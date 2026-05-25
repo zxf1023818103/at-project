@@ -30,6 +30,19 @@ if(BOUFFALO_CHIP)
     add_subdirectory(component)
 endif()
 
+# AmebaD KM0 bootloader subtree. Gated on AMEBAD_CHIP (set by
+# cmake/amebad-km0.cmake) so the legacy AmebaD SDK flow
+# (`cmake -S <root>` with no chip toolchain, used only to produce
+# user_link.list) doesn't enter the bootloader recipe.
+if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
+    add_subdirectory(component/amebad/fwlib_headers)
+    add_subdirectory(component/amebad/sdk_includes)
+    add_subdirectory(component/amebad/ram_common)
+    add_subdirectory(component/amebad/ram_lp)
+    add_subdirectory(component/amebad/ram_hp)            # no-op under KM0 (self-gated)
+    add_subdirectory(component/amebad/bootloader_km0)
+endif()
+
 # Forward src/'s AT_USER_SOURCES / AT_USER_SRC_DIR one more scope up so a
 # per-chip project (project/bouffalo, etc.) that wraps this root via
 # add_subdirectory still sees the exports. Skipped when this file is the
