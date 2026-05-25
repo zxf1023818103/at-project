@@ -6,13 +6,13 @@
 # and pick up the low-level HAL, board init sources, linker script, and
 # the -ufw_header link option transitively.
 
-# BOUFFALO_CHIP gating happens in cmake/bouffalo_sdk.cmake (the glue file
-# that triggers this subdirectory). We can rely on it being set + valid by
-# the time we get here.
+# BOUFFALO_CHIP gating happens in component/CMakeLists.txt (the file
+# that add_subdirectory's this one). We can rely on it being set + valid
+# by the time we get here.
 
-# FreeRTOS-Kernel (component/freertos-kernel, the bouffalo-port branch on
-# the zxf1023818103 fork). Configure it BEFORE add_subdirectory so the
-# kernel's CMakeLists can read FREERTOS_PORT + freertos_config.
+# FreeRTOS-Kernel (component/thridparty/freertos-kernel, the bouffalo-port
+# branch on the zxf1023818103 fork). Configure it BEFORE add_subdirectory
+# so the kernel's CMakeLists can read FREERTOS_PORT + freertos_config.
 if(NOT TARGET freertos_config)
     if("${BOUFFALO_CHIP}" STREQUAL "bl602")
         set(_mtime_base    "0x0200BFF8UL")
@@ -36,8 +36,8 @@ endif()
 set(FREERTOS_PORT GCC_RISC_V CACHE STRING "FreeRTOS port name" FORCE)
 if(NOT TARGET freertos_kernel)
     add_subdirectory(
-        "${CMAKE_CURRENT_SOURCE_DIR}/../freertos-kernel"
-        "${CMAKE_BINARY_DIR}/component/freertos-kernel"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../thridparty/freertos-kernel"
+        "${CMAKE_BINARY_DIR}/component/thridparty/freertos-kernel"
     )
 endif()
 
@@ -68,25 +68,102 @@ if(NOT "${BOUFFALO_CHIP}" STREQUAL "bl602")
     add_subdirectory(bflb_power_mgmt)
 endif()
 # Bouffalo's lwIP port layer (arch + lwipopts.h + ethernetif + sys_arch).
-# Always built — cmake/lwip.cmake hard-requires this target, and a few
+# Always built — the lwip block in component/thridparty/CMakeLists.txt
+# hard-requires this target, and a few
 # bflb_* libs include lwipopts.h transitively. Lib is tiny when nothing
 # pulls it.
 add_subdirectory(bflb_lwip_port)
 
 # Bouffalo's littlefs XIP-flash backend (lfs_xip_init + the four lfs_config
-# read/prog/erase/sync callbacks). Always built so cmake/littlefs.cmake
-# can find a backend; tiny when nothing links it.
+# read/prog/erase/sync callbacks). Always built so consumers of the
+# `littlefs` target from component/thridparty/ find a backend; tiny
+# when nothing links it.
 add_subdirectory(bflb_littlefs_port)
 
 # mbedtls port surface — split into config (headers) + port (runtime
-# glue) + hw_acc (HACC-backed alt impls). Always built (cheap when
-# nothing references them); cmake/mbedtls.cmake hard-requires config +
-# port targets when wiring upstream mbedtls. hw_acc is consumed via the
-# MBEDTLS_*_ALT mechanism, so its sources only get linked in if a
-# consumer's call into upstream mbedcrypto pulls them in.
+# glue) + hw_acc (HACC-backed alt impls). All three are prereqs for the
+# upstream mbedtls pull immediately below, so they're added first. hw_acc
+# is consumed via the MBEDTLS_*_ALT mechanism, so its sources only get
+# linked in if a consumer's call into upstream mbedcrypto pulls them in.
 add_subdirectory(bflb_mbedtls_config)
 add_subdirectory(bflb_mbedtls_port)
 add_subdirectory(bflb_mbedtls_hw_acc)
+
+# -------------------------------------------------------------------------
+# Upstream Mbed TLS v3.6.4 (component/thridparty/mbedtls, clean upstream).
+# Pulled here — not in component/thridparty/CMakeLists.txt — because the
+# upstream sources are unbuildable without bflb_mbedtls_config /
+# _port / _hw_acc headers, and nothing outside the Bouffalo SDK consumes
+# upstream mbedtls. Keeps the dependency one-directional.
+#
+# Why v3.6.4 and not v3.6.5+: the 3.6.5 release reorganized the source
+# tree (most primitives moved under tf-psa-crypto/drivers/builtin/src/)
+# AND removed the classic MBEDTLS_*_ALT mechanism for the in-tree builtin
+# drivers. Bouffalo's HW-accelerated alt impls (aes_alt.c, sha*_alt.c,
+# bignum_alt.c, ecp_alt.c, …) rely on MBEDTLS_*_ALT to substitute the
+# software implementations at compile time. Pinning at 3.6.4 keeps that
+# contract intact while still being a supported LTS release.
+#
+# Targets produced (all STATIC — BUILD_SHARED_LIBS forced OFF):
+#   mbedcrypto    crypto primitives + PSA + DRBG
+#   mbedx509      X.509 cert handling
+#   mbedtls       TLS protocol (depends on the above)
+#   everest       Curve25519 fast impl (3rdparty submodule)
+#   p256m         secp256r1 fast impl (3rdparty submodule)
+
+# Strip upstream's testing scaffolding and install/export — none of it
+# makes sense on bare metal.
+set(ENABLE_TESTING       OFF CACHE BOOL "" FORCE)
+set(ENABLE_PROGRAMS      OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS    OFF CACHE BOOL "" FORCE)
+set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
+set(USE_SHARED_MBEDTLS_LIBRARY OFF CACHE BOOL "" FORCE)
+set(USE_STATIC_MBEDTLS_LIBRARY ON  CACHE BOOL "" FORCE)
+set(DISABLE_PACKAGE_CONFIG_AND_INSTALL ON CACHE BOOL "" FORCE)
+set(GEN_FILES            OFF CACHE BOOL "" FORCE)
+
+# Point upstream at the Bouffalo config wrapper (config-tls-generic.h)
+# carried by bflb_mbedtls_config. Use -DMBEDTLS_CONFIG_FILE +
+# include_directories BEFORE the subdirectory so every target the
+# upstream tree creates (mbedcrypto, mbedtls, mbedx509, p256m, everest,
+# …) sees both the macro AND the path that makes it resolve.
+add_compile_definitions(MBEDTLS_CONFIG_FILE="config-tls-generic.h")
+include_directories("${CMAKE_CURRENT_LIST_DIR}/bflb_mbedtls_config")
+# hw_acc headers (aes_alt.h etc.) likewise need to be on the include
+# path of every TU because upstream's public headers #include "aes_alt.h"
+# unconditionally when MBEDTLS_AES_ALT is set.
+include_directories("${CMAKE_CURRENT_LIST_DIR}/bflb_mbedtls_hw_acc")
+# Same story for the port header named by MBEDTLS_PLATFORM_STD_MEM_HDR.
+include_directories("${CMAKE_CURRENT_LIST_DIR}/bflb_mbedtls_port")
+
+add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../thridparty/mbedtls"
+                 ${CMAKE_BINARY_DIR}/at_mbedtls_build
+                 EXCLUDE_FROM_ALL)
+
+# Wire the Bouffalo include paths (config + hw_acc) onto the upstream
+# targets so the config file resolves and the alt headers are visible
+# when MBEDTLS_*_ALT macros are on.
+#
+# bflb_mbedtls_port is NOT linked here — that would create a cycle
+# (port links mbedcrypto for upstream headers; doing the reverse would
+# break configuration). Instead we expose only port's source directory
+# to mbedcrypto (header edge, not symbol edge), so
+# MBEDTLS_PLATFORM_STD_MEM_HDR="mbedtls_port_bouffalo_sdk.h" resolves
+# during upstream compilation. Using
+# $<TARGET_PROPERTY:bflb_mbedtls_port,SOURCE_DIR> rather than its
+# INTERFACE_INCLUDE_DIRECTORIES is deliberate: port itself reads
+# mbedcrypto's INTERFACE_INCLUDE_DIRECTORIES (for the mbedtls/ public
+# headers), and feeding port's INTERFACE includes back into mbedcrypto
+# would close a generator-expression cycle. SOURCE_DIR is a fixed
+# string, so the propagation stays one-way.
+foreach(_t mbedcrypto mbedtls mbedx509)
+    target_link_libraries(${_t} PUBLIC bflb_mbedtls_config)
+    target_include_directories(${_t} PUBLIC
+        "$<TARGET_PROPERTY:bflb_mbedtls_hw_acc,SOURCE_DIR>"
+        "$<TARGET_PROPERTY:bflb_mbedtls_port,SOURCE_DIR>"
+    )
+    target_compile_options(${_t} PRIVATE -w)
+endforeach()
 # Utility libs ported one-by-one from
 # platform/bouffalo_sdk/components/utils/. All are header-only INTERFACEs
 # or small STATIC libs; pull them all in unconditionally — they're tiny
@@ -235,14 +312,46 @@ if(TARGET bflb_zypher_bluetooth)
     target_link_libraries(bouffalo_sdk INTERFACE bflb_zypher_bluetooth)
 endif()
 
+# Cross-platform third-party libs from component/thridparty/ (built by its
+# own CMakeLists, which knows nothing about Bouffalo) + the upstream lwip
+# and mbedtls targets pulled in by the bflb_lwip_port and upstream-mbedtls
+# blocks above. Sticking them on the umbrella here keeps the dependency
+# one-directional: third-party doesn't peek at bouffalo_sdk.
+#
+# mbedcrypto / mbedtls / mbedx509 + bflb_mbedtls_hw_acc: hw_acc used to
+# PUBLIC-link into mbedcrypto directly, but that closed an include-cycle
+# once hw_acc started pulling mbedcrypto's INTERFACE_INCLUDE_DIRECTORIES.
+# Routing both through the umbrella keeps symbol resolution intact without
+# the cycle.
+target_link_libraries(bouffalo_sdk INTERFACE
+    zlibstatic
+    cjson
+    cjson_utils
+    littlefs
+    lwipcore
+    mbedtls
+    mbedcrypto
+    mbedx509
+    bflb_mbedtls_hw_acc
+)
+
+# Bouffalo SDK keeps its -march/-mabi/include flags on the sdk_intf_lib
+# INTERFACE target. Without linking against it zlib gets the toolchain's
+# default ABI (RV64GC) and bl616 link fails with "ABI is incompatible
+# with that of the selected emulation". Wired here, not on zlibstatic's
+# own block in thridparty/, because sdk_intf_lib is a Bouffalo-only
+# target — keeping the dependency one-directional.
+if(TARGET sdk_intf_lib)
+    target_link_libraries(zlibstatic PRIVATE sdk_intf_lib)
+endif()
+
 # Open a linker group around the umbrella's transitive archives + force-pull
-# SDK's newlib retargets. Closing --end-group is the job of
-# bouffalo_sdk_finalize_link() in cmake/bouffalo_sdk.cmake, which is called
-# explicitly by the consuming executable AFTER add_subdirectory(component)
-# completes — that's the only way to guarantee the `-Wl,--end-group` token
-# is appended past every external lib (cjson / lwip / mbedtls / …) that
-# stitches itself into bouffalo_sdk's INTERFACE_LINK_LIBRARIES from its own
-# cmake/<name>.cmake glue.
+# SDK's newlib retargets. Closing --end-group is deferred to project scope
+# by component/CMakeLists.txt's _bouffalo_sdk_close_link_group() — that's
+# the only way to guarantee the `-Wl,--end-group` token is appended past
+# every external lib (cjson / lwip / mbedtls / …) the umbrella links
+# above, since `target_link_options` emits before `target_link_libraries`
+# in the final link line.
 #
 # Reasons for each piece:
 #   --start-group: bouffalo_sdk has cyclic refs across archives

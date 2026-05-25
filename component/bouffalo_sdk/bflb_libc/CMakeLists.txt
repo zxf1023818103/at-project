@@ -6,7 +6,7 @@
 #   newlib/    syscall stubs (sbrk / write / read / time / fstat / ...)
 #              and three filesystem backends:
 #                port_file_nosys.c   no FS (default)
-#                port_file_littlefs.c  via component/littlefs
+#                port_file_littlefs.c  via component/thridparty/littlefs
 #                port_file_fatfs.c     via FATFS (not in this tree yet)
 #   nuttx/     trimmed NuttX libc — stdlib (atoi/atof/qsort/itoa/…) +
 #              string (memmove/memset/strchr/strdup/…). Used because the

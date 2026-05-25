@@ -1,9 +1,9 @@
 # Shared user sources for all platform projects.
 #
 # Sourced two ways:
-#   - via add_subdirectory(${AT_PROJECT_ROOT}/src ...) from a chip
-#     project. AT_USER_SOURCES and AT_USER_SRC_DIR get propagated to the
-#     parent scope so the project can feed them into the platform's own
+#   - via add_subdirectory(<at-project>/src ...) from a chip project.
+#     AT_USER_SOURCES and AT_USER_SRC_DIR get propagated to the parent
+#     scope so the project can feed them into the platform's own
 #     add_executable / ameba_add_internal_library / etc.
 #   - directly as a STATIC `at_user` lib for the AmebaD legacy flow
 #     (project/amebad/Makefile reads user_link.list at final link time).
@@ -57,7 +57,7 @@ endif()
 # Today amebad/Makefile actually goes straight to the platform SDK build
 # (without our user sources), so this path is build-clean but unused.
 # ---------------------------------------------------------------------------
-include(${AT_PROJECT_ROOT}/cmake/at_collect_static_libs.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/../cmake/at_collect_static_libs.cmake)
 
 add_library(at_user STATIC ${AT_USER_SOURCES})
 target_include_directories(at_user PUBLIC ${AT_USER_SRC_DIR})

@@ -27,8 +27,7 @@
 cmake_minimum_required(VERSION 3.19)
 project(lfs_image NONE)
 
-set(AT_PROJECT_ROOT ${CMAKE_CURRENT_LIST_DIR}/..)
-add_subdirectory(${AT_PROJECT_ROOT}/component/lfs_image
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../component/lfs_image
                  ${CMAKE_BINARY_DIR}/component/lfs_image)
 
 lfs_image_add(${CMAKE_CURRENT_LIST_DIR}/lfs.bin

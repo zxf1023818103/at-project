@@ -67,8 +67,8 @@ target_compile_options(bl_wpa_supplicant PRIVATE
 )
 
 # Crypto routines: USE_MBEDTLS_CRYPTO means we lean on upstream mbedtls
-# for bignum / ECC / AES primitives. mbedcrypto is built by
-# cmake/mbedtls.cmake at the project level.
+# for bignum / ECC / AES primitives. mbedcrypto is built by the mbedtls
+# block in component/thridparty/CMakeLists.txt.
 target_link_libraries(bl_wpa_supplicant PUBLIC
     bflb_lhal
     bflb_freertos_port

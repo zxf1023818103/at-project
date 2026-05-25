@@ -16,7 +16,7 @@
 #
 # This contract was BROKEN in Mbed TLS 3.6.5+ — the alt wrappers were
 # removed when the crypto primitives moved into tf-psa-crypto/. That's
-# why cmake/mbedtls.cmake pins at v3.6.4.
+# why the mbedtls block in component/thridparty/CMakeLists.txt pins at v3.6.4.
 #
 # Per-primitive opt-in via BFLB_MBEDTLS_HW_*:
 #   AES, SHA1, SHA256, SHA512, BIGNUM, ECC
@@ -66,11 +66,12 @@ target_include_directories(bflb_mbedtls_hw_acc PUBLIC
 # Same pattern as bflb_mbedtls_port: PUBLIC-borrow mbedcrypto's
 # INTERFACE include set so consumers (wifi4_internal_headers etc.) see
 # mbedtls/* transitively, and PRIVATE-borrow its SOURCE_DIR
-# (component/mbedtls/library/) for the upstream-private common.h /
-# ecp_invasive.h / bignum_core.h headers our alt impls reach into.
-# cmake/mbedtls.cmake propagates this lib's headers BACK into
-# mbedcrypto via SOURCE_DIR (not INTERFACE_INCLUDE_DIRECTORIES), so the
-# one-way edge here doesn't close a generator-expression cycle.
+# (component/thridparty/mbedtls/library/) for the upstream-private
+# common.h / ecp_invasive.h / bignum_core.h headers our alt impls reach
+# into. The mbedtls block in component/thridparty/CMakeLists.txt
+# propagates this lib's headers BACK into mbedcrypto via SOURCE_DIR (not
+# INTERFACE_INCLUDE_DIRECTORIES), so the one-way edge here doesn't close
+# a generator-expression cycle.
 target_include_directories(bflb_mbedtls_hw_acc PUBLIC
     "$<TARGET_PROPERTY:mbedcrypto,INTERFACE_INCLUDE_DIRECTORIES>"
 )

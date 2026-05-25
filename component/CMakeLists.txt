@@ -1,42 +1,118 @@
-# Enumerates immediate subdirs of component/ and pulls each in.
+# Top-level component wiring. Pulls everything in this directory into
+# a single build:
 #
-# Each library is wired up either:
-#   - via a matching cmake/<libname>.cmake — a glue script that sets
-#     option knobs (BUILD_SHARED_LIBS, -Wno-..., etc.) and the actual
-#     add_subdirectory() call. This is the right pattern for third-party
-#     submodules whose upstream CMakeLists.txt we can't modify but need
-#     to wrap with project-specific post-processing.
-#   - via component/<libname>/CMakeLists.txt living next to the source,
-#     used when the wiring is project-owned (component/lfs_image is the
-#     current example: a dual-mode CMakeLists that defines a helper
-#     function on add_subdirectory and acts as a standalone host
-#     sub-project under ExternalProject_Add).
-#
-# Glue script takes precedence when both exist.
-#
-# To add a new third-party submodule:
-#   1. git submodule add <url> component/<name>
-#   2. drop a cmake/<name>.cmake that sets options + add_subdirectory +
-#      any post-target_compile_options. Use include_guard() at the top.
-#   3. wire the target into src/CMakeLists.txt via target_link_libraries.
-# No edits to this file required.
+#   thridparty/          cross-platform third-party submodules
+#                        (cjson / littlefs / zlib + a few others not
+#                        consumed directly by Ameba). One block per lib —
+#                        see component/thridparty/CMakeLists.txt. The
+#                        file knows nothing about the Bouffalo SDK; this
+#                        ordering deliberately runs it FIRST so the
+#                        Bouffalo SDK can pull the third-party targets
+#                        it needs (zlibstatic / cjson / littlefs) into
+#                        its umbrella below.
+#   bouffalo_sdk         the Bouffalo Lab SDK extraction (HAL + chip-std
+#                        + sysinit + port adapters + wifi/BT/RF stacks).
+#                        Umbrella INTERFACE target `bouffalo_sdk` is what
+#                        consumers link. Also pulls in upstream lwip
+#                        (via bflb_lwip_port) and upstream mbedtls (after
+#                        the three bflb_mbedtls_* port adapters).
+#   lwip_dhcpd           Bouffalo's raw DHCP-server-on-lwip app, lifted
+#                        out of the lwip submodule so it can depend on
+#                        the upstream-clean lwip + freertos_kernel.
+#   lfs_easyflash        EasyFlash KV API on top of upstream littlefs.
+#   lfs_image            host-side helper to pack a directory tree into
+#                        a LittleFS image (component/lfs_image/CMakeLists.txt
+#                        is dual-mode: registers lfs_image_add() here,
+#                        becomes a standalone host build when invoked
+#                        via ExternalProject_Add from inside that helper).
 
-file(GLOB _at_component_subdirs
-    LIST_DIRECTORIES true
-    RELATIVE ${CMAKE_CURRENT_LIST_DIR}
-    ${CMAKE_CURRENT_LIST_DIR}/*)
+# ---------------------------------------------------------------------
+# bouffalo_sdk
+# ---------------------------------------------------------------------
+#
+# Target chip selection. Typical usage is to set this through a chip
+# toolchain file (cmake/bl602-toolchain.cmake etc., which also pins
+# -march / -mabi / sysroot) but a plain -DBOUFFALO_CHIP=bl602 on the
+# cmake command line works too — the CACHE STRING declaration here
+# makes the value visible in cmake-gui / ccmake and the STRINGS
+# property gives a dropdown of supported chips. set() with CACHE does
+# not overwrite an existing value, so this is a no-op when the
+# toolchain file has already set it.
+set(BOUFFALO_CHIP "" CACHE STRING
+    "Bouffalo target chip — required (bl602 | bl616 | bl616cl)")
+set_property(CACHE BOUFFALO_CHIP PROPERTY STRINGS
+    bl602 bl616 bl616cl)
+if(NOT BOUFFALO_CHIP)
+    message(FATAL_ERROR
+        "BOUFFALO_CHIP is not set — either include a chip toolchain "
+        "(-DCMAKE_TOOLCHAIN_FILE=<repo>/cmake/bl602-toolchain.cmake or "
+        "bl616 / bl616cl) or pass -DBOUFFALO_CHIP=<chip> directly.")
+endif()
+if(NOT BOUFFALO_CHIP MATCHES "^(bl602|bl616|bl616cl)$")
+    message(FATAL_ERROR
+        "BOUFFALO_CHIP='${BOUFFALO_CHIP}' is not a supported chip. "
+        "Expected one of: bl602, bl616, bl616cl.")
+endif()
 
-foreach(_at_subdir IN LISTS _at_component_subdirs)
-    if(NOT IS_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/${_at_subdir})
-        continue()
-    endif()
-    set(_at_glue   ${AT_PROJECT_ROOT}/cmake/${_at_subdir}.cmake)
-    set(_at_inline ${CMAKE_CURRENT_LIST_DIR}/${_at_subdir}/CMakeLists.txt)
-    if(EXISTS ${_at_glue})
-        include(${_at_glue})
-    elseif(EXISTS ${_at_inline})
-        add_subdirectory(${_at_subdir})
-    else()
-        message(WARNING "component/${_at_subdir} has neither cmake/${_at_subdir}.cmake nor an inline CMakeLists.txt, skipping")
-    endif()
-endforeach()
+# ASM is an SDK concern (startup code, FreeRTOS port asm, vendor archive
+# stubs — 700+ .S files in components/bouffalo_sdk + freertos-kernel),
+# not a user-application one. Enable it here so projects can keep their
+# project() line to the languages they actually write (C / CXX).
+#
+# bflb_add_executable() (the ELF -> flashable BIN pipeline) is provided
+# by component/bouffalo_sdk/bflb_image_tool/CMakeLists.txt, pulled in
+# transitively by add_subdirectory(bouffalo_sdk).
+enable_language(ASM)
+
+# Third-party first: bouffalo_sdk's umbrella pulls zlibstatic / cjson /
+# littlefs into its INTERFACE link list, so the targets must exist by
+# the time bouffalo_sdk/CMakeLists.txt finishes.
+add_subdirectory(thridparty)
+add_subdirectory(bouffalo_sdk)
+
+# Auto-close the link group bouffalo_sdk's INTERFACE link options open.
+# `-Wl,--end-group` is smuggled in as a library entry so CMake appends
+# it to INTERFACE_LINK_LIBRARIES (which gets emitted AFTER the link
+# options block where --start-group sits, and after every archive the
+# umbrella transitively pulls). Putting it in target_link_options would
+# lump it together with --start-group before any libraries — wrong slot,
+# group never opens.
+#
+# The cmake_language(DEFER) call schedules the append for the very end
+# of the top-level project's CMakeLists.txt scope. Deferring to project
+# scope guarantees `-Wl,--end-group` is the very last entry in the list,
+# past every archive ld needs to resolve.
+#
+# Consumer side is a one-liner: target_link_libraries(<exe> PRIVATE bouffalo_sdk).
+# No finalize call needed.
+function(_bouffalo_sdk_close_link_group)
+    target_link_libraries(bouffalo_sdk INTERFACE -Wl,--end-group)
+endfunction()
+cmake_language(DEFER DIRECTORY ${CMAKE_SOURCE_DIR}
+    CALL _bouffalo_sdk_close_link_group)
+
+# ---------------------------------------------------------------------
+# lwip_dhcpd — Bouffalo's raw-DHCP-server-on-lwip app. Lives at this
+# level (not inside bouffalo_sdk) because it depends on the upstream
+# lwip target `lwipcore`, defined by the bflb_lwip_port block.
+# ---------------------------------------------------------------------
+add_subdirectory(lwip_dhcpd)
+target_link_libraries(bouffalo_sdk INTERFACE lwip_dhcpd)
+
+# ---------------------------------------------------------------------
+# lfs_easyflash — EasyFlash KV API on top of upstream littlefs. Hard
+# prereqs (already registered by this point):
+#   littlefs            from thridparty/
+#   bflb_littlefs_port  from bouffalo_sdk
+#   freertos_kernel + bflb_log
+# ---------------------------------------------------------------------
+add_subdirectory(lfs_easyflash)
+target_link_libraries(bouffalo_sdk INTERFACE lfs_easyflash)
+
+# ---------------------------------------------------------------------
+# lfs_image — host-side LittleFS image builder. Dual-mode CMakeLists:
+# add_subdirectory here registers the helper function lfs_image_add();
+# the standalone host sub-build is launched separately via
+# ExternalProject_Add when a consumer calls lfs_image_add().
+# ---------------------------------------------------------------------
+add_subdirectory(lfs_image)

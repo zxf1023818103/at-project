@@ -13,25 +13,25 @@
 	url = https://github.com/zxf1023818103/bouffalo_sdk.git
 	branch = at-v2.3.26
 [submodule "component/zlib"]
-	path = component/zlib
+	path = component/thridparty/zlib
 	url = https://github.com/madler/zlib.git
 [submodule "component/freertos-kernel"]
-	path = component/freertos-kernel
+	path = component/thridparty/freertos-kernel
 	url = https://github.com/zxf1023818103/FreeRTOS-Kernel.git
 	branch = bouffalo-port
 [submodule "component/lwip"]
-	path = component/lwip
+	path = component/thridparty/lwip
 	url = https://github.com/zxf1023818103/lwip.git
 	branch = bouffalo-port
 [submodule "component/cjson"]
-	path = component/cjson
+	path = component/thridparty/cjson
 	url = https://github.com/DaveGamble/cJSON.git
 [submodule "component/mbedtls"]
-	path = component/mbedtls
+	path = component/thridparty/mbedtls
 	url = https://github.com/Mbed-TLS/mbedtls.git
 	branch = v3.6.4
 [submodule "component/littlefs"]
-	path = component/littlefs
+	path = component/thridparty/littlefs
 	url = https://github.com/littlefs-project/littlefs.git
 	branch = v2.8.2
 [submodule "component/lfs_image/mklittlefs"]

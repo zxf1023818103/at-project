@@ -10,15 +10,13 @@ project(at C CXX)
 # "Cannot find source file".
 cmake_policy(SET CMP0118 NEW)
 
-set(AT_PROJECT_ROOT ${CMAKE_CURRENT_LIST_DIR}/../..)
-list(APPEND CMAKE_MODULE_PATH ${AT_PROJECT_ROOT}/cmake)
-
 include(proj.conf)
 
-add_subdirectory(${AT_PROJECT_ROOT}/component
-                 ${CMAKE_BINARY_DIR}/component)
-
-add_subdirectory(${AT_PROJECT_ROOT}/src ${CMAKE_BINARY_DIR}/src)
+# Pull the at-project root in as a single subdir — root CMakeLists.txt
+# is the canonical entry, it add_subdirectory's component/ + src/ + any
+# future top-level dirs. Add new at-project dirs there, not here.
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../..
+                 ${CMAKE_BINARY_DIR}/at_project)
 
 bflb_add_executable(at ${AT_USER_SOURCES})
 

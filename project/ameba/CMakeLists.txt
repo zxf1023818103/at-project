@@ -1,7 +1,7 @@
-set(AT_PROJECT_ROOT ${CMAKE_CURRENT_LIST_DIR}/../..)
-set(SRC_DIR ${AT_PROJECT_ROOT}/src)
-add_subdirectory(${SRC_DIR} ${CMAKE_BINARY_DIR}/src)
-include(${AT_PROJECT_ROOT}/cmake/zlib.cmake)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../src
+                 ${CMAKE_BINARY_DIR}/src)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../component/thridparty
+                 ${CMAKE_BINARY_DIR}/component/thridparty)
 
 set(private_compile_options
     $<$<COMPILE_LANGUAGE:CXX>:-Wno-error=unused-function>
