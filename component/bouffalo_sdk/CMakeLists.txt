@@ -6,9 +6,9 @@
 # and pick up the low-level HAL, board init sources, linker script, and
 # the -ufw_header link option transitively.
 
-if(NOT BOUFFALO_CHIP)
-    message(FATAL_ERROR "bouffalo_sdk: BOUFFALO_CHIP not set (use a chip toolchain)")
-endif()
+# BOUFFALO_CHIP gating happens in cmake/bouffalo_sdk.cmake (the glue file
+# that triggers this subdirectory). We can rely on it being set + valid by
+# the time we get here.
 
 # FreeRTOS-Kernel (component/freertos-kernel, the bouffalo-port branch on
 # the zxf1023818103 fork). Configure it BEFORE add_subdirectory so the

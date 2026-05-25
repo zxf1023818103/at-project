@@ -34,12 +34,9 @@ endif()
 # before this point.
 project(at C CXX)
 
-if(NOT BOUFFALO_CHIP)
-    message(FATAL_ERROR
-        "BOUFFALO_CHIP not set — include a chip toolchain via "
-        "-DCMAKE_TOOLCHAIN_FILE=<repo>/cmake/bl602-toolchain.cmake "
-        "(or bl616/bl616cl).")
-endif()
+# BOUFFALO_CHIP is declared / validated by cmake/bouffalo_sdk.cmake (pulled
+# in transitively via add_subdirectory(component) below) — no project-side
+# pre-check needed.
 
 set(AT_PROJECT_ROOT ${CMAKE_CURRENT_LIST_DIR}/../..)
 list(APPEND CMAKE_MODULE_PATH ${AT_PROJECT_ROOT}/cmake)
