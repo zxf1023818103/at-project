@@ -32,7 +32,7 @@ endif()
 # the first project()'s compiler-probe step, so any variables the
 # toolchain sets (BOUFFALO_CHIP, BOUFFALO_MARCH, …) aren't visible
 # before this point.
-project(at C CXX ASM)
+project(at C CXX)
 
 if(NOT BOUFFALO_CHIP)
     message(FATAL_ERROR

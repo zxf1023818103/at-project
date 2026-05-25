@@ -19,6 +19,12 @@ endif()
 # include() for it.
 include(${AT_PROJECT_ROOT}/cmake/bflb_elf_to_bin.cmake)
 
+# ASM is an SDK concern (startup code, FreeRTOS port asm, vendor archive
+# stubs — 700+ .S files in components/bouffalo_sdk + freertos-kernel),
+# not a user-application one. Enable it here so projects can keep their
+# project() line to the languages they actually write (C / CXX).
+enable_language(ASM)
+
 add_subdirectory(${AT_PROJECT_ROOT}/component/bouffalo_sdk
                  ${CMAKE_BINARY_DIR}/component/bouffalo_sdk)
 
