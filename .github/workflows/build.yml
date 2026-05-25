@@ -60,6 +60,12 @@ jobs:
             submodules: |
               platform/bouffalo_sdk
               platform/toolchain_gcc_t-head_linux
+              component/thridparty/cjson
+              component/thridparty/freertos-kernel
+              component/thridparty/littlefs
+              component/thridparty/lwip
+              component/thridparty/mbedtls
+              component/thridparty/zlib
             project_dir: project/bouffalo
             build_cmd: make CHIP=bl602 BOARD=bl602dk
             merged: project/bouffalo/build_bl602/at_bl602_whole_flash_data.bin
@@ -80,6 +86,12 @@ jobs:
             submodules: |
               platform/bouffalo_sdk
               platform/toolchain_gcc_t-head_linux
+              component/thridparty/cjson
+              component/thridparty/freertos-kernel
+              component/thridparty/littlefs
+              component/thridparty/lwip
+              component/thridparty/mbedtls
+              component/thridparty/zlib
             project_dir: project/bouffalo
             build_cmd: make CHIP=bl616 BOARD=bl616dk
             merged: project/bouffalo/build_bl616/at_bl616_whole_flash_data.bin
@@ -100,6 +112,12 @@ jobs:
             submodules: |
               platform/bouffalo_sdk
               platform/toolchain_gcc_t-head_linux
+              component/thridparty/cjson
+              component/thridparty/freertos-kernel
+              component/thridparty/littlefs
+              component/thridparty/lwip
+              component/thridparty/mbedtls
+              component/thridparty/zlib
             project_dir: project/bouffalo
             build_cmd: make CHIP=bl616cl BOARD=bl616cldk
             merged: project/bouffalo/build_bl616cl/at_bl616cl_whole_flash_data.bin
@@ -118,6 +136,9 @@ jobs:
             display: Ameba D (RTL8721D / RTL8710C)
             submodules: |
               platform/ameba-rtos-d
+              component/thridparty/cjson
+              component/thridparty/littlefs
+              component/thridparty/zlib
             project_dir: project/amebad
             build_cmd: make
             merged: project/amebad/out/Image_All.bin
@@ -136,6 +157,9 @@ jobs:
             display: Ameba Dplus (RTL8711Dx)
             submodules: |
               platform/ameba-rtos
+              component/thridparty/cjson
+              component/thridparty/littlefs
+              component/thridparty/zlib
             project_dir: project/ameba
             build_cmd: bash -lc "source env.sh && make amebadplus"
             merged: project/ameba/build_RTL8711Dx/Image_All.bin
@@ -153,6 +177,9 @@ jobs:
             display: Ameba Green 2 (RTL8711F)
             submodules: |
               platform/ameba-rtos
+              component/thridparty/cjson
+              component/thridparty/littlefs
+              component/thridparty/zlib
             project_dir: project/ameba
             build_cmd: bash -lc "source env.sh && make amebagreen2"
             merged: project/ameba/build_RTL8711F/Image_All.bin

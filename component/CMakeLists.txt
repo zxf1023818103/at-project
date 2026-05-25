@@ -1,15 +1,7 @@
-# Top-level component wiring. Pulls everything in this directory into
-# a single build:
+# Bouffalo-specific subtree. Entered only when BOUFFALO_CHIP is set (the
+# root CMakeLists.txt gates this add_subdirectory). Cross-platform pieces
+# (component/thridparty/, src/) live up at the root instead.
 #
-#   thridparty/          cross-platform third-party submodules
-#                        (cjson / littlefs / zlib + a few others not
-#                        consumed directly by Ameba). One block per lib —
-#                        see component/thridparty/CMakeLists.txt. The
-#                        file knows nothing about the Bouffalo SDK; this
-#                        ordering deliberately runs it FIRST so the
-#                        Bouffalo SDK can pull the third-party targets
-#                        it needs (zlibstatic / cjson / littlefs) into
-#                        its umbrella below.
 #   bouffalo_sdk         the Bouffalo Lab SDK extraction (HAL + chip-std
 #                        + sysinit + port adapters + wifi/BT/RF stacks).
 #                        Umbrella INTERFACE target `bouffalo_sdk` is what
@@ -64,10 +56,9 @@ endif()
 # transitively by add_subdirectory(bouffalo_sdk).
 enable_language(ASM)
 
-# Third-party first: bouffalo_sdk's umbrella pulls zlibstatic / cjson /
-# littlefs into its INTERFACE link list, so the targets must exist by
-# the time bouffalo_sdk/CMakeLists.txt finishes.
-add_subdirectory(thridparty)
+# Third-party submodules are added by the root CMakeLists.txt before we
+# get here, so zlibstatic / cjson / littlefs are already real targets that
+# bouffalo_sdk's umbrella can pull into its INTERFACE link list.
 add_subdirectory(bouffalo_sdk)
 
 # Auto-close the link group bouffalo_sdk's INTERFACE link options open.
