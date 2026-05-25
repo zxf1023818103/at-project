@@ -27,11 +27,6 @@
 # Upstream is built unchanged. We layer on top via MBEDTLS_*_ALT macros
 # (set by bflb_mbedtls_config) plus this lib's weak / strong overrides.
 
-if(NOT DEFINED AT_PROJECT_ROOT)
-    message(FATAL_ERROR "bflb_mbedtls_port: AT_PROJECT_ROOT must be set "
-                        "so we can reach component/mbedtls/library private headers.")
-endif()
-
 add_library(bflb_mbedtls_port STATIC
     alt_timing.c
     entropy_poll_alt.c
@@ -43,16 +38,21 @@ target_include_directories(bflb_mbedtls_port PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
-# bignum.c + friends reach into private mbedtls headers (bignum_core.h,
-# bignum_internal.h, bn_mul.h, common.h, constant_time_internal.h) that
-# live under library/ rather than include/. Add that PRIVATE, plus the
-# public include/ for mbedtls/* (same reasoning as bflb_mbedtls_hw_acc:
-# we're a sibling to mbedcrypto, not a consumer of its symbols).
-target_include_directories(bflb_mbedtls_port PRIVATE
-    "${AT_PROJECT_ROOT}/component/mbedtls/library"
-)
+# Borrow mbedcrypto's PUBLIC include set so consumers of this port see
+# mbedtls/* headers transitively, and its SOURCE_DIR (= component/mbedtls/library/)
+# PRIVATE for the upstream-private bignum_core.h / bn_mul.h / common.h
+# / constant_time_internal.h headers our alt impls reach into.
+#
+# The cycle that would normally form (cmake/mbedtls.cmake reads port's
+# INTERFACE_INCLUDE_DIRECTORIES and feeds it back into mbedcrypto's
+# INTERFACE includes) is broken on the other side: cmake/mbedtls.cmake
+# was changed to reference port's SOURCE_DIR directly instead of its
+# INTERFACE_INCLUDE_DIRECTORIES, so the propagation here is one-way.
 target_include_directories(bflb_mbedtls_port PUBLIC
-    "${AT_PROJECT_ROOT}/component/mbedtls/include"
+    "$<TARGET_PROPERTY:mbedcrypto,INTERFACE_INCLUDE_DIRECTORIES>"
+)
+target_include_directories(bflb_mbedtls_port PRIVATE
+    "$<TARGET_PROPERTY:mbedcrypto,SOURCE_DIR>"
 )
 
 # Real-target deps. bflb_lhal — sec_trng + mtimer. lwip — net_sockets.c.

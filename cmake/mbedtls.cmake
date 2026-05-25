@@ -76,21 +76,40 @@ add_subdirectory(${AT_PROJECT_ROOT}/component/mbedtls
 #
 # bflb_mbedtls_port is NOT linked here — that would create a cycle
 # (port links mbedcrypto for upstream headers; doing the reverse would
-# break configuration). Instead we expose only port's include directory
+# break configuration). Instead we expose only port's source directory
 # to mbedcrypto (header edge, not symbol edge), so
 # MBEDTLS_PLATFORM_STD_MEM_HDR="mbedtls_port_bouffalo_sdk.h" resolves
-# during upstream compilation.
+# during upstream compilation. Using
+# $<TARGET_PROPERTY:bflb_mbedtls_port,SOURCE_DIR> rather than its
+# INTERFACE_INCLUDE_DIRECTORIES is deliberate: port itself reads
+# mbedcrypto's INTERFACE_INCLUDE_DIRECTORIES (for the mbedtls/ public
+# headers), and feeding port's INTERFACE includes back into mbedcrypto
+# would close a generator-expression cycle. SOURCE_DIR is a fixed
+# string, so the propagation stays one-way.
 foreach(_t mbedcrypto mbedtls mbedx509)
     if(TARGET ${_t})
         if(TARGET bflb_mbedtls_config)
             target_link_libraries(${_t} PUBLIC bflb_mbedtls_config)
         endif()
+        # hw_acc and port both expose mbedtls/* headers transitively via
+        # $<TARGET_PROPERTY:mbedcrypto,INTERFACE_INCLUDE_DIRECTORIES>.
+        # PUBLIC-linking them into mbedcrypto would close the
+        # generator-expression cycle (mbedcrypto's INTERFACE evaluation
+        # would pull theirs, which references mbedcrypto's again).
+        # Propagate only the SOURCE_DIR (fixed string) so mbedcrypto's
+        # compile still sees aes_alt.h / mbedtls_port_bouffalo_sdk.h
+        # without re-entering the cycle. Symbol-level linkage of hw_acc
+        # comes from the bouffalo_sdk INTERFACE_LINK_LIBRARIES list
+        # below.
         if(TARGET bflb_mbedtls_hw_acc)
-            target_link_libraries(${_t} PUBLIC bflb_mbedtls_hw_acc)
+            target_include_directories(${_t} PUBLIC
+                "$<TARGET_PROPERTY:bflb_mbedtls_hw_acc,SOURCE_DIR>"
+            )
         endif()
         if(TARGET bflb_mbedtls_port)
-            get_target_property(_port_inc bflb_mbedtls_port INTERFACE_INCLUDE_DIRECTORIES)
-            target_include_directories(${_t} PUBLIC ${_port_inc})
+            target_include_directories(${_t} PUBLIC
+                "$<TARGET_PROPERTY:bflb_mbedtls_port,SOURCE_DIR>"
+            )
         endif()
         # Silence upstream warnings we can't reasonably fix.
         target_compile_options(${_t} PRIVATE -w)
@@ -101,5 +120,15 @@ endforeach()
 # bouffalo_sdk and gets the TLS stack transitively. Ameba projects don't
 # define bouffalo_sdk, hence the guard.
 if(TARGET bouffalo_sdk)
-    target_link_libraries(bouffalo_sdk INTERFACE mbedtls mbedcrypto mbedx509)
+    # hw_acc + port both go on the umbrella INTERFACE link list so the
+    # final ELF picks up their symbols. mbedcrypto used to PUBLIC-link
+    # hw_acc above, but that closed an include-cycle once hw_acc started
+    # pulling mbedcrypto's INTERFACE_INCLUDE_DIRECTORIES — wiring it
+    # through bouffalo_sdk keeps symbol resolution intact without the
+    # cycle. (bflb_mbedtls_port is already stitched in by
+    # component/bouffalo_sdk/CMakeLists.txt's port-adapter block.)
+    target_link_libraries(bouffalo_sdk INTERFACE
+        mbedtls mbedcrypto mbedx509
+        bflb_mbedtls_hw_acc
+    )
 endif()

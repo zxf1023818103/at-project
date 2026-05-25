@@ -31,11 +31,6 @@ option(BFLB_MBEDTLS_HW_SHA512 "HW SHA-512 via HACC"         ON)
 option(BFLB_MBEDTLS_HW_BIGNUM "HW BIGNUM (modular) via PKA" ON)
 option(BFLB_MBEDTLS_HW_ECC    "HW ECP / curves via PKA"     ON)
 
-if(NOT DEFINED AT_PROJECT_ROOT)
-    message(FATAL_ERROR "bflb_mbedtls_hw_acc: AT_PROJECT_ROOT must be set "
-                        "so we can reach component/mbedtls/library private headers.")
-endif()
-
 add_library(bflb_mbedtls_hw_acc STATIC)
 
 if(BFLB_MBEDTLS_HW_AES)
@@ -68,19 +63,19 @@ target_include_directories(bflb_mbedtls_hw_acc PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
-# alt .c files reach into upstream's library/ private headers
-# (common.h, ecp_invasive.h, bignum_core.h, …) AND its public include/
-# (mbedtls/aes.h, mbedtls/bignum.h, mbedtls/build_info.h, …).
-# Reference them directly via the submodule path — no target_link to
-# mbedcrypto, because that target may not exist yet when this dir is
-# processed (it gets created by cmake/mbedtls.cmake which runs later),
-# and because we're a SIBLING to mbedcrypto in the final archive, not
-# a consumer of its symbols.
-target_include_directories(bflb_mbedtls_hw_acc PRIVATE
-    "${AT_PROJECT_ROOT}/component/mbedtls/library"
-)
+# Same pattern as bflb_mbedtls_port: PUBLIC-borrow mbedcrypto's
+# INTERFACE include set so consumers (wifi4_internal_headers etc.) see
+# mbedtls/* transitively, and PRIVATE-borrow its SOURCE_DIR
+# (component/mbedtls/library/) for the upstream-private common.h /
+# ecp_invasive.h / bignum_core.h headers our alt impls reach into.
+# cmake/mbedtls.cmake propagates this lib's headers BACK into
+# mbedcrypto via SOURCE_DIR (not INTERFACE_INCLUDE_DIRECTORIES), so the
+# one-way edge here doesn't close a generator-expression cycle.
 target_include_directories(bflb_mbedtls_hw_acc PUBLIC
-    "${AT_PROJECT_ROOT}/component/mbedtls/include"
+    "$<TARGET_PROPERTY:mbedcrypto,INTERFACE_INCLUDE_DIRECTORIES>"
+)
+target_include_directories(bflb_mbedtls_hw_acc PRIVATE
+    "$<TARGET_PROPERTY:mbedcrypto,SOURCE_DIR>"
 )
 
 # Deps: bflb_lhal for the SEC AES / SHA / PKA peripheral drivers, plus

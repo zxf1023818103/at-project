@@ -39,17 +39,15 @@ else()
         "${CMAKE_CURRENT_SOURCE_DIR}/FreeRTOS"
     )
     # sys_arch.c + ethernetif.c #include FreeRTOS + lwip headers.
-    # FreeRTOS is a real target we can link; lwip is structurally
-    # circular here (cmake/lwip.cmake makes lwipcore PUBLIC-link
-    # bflb_lwip_port for the lwipopts.h surface), so we PUBLICly
-    # advertise lwip's include dir directly via the submodule path
-    # instead of going through lwipcore.
+    # FreeRTOS is a real target we can link straight. lwip is the
+    # awkward one: cmake/lwip.cmake makes lwipcore PUBLIC-link
+    # bflb_lwip_port (so its lwipopts.h gets seen during lwipcore's
+    # own compile), and a reciprocal target_link_libraries here would
+    # close the cycle and break cmake configure. Use a generator
+    # expression that pulls lwipcore's INTERFACE_INCLUDE_DIRECTORIES
+    # without creating a link edge — same headers, no cycle.
     target_link_libraries(bflb_lwip_port PUBLIC freertos_kernel)
-    if(NOT DEFINED AT_PROJECT_ROOT)
-        message(FATAL_ERROR "bflb_lwip_port: AT_PROJECT_ROOT must be set "
-                            "so we can reach component/lwip headers.")
-    endif()
     target_include_directories(bflb_lwip_port PUBLIC
-        "${AT_PROJECT_ROOT}/component/lwip/src/include"
+        "$<TARGET_PROPERTY:lwipcore,INTERFACE_INCLUDE_DIRECTORIES>"
     )
 endif()
