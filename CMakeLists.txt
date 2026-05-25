@@ -45,6 +45,7 @@ if(AMEBAD_CHIP MATCHES "^amebad-km[04]$")
     add_subdirectory(component/amebad/usrcfg_hp)      # KM4-gated
     if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
         add_subdirectory(component/amebad/bootloader_km0)
+        add_subdirectory(component/amebad/bootloader_km0_2nd)  # opt-in via AMEBAD_ENABLE_2ND_BOOT
     elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
         add_subdirectory(component/amebad/bootloader_km4)
     endif()
