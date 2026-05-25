@@ -40,9 +40,15 @@ MMU_ConfDef Flash_MMU_Config[] = {
 *	of KM0 IMG2.
 */
 BOOT_RAM_DATA_SECTION
+/* CMAKE_PATCH: literal OTA addresses replaced by CMake-injected macros
+ * (AMEBAD_OTA1_ADDR / AMEBAD_OTA2_ADDR) so the boot image's image2
+ * partition base is configurable without forking the .c per layout.
+ * Defaults match SDK upstream (0x08006000 / 0x08183000). Override with
+ * -DAMEBAD_OTA1_ADDR=0xXX -DAMEBAD_OTA2_ADDR=0xXX on the cmake line.
+ * Resync caveat: SDK upstream still has literals here. */
 u32 OTA_Region[2] = {
-	0x08006000,		/* OTA1 region start address */
-	0x08183000,		/* OTA2 region start address */
+	AMEBAD_OTA1_ADDR,	/* OTA1 region start address */
+	AMEBAD_OTA2_ADDR,	/* OTA2 region start address */
 };
 
 /*
