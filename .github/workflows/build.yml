@@ -47,9 +47,87 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  ragel:
+    name: Build ragel from source
+    runs-on: ubuntu-24.04
+    env:
+      # Latest non-barracuda releases at adrian-thurston/{colm,ragel}.
+      # Pinned by tag so the produced artifact is reproducible; cache key
+      # below keys on these values.
+      COLM_REF:  '0.14.7'
+      RAGEL_REF: '7.0.4'
+    steps:
+      - name: Cache built ragel
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ragel-dist
+          key: ragel-${{ runner.os }}-colm-${{ env.COLM_REF }}-ragel-${{ env.RAGEL_REF }}
+
+      - name: Install build deps
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential autoconf automake libtool pkg-config git ca-certificates
+
+      - name: Clone colm
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: adrian-thurston/colm
+          ref: ${{ env.COLM_REF }}
+          path: _src/colm
+
+      - name: Clone ragel
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: adrian-thurston/ragel
+          ref: ${{ env.RAGEL_REF }}
+          path: _src/ragel
+
+      - name: Build colm
+        if: steps.cache.outputs.cache-hit != 'true'
+        working-directory: _src/colm
+        run: |
+          ./autogen.sh
+          ./configure --prefix=${GITHUB_WORKSPACE}/ragel-dist --disable-manual
+          make -j"$(nproc)"
+          make install
+
+      - name: Build ragel
+        if: steps.cache.outputs.cache-hit != 'true'
+        working-directory: _src/ragel
+        run: |
+          ./autogen.sh
+          ./configure --prefix=${GITHUB_WORKSPACE}/ragel-dist \
+                      --with-colm=${GITHUB_WORKSPACE}/ragel-dist \
+                      --disable-manual
+          make -j"$(nproc)"
+          make install
+          strip ${GITHUB_WORKSPACE}/ragel-dist/bin/ragel \
+                ${GITHUB_WORKSPACE}/ragel-dist/bin/colm
+
+      - name: Smoke-test
+        run: |
+          export LD_LIBRARY_PATH=${GITHUB_WORKSPACE}/ragel-dist/lib
+          ${GITHUB_WORKSPACE}/ragel-dist/bin/ragel --version | head -1
+
+      - name: Tarball
+        run: tar -czf ragel-dist.tar.gz -C ragel-dist .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ragel-dist
+          path: ragel-dist.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+
   build:
     name: ${{ matrix.display }}
-    needs: lfs_image
+    needs: [lfs_image, ragel]
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -216,7 +294,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake ninja-build python3 python3-pip python3-venv \
-            ragel xz-utils ccache gcc-multilib
+            xz-utils ccache gcc-multilib
+
+      - name: Download ragel artifact (built from source by `ragel` job)
+        uses: actions/download-artifact@v4
+        with:
+          name: ragel-dist
+          path: _ragel
+
+      - name: Install ragel into /usr/local
+        run: |
+          set -e
+          sudo tar -xzf _ragel/ragel-dist.tar.gz -C /usr/local
+          sudo ldconfig
+          ragel --version | head -1
 
       - name: Install Python deps (Ameba newer)
         if: matrix.id == 'amebadplus' || matrix.id == 'amebagreen2'
