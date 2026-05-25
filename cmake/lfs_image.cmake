@@ -83,7 +83,7 @@ function(lfs_image_add target_path)
     # custom_command below).
     if(NOT TARGET mklittlefs_host)
         ExternalProject_Add(mklittlefs_host
-            SOURCE_DIR ${AT_PROJECT_ROOT}/cmake/lfs_image
+            SOURCE_DIR ${AT_PROJECT_ROOT}/component/lfs_image
             BINARY_DIR ${CMAKE_BINARY_DIR}/_mklittlefs_build
             INSTALL_DIR ${_install_dir}
             CMAKE_GENERATOR ${CMAKE_GENERATOR}
