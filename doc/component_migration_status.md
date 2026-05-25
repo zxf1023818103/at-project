@@ -285,7 +285,7 @@ wait
   `.rl` + `.h` 把 ctor 改成 `(std::ostream&)`，但 `.rl.cpp` 是 untracked 生成物，
   fresh clone 上没人跑 ragel → 编 `AtCommandParser.rl.cpp` 时 "no declaration matches
   'at::AtCommandParser::AtCommandParser()'"。
-  修：在 [src/sources.cmake](../src/sources.cmake) 里加 `find_program(RAGEL_EXECUTABLE ragel REQUIRED)`
+  修：在 [src/CMakeLists.txt](../src/CMakeLists.txt) 里加 `find_program(RAGEL_EXECUTABLE ragel REQUIRED)`
   + custom-command `ragel -G2 AtCommandParser.rl -> ${CMAKE_CURRENT_BINARY_DIR}/AtCommandParser.rl.cpp`，
   glob 里 EXCLUDE 掉 src/AtCommandParser.rl.cpp（防 stale local），把生成路径 append 到
   `AT_USER_SOURCES`。每个 chip / 平台 build dir 各 regen 一次。前置依赖：`ragel` 在

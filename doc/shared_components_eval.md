@@ -126,7 +126,7 @@ third_party/
 ### 跟现有 `platform/<sdk>` 子模块结构怎么共存
 - 三个 SDK 仍然是 git submodule，**不 fork**。
 - 共用基线 + chip vendor 私有 port 两层结构：上层（kernel/library）从 `third_party/` 取，下层（portable/port/hw_alt）从 `platform/<sdk>/` 取，编译期通过 include path / 链接器拼合。
-- 构建系统在 `project/<board>/CMakeLists.txt` 里显式列出共用 + 私有源文件清单（参照本仓 `src/sources.cmake` 的做法）。
+- 构建系统在 `project/<board>/CMakeLists.txt` 里显式列出共用 + 私有源文件清单（参照本仓 `src/CMakeLists.txt` 的做法）。
 
 ### 版本升级兼容风险
 - **FreeRTOS 10.2.0 → 10.6.2**：AmebaD 跨大版本，`xTaskCreateRestricted`、static allocation API 行为有变化；`taskENTER_CRITICAL_FROM_ISR` 返回值类型在 10.4 改过；建议先跑 FreeRTOS 自测 + AmebaD 全部 BT/WiFi 回归。
