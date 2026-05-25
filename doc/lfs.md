@@ -86,32 +86,60 @@ sector"做缓冲；不留也不影响功能。
 不可读**。`cache_size`、`lookahead_size`、`block_cycles` 是 RAM / 行为参数，
 不写盘，可以各平台不同（但还是统一以保持简单）。
 
-## 生成镜像：mklfs
+## 生成镜像：mklittlefs
 
-工具：[platform/bouffalo_sdk/tools/genlfs/mklfs-ubuntu](../platform/bouffalo_sdk/tools/genlfs/mklfs-ubuntu)
-（macOS 用 `mklfs-macos`，Windows 用 `mklfs.exe`），跟运行时一样底层
-littlefs v2.8.0。
+工具：[earlephilhower/mklittlefs](https://github.com/earlephilhower/mklittlefs)（上游
+littlefs README 第二个推荐的 host 工具，相比 Bouffalo SDK 自带的 Linux-only
+prebuilt mklfs-ubuntu 跨平台更彻底）。我们维护一个分支
+[zxf1023818103/mklittlefs `at-project`](https://github.com/zxf1023818103/mklittlefs/tree/at-project)，
+跟 upstream 的唯一差别是把 nested `./littlefs` submodule 改成相对符号链接
+`./littlefs -> ../littlefs`，这样跟 `component/littlefs/` 共用同一份 v2.8.2 源码。
 
-命令模板（跨平台统一）：
+构建从 source 走（不再依赖 prebuilt binary）：
 
-```sh
-mklfs-ubuntu \
-  -c <input_dir> \
-  -b 4096 \
-  -r 256 \
-  -p 256 \
-  -s 1024000 \
-  -i <output.bin>
+- `cmake/lfs_image.cmake` 提供 `lfs_image_add(<output> SOURCE_DIR <dir>)` 函数
+- `cmake/lfs_image/CMakeLists.txt` 是 host-toolchain 子项目，通过 `ExternalProject_Add`
+  跑（host CC 跟外层 cross-compile 的 toolchain 隔开）
+- 输出可执行 `<build>/_mklittlefs_install/bin/mklittlefs`
+
+命令模板（跨平台统一，cmake 帮你拼好）：
+
+```
+mklittlefs -c <input_dir> -b 4096 -p 256 -s 1024000 <output.bin>
 ```
 
 - `-s 1024000` 字节 = 1000 KB
-- mklfs 自己会把 `cache_size = prog_size = 256`、`lookahead_size = ALIGN8(block_count >> 4)`
-  ≈ 16 算出来；这两个不写盘，跟运行时 512 / 256 的差异不影响 mount
+- mklittlefs 内部把 `cache_size = read_size = prog_size = lookahead_size = 64` 写死。
+  这四个都是 RAM-only 不写盘，跟运行时 512 / 256 / ... 的差异不影响 mount
+- 注意 mklittlefs 不接 `-r read_size` 参数（mklfs 那条 `-r 256` 改用 `-p` 顶替）
+- 输出文件名是 **positional** 参数（mklfs 用 `-i`，mklittlefs 直接位置参数）
 
-项目里的封装：`make -C project lfs_image` 会用上面这套参数从 `project/resource/`
-打包出 `project/lfs.bin`。`resource/` 的内容直接成为 lfs 镜像的根 —— 见
-[kv.md](kv.md) 关于 `resource/KV/<key>` 怎么变成运行时 `ef_get_env_blob /
-rt_kv_get` 能读的 KV。
+项目里的封装：`make -C project lfs_image` 触发 cmake 配置 + 编 mklittlefs +
+跑 mklittlefs 产 `project/lfs.bin`。`resource/` 的内容直接成为 lfs 镜像的根 ——
+见 [kv.md](kv.md) 关于 `resource/KV/<key>` 怎么变成运行时
+`ef_get_env_blob / rt_kv_get` 能读的 KV。
+
+### Windows host：需要 symlink 支持
+
+`component/mklittlefs/littlefs` 是一个 git 跟踪的相对符号链接。Linux / macOS /
+WSL 直接 work，**Windows 原生 git 默认不创建 symlink**（要么留下一个写着
+`../littlefs` 文本的普通文件，要么把符号链接转成 directory copy，两种都 break
+build）。在 Windows 上 clone 这个仓库前要：
+
+```cmd
+:: Per-user
+git config --global core.symlinks true
+
+:: 或 per-repo（已经 clone 过的话）
+cd at-project
+git config core.symlinks true
+git checkout --force HEAD     :: 重新展开 symlink
+git submodule update --init --force component/mklittlefs
+```
+
+另外 Windows 10 1709+ 的 "Developer Mode" 开关 / 或以管理员身份运行 git 也是
+创建 symlink 的前提（普通用户没 `SeCreateSymbolicLinkPrivilege` 权限会 fail）。
+CI 用的 Windows runner 一般已经满足。
 
 ## 嵌入到合成固件
 
