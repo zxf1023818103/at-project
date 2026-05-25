@@ -35,6 +35,32 @@ endif()
 add_library(amebad_sdk_includes INTERFACE)
 target_link_libraries(amebad_sdk_includes INTERFACE amebad_fwlib_headers)
 
+# OTA region — base addresses for the two image2 partitions. Default
+# values match SDK upstream (rtl8721d_ota.h #define defaults). Override
+# on the cmake line when relocating image2:
+#   cmake -DAMEBAD_OTA1_ADDR=0x080xx000 -DAMEBAD_OTA2_ADDR=0x081xx000 ...
+#
+# Notes:
+#   - 4 KB aligned (RSIP mask granularity).
+#   - KM0 and KM4 image2 are combined into one blob; only KM0's start
+#     address needs setting (KM4 follows immediately after).
+#   - Consumed everywhere via SDK macro LS_IMG2_OTA{1,2}_ADDR:
+#       * boot stage:   usrcfg_common/src/rtl8721d_bootcfg.c (OTA_Region[])
+#       * image2 stage: SDK misc/rtl8721d_ota.c (OtaTargetHdr lookup, etc.)
+#     fwlib_headers/rtl8721d_ota.h provides the default via #ifndef so
+#     the CMake -D injection below cleanly overrides it (no -Wmacro-redefined).
+#
+# Lives in sdk_includes (not usrcfg_common) because the macro reaches
+# beyond board config — image2-stage SDK code references the same macro.
+set(AMEBAD_OTA1_ADDR "0x08006000" CACHE STRING
+    "AmebaD KM0 IMG2 OTA1 partition start address (4K-aligned)")
+set(AMEBAD_OTA2_ADDR "0x08183000" CACHE STRING
+    "AmebaD KM0 IMG2 OTA2 partition start address (4K-aligned)")
+target_compile_definitions(amebad_sdk_includes INTERFACE
+    "LS_IMG2_OTA1_ADDR=${AMEBAD_OTA1_ADDR}"
+    "LS_IMG2_OTA2_ADDR=${AMEBAD_OTA2_ADDR}"
+)
+
 set(_sdk_base "${CMAKE_SOURCE_DIR}/platform/ameba-rtos-d")
 set(_sdk_soc  "${_sdk_base}/component/soc/realtek/amebad")
 set(_os       "${_sdk_base}/component/os")

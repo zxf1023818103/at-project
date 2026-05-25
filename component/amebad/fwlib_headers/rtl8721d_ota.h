@@ -117,9 +117,17 @@ typedef struct
 /** @defgroup OTA_system_parameter_definitions 
   * @{
   */ 
-#define BACKUP_SECTOR	(FLASH_RESERVED_DATA_BASE)	/*back up system data offset address*/						
+#define BACKUP_SECTOR	(FLASH_RESERVED_DATA_BASE)	/*back up system data offset address*/
+/* CMAKE_PATCH: wrap default OTA addresses in #ifndef so cmake
+ * -DAMEBAD_OTA{1,2}_ADDR=... (injected via amebad_sdk_includes) can
+ * override them without touching this header. Defaults preserved.
+ * Resync caveat: SDK upstream has unconditional #define here. */
+#ifndef LS_IMG2_OTA1_ADDR
 #define LS_IMG2_OTA1_ADDR	0x08006000				/* KM0 OTA1 start address*/
+#endif
+#ifndef LS_IMG2_OTA2_ADDR
 #define LS_IMG2_OTA2_ADDR	0x08183000				/* KM0 OTA2 start address*/
+#endif
 
 
 #define BUF_SIZE			512								/*the size of the buffer used for receiving firmware data from server*/
