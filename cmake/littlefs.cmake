@@ -34,4 +34,13 @@ target_include_directories(littlefs PUBLIC
 # treatment as zlib / cjson upstream sources.
 target_compile_options(littlefs PRIVATE -w)
 
+# LFS_THREADSAFE changes sizeof(struct lfs_config) by adding lock/unlock fn
+# ptrs. It MUST be defined identically wherever lfs.h is included, or static
+# instances initialized in one TU get read with shifted field offsets in
+# another — silently corrupts pointers like read_buffer to whatever the
+# preceding lfs_size_t field happened to be. Pin it PUBLIC on `littlefs`
+# itself so both lfs.c (this lib's own source) and every consumer of lfs.h
+# (bflb_littlefs_port, lfs_easyflash, future Ameba adapters) agree.
+target_compile_definitions(littlefs PUBLIC LFS_THREADSAFE)
+
 unset(_lfs_dir)
