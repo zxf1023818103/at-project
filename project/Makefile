@@ -18,8 +18,11 @@
 
 SHELL := /bin/bash
 
-BL_SDK_BASE := $(realpath ../platform/bouffalo_sdk)
-MKLFS       := $(BL_SDK_BASE)/tools/genlfs/mklfs-ubuntu
+# lfs.bin is produced by the host-platform-independent cmake builder in
+# CMakeLists.txt + cmake/lfs_image.cmake — it compiles mklfs from source
+# against component/littlefs on whatever host cc is available, instead of
+# relying on a Linux-only prebuilt under platform/bouffalo_sdk/tools/genlfs/.
+LFS_BUILD_DIR := .lfs_build
 
 RESOURCE_FILES := $(shell find resource -type f 2>/dev/null)
 
@@ -28,9 +31,11 @@ RESOURCE_FILES := $(shell find resource -type f 2>/dev/null)
 all: bl602 bl616 bl616cl amebad amebadplus amebagreen2
 
 # Real file target so parallel/repeated builds reuse it; rebuilds only when
-# the resource tree (or mklfs binary) actually changes.
-lfs.bin: $(RESOURCE_FILES) $(MKLFS)
-	$(MKLFS) -c resource -b 4096 -r 256 -p 256 -s 1024000 -i lfs.bin
+# the resource tree changes (CONFIGURE_DEPENDS in cmake/lfs_image.cmake
+# re-runs cmake configure if files are added / removed under resource/).
+lfs.bin: $(RESOURCE_FILES)
+	@cmake -S . -B $(LFS_BUILD_DIR) >/dev/null
+	@cmake --build $(LFS_BUILD_DIR) --target lfs_image
 	@ls -l lfs.bin
 
 lfs_image: lfs.bin
@@ -55,5 +60,6 @@ amebagreen2: lfs.bin
 
 clean:
 	-rm -f lfs.bin
+	-rm -rf $(LFS_BUILD_DIR)
 	-$(MAKE) -C amebad clean
 	-$(MAKE) -C ameba clean
