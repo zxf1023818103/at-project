@@ -189,6 +189,8 @@ int main(void) {
     easyflash_init();
     tcpip_init(on_tcpip_init_done, NULL);
 
+    at::make_shared<at::AtTask>()->startAsync("AtTask", 256 * 12, 4);
+
     vTaskStartScheduler();
     while (1) {}
     return 0;
