@@ -1,40 +1,13 @@
-# project/bouffalo — chip-toolchain-driven build for the AT firmware on
-# BL602 / BL616 / BL616CL. Pulls everything from the at-project
-# component/ tree; no dependency on platform/bouffalo_sdk's own CMake
-# entry (find_package(bouffalo_sdk)) — that was the legacy path,
-# preserved as CMakeLists.txt.legacy.
-#
-# Invocation expects a chip toolchain via -DCMAKE_TOOLCHAIN_FILE:
-#   cmake -B build_bl602 -DCMAKE_TOOLCHAIN_FILE=<repo>/cmake/bl602-toolchain.cmake
-# The toolchain file sets BOUFFALO_CHIP (bl602 / bl616 / bl616cl); the
-# rest of this file branches off that.
-#
-# Bin pipeline: bflb_add_executable from component/bouffalo_sdk/bflb_image_tool/CMakeLists.txt
-# produces both the ELF and the flashable
-# at_<chip>_whole_flash_data.bin in one go — no separate Makefile
-# postbuild step needed.
-
 cmake_minimum_required(VERSION 3.19)
-
-# project() needs to run before we can rely on the toolchain file
-# having been processed — CMake only loads CMAKE_TOOLCHAIN_FILE during
-# the first project()'s compiler-probe step, so any variables the
-# toolchain sets (BOUFFALO_CHIP, BOUFFALO_MARCH, …) aren't visible
-# before this point.
 project(at C CXX)
-
-# BOUFFALO_CHIP is declared / validated by cmake/bouffalo_sdk.cmake (pulled
-# in transitively via add_subdirectory(component) below) — no project-side
-# pre-check needed.
 
 set(AT_PROJECT_ROOT ${CMAKE_CURRENT_LIST_DIR}/../..)
 list(APPEND CMAKE_MODULE_PATH ${AT_PROJECT_ROOT}/cmake)
 
 # Pull project-wide knobs out of proj.conf (chip-conditional CONFIG_*).
 # Some of these are read by the bouffalo_sdk umbrella as it processes
-# the subdirectory below, so they must be set first. proj.conf expects
-# CHIP to identify the active chip — mirror BOUFFALO_CHIP into it.
-set(CHIP "${BOUFFALO_CHIP}")
+# the subdirectory below, so they must be set first. proj.conf reads
+# BOUFFALO_CHIP directly (set by the chip toolchain file).
 include(proj.conf)
 
 # PROJECT_SDK_VERSION is declared (cache STRING) and validated by

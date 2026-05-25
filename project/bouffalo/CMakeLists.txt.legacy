@@ -1,4 +1,12 @@
 cmake_minimum_required(VERSION 3.15)
+
+# proj.conf reads BOUFFALO_CHIP (set by chip toolchain files in the modern
+# build). The legacy SDK driver passes CHIP instead — mirror it across so
+# the same proj.conf works both ways.
+if(NOT DEFINED BOUFFALO_CHIP AND DEFINED CHIP)
+    set(BOUFFALO_CHIP "${CHIP}")
+endif()
+
 include(proj.conf)
 find_package(bouffalo_sdk REQUIRED HINTS $ENV{BL_SDK_BASE})
 sdk_add_include_directories(./include)
