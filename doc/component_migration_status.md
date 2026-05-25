@@ -352,6 +352,7 @@ wait
 3. **`CONFIG_SHELL=n`** 仍然关着；要打开得抽 `platform/bouffalo_sdk/components/shell/`（参考 bflb_mm/mm_debug.c 用 shell.h 那条）。
 4. **CI 没接** BL616 / BL616CL；目前只有 BL602 在 CI 走 build。要加 matrix job + artifact upload。
 5. **`tool/bflb_tools` / `tool/bflb_elf_to_bin.py` 这条 pipeline 也得在 CLAUDE.md 里同步**（CLAUDE.md 里说"Output: `project/bouffalo/build_<CHIP>/build_out/whole_flash_data.bin`"已过期，现在是 `build_<CHIP>/at_<chip>_whole_flash_data.bin`，没有 build_out 子目录）。
+6. **BL602 latent heap overlap**：lwip 的 `ram_heap[]` (`.wifibss`, 8 KB) 物理上落在 mm OCRAM 池 `__HeapBase..__HeapLimit` 区间内 — `bl602_flash.ld` 把 `ram_memory` 和 `ram_wifi` 两个 region 物理重叠，mm 看到的"free"区间里夹着一段 lwip 在用的 RAM。当前 mm 用量没爬到那个 offset 所以还没炸，但任何大块 malloc / 长期碎片化都会撞。详见 [bl602_heap_overlap.md](bl602_heap_overlap.md)。修法建议 `MEM_LIBC_MALLOC=1` 让 lwip 走 mm 一个池。BL702 / BL702L 这种单 bank chip 大概率同病；BL616CL 因为 ram_memory 和 ram_wifi 分别在 0x60xxxxxx / 0x20xxxxxx 不同物理 bank 不受影响。
 
 ## 重启 build 准备清单（新机器 / fresh clone）
 
