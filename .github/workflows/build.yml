@@ -234,7 +234,8 @@ jobs:
         # src/*.rl → src/*.rl.cpp (gitignored). 每个 project 的构建系统都用
         # GLOB / find 收集 src/*.cpp，所以必须先跑 ragel，否则
         # AtCommandParser::process()/ctor 等符号会缺失。
-        run: make -C src
+        # -G2 matches the cmake-side rule in src/CMakeLists.txt.
+        run: ragel -G2 -o src/AtCommandParser.rl.cpp src/AtCommandParser.rl
 
       - name: Download lfs.bin (shared across all platforms)
         # 由独立的 lfs_image job 生成；各 sub-make 直接读 project/lfs.bin，不
