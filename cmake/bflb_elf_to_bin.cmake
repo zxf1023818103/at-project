@@ -1,3 +1,5 @@
+include_guard()
+
 # bflb_elf_to_bin.cmake
 #
 # Provides:

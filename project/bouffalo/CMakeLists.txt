@@ -77,8 +77,8 @@ include(${AT_PROJECT_ROOT}/src/sources.cmake)
 # bflb_add_executable creates the ELF target + a sibling custom-target
 # that runs tool/bflb_elf_to_bin.py to produce
 # at_<chip>_whole_flash_data.bin (and the OTA / xz / hash variants).
-include(${AT_PROJECT_ROOT}/cmake/bflb_elf_to_bin.cmake)
-
+# Pulled in transitively by cmake/bouffalo_sdk.cmake, no explicit
+# include needed.
 bflb_add_executable(at ${AT_USER_SOURCES})
 
 target_include_directories(at PRIVATE

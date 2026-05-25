@@ -13,6 +13,12 @@ if(NOT DEFINED AT_PROJECT_ROOT)
     message(FATAL_ERROR "AT_PROJECT_ROOT must be set before including cmake/bouffalo_sdk.cmake")
 endif()
 
+# bflb_add_executable() — BL chip ELF/.bin pipeline + auto .map. Bundled
+# here because it is part of the same "BL chip toolchain build" contract
+# as the umbrella below; consuming projects should not need a separate
+# include() for it.
+include(${AT_PROJECT_ROOT}/cmake/bflb_elf_to_bin.cmake)
+
 add_subdirectory(${AT_PROJECT_ROOT}/component/bouffalo_sdk
                  ${CMAKE_BINARY_DIR}/component/bouffalo_sdk)
 
