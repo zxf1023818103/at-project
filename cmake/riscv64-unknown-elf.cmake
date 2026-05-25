@@ -159,3 +159,15 @@ unset(_bouffalo_link_flags_str)
 
 unset(_exe)
 unset(_prefix)
+
+# Default CMAKE_BUILD_TYPE = Release. Without it CMake leaves
+# CMAKE_<LANG>_FLAGS_<TYPE> unset and code compiles -O0, which:
+#   - balloons the BL616 boot path (.init_code in rom_header overflows
+#     its 6 KB budget — boot rom_header is sized assuming -O2/-Os),
+#   - and bloats the BL602 ITCM headroom that ROMAPI just won back.
+# CACHE without FORCE so an explicit -DCMAKE_BUILD_TYPE=Debug still wins.
+# Guarded against CMAKE_CONFIGURATION_TYPES because multi-config generators
+# (Ninja Multi-Config, Visual Studio) don't use CMAKE_BUILD_TYPE.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Default to optimized build")
+endif()

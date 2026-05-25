@@ -16,17 +16,6 @@
 
 cmake_minimum_required(VERSION 3.19)
 
-# Default build type: Release (-O3 -DNDEBUG). Without it CMake leaves
-# CMAKE_<LANG>_FLAGS_<TYPE> unset and code compiles -O0, which:
-#   - balloons the BL616 boot path (.init_code in rom_header overflows
-#     its 6 KB budget — boot rom_header is sized assuming -O2/-Os),
-#   - and bloats the BL602 ITCM headroom that ROMAPI just won the back.
-# Override on the cmake command line if you want a debug build:
-#   cmake -DCMAKE_BUILD_TYPE=Debug -B build ...
-if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-    set(CMAKE_BUILD_TYPE Release CACHE STRING "Default to optimized build" FORCE)
-endif()
-
 # project() needs to run before we can rely on the toolchain file
 # having been processed — CMake only loads CMAKE_TOOLCHAIN_FILE during
 # the first project()'s compiler-probe step, so any variables the
