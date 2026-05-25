@@ -61,6 +61,34 @@ target_compile_definitions(amebad_sdk_includes INTERFACE
     "LS_IMG2_OTA2_ADDR=${AMEBAD_OTA2_ADDR}"
 )
 
+# RSIP Mask entry 0 — covers the system-data region (BACKUP + XIPSYS,
+# 2*4K starting at 0x08002000 by default). SDK comment: "Entry 0 is
+# already used by System Data". Entries 1-3 are user-customizable
+# directly in usrcfg_common/src/rtl8721d_bootcfg.c (no cmake option
+# for those, they're meant to be hand-edited).
+#
+# Defaults match SDK upstream (bootcfg.c literal + layout.ld
+# BACKUP(0x08002000)+XIPSYS(0x08003000)). Override on the cmake line
+# when relocating system data:
+#   cmake -DAMEBAD_RSIP_MASK_ENTRY0_ADDR=0xXX \
+#         -DAMEBAD_RSIP_MASK_ENTRY0_PAGES=N ...
+#
+# Notes:
+#   - ADDR: 4K aligned. PAGES: count of 4K pages, max 255.
+#   - Consumed by usrcfg_common/src/rtl8721d_bootcfg.c RSIP_Mask_Config[0].
+#   - If you relocate ADDR, you also need to move BACKUP/XIPSYS in the
+#     layout.ld files (still hard-coded — see Wave 2 plan).
+#   - Lives in sdk_includes (not usrcfg_common) for parity with OTA
+#     option; any future layout-driven option goes here too.
+set(AMEBAD_RSIP_MASK_ENTRY0_ADDR "0x08002000" CACHE STRING
+    "AmebaD RSIP mask entry 0 start address (system data, 4K-aligned)")
+set(AMEBAD_RSIP_MASK_ENTRY0_PAGES "2" CACHE STRING
+    "AmebaD RSIP mask entry 0 size in 4K pages (max 255)")
+target_compile_definitions(amebad_sdk_includes INTERFACE
+    "AMEBAD_RSIP_MASK_ENTRY0_ADDR=${AMEBAD_RSIP_MASK_ENTRY0_ADDR}"
+    "AMEBAD_RSIP_MASK_ENTRY0_PAGES=${AMEBAD_RSIP_MASK_ENTRY0_PAGES}"
+)
+
 set(_sdk_base "${CMAKE_SOURCE_DIR}/platform/ameba-rtos-d")
 set(_sdk_soc  "${_sdk_base}/component/soc/realtek/amebad")
 set(_os       "${_sdk_base}/component/os")

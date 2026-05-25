@@ -58,9 +58,14 @@ u32 OTA_Region[2] = {
 *	MaskSize: size of the mask area, unit is 4KB, MaxSize 255*4KB
 */
 BOOT_RAM_DATA_SECTION
+/* CMAKE_PATCH: Entry 0 literal addr+pages replaced by cmake-injected
+ * macros (AMEBAD_RSIP_MASK_ENTRY0_{ADDR,PAGES} via amebad_sdk_includes,
+ * defaults 0x08002000 / 2 = SDK upstream). Entries 1-3 are intentionally
+ * left as hand-edit slots (SDK comment "customer can set here").
+ * Resync caveat: SDK upstream has literals for entry 0. */
 RSIP_MaskDef RSIP_Mask_Config[] = {
 	/*MaskAddr,		MaskSize*/
-	{0x08002000,	2},  		//Entry 0: 4K system data & 4K backup
+	{AMEBAD_RSIP_MASK_ENTRY0_ADDR,	AMEBAD_RSIP_MASK_ENTRY0_PAGES},  //Entry 0: 4K system data & 4K backup
 
 	/* customer can set here */
 	{0xFFFFFFFF,	0xFF},  	//Entry 1: can be used by users
