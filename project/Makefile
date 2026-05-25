@@ -19,7 +19,7 @@
 SHELL := /bin/bash
 
 # lfs.bin is produced by the host-platform-independent cmake builder in
-# CMakeLists.txt + cmake/lfs_image.cmake — it compiles earlephilhower's
+# CMakeLists.txt + component/lfs_image/CMakeLists.txt — it compiles earlephilhower's
 # mklittlefs (component/mklittlefs) from source against component/littlefs
 # on whatever host C++ compiler is available, instead of relying on a
 # Linux-only prebuilt under platform/bouffalo_sdk/tools/genlfs/.
@@ -32,7 +32,7 @@ RESOURCE_FILES := $(shell find resource -type f 2>/dev/null)
 all: bl602 bl616 bl616cl amebad amebadplus amebagreen2
 
 # Real file target so parallel/repeated builds reuse it; rebuilds only when
-# the resource tree changes (CONFIGURE_DEPENDS in cmake/lfs_image.cmake
+# the resource tree changes (CONFIGURE_DEPENDS in component/lfs_image/CMakeLists.txt
 # re-runs cmake configure if files are added / removed under resource/).
 lfs.bin: $(RESOURCE_FILES)
 	@cmake -S . -B $(LFS_BUILD_DIR) >/dev/null

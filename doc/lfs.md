@@ -121,7 +121,7 @@ mklittlefs -c <input_dir> -b 4096 -p 256 -s 1024000 <output.bin>
 
 ### Windows host：需要 symlink 支持
 
-`component/mklittlefs/littlefs` 是一个 git 跟踪的相对符号链接。Linux / macOS /
+`component/lfs_image/mklittlefs/littlefs` 是一个 git 跟踪的相对符号链接。Linux / macOS /
 WSL 直接 work，**Windows 原生 git 默认不创建 symlink**（要么留下一个写着
 `../littlefs` 文本的普通文件，要么把符号链接转成 directory copy，两种都 break
 build）。在 Windows 上 clone 这个仓库前要：
@@ -134,7 +134,7 @@ git config --global core.symlinks true
 cd at-project
 git config core.symlinks true
 git checkout --force HEAD     :: 重新展开 symlink
-git submodule update --init --force component/mklittlefs
+git submodule update --init --force component/lfs_image/mklittlefs
 ```
 
 另外 Windows 10 1709+ 的 "Developer Mode" 开关 / 或以管理员身份运行 git 也是

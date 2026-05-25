@@ -34,7 +34,7 @@
 	path = component/littlefs
 	url = https://github.com/littlefs-project/littlefs.git
 	branch = v2.8.2
-[submodule "component/mklittlefs"]
-	path = component/mklittlefs
+[submodule "component/lfs_image/mklittlefs"]
+	path = component/lfs_image/mklittlefs
 	url = https://github.com/zxf1023818103/mklittlefs.git
 	branch = at-project
