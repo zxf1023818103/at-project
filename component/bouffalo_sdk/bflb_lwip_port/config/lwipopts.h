@@ -54,8 +54,22 @@
    byte alignment -> define MEM_ALIGNMENT to 2. */
 #define MEM_ALIGNMENT           4
 
-/* MEM_SIZE: the size of the heap memory. If the application will send
-a lot of data that needs to be copied, this should be set high. */
+/* Route lwip's mem_malloc / mem_free through libc malloc / free instead of
+   its own static ram_heap[] pool. On chips with a single SRAM bank
+   (BL602 / BL702 / BL702L) bl602_flash.ld declares ram_memory and ram_wifi
+   as physically-overlapping regions; ram_heap lands in .wifibss inside the
+   mm OCRAM pool's [__HeapBase, __HeapLimit) range, so mm's TLSF eventually
+   hands out addresses that collide with whatever lwip wrote there. Routing
+   through libc gets lwip onto the same mm pool that newlib malloc uses
+   (see port_memory.c::_malloc_r -> kmalloc), eliminating the overlap and
+   reclaiming the 8 KB BSS that ram_heap[] occupied. See doc/bl602_heap_overlap.md.
+
+   Caveat: pbuf_free in IRQ context would call libc free which is not
+   IRQ-safe -- bouffalo_sdk's lwip runs in the tcpip thread and we do not
+   call pbuf_free from ISRs, so this is safe for our build paths. */
+#define MEM_LIBC_MALLOC         1
+
+/* MEM_SIZE: only used when MEM_LIBC_MALLOC == 0. Kept for reference. */
 #if 0
 #define MEM_SIZE                (60*1024)
 #elif defined(CFG_SDIOWIFI)
