@@ -36,4 +36,5 @@
 	branch = v2.8.2
 [submodule "component/mklittlefs"]
 	path = component/mklittlefs
-	url = https://github.com/earlephilhower/mklittlefs
+	url = https://github.com/zxf1023818103/mklittlefs.git
+	branch = at-project

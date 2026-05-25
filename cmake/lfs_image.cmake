@@ -13,11 +13,12 @@ include_guard()
 # native binary to pack <SOURCE_DIR> into a LittleFS image at
 # <output_path>.
 #
-# mklittlefs sources live at component/mklittlefs/ (vendored as a git
-# submodule). Its nested ./littlefs submodule is intentionally NOT
-# initialised — the host build reuses our project-tree littlefs at
-# component/littlefs/ instead, so we don't carry two slightly-different
-# copies of upstream littlefs.
+# mklittlefs sources live at component/mklittlefs/ (the at-project
+# branch of zxf1023818103/mklittlefs, our fork of earlephilhower's).
+# Its ./littlefs is a relative symlink to ../littlefs — i.e. our
+# project-tree component/littlefs/ — so the build picks up the same
+# upstream littlefs source the runtime SDK adapters use, instead of
+# pulling the original ARMmbed/littlefs nested submodule.
 #
 # Why a sub-project: an outer cross-compile build cannot also produce a
 # native host binary in the same CMake project — CMAKE_C_COMPILER and
@@ -91,7 +92,6 @@ function(lfs_image_add target_path)
                 -DCMAKE_SYSTEM_NAME=${CMAKE_HOST_SYSTEM_NAME}
                 -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                 -DMKLITTLEFS_SOURCE_DIR=${AT_PROJECT_ROOT}/component/mklittlefs
-                -DLITTLEFS_SOURCE_DIR=${AT_PROJECT_ROOT}/component/littlefs
             BUILD_BYPRODUCTS ${_mklittlefs_bin}
         )
     endif()

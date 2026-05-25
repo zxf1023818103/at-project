@@ -4,17 +4,22 @@
 # cross-compile build (CMAKE_TOOLCHAIN_FILE for the outer is
 # intentionally not propagated).
 #
-# Reuses our project-tree littlefs (component/littlefs) rather than
-# initialising mklittlefs's own nested littlefs submodule — we already
-# vendor upstream littlefs-project/littlefs at component/littlefs, and
-# letting both copies coexist would just waste a git submodule + create
-# a "which lfs.c am I building against?" ambiguity.
+# Source tree (component/mklittlefs, the at-project branch of our fork):
+#   main.cpp           — mklittlefs's command-line entry
+#   tclap/             — inline header-only argument parser
+#   include/           — mklittlefs's own headers
+#   littlefs/          — RELATIVE SYMLINK -> ../littlefs (component/littlefs)
 #
-# Inputs (CMake args from the outer ExternalProject_Add):
-#   MKLITTLEFS_SOURCE_DIR  — earlephilhower/mklittlefs root (main.cpp,
-#                            tclap/, include/).
-#   LITTLEFS_SOURCE_DIR    — upstream littlefs root (lfs.c, lfs_util.c,
-#                            lfs.h).
+# The symlink is the whole point of the fork: it lets us reuse our
+# project-tree upstream littlefs (component/littlefs, pinned at v2.8.2 —
+# the same source the runtime SDK adapters use) instead of pulling the
+# upstream ARMmbed/littlefs nested submodule. mklittlefs's own source
+# layout (lfs.c at littlefs/lfs.c, #include "littlefs/lfs.h") therefore
+# just works without any include-path gymnastics here.
+#
+# Input (CMake arg from the outer ExternalProject_Add):
+#   MKLITTLEFS_SOURCE_DIR — earlephilhower/mklittlefs source root
+#                          (our fork's at-project branch).
 #
 # Output: mklittlefs (or mklittlefs.exe on Windows) installed into
 # CMAKE_INSTALL_PREFIX.
@@ -25,23 +30,46 @@ project(mklittlefs C CXX)
 if(NOT MKLITTLEFS_SOURCE_DIR)
     message(FATAL_ERROR "MKLITTLEFS_SOURCE_DIR must be set (the earlephilhower/mklittlefs source root)")
 endif()
-if(NOT LITTLEFS_SOURCE_DIR)
-    message(FATAL_ERROR "LITTLEFS_SOURCE_DIR must be set (upstream littlefs root)")
+
+set(_lfs_dir ${MKLITTLEFS_SOURCE_DIR}/littlefs)
+if(NOT EXISTS ${_lfs_dir}/lfs.c)
+    message(FATAL_ERROR
+        "mklittlefs's littlefs symlink does not resolve to a real littlefs tree "
+        "(missing ${_lfs_dir}/lfs.c). Make sure component/littlefs is checked out.")
 endif()
 
 add_executable(mklittlefs
     ${MKLITTLEFS_SOURCE_DIR}/main.cpp
-    ${LITTLEFS_SOURCE_DIR}/lfs.c
-    ${LITTLEFS_SOURCE_DIR}/lfs_util.c
+    ${_lfs_dir}/lfs.c
+    ${_lfs_dir}/lfs_util.c
+)
+
+target_include_directories(mklittlefs PRIVATE
+    ${MKLITTLEFS_SOURCE_DIR}
+    ${MKLITTLEFS_SOURCE_DIR}/tclap
+    ${MKLITTLEFS_SOURCE_DIR}/include
+    ${_lfs_dir}
+)
+
+# Upstream littlefs + mklittlefs's main.cpp trigger a handful of benign
+# warnings under -Wall (printf format mismatches, signed/unsigned
+# comparisons, unused result of read()). Silence them — we don't audit
+# the upstream sources.
+target_compile_options(mklittlefs PRIVATE -O2 -Wall -Wno-format -Wno-unused-result -Wno-sign-compare)
+
+set_target_properties(mklittlefs PROPERTIES
+    CXX_STANDARD 11
+    CXX_STANDARD_REQUIRED ON
 )
 
 # mklittlefs's main.cpp expects four -D macros that its upstream Makefile
 # provides. Reproduce them here so the same source compiles cleanly under
-# cmake. git describe of the two submodule trees gives nice provenance in
-# `mklittlefs --version` output without depending on env state.
+# cmake. git describe of each tree gives nice provenance in `mklittlefs
+# --version` output.
 find_package(Git QUIET)
 function(_git_describe out_var dir)
-    if(GIT_FOUND AND EXISTS ${dir}/.git)
+    set(_out "")
+    if(GIT_FOUND)
         execute_process(
             COMMAND ${GIT_EXECUTABLE} -C ${dir} describe --tags --always --dirty
             OUTPUT_VARIABLE _out
@@ -56,40 +84,15 @@ function(_git_describe out_var dir)
 endfunction()
 
 _git_describe(_mklittlefs_version ${MKLITTLEFS_SOURCE_DIR})
-_git_describe(_littlefs_version   ${LITTLEFS_SOURCE_DIR})
+# The littlefs symlink target — git describe follows symlinks, so this
+# reads the version of component/littlefs.
+_git_describe(_littlefs_version ${_lfs_dir})
 
 target_compile_definitions(mklittlefs PRIVATE
     VERSION="${_mklittlefs_version}"
     LITTLEFS_VERSION="${_littlefs_version}"
     BUILD_CONFIG=""
     BUILD_CONFIG_NAME="-generic"
-)
-
-target_include_directories(mklittlefs PRIVATE
-    ${MKLITTLEFS_SOURCE_DIR}
-    ${MKLITTLEFS_SOURCE_DIR}/tclap
-    ${MKLITTLEFS_SOURCE_DIR}/include
-    # littlefs's own sources #include "lfs.h" unqualified — needs its
-    # directory on the include path.
-    ${LITTLEFS_SOURCE_DIR}
-    # main.cpp does #include "littlefs/lfs.h" with the directory prefix.
-    # Add the parent so that prefix resolves to component/littlefs/lfs.h.
-    # ARMmbed/littlefs (mklittlefs's own nested submodule, which we don't
-    # init) would have satisfied this from inside the source tree; reusing
-    # our component/littlefs needs an extra -I.
-    ${LITTLEFS_SOURCE_DIR}/..
-)
-
-# Upstream littlefs + mklittlefs's main.cpp trigger a handful of benign
-# warnings under -Wall (printf format mismatches, signed/unsigned
-# comparisons, unused result of read()). Silence them — we don't audit
-# the upstream sources.
-target_compile_options(mklittlefs PRIVATE -O2 -Wall -Wno-format -Wno-unused-result -Wno-sign-compare)
-
-# mklittlefs's main.cpp uses C++11 features (std::string, range-for, ...).
-set_target_properties(mklittlefs PROPERTIES
-    CXX_STANDARD 11
-    CXX_STANDARD_REQUIRED ON
 )
 
 install(TARGETS mklittlefs RUNTIME DESTINATION bin)
