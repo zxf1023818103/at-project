@@ -1,13 +1,15 @@
-include_guard()
-
-# bflb_elf_to_bin.cmake
+# bflb_image_tool — Bouffalo ELF → flashable BIN pipeline.
+#
+# Pulled in by component/bouffalo_sdk/CMakeLists.txt's add_subdirectory,
+# so anyone who links the bouffalo_sdk umbrella automatically gets the
+# bflb_add_executable() function below — no separate include() needed.
 #
 # Provides:
 #   bflb_add_executable(<target> [BOARD <board>] <sources...>)
 #
 # Builds an ELF for the chip selected by the active Bouffalo toolchain
-# (bl602/bl616/bl616cl), then runs tool/bflb_elf_to_bin.py against it to
-# produce the flashable artefacts under <bindir>/build_out/:
+# (bl602 / bl616 / bl616cl), then runs bflb_elf_to_bin.py against it to
+# produce the flashable artefacts in the target's build directory:
 #
 #   <target>_<chip>.elf
 #   <target>_<chip>.bin
@@ -19,18 +21,16 @@ include_guard()
 #
 # BOARD defaults to ${BOUFFALO_BOARD}, or to ${BOUFFALO_CHIP}dk if neither
 # is set (mirrors the convention used by project/bouffalo/Makefile).
+#
+# The Python entry script plus its support trees (bflb_tools/,
+# board_configs/, byai/) all live alongside this file — see README.md
+# for the layout.
 
 if(NOT DEFINED BFLB_ELF_TO_BIN_SCRIPT)
-    # REALPATH so a symlinked cmake/ resolves to the real repo cmake/ before
-    # we walk up to ../tool/.
-    get_filename_component(_bflb_self "${CMAKE_CURRENT_LIST_FILE}" REALPATH)
-    get_filename_component(_bflb_self_dir "${_bflb_self}" DIRECTORY)
     set(BFLB_ELF_TO_BIN_SCRIPT
-        "${_bflb_self_dir}/../tool/bflb_elf_to_bin.py"
+        "${CMAKE_CURRENT_LIST_DIR}/bflb_elf_to_bin.py"
         CACHE FILEPATH "Path to bflb_elf_to_bin.py"
     )
-    unset(_bflb_self)
-    unset(_bflb_self_dir)
 endif()
 
 if(NOT DEFINED BFLB_PYTHON)

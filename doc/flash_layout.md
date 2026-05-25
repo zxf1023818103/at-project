@@ -150,4 +150,4 @@ PSM 大小固定 1000 KB 与 Ameba D 对齐（让同一份 lfs 镜像可在三�
 |------|------|
 | [partition_cfg_4M.toml × 3](../platform/bouffalo_sdk/bsp/board/) | 整体重写：删 mfg/media/KEY/DATA/factory，PSM 扩到 1 MB @ `0x300000`，FW slot 对称 `0x10000 + 0x178000` / `0x188000 + 0x178000` |
 
-构建脚本（[tool/bflb_elf_to_bin.py](../tool/bflb_elf_to_bin.py)）按 GLOB 取唯一一份 `partition_cfg_*.toml`，不用动。
+构建脚本（[component/bouffalo_sdk/bflb_image_tool/bflb_elf_to_bin.py](../component/bouffalo_sdk/bflb_image_tool/bflb_elf_to_bin.py)）按 GLOB 取唯一一份 `partition_cfg_*.toml`，不用动。

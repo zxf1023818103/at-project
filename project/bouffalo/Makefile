@@ -8,7 +8,7 @@
 #
 # The build directory is build_<CHIP>/ at the project root. The ELF
 # lands at build_<CHIP>/at.elf (CMake's default location for the
-# `at` target). bflb_add_executable in cmake/bflb_elf_to_bin.cmake then
+# `at` target). bflb_add_executable in component/bouffalo_sdk/bflb_image_tool/CMakeLists.txt then
 # generates build_<CHIP>/at_<CHIP>_whole_flash_data.bin as part of the
 # build — no separate postbuild step needed.
 

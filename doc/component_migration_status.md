@@ -19,10 +19,10 @@
 [bl616-toolchain.cmake](../cmake/bl616-toolchain.cmake) /
 [bl616cl-toolchain.cmake](../cmake/bl616cl-toolchain.cmake)）驱动，完全不依赖
 `platform/bouffalo_sdk/project.build`。bin 生成走 `bflb_add_executable()`
-（[cmake/bflb_elf_to_bin.cmake](../cmake/bflb_elf_to_bin.cmake)）的 custom-command
-sibling target —— 三 chip 都走 [tool/bflb_elf_to_bin.py](../tool/bflb_elf_to_bin.py)
-（`--chip` 接 `bl602` / `bl616` / `bl616cl`，对应 `tool/board_configs/<board>/` +
-`tool/bflb_tools/bouffalo_flash_cube/chips/<chip>/` 三套配置），统一产
+（[component/bouffalo_sdk/bflb_image_tool/CMakeLists.txt](../component/bouffalo_sdk/bflb_image_tool/CMakeLists.txt)）的 custom-command
+sibling target —— 三 chip 都走 [component/bouffalo_sdk/bflb_image_tool/bflb_elf_to_bin.py](../component/bouffalo_sdk/bflb_image_tool/bflb_elf_to_bin.py)
+（`--chip` 接 `bl602` / `bl616` / `bl616cl`，对应 `component/bouffalo_sdk/bflb_image_tool/board_configs/<board>/` +
+`component/bouffalo_sdk/bflb_image_tool/bflb_tools/bouffalo_flash_cube/chips/<chip>/` 三套配置），统一产
 `at_<chip>_whole_flash_data.bin`。
 
 **Project CMakeLists 干净度：** [project/bouffalo/CMakeLists.txt](../project/bouffalo/CMakeLists.txt)
@@ -92,7 +92,7 @@ EF / SF-cfg 的 HAL routine 实际驻留 ROM，不占 ITCM。
 留下的入口（如果以后真要做 whole-archive 一致性）：
 - [cmake/at_dedup_link_libs.cmake](../cmake/at_dedup_link_libs.cmake) — 递归
   walk `INTERFACE_LINK_LIBRARIES` 的 dedup helper，路径正确但目前没人调用。
-- [cmake/bflb_elf_to_bin.cmake](../cmake/bflb_elf_to_bin.cmake) 里的 comment 标
+- [component/bouffalo_sdk/bflb_image_tool/CMakeLists.txt](../component/bouffalo_sdk/bflb_image_tool/CMakeLists.txt) 里的 comment 标
   了重启入口（要 CMake 3.29+ 或者给 `cmake/mbedtls.cmake` 加一个 `ar -d
   bignum.c.obj` 的 post-build 把上游 bignum 剔掉，再把 `bflb_mbedtls_port/bignum.c`
   加回来）。
@@ -273,10 +273,10 @@ wait
 
 修 doc 跟仓库的两处偏差，没新功能：
 
-- **doc 之前说"BL616/BL616CL flash pipeline 没接"是错的** —— [tool/bflb_elf_to_bin.py](../tool/bflb_elf_to_bin.py)
+- **doc 之前说"BL616/BL616CL flash pipeline 没接"是错的** —— [component/bouffalo_sdk/bflb_image_tool/bflb_elf_to_bin.py](../component/bouffalo_sdk/bflb_image_tool/bflb_elf_to_bin.py)
   自 `f5fb94c` 起就是 `--chip` 接 `bl602` / `bl616` / `bl616cl` 三选一，
-  [cmake/bflb_elf_to_bin.cmake](../cmake/bflb_elf_to_bin.cmake) 也无条件调它，
-  `tool/board_configs/{bl602dk,bl616dk,bl616cldk}/` + `tool/bflb_tools/bouffalo_flash_cube/chips/{bl602,bl616,bl616cl}/`
+  [component/bouffalo_sdk/bflb_image_tool/CMakeLists.txt](../component/bouffalo_sdk/bflb_image_tool/CMakeLists.txt) 也无条件调它，
+  `component/bouffalo_sdk/bflb_image_tool/board_configs/{bl602dk,bl616dk,bl616cldk}/` + `component/bouffalo_sdk/bflb_image_tool/bflb_tools/bouffalo_flash_cube/chips/{bl602,bl616,bl616cl}/`
   三套配置都齐。本次实跑：三平台都得 `at_<chip>_whole_flash_data.bin` (4 MB pad)。
   doc 表格 + 后续段落已修正。
 
@@ -351,7 +351,7 @@ wait
 2. **接 `pm_manager` caller / `CONFIG_TICKLESS_ACCURATE`**：CMakeLists wiring + proj.conf 翻 `CONFIG_PM_MANAGER=y` 现在都能 link（见上面"CONFIG_PM_MANAGER wiring OK"段），但 final ELF 仍 0 caller。要做 BT/Wi-Fi PS 联合 tickless idle，得：（a）proj.conf 加 `set(CONFIG_PM_MANAGER y)` + `set(CONFIG_TICKLESS_ACCURATE y)`；（b）找谁 register pm_sleep_check callback；（c）`tickless_accurate.c` 里 MTIME / MTIMECMP defines 已经按 chip 配好。
 3. **`CONFIG_SHELL=n`** 仍然关着；要打开得抽 `platform/bouffalo_sdk/components/shell/`（参考 bflb_mm/mm_debug.c 用 shell.h 那条）。
 4. **CI 没接** BL616 / BL616CL；目前只有 BL602 在 CI 走 build。要加 matrix job + artifact upload。
-5. **`tool/bflb_tools` / `tool/bflb_elf_to_bin.py` 这条 pipeline 也得在 CLAUDE.md 里同步**（CLAUDE.md 里说"Output: `project/bouffalo/build_<CHIP>/build_out/whole_flash_data.bin`"已过期，现在是 `build_<CHIP>/at_<chip>_whole_flash_data.bin`，没有 build_out 子目录）。
+5. **`component/bouffalo_sdk/bflb_image_tool/bflb_tools` / `component/bouffalo_sdk/bflb_image_tool/bflb_elf_to_bin.py` 这条 pipeline 也得在 CLAUDE.md 里同步**（CLAUDE.md 里说"Output: `project/bouffalo/build_<CHIP>/build_out/whole_flash_data.bin`"已过期，现在是 `build_<CHIP>/at_<chip>_whole_flash_data.bin`，没有 build_out 子目录）。
 6. **BL602 latent heap overlap**：lwip 的 `ram_heap[]` (`.wifibss`, 8 KB) 物理上落在 mm OCRAM 池 `__HeapBase..__HeapLimit` 区间内 — `bl602_flash.ld` 把 `ram_memory` 和 `ram_wifi` 两个 region 物理重叠，mm 看到的"free"区间里夹着一段 lwip 在用的 RAM。当前 mm 用量没爬到那个 offset 所以还没炸，但任何大块 malloc / 长期碎片化都会撞。详见 [bl602_heap_overlap.md](bl602_heap_overlap.md)。修法建议 `MEM_LIBC_MALLOC=1` 让 lwip 走 mm 一个池。BL702 / BL702L 这种单 bank chip 大概率同病；BL616CL 因为 ram_memory 和 ram_wifi 分别在 0x60xxxxxx / 0x20xxxxxx 不同物理 bank 不受影响。
 
 ## 重启 build 准备清单（新机器 / fresh clone）

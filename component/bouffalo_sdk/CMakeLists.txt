@@ -101,6 +101,11 @@ add_subdirectory(bflb_math)
 add_subdirectory(bflb_coredump)
 add_subdirectory(${BOUFFALO_CHIP}_board_config)
 
+# ELF -> flashable BIN pipeline (the bflb_add_executable() helper).
+# Lives next to the rest of the SDK so consumers automatically get the
+# helper after linking bouffalo_sdk — no separate include() needed.
+add_subdirectory(bflb_image_tool)
+
 # phyrf only matters when RF/Wi-Fi is enabled. rfparam (BL602-only in this
 # fork — BL616 / BL616CL use a different RF parameter pipeline shipped inside
 # their respective phyrf .a archives) needs phyrf's headers, so it gates on

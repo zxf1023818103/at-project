@@ -9,7 +9,7 @@
 # The toolchain file sets BOUFFALO_CHIP (bl602 / bl616 / bl616cl); the
 # rest of this file branches off that.
 #
-# Bin pipeline: bflb_add_executable from cmake/bflb_elf_to_bin.cmake
+# Bin pipeline: bflb_add_executable from component/bouffalo_sdk/bflb_image_tool/CMakeLists.txt
 # produces both the ELF and the flashable
 # at_<chip>_whole_flash_data.bin in one go — no separate Makefile
 # postbuild step needed.
@@ -61,7 +61,7 @@ add_subdirectory(${AT_PROJECT_ROOT}/component
 include(${AT_PROJECT_ROOT}/src/sources.cmake)
 
 # bflb_add_executable creates the ELF target + a sibling custom-target
-# that runs tool/bflb_elf_to_bin.py to produce
+# that runs component/bouffalo_sdk/bflb_image_tool/bflb_elf_to_bin.py to produce
 # at_<chip>_whole_flash_data.bin (and the OTA / xz / hash variants).
 # Pulled in transitively by cmake/bouffalo_sdk.cmake, no explicit
 # include needed.

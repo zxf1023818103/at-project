@@ -37,16 +37,14 @@ if(NOT BOUFFALO_CHIP MATCHES "^(bl602|bl616|bl616cl)$")
         "Expected one of: bl602, bl616, bl616cl.")
 endif()
 
-# bflb_add_executable() — BL chip ELF/.bin pipeline + auto .map. Bundled
-# here because it is part of the same "BL chip toolchain build" contract
-# as the umbrella below; consuming projects should not need a separate
-# include() for it.
-include(${AT_PROJECT_ROOT}/cmake/bflb_elf_to_bin.cmake)
-
 # ASM is an SDK concern (startup code, FreeRTOS port asm, vendor archive
 # stubs — 700+ .S files in components/bouffalo_sdk + freertos-kernel),
 # not a user-application one. Enable it here so projects can keep their
 # project() line to the languages they actually write (C / CXX).
+#
+# bflb_add_executable() (the ELF -> flashable BIN pipeline) is now
+# provided by component/bouffalo_sdk/bflb_image_tool/CMakeLists.txt,
+# pulled in transitively by add_subdirectory(bouffalo_sdk).
 enable_language(ASM)
 
 add_subdirectory(${AT_PROJECT_ROOT}/component/bouffalo_sdk

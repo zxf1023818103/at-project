@@ -12,7 +12,7 @@ include_guard()
 # wifi4, bflb_zypher_bluetooth, …) each PUBLIC-link a bunch of STATIC
 # libs; the same lib (libbl602_std.a, libbflb_lhal.a, libcjson.a, …)
 # ends up on the link line 2–3×. Lazy linking ignored dups; under
-# -Wl,--whole-archive (which cmake/bflb_elf_to_bin.cmake's
+# -Wl,--whole-archive (which component/bouffalo_sdk/bflb_image_tool/CMakeLists.txt's
 # bflb_add_executable wraps the lib list in to match the legacy SDK)
 # every duplicate force-includes the archive again, multiplying the
 # LDS-KEEP'd .vector / .init sections and overflowing the .init
