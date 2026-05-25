@@ -129,6 +129,17 @@ target_link_libraries(at PRIVATE bouffalo_sdk)
 target_link_options(at PRIVATE
     -Wl,--start-group
     -Wl,-Map=$<TARGET_FILE_BASE_NAME:at>.map
+    # Force pull-in of SDK's newlib retargets (port_memory.c / syscalls_nosys.c)
+    # from libbflb_libc.a. Without these -u refs, newlib's own _malloc_r wins
+    # (it uses ecall SYS_brk which isn't serviced on bare-metal), causing
+    # heap_end=0 and a NULL store fault inside _malloc_r on the first malloc.
+    -Wl,-u,_malloc_r
+    -Wl,-u,_free_r
+    -Wl,-u,_calloc_r
+    -Wl,-u,_realloc_r
+    -Wl,-u,_memalign_r
+    -Wl,-u,_sbrk_r
+    -Wl,-u,_sbrk
     # The toolchain enables -flto on link, which makes gcc replay
     # compilation of every TU in the prebuilt vendor archives
     # (libwl80211_${chip}.a / libphyrf_${chip}.a — both shipped by the
