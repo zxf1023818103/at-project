@@ -8,8 +8,8 @@
 # are skipped — gcc would accept them silently but they don't exist in the
 # submodule.
 #
-# Currently KM0-only. When KM4 toolchain (cmake/amebad-km4.cmake) is added,
-# extend the chip-gate below with inc_hp + FreeRTOS RTL8721D_HP paths.
+# Chip-gated: KM0 uses inc_lp + FreeRTOS RTL8721D_LP; KM4 uses inc_hp +
+# FreeRTOS RTL8721D_HP. The other ~30 paths are chip-agnostic.
 #
 # Members linked via this INTERFACE:
 #   - amebad_fwlib_headers      (project-local 69 chip-register / HAL headers)
@@ -17,10 +17,19 @@
 #   - ~30 SDK subdirs           (FreeRTOS, swlib, app, common/api, wlan, lwip,
 #                                mbedtls, ...)
 
-if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km0")
+if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
+    set(_proj_inc_dir   "inc_lp")
+    # KM0 port is flat: portable/GCC/RTL8721D_LP/{port.c,portmacro.h}
+    set(_freertos_ports "RTL8721D_LP")
+elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
+    set(_proj_inc_dir   "inc_hp")
+    # KM4 port is split for TrustZone-M: portable/GCC/RTL8721D_HP/{non_secure,secure}/...
+    # SDK IFLAGS (project_hp/.../Makefile.include.gen:171-172) lists both.
+    set(_freertos_ports "RTL8721D_HP/non_secure" "RTL8721D_HP/secure")
+else()
     message(FATAL_ERROR
-        "amebad_sdk_includes: only KM0 wired today "
-        "(AMEBAD_CHIP='${AMEBAD_CHIP}'). Extend this file when adding KM4.")
+        "amebad_sdk_includes: AMEBAD_CHIP='${AMEBAD_CHIP}' not supported "
+        "(expected amebad-km0 or amebad-km4)")
 endif()
 
 add_library(amebad_sdk_includes INTERFACE)
@@ -33,15 +42,21 @@ set(_freertos "${_os}/freertos/freertos_v10.2.0/Source")
 set(_common   "${_sdk_base}/component/common")
 set(_proj     "${_sdk_base}/project/realtek_amebaD_va0_example")
 
+# Expand chip-specific FreeRTOS port list to absolute paths.
+set(_freertos_port_paths)
+foreach(_port IN LISTS _freertos_ports)
+    list(APPEND _freertos_port_paths "${_freertos}/portable/GCC/${_port}")
+endforeach()
+
 target_include_directories(amebad_sdk_includes SYSTEM INTERFACE
-    # project-local KM0 configs (Kconfig autoconf + board opts)
-    "${_proj}/inc/inc_lp"
+    # project-local chip configs (Kconfig autoconf + board opts)
+    "${_proj}/inc/${_proj_inc_dir}"
     # OS / FreeRTOS
     "${_os}"
     "${_os}/freertos"
     "${_os}/os_dep/include"
     "${_freertos}/include"
-    "${_freertos}/portable/GCC/RTL8721D_LP"
+    ${_freertos_port_paths}
     # SoC-level
     "${_sdk_soc}/cmsis"
     "${_sdk_soc}/app/monitor/include"

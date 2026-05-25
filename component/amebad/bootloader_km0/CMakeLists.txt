@@ -17,9 +17,9 @@
 #
 # Headers + IFLAGS come transitively through amebad_sdk_includes.
 # HAL drivers come from amebad_ram_common + amebad_ram_lp static libs.
-# Only the 3 .c that don't live in a fwlib/ subdir stay here:
-# bootloader/boot_ram_lp.c, bootloader/boot_flash_lp.c, and
-# fwlib/usrcfg/rtl8721d_bootcfg.c.
+# Board configuration (bootcfg etc.) comes from amebad_usrcfg_common +
+# amebad_usrcfg_lp. Only the 2 .c specific to KM0 LP boot stay here:
+# bootloader/boot_ram_lp.c, bootloader/boot_flash_lp.c.
 
 if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km0")
     message(FATAL_ERROR
@@ -45,7 +45,6 @@ endforeach()
 set(_loader_srcs
     "${_src_dir}/boot_ram_lp.c"             # SDK: bootloader/boot_ram_lp.c
     "${_src_dir}/boot_flash_lp.c"           # SDK: bootloader/boot_flash_lp.c
-    "${_src_dir}/rtl8721d_bootcfg.c"        # SDK: fwlib/usrcfg/rtl8721d_bootcfg.c
 )
 
 # Linker script: cat boot.ld + rom_symbol_acut.ld into build dir
@@ -73,14 +72,17 @@ set_target_properties(target_loader PROPERTIES
 set_property(TARGET target_loader APPEND PROPERTY LINK_DEPENDS "${_combined_ld}")
 add_dependencies(target_loader amebad_km0_loader_ld)
 
-# Vendor includes + HAL libs. amebad_sdk_includes brings in the 30+
-# SDK header paths + amebad_fwlib_headers transitively; ram_common /
-# ram_lp provide the HAL drivers that boot_*.c references (e.g.
-# WDG_Cmd from ram_common/rtl8721d_wdg.c).
+# Vendor includes + HAL libs + board config. amebad_sdk_includes brings
+# in the 30+ SDK header paths + amebad_fwlib_headers transitively;
+# ram_common / ram_lp provide HAL drivers (e.g. WDG_Cmd from
+# ram_common/rtl8721d_wdg.c); usrcfg_common / usrcfg_lp provide board
+# config (boot config, flash config, pinmap etc.).
 target_link_libraries(target_loader PRIVATE
     amebad_sdk_includes
     amebad_ram_common
     amebad_ram_lp
+    amebad_usrcfg_common
+    amebad_usrcfg_lp
 )
 
 # Per-target link delta over what arm-none-eabi.cmake already provides:

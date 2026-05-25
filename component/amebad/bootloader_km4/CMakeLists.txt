@@ -1,0 +1,107 @@
+# AmebaD KM4 HP bootloader — produces target_loader.axf.
+#
+# Stage 1 of the KM4 image pipeline: ELF/AXF link only. Mirrors
+# bootloader_km0/ — same recipe, KM4-specific sources + ld scripts.
+#
+# Source-of-truth: project_hp/asdk/Makefile (linker_loader rule) +
+# Makefile.include.gen (LD_ARG lines 463-487).
+#
+# Sources (src/) and linker scripts (ld/) are project-local copies of
+# the SDK. Resync with the submodule when its pointer moves:
+#   diff -q component/amebad/bootloader_km4/src/boot_ram_hp.c \
+#           platform/ameba-rtos-d/component/soc/realtek/amebad/bootloader/boot_ram_hp.c
+#
+# Headers + IFLAGS via amebad_sdk_includes (KM4 branch selects inc_hp
+# + FreeRTOS RTL8721D_HP port). HAL drivers are pulled from on-chip
+# ROM via rom_symbol_acut_boot.ld PROVIDE — KM4 bootloader links NO
+# ram_* libs (SDK Makefile only edits drivers/ for KM4, never ram_common).
+# Board config (bootcfg, trustzonecfg) comes via amebad_usrcfg_common
+# + amebad_usrcfg_hp — usrcfg_common's chip-agnostic .c (bootcfg /
+# ipccfg / wificfg) is built twice (once per chip toolchain), giving
+# us a clean KM4 ABI .o without duplicating .c on disk.
+
+if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km4")
+    message(FATAL_ERROR
+        "amebad/bootloader_km4: requires "
+        "-DCMAKE_TOOLCHAIN_FILE=cmake/amebad-km4.cmake "
+        "(AMEBAD_CHIP='${AMEBAD_CHIP}', expected 'amebad-km4')")
+endif()
+
+set(_src_dir       "${CMAKE_CURRENT_SOURCE_DIR}/src")
+set(_local_ld_dir  "${CMAKE_CURRENT_SOURCE_DIR}/ld")
+
+foreach(_p
+        "${_src_dir}/boot_ram_hp.c"
+        "${_local_ld_dir}/rlx8721d_img1_s.ld"
+        "${_local_ld_dir}/rlx8721d_layout_tz.ld")
+    if(NOT EXISTS "${_p}")
+        message(FATAL_ERROR "amebad/bootloader_km4: missing '${_p}'")
+    endif()
+endforeach()
+
+set(_loader_srcs
+    "${_src_dir}/boot_ram_hp.c"                  # SDK: bootloader/boot_ram_hp.c
+    "${_src_dir}/boot_flash_hp.c"                # SDK: bootloader/boot_flash_hp.c
+    "${_src_dir}/boot_trustzone_hp.c"            # SDK: bootloader/boot_trustzone_hp.c
+)
+
+# Linker script: cat img1_s.ld + rom_symbol_acut_boot.ld into build dir.
+# img1_s.ld does INCLUDE "rlx8721d_layout_tz.ld" (no path), so -L below
+# resolves it from our local ld/ dir.
+set(_boot_ld       "${_local_ld_dir}/rlx8721d_img1_s.ld")
+set(_rom_symbol_ld "${_local_ld_dir}/rlx8721d_rom_symbol_acut_boot.ld")
+set(_layout_ld     "${_local_ld_dir}/rlx8721d_layout_tz.ld")
+set(_combined_ld   "${CMAKE_CURRENT_BINARY_DIR}/rlx8721d.ld")
+
+add_custom_command(
+    OUTPUT  "${_combined_ld}"
+    COMMAND "${CMAKE_COMMAND}" -E cat "${_boot_ld}" "${_rom_symbol_ld}"
+                                       > "${_combined_ld}"
+    DEPENDS "${_boot_ld}" "${_rom_symbol_ld}" "${_layout_ld}"
+    COMMENT "concat KM4 loader linker script"
+    VERBATIM
+)
+add_custom_target(amebad_km4_loader_ld DEPENDS "${_combined_ld}")
+
+add_executable(target_loader ${_loader_srcs})
+set_target_properties(target_loader PROPERTIES
+    SUFFIX      ".axf"
+    OUTPUT_NAME "target_loader"
+)
+set_property(TARGET target_loader APPEND PROPERTY LINK_DEPENDS "${_combined_ld}")
+add_dependencies(target_loader amebad_km4_loader_ld)
+
+target_link_libraries(target_loader PRIVATE
+    amebad_sdk_includes
+    amebad_usrcfg_common
+    amebad_usrcfg_hp
+)
+
+# Per-target link delta over arm-none-eabi.cmake + amebad-km4.cmake:
+#   -T <combined.ld>             linker script
+#   -L <ld>/                     INCLUDE rlx8721d_layout_tz.ld resolves
+#   -Wl,--no-enum-size-warning   LD_ARG (KM4 doesn't have it explicitly,
+#                                added for parity with KM0)
+#   -Wl,--warn-common            same
+#   -Wl,-Map=<bin>/target_loader.map
+target_link_options(target_loader PRIVATE
+    "-T${_combined_ld}"
+    "-L${_local_ld_dir}"
+    "-Wl,--no-enum-size-warning"
+    "-Wl,--warn-common"
+    "-Wl,-Map=$<TARGET_FILE_DIR:target_loader>/target_loader.map"
+)
+
+target_compile_options(target_loader PRIVATE
+    -Wno-unused-parameter
+    -Wno-unused-variable
+    -Wno-unused-function
+    -Wno-sign-compare
+)
+
+add_custom_command(TARGET target_loader POST_BUILD
+    COMMAND "${CMAKE_SIZE}" -A --radix=16 "$<TARGET_FILE:target_loader>"
+    COMMAND "${CMAKE_SIZE}" -t --radix=16 "$<TARGET_FILE:target_loader>"
+    COMMENT "section sizes for target_loader.axf"
+    VERBATIM
+)
