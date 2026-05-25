@@ -5,18 +5,18 @@
 # version-bookkeeping bit lives here; the board logic is already covered by
 # bl<chip>_board_config/).
 #
-# Consumers must define PROJECT_SDK_VERSION (e.g. "2.3.26") before pulling
-# this component in via add_subdirectory.
+# PROJECT_SDK_VERSION is exposed as a cache STRING with a "0.0.0" default
+# so out-of-the-box builds always succeed; consuming projects override on
+# the cmake command line with -DPROJECT_SDK_VERSION=x.y.z (or set the
+# variable before pulling this component in). set() with CACHE doesn't
+# overwrite an existing value, so the override path is unaffected.
 #
 # SDK -> native CMake mapping:
 #   sdk_add_compile_definitions(-DAPP_VER_X=...) -> target_compile_definitions(... PUBLIC ...)
 #   target_sources(app PRIVATE sdk_version.c)    -> add_library(... STATIC sdk_version.c)
 
-if(NOT DEFINED PROJECT_SDK_VERSION)
-    message(FATAL_ERROR
-        "bflb_sdk_version: PROJECT_SDK_VERSION not set "
-        "(pass -DPROJECT_SDK_VERSION=x.y.z)")
-endif()
+set(PROJECT_SDK_VERSION "0.0.0" CACHE STRING
+    "Bouffalo SDK version embedded in the .version.sdk ELF section (x.y.z, each component <255)")
 
 string(REGEX MATCH "^([0-9]+)\\.([0-9]+)\\.([0-9]+)$" _matched "${PROJECT_SDK_VERSION}")
 if(NOT _matched)

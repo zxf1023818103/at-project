@@ -37,9 +37,9 @@ list(APPEND CMAKE_MODULE_PATH ${AT_PROJECT_ROOT}/cmake)
 set(CHIP "${BOUFFALO_CHIP}")
 include(proj.conf)
 
-if(NOT DEFINED PROJECT_SDK_VERSION)
-    set(PROJECT_SDK_VERSION "0.0.0" CACHE STRING "" FORCE)
-endif()
+# PROJECT_SDK_VERSION is declared (cache STRING) and validated by
+# component/bouffalo_sdk/bflb_sdk_version/CMakeLists.txt — projects can
+# override on the cmake command line with -DPROJECT_SDK_VERSION=x.y.z.
 
 # ---------------------------------------------------------------------------
 # Component tree
