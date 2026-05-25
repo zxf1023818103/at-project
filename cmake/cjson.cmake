@@ -38,3 +38,10 @@ add_subdirectory(${AT_PROJECT_ROOT}/component/cjson
 # Public headers live at the submodule root (cJSON.h, cJSON_Utils.h).
 # Upstream sets that via target_include_directories on the cjson target —
 # nothing to do here.
+
+# Stitch into the bouffalo_sdk umbrella so downstream just links
+# bouffalo_sdk and gets cjson transitively. Ameba projects don't define
+# bouffalo_sdk, hence the guard.
+if(TARGET bouffalo_sdk)
+    target_link_libraries(bouffalo_sdk INTERFACE cjson cjson_utils)
+endif()

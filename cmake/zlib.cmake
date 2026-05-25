@@ -51,3 +51,10 @@ if(TARGET zlibstatic)
         target_link_libraries(zlibstatic PRIVATE sdk_intf_lib)
     endif()
 endif()
+
+# Stitch into the bouffalo_sdk umbrella so downstream just links
+# bouffalo_sdk and gets zlibstatic transitively. Ameba projects don't
+# define bouffalo_sdk, hence the guard.
+if(TARGET bouffalo_sdk)
+    target_link_libraries(bouffalo_sdk INTERFACE zlibstatic)
+endif()

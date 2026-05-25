@@ -55,3 +55,10 @@ foreach(_t lwipcore lwipcore4 lwipcore6 lwipallapps)
         target_link_libraries(${_t} PUBLIC bflb_lwip_port)
     endif()
 endforeach()
+
+# Stitch into the bouffalo_sdk umbrella so downstream just links
+# bouffalo_sdk and gets the lwip stack transitively. Ameba projects
+# don't define bouffalo_sdk, hence the guard.
+if(TARGET bouffalo_sdk)
+    target_link_libraries(bouffalo_sdk INTERFACE lwipcore)
+endif()

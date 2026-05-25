@@ -96,3 +96,10 @@ foreach(_t mbedcrypto mbedtls mbedx509)
         target_compile_options(${_t} PRIVATE -w)
     endif()
 endforeach()
+
+# Stitch into the bouffalo_sdk umbrella so downstream just links
+# bouffalo_sdk and gets the TLS stack transitively. Ameba projects don't
+# define bouffalo_sdk, hence the guard.
+if(TARGET bouffalo_sdk)
+    target_link_libraries(bouffalo_sdk INTERFACE mbedtls mbedcrypto mbedx509)
+endif()

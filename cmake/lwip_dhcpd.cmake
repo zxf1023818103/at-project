@@ -12,3 +12,10 @@ endif()
 
 add_subdirectory(${AT_PROJECT_ROOT}/component/lwip_dhcpd
                  ${CMAKE_BINARY_DIR}/component/lwip_dhcpd)
+
+# Stitch into the bouffalo_sdk umbrella so downstream just links
+# bouffalo_sdk and gets the DHCP server transitively. Ameba projects
+# don't define bouffalo_sdk, hence the guard.
+if(TARGET bouffalo_sdk)
+    target_link_libraries(bouffalo_sdk INTERFACE lwip_dhcpd)
+endif()

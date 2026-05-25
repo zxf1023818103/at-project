@@ -26,3 +26,10 @@ include(${AT_PROJECT_ROOT}/cmake/bouffalo_sdk.cmake)    # bflb_littlefs_port + b
 add_subdirectory(${AT_PROJECT_ROOT}/component/lfs_easyflash
                  ${CMAKE_BINARY_DIR}/at_lfs_easyflash_build
                  EXCLUDE_FROM_ALL)
+
+# Stitch into the bouffalo_sdk umbrella so downstream just links
+# bouffalo_sdk and gets lfs_easyflash transitively. Ameba projects don't
+# define bouffalo_sdk, hence the guard.
+if(TARGET bouffalo_sdk)
+    target_link_libraries(bouffalo_sdk INTERFACE lfs_easyflash)
+endif()

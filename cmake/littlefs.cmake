@@ -43,4 +43,11 @@ target_compile_options(littlefs PRIVATE -w)
 # (bflb_littlefs_port, lfs_easyflash, future Ameba adapters) agree.
 target_compile_definitions(littlefs PUBLIC LFS_THREADSAFE)
 
+# Stitch into the bouffalo_sdk umbrella so downstream just links
+# bouffalo_sdk and gets littlefs transitively. Ameba projects don't define
+# bouffalo_sdk, hence the guard.
+if(TARGET bouffalo_sdk)
+    target_link_libraries(bouffalo_sdk INTERFACE littlefs)
+endif()
+
 unset(_lfs_dir)

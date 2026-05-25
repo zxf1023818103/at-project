@@ -86,67 +86,11 @@ target_include_directories(at PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/include
 )
 
-# Stitch the project-level libs (port adapters + upstream submodule
-# wrappers + Bouffalo bridges) into the bouffalo_sdk umbrella here, so
-# the app below only needs `target_link_libraries(at PRIVATE bouffalo_sdk)`.
-# Has to happen after all add_subdirectory / include() above — the
-# umbrella subdir runs first (it defines bflb_*_port, which the
-# cmake/*.cmake glue then consumes via the port's lwipopts.h /
-# mbedtls_config.h), so we can only know which TARGETs exist now.
-foreach(_lib IN ITEMS
-        bflb_lwip_port bflb_littlefs_port bflb_mbedtls_port
-        lwipcore lwip_dhcpd
-        mbedtls mbedcrypto mbedx509
-        cjson cjson_utils
-        littlefs lfs_easyflash
-        zlibstatic
-        bflb_zypher_bluetooth)
-    if(TARGET ${_lib})
-        target_link_libraries(bouffalo_sdk INTERFACE ${_lib})
-    endif()
-endforeach()
-
-# Close the linker group opened in target_link_options below. Append
-# `-Wl,--end-group` as the LAST entry of bouffalo_sdk's INTERFACE link
-# list so that when `at` links against bouffalo_sdk, the .a expansion
-# emits the close-marker as the final token after every transitively-
-# pulled archive. (Putting it directly in target_link_libraries(at ...)
-# instead lands it BEFORE the INTERFACE expansion in the link line —
-# wrong position, still warns.) Without it ld warns "missing
-# --end-group; added as last command line option" — the group still
-# closes (ld auto-appends), but the warning is noise.
-target_link_libraries(bouffalo_sdk INTERFACE -Wl,--end-group)
-
 target_link_libraries(at PRIVATE bouffalo_sdk)
 
-# Open a linker group so all archives that follow get rescanned until
-# no new undefined references resolve. The bouffalo_sdk pieces have
-# cyclic references across archives (bl602_std ↔ bflb_sysinit,
-# wifi4_manager ↔ wifi4_wpa_supplicant, libc nuttx-stdlib ↔ everything
-# pulling memset/strlen, libfirmware.a ↔ wifi4_manager, etc.) that a
-# single-pass scan can't resolve. --end-group closes via the
-# bouffalo_sdk INTERFACE-link trick above.
-target_link_options(at PRIVATE
-    -Wl,--start-group
-    -Wl,-Map=$<TARGET_FILE_BASE_NAME:at>.map
-    # Force pull-in of SDK's newlib retargets (port_memory.c / syscalls_nosys.c)
-    # from libbflb_libc.a. Without these -u refs, newlib's own _malloc_r wins
-    # (it uses ecall SYS_brk which isn't serviced on bare-metal), causing
-    # heap_end=0 and a NULL store fault inside _malloc_r on the first malloc.
-    -Wl,-u,_malloc_r
-    -Wl,-u,_free_r
-    -Wl,-u,_calloc_r
-    -Wl,-u,_realloc_r
-    -Wl,-u,_memalign_r
-    -Wl,-u,_sbrk_r
-    -Wl,-u,_sbrk
-    # The toolchain enables -flto on link, which makes gcc replay
-    # compilation of every TU in the prebuilt vendor archives
-    # (libwl80211_${chip}.a / libphyrf_${chip}.a — both shipped by the
-    # SDK as LTO-fat .a, with jenkins-build paths baked into DWARF).
-    # That replay surfaces -Wmaybe-uninitialized in upstream TUs
-    # (cntrl.c / ap.c / scan.c / phy.h) we can't touch. Quiet them at
-    # link only — compile-time -Wmaybe-uninitialized stays on for our
-    # own sources.
-    -Wno-maybe-uninitialized
-)
+# Closes the --start-group bouffalo_sdk opens on its INTERFACE link
+# options + emits the .map file. Has to run AFTER add_subdirectory above
+# so every external lib (cjson / lwip / mbedtls / …) has already stitched
+# itself into the umbrella from its own cmake/<name>.cmake — that
+# guarantees --end-group lands past every archive ld needs to resolve.
+bouffalo_sdk_finalize_link(at)

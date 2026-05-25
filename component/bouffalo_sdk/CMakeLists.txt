@@ -214,3 +214,56 @@ endif()
 if(TARGET rfparam)
     target_link_libraries(bouffalo_sdk INTERFACE rfparam)
 endif()
+
+# Port adapter libs that always get built (bflb_lwip_port / bflb_littlefs_port
+# / bflb_mbedtls_port carry headers downstream consumers transitively need
+# even when nothing references the symbols). Plus the Zephyr-derived BLE host
+# when CONFIG_BLUETOOTH is on. Stitching them in the umbrella here so that
+# downstream projects don't have to know which sub-targets exist — they just
+# do `target_link_libraries(<exe> PRIVATE bouffalo_sdk)`.
+target_link_libraries(bouffalo_sdk INTERFACE
+    bflb_lwip_port
+    bflb_littlefs_port
+    bflb_mbedtls_port
+)
+if(TARGET bflb_zypher_bluetooth)
+    target_link_libraries(bouffalo_sdk INTERFACE bflb_zypher_bluetooth)
+endif()
+
+# Open a linker group around the umbrella's transitive archives + force-pull
+# SDK's newlib retargets. Closing --end-group is the job of
+# bouffalo_sdk_finalize_link() in cmake/bouffalo_sdk.cmake, which is called
+# explicitly by the consuming executable AFTER add_subdirectory(component)
+# completes — that's the only way to guarantee the `-Wl,--end-group` token
+# is appended past every external lib (cjson / lwip / mbedtls / …) that
+# stitches itself into bouffalo_sdk's INTERFACE_LINK_LIBRARIES from its own
+# cmake/<name>.cmake glue.
+#
+# Reasons for each piece:
+#   --start-group: bouffalo_sdk has cyclic refs across archives
+#       (bl<chip>_std <-> bflb_sysinit, wifi_manager <-> wpa_supplicant,
+#        libc nuttx-stdlib <-> everything pulling memset/strlen,
+#        libfirmware.a <-> wifi_manager, …) that single-pass ld can't
+#       resolve.
+#   -u,_malloc_r etc.: SDK's port_memory.c retargets newlib's _malloc_r /
+#       _sbrk_r / friends to kmalloc() (mm subsystem), but it ships as an
+#       archive member with no consumer-side reference. Without these -u
+#       refs newlib's own _malloc_r (which goes through `ecall SYS_brk`,
+#       unserviced on bare metal) wins -> heap_end=0 -> first malloc faults.
+#   -Wno-maybe-uninitialized: the toolchain enables -flto on link, so gcc
+#       replays compilation of every TU inside the prebuilt vendor archives
+#       (libwl80211_*.a / libphyrf_*.a — shipped LTO-fat with jenkins-build
+#       paths baked into DWARF). That replay surfaces upstream warnings
+#       (cntrl.c / ap.c / scan.c / phy.h) we can't touch. Compile-time
+#       -Wmaybe-uninitialized stays on for the project's own sources.
+target_link_options(bouffalo_sdk INTERFACE
+    -Wl,--start-group
+    -Wl,-u,_malloc_r
+    -Wl,-u,_free_r
+    -Wl,-u,_calloc_r
+    -Wl,-u,_realloc_r
+    -Wl,-u,_memalign_r
+    -Wl,-u,_sbrk_r
+    -Wl,-u,_sbrk
+    -Wno-maybe-uninitialized
+)
