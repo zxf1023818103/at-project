@@ -60,7 +60,10 @@ add_custom_command(
 )
 add_custom_target(amebad_km4_img2_ld DEPENDS "${_combined_ld}")
 
-add_executable(target_img2_km4 "${_src_dir}/main.c")
+add_executable(target_img2_km4
+    "${_src_dir}/main.c"
+    "${_src_dir}/cm_backtrace_stub.c"   # weak no-op (CmBacktrace lib not in this checkout)
+)
 # WIP: the image2 link still needs the app/WiFi/mbedTLS/lwIP/log/os_dep/ftl
 # stack (~30 undefined symbols at bootstrap). EXCLUDE_FROM_ALL keeps the
 # default KM4 build (bootloader_km4 + the driver libs) green; build this
@@ -75,11 +78,14 @@ target_include_directories(target_img2_km4 SYSTEM PRIVATE
     "${CMAKE_SOURCE_DIR}/platform/ameba-rtos-d/component/common/file_system/ftl")
 
 # Archives wrapped in --start-group (cross_refs) for circular vendor refs.
+# libc (-lc) supplies __libc_init_array (KM4 has C++ global ctors; KM0 didn't)
+# plus memcpy/memset — so KM4 doesn't need the ROM memcpy alias KM0 uses.
 target_link_libraries(target_img2_km4 PRIVATE
     amebad_sdk_includes
-    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km4,amebad_ram_hp,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_monitor_km4,amebad_pmc_hp,amebad_wlan,amebad_wps>"
+    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km4,amebad_osdep_km4,amebad_ram_hp,amebad_ram_common_km4,amebad_ftl_km4,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_monitor_km4,amebad_pmc_hp,amebad_wlan,amebad_wps>"
     m
     stdc++
+    c
 )
 
 target_link_options(target_img2_km4 PRIVATE
