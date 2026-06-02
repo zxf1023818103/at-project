@@ -29,10 +29,12 @@
 # pointer moves and the SDK ships a new revision.
 set(AMEBAD_PREPEND_HEADER_SH "${CMAKE_CURRENT_SOURCE_DIR}/prepend_header.sh"
     CACHE INTERNAL "AmebaD prepend_header.sh — 32-byte LE header prepender")
+set(AMEBAD_PAD_SH "${CMAKE_CURRENT_SOURCE_DIR}/pad.sh"
+    CACHE INTERNAL "AmebaD pad.sh — pad a bin up to the next 4K with 0xFF")
 set(AMEBAD_ENCTOOL "${CMAKE_CURRENT_SOURCE_DIR}/EncTool"
     CACHE INTERNAL "AmebaD EncTool (Linux) — RSIP/SBOOT/RDP")
 
-foreach(_p "${AMEBAD_PREPEND_HEADER_SH}" "${AMEBAD_ENCTOOL}")
+foreach(_p "${AMEBAD_PREPEND_HEADER_SH}" "${AMEBAD_PAD_SH}" "${AMEBAD_ENCTOOL}")
     if(NOT EXISTS "${_p}")
         message(FATAL_ERROR "amebad/image_tool: missing '${_p}'")
     endif()
@@ -151,6 +153,101 @@ function(amebad_make_boot_all_bin AXF_TARGET OUT_NAME RSIP_ADDR)
     )
 
     # --- Stage C: optional RSIP encryption in place.
+    if(AMEBAD_RSIP_ENABLE)
+        set(_out_enc "${_imgdir}/${OUT_NAME}.enc")
+        add_custom_command(TARGET ${AXF_TARGET} POST_BUILD
+            COMMAND "${AMEBAD_ENCTOOL}" rsip
+                    "${_out_bin}" "${_out_enc}" "${RSIP_ADDR}"
+                    "${AMEBAD_RSIP_KEY}" "${AMEBAD_RSIP_IV}"
+            COMMAND "${CMAKE_COMMAND}" -E rename "${_out_enc}" "${_out_bin}"
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            BYPRODUCTS "${_out_enc}"
+            COMMENT "amebad: RSIP-encrypt ${OUT_NAME} @ ${RSIP_ADDR}"
+            VERBATIM
+        )
+    endif()
+endfunction()
+
+# ===========================================================================
+# amebad_make_image2_all_bin(<axf-target> <out-name> <rsip-xip-addr>)
+#
+# image2 (application) counterpart of amebad_make_boot_all_bin. Drives the
+# SDK's img2-axf -> km0_image2_all.bin pipeline. Differences vs. the loader:
+#   - three segments instead of two (+ .ram_retention),
+#   - image2 prepend symbols (__ram_image2_text_start__ / __flash_text_start__
+#     / __retention_entry_func__),
+#   - a 4 KB pad after cat (pad.sh),
+#   - RSIP entry is the XIP *cache* base (0x0c000000 for KM0), not the flash
+#     base the loader uses.
+#
+# Source of truth: project_lp/asdk/Makefile, the `image2:` postlink block
+# (lines 132-176) + gnu_utility/{prepend_header,pad}.sh + image_tool/
+# imagetool.sh (RSIP @ 0x0c000000, line 120).
+#
+# NB the SDK prepends ram_retention.bin but does NOT cat it into
+# km0_image2_all.bin (cat is xip_image2_prepend + ram_2_prepend only) — we
+# match that exactly; ram_retention_prepend.bin is left as a byproduct.
+#
+# Args:
+#   AXF_TARGET    add_executable() producing the image2 axf (target_img2_km0).
+#   OUT_NAME      final bin basename (km0_image2_all.bin).
+#   RSIP_ADDR     XIP cache base for RSIP: 0x0c000000 (KM0). RSIP-only.
+# ===========================================================================
+function(amebad_make_image2_all_bin AXF_TARGET OUT_NAME RSIP_ADDR)
+    set(_imgdir   "${CMAKE_CURRENT_BINARY_DIR}")
+    set(_axf      "$<TARGET_FILE:${AXF_TARGET}>")
+    set(_axf_pure "${_imgdir}/target_pure_img2.axf")
+    set(_nmmap    "${_imgdir}/target_img2.map")          # nm-sorted, for prepend
+    set(_asmdump  "${_imgdir}/target_img2.asm")
+    set(_ram_bin  "${_imgdir}/ram_2.bin")
+    set(_xip_bin  "${_imgdir}/xip_image2.bin")
+    set(_ret_bin  "${_imgdir}/ram_retention.bin")
+    set(_ram_prep "${_imgdir}/ram_2_prepend.bin")
+    set(_xip_prep "${_imgdir}/xip_image2_prepend.bin")
+    set(_ret_prep "${_imgdir}/ram_retention_prepend.bin")
+    set(_out_bin  "${_imgdir}/${OUT_NAME}")
+
+    # --- Stage A: split axf -> ram_2 / xip_image2 / ram_retention (+ nm map, asm, pure axf)
+    add_custom_command(TARGET ${AXF_TARGET} POST_BUILD
+        COMMAND bash -c "'${CMAKE_NM}' '${_axf}' | sort > '${_nmmap}'"
+        COMMAND bash -c "'${CMAKE_OBJDUMP}' -d '${_axf}' > '${_asmdump}'"
+        COMMAND "${CMAKE_COMMAND}" -E copy "${_axf}" "${_axf_pure}"
+        COMMAND "${CMAKE_STRIP}" "${_axf_pure}"
+        COMMAND "${CMAKE_OBJCOPY}"
+                -j .ram_image2.entry
+                -j .ram_image2.text
+                -j .ram_image2.data
+                -O binary "${_axf_pure}" "${_ram_bin}"
+        COMMAND "${CMAKE_OBJCOPY}"
+                -j .xip_image2.text
+                -O binary "${_axf_pure}" "${_xip_bin}"
+        COMMAND "${CMAKE_OBJCOPY}"
+                -j .ram_retention.text
+                -j .ram_retention.entry
+                -O binary "${_axf_pure}" "${_ret_bin}"
+        BYPRODUCTS
+            "${_nmmap}" "${_asmdump}" "${_axf_pure}"
+            "${_ram_bin}" "${_xip_bin}" "${_ret_bin}"
+        COMMENT "amebad: split ${AXF_TARGET} -> ram_2 / xip_image2 / ram_retention"
+        VERBATIM
+    )
+
+    # --- Stage B: prepend 32-byte headers (all three), cat xip+ram_2, 4K pad.
+    add_custom_command(TARGET ${AXF_TARGET} POST_BUILD
+        COMMAND bash "${AMEBAD_PREPEND_HEADER_SH}"
+                "${_ram_bin}" __ram_image2_text_start__   "${_nmmap}"
+        COMMAND bash "${AMEBAD_PREPEND_HEADER_SH}"
+                "${_xip_bin}" __flash_text_start__        "${_nmmap}"
+        COMMAND bash "${AMEBAD_PREPEND_HEADER_SH}"
+                "${_ret_bin}" __retention_entry_func__    "${_nmmap}"
+        COMMAND bash -c "cat '${_xip_prep}' '${_ram_prep}' > '${_out_bin}'"
+        COMMAND bash "${AMEBAD_PAD_SH}" "${_out_bin}"
+        BYPRODUCTS "${_ram_prep}" "${_xip_prep}" "${_ret_prep}" "${_out_bin}"
+        COMMENT "amebad: prepend + cat + 4K pad -> ${OUT_NAME}"
+        VERBATIM
+    )
+
+    # --- Stage C: optional RSIP encryption in place (XIP cache base).
     if(AMEBAD_RSIP_ENABLE)
         set(_out_enc "${_imgdir}/${OUT_NAME}.enc")
         add_custom_command(TARGET ${AXF_TARGET} POST_BUILD

@@ -102,6 +102,7 @@ add_custom_command(TARGET target_img2_km0 POST_BUILD
     VERBATIM
 )
 
-# Stage 2 (image2 -> km0_image2_all.bin: objcopy 3 segments, prepend IMG2SIGN
-# headers, cat, 4K pad, optional RSIP @ 0x0c000000) is added next, via an
-# image2 variant of the image_tool helper.
+# Stage 2: split axf -> ram_2 / xip_image2 / ram_retention, prepend 32-byte
+# headers, cat (xip_image2 + ram_2), 4K pad -> km0_image2_all.bin, optional
+# RSIP encrypt @ XIP cache base 0x0c000000. Helper in image_tool/.
+amebad_make_image2_all_bin(target_img2_km0 km0_image2_all.bin 0x0c000000)
