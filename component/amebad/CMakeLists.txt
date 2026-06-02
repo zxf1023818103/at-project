@@ -24,6 +24,11 @@
 #   usrcfg_lp        KM0 trustzone/sleep/audio-lp board config.
 #   usrcfg_hp        KM4 trustzone/sleep/audio-hp board config.
 #
+#   freertos_km0     FreeRTOS v10.2.0 kernel + RTL8721D_LP port (KM0 image2),
+#                    built from the component/thirdparty/freertos_amebad
+#                    submodule + 2 SDK glue .c. Built only when
+#                    AMEBAD_CHIP==amebad-km0.
+#
 #   common_ld_script INTERFACE target carrying the KM0-image ld fragments
 #                    shared across boot stages (rlx8721d_layout.ld via -L,
 #                    rlx8721d_rom_symbol_acut.ld via cat). Must be added
@@ -57,6 +62,7 @@ add_subdirectory(ram_hp)             # KM4-gated internally
 add_subdirectory(usrcfg_common)
 add_subdirectory(usrcfg_lp)          # KM0-gated internally
 add_subdirectory(usrcfg_hp)          # KM4-gated internally
+add_subdirectory(freertos_km0)       # KM0-gated internally (image2 FreeRTOS)
 add_subdirectory(image_tool)         # defines amebad_make_boot_all_bin(...)
 add_subdirectory(common_ld_script)   # shared KM0-image ld fragments + path vars
 
