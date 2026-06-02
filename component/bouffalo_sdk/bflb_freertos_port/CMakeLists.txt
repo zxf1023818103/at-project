@@ -3,7 +3,7 @@
 # Upstream's divergent files were folded back into the kernel itself: the
 # patches now live on the `bouffalo-port` branch of the
 # https://github.com/zxf1023818103/FreeRTOS-Kernel.git fork, which is what
-# component/thridparty/freertos-kernel points at. That leaves only the Bouffalo-only
+# component/thirdparty/freertos-kernel points at. That leaves only the Bouffalo-only
 # additions here:
 #
 #   freertos_port.c           Bouffalo's port glue (timer/IRQ setup, etc.)

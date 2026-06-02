@@ -18,7 +18,7 @@ project(at_project C CXX ASM)
 # Cross-platform third-party libs (cjson / littlefs / zlib). Always added —
 # AmebaD reads zlibstatic out of the user_link.list it produces, Bouffalo
 # stitches the same targets into its bouffalo_sdk umbrella below.
-add_subdirectory(component/thridparty)
+add_subdirectory(component/thirdparty)
 
 # Shared user sources (src/main.cpp + ragel-generated AT parser).
 add_subdirectory(src)

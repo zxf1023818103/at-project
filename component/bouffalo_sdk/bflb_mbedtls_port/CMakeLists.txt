@@ -40,12 +40,12 @@ target_include_directories(bflb_mbedtls_port PUBLIC
 
 # Borrow mbedcrypto's PUBLIC include set so consumers of this port see
 # mbedtls/* headers transitively, and its SOURCE_DIR
-# (= component/thridparty/mbedtls/library/) PRIVATE for the upstream-private
+# (= component/thirdparty/mbedtls/library/) PRIVATE for the upstream-private
 # bignum_core.h / bn_mul.h / common.h / constant_time_internal.h headers
 # our alt impls reach into.
 #
 # The cycle that would normally form (the mbedtls block in
-# component/thridparty/CMakeLists.txt reads port's INTERFACE_INCLUDE_DIRECTORIES
+# component/thirdparty/CMakeLists.txt reads port's INTERFACE_INCLUDE_DIRECTORIES
 # and feeds it back into mbedcrypto's INTERFACE includes) is broken on the
 # other side: that block references port's SOURCE_DIR directly instead of
 # its INTERFACE_INCLUDE_DIRECTORIES, so the propagation here is one-way.

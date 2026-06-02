@@ -54,11 +54,11 @@ else()
 endif()
 
 # ---------------------------------------------------------------------
-# Upstream lwIP 2.1.2 (component/thridparty/lwip, Bouffalo-port branch).
+# Upstream lwIP 2.1.2 (component/thirdparty/lwip, Bouffalo-port branch).
 # Lives next to the port adapter because the upstream sources are
 # unbuildable without bflb_lwip_port's lwipopts.h + arch/ headers, and
 # nothing else in the tree consumes upstream lwip directly. Keeping the
-# pull here makes the dependency one-directional — thridparty/ knows
+# pull here makes the dependency one-directional — thirdparty/ knows
 # nothing about Bouffalo.
 #
 # Bouffalo's patches replaced the upstream top-level CMakeLists with
@@ -72,7 +72,7 @@ endif()
 #   lwipallapps    bundled apps (HTTP, MDNS, SNTP, etc.) — optional
 # ---------------------------------------------------------------------
 
-set(LWIP_DIR "${CMAKE_CURRENT_LIST_DIR}/../../thridparty/lwip")
+set(LWIP_DIR "${CMAKE_CURRENT_LIST_DIR}/../../thirdparty/lwip")
 
 # bflb_lwip_port::INTERFACE_INCLUDE_DIRECTORIES gives us lwipopts.h + arch.
 get_target_property(_bflb_lwip_port_inc bflb_lwip_port INTERFACE_INCLUDE_DIRECTORIES)

@@ -18,7 +18,7 @@
 # umbrella with -DBOUFFALO_CHIP=bl602 -DCONFIG_RF=y -DCONFIG_WIFI4=y.
 # Full compile is blocked on, in order:
 #   1. lwip isn't wired into the chip-toolchain component/ tree yet.
-#      component/thridparty/lwip/CMakeLists.txt still uses SDK sdk_*
+#      component/thirdparty/lwip/CMakeLists.txt still uses SDK sdk_*
 #      macros, so the `lwipcore` target doesn't exist. wifi_mgmr_ext.h
 #      (manager's PUBLIC header) #include <lwip/netif.h>, so every
 #      consumer of wifi4 needs lwIP on the include path.
@@ -78,7 +78,7 @@ target_link_libraries(wifi4_internal_headers INTERFACE
 )
 # wpa_supplicant's crypto layer #includes <mbedtls/aes.h> unconditionally
 # (USE_MBEDTLS_CRYPTO is hardwired in supplicant_opt.h). The hw_acc
-# target carries the public include path for component/thridparty/mbedtls/include
+# target carries the public include path for component/thirdparty/mbedtls/include
 # (and the matching MBEDTLS_*_ALT macros via bflb_mbedtls_config).
 if(TARGET bflb_mbedtls_hw_acc)
     target_link_libraries(wifi4_internal_headers INTERFACE bflb_mbedtls_hw_acc)

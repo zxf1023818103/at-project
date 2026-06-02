@@ -1,7 +1,7 @@
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../src
                  ${CMAKE_BINARY_DIR}/src)
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../component/thridparty
-                 ${CMAKE_BINARY_DIR}/component/thridparty)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../component/thirdparty
+                 ${CMAKE_BINARY_DIR}/component/thirdparty)
 
 set(private_compile_options
     $<$<COMPILE_LANGUAGE:CXX>:-Wno-error=unused-function>

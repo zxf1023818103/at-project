@@ -21,7 +21,7 @@
 #                                            (at-project branch — only diff
 #                                             from upstream is the symlink
 #                                             ./littlefs -> ../../littlefs)
-#        component/thridparty/littlefs/     upstream littlefs (v2.8.2),
+#        component/thirdparty/littlefs/     upstream littlefs (v2.8.2),
 #                                            reached through the symlink
 #                                            so the runtime SDK adapters
 #                                            and the host image builder

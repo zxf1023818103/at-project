@@ -1,6 +1,6 @@
 # Bouffalo-specific subtree. Entered only when BOUFFALO_CHIP is set (the
 # root CMakeLists.txt gates this add_subdirectory). Cross-platform pieces
-# (component/thridparty/, src/) live up at the root instead.
+# (component/thirdparty/, src/) live up at the root instead.
 #
 #   bouffalo_sdk         the Bouffalo Lab SDK extraction (HAL + chip-std
 #                        + sysinit + port adapters + wifi/BT/RF stacks).
@@ -93,7 +93,7 @@ target_link_libraries(bouffalo_sdk INTERFACE lwip_dhcpd)
 # ---------------------------------------------------------------------
 # lfs_easyflash — EasyFlash KV API on top of upstream littlefs. Hard
 # prereqs (already registered by this point):
-#   littlefs            from thridparty/
+#   littlefs            from thirdparty/
 #   bflb_littlefs_port  from bouffalo_sdk
 #   freertos_kernel + bflb_log
 # ---------------------------------------------------------------------

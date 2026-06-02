@@ -10,7 +10,7 @@
 # that add_subdirectory's this one). We can rely on it being set + valid
 # by the time we get here.
 
-# FreeRTOS-Kernel (component/thridparty/freertos-kernel, the bouffalo-port
+# FreeRTOS-Kernel (component/thirdparty/freertos-kernel, the bouffalo-port
 # branch on the zxf1023818103 fork). Configure it BEFORE add_subdirectory
 # so the kernel's CMakeLists can read FREERTOS_PORT + freertos_config.
 if(NOT TARGET freertos_config)
@@ -36,8 +36,8 @@ endif()
 set(FREERTOS_PORT GCC_RISC_V CACHE STRING "FreeRTOS port name" FORCE)
 if(NOT TARGET freertos_kernel)
     add_subdirectory(
-        "${CMAKE_CURRENT_SOURCE_DIR}/../thridparty/freertos-kernel"
-        "${CMAKE_BINARY_DIR}/component/thridparty/freertos-kernel"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty/freertos-kernel"
+        "${CMAKE_BINARY_DIR}/component/thirdparty/freertos-kernel"
     )
 endif()
 
@@ -68,7 +68,7 @@ if(NOT "${BOUFFALO_CHIP}" STREQUAL "bl602")
     add_subdirectory(bflb_power_mgmt)
 endif()
 # Bouffalo's lwIP port layer (arch + lwipopts.h + ethernetif + sys_arch).
-# Always built — the lwip block in component/thridparty/CMakeLists.txt
+# Always built — the lwip block in component/thirdparty/CMakeLists.txt
 # hard-requires this target, and a few
 # bflb_* libs include lwipopts.h transitively. Lib is tiny when nothing
 # pulls it.
@@ -76,7 +76,7 @@ add_subdirectory(bflb_lwip_port)
 
 # Bouffalo's littlefs XIP-flash backend (lfs_xip_init + the four lfs_config
 # read/prog/erase/sync callbacks). Always built so consumers of the
-# `littlefs` target from component/thridparty/ find a backend; tiny
+# `littlefs` target from component/thirdparty/ find a backend; tiny
 # when nothing links it.
 add_subdirectory(bflb_littlefs_port)
 
@@ -90,8 +90,8 @@ add_subdirectory(bflb_mbedtls_port)
 add_subdirectory(bflb_mbedtls_hw_acc)
 
 # -------------------------------------------------------------------------
-# Upstream Mbed TLS v3.6.4 (component/thridparty/mbedtls, clean upstream).
-# Pulled here — not in component/thridparty/CMakeLists.txt — because the
+# Upstream Mbed TLS v3.6.4 (component/thirdparty/mbedtls, clean upstream).
+# Pulled here — not in component/thirdparty/CMakeLists.txt — because the
 # upstream sources are unbuildable without bflb_mbedtls_config /
 # _port / _hw_acc headers, and nothing outside the Bouffalo SDK consumes
 # upstream mbedtls. Keeps the dependency one-directional.
@@ -136,7 +136,7 @@ include_directories("${CMAKE_CURRENT_LIST_DIR}/bflb_mbedtls_hw_acc")
 # Same story for the port header named by MBEDTLS_PLATFORM_STD_MEM_HDR.
 include_directories("${CMAKE_CURRENT_LIST_DIR}/bflb_mbedtls_port")
 
-add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../thridparty/mbedtls"
+add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../thirdparty/mbedtls"
                  ${CMAKE_BINARY_DIR}/at_mbedtls_build
                  EXCLUDE_FROM_ALL)
 
@@ -312,7 +312,7 @@ if(TARGET bflb_zypher_bluetooth)
     target_link_libraries(bouffalo_sdk INTERFACE bflb_zypher_bluetooth)
 endif()
 
-# Cross-platform third-party libs from component/thridparty/ (built by its
+# Cross-platform third-party libs from component/thirdparty/ (built by its
 # own CMakeLists, which knows nothing about Bouffalo) + the upstream lwip
 # and mbedtls targets pulled in by the bflb_lwip_port and upstream-mbedtls
 # blocks above. Sticking them on the umbrella here keeps the dependency
@@ -339,7 +339,7 @@ target_link_libraries(bouffalo_sdk INTERFACE
 # INTERFACE target. Without linking against it zlib gets the toolchain's
 # default ABI (RV64GC) and bl616 link fails with "ABI is incompatible
 # with that of the selected emulation". Wired here, not on zlibstatic's
-# own block in thridparty/, because sdk_intf_lib is a Bouffalo-only
+# own block in thirdparty/, because sdk_intf_lib is a Bouffalo-only
 # target — keeping the dependency one-directional.
 if(TARGET sdk_intf_lib)
     target_link_libraries(zlibstatic PRIVATE sdk_intf_lib)

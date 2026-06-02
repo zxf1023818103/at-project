@@ -1,7 +1,7 @@
 # bflb_mbedtls_config — INTERFACE target that exports the Bouffalo
 # mbedtls config header search path. Upstream Mbed TLS compiles every
 # TU with -DMBEDTLS_CONFIG_FILE=<some name>; we set that macro in
-# the mbedtls block of component/thridparty/CMakeLists.txt to
+# the mbedtls block of component/thirdparty/CMakeLists.txt to
 # "config-tls-generic.h" — and this directory is what makes that name resolve.
 #
 # Why upstream is left clean: the Bouffalo config (config-tls-generic.h)
@@ -34,7 +34,7 @@ target_include_directories(bflb_mbedtls_config INTERFACE
 # Propagate MBEDTLS_CONFIG_FILE so every consumer (port, hw_acc, upstream
 # mbedcrypto/mbedtls/mbedx509, the supplicant TUs that #include
 # <mbedtls/aes.h>, …) sees the same config. The mbedtls block in
-# component/thridparty/CMakeLists.txt also sets this via
+# component/thirdparty/CMakeLists.txt also sets this via
 # add_compile_definitions, but only the post-include targets get covered
 # by that — INTERFACE propagation through this
 # link catches the targets added earlier (hw_acc, port, the wifi4

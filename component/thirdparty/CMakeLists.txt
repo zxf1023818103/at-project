@@ -17,7 +17,7 @@
 # + freertos_config and adds the kernel directly).
 #
 # To add a new cross-platform submodule:
-#   1. git submodule add <url> component/thridparty/<name>
+#   1. git submodule add <url> component/thirdparty/<name>
 #   2. add a block below — option knobs, add_subdirectory(<name> ...),
 #      warning-silence.
 #   3. wire the target into the consuming project via target_link_libraries.
