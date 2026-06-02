@@ -32,9 +32,9 @@ add_library(amebad_monitor_km0 STATIC
 
 # Headers come via amebad_sdk_includes (app/monitor/include, swlib/string for
 # strproc.h, os_dep, fwlib). monitor_lp.c pulls freertos_pmu.h / FreeRTOS.h, so
-# also link amebad_freertos_km0 to get the submodule FreeRTOS headers (it
-# PUBLIC-links amebad_sdk_includes transitively).
-target_link_libraries(amebad_monitor_km0 PUBLIC amebad_freertos_km0)
+# also link the upstream FreeRTOS kernel to get the submodule FreeRTOS headers
+# (it PUBLIC-links amebad_sdk_includes transitively).
+target_link_libraries(amebad_monitor_km0 PUBLIC FreeRTOS)
 
 target_compile_options(amebad_monitor_km0 PRIVATE
     -Wno-unused-parameter

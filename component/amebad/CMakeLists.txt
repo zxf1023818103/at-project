@@ -24,10 +24,12 @@
 #   usrcfg_lp        KM0 trustzone/sleep/audio-lp board config.
 #   usrcfg_hp        KM4 trustzone/sleep/audio-hp board config.
 #
-#   freertos_km0     FreeRTOS v10.2.0 kernel + RTL8721D_LP port (KM0 image2),
-#                    built from the component/thirdparty/freertos_amebad
-#                    submodule + 2 SDK glue .c. Built only when
-#                    AMEBAD_CHIP==amebad-km0.
+#   freertos         Upstream FreeRTOS v10.2.0 kernel from the
+#                    component/thirdparty/freertos_amebad submodule. Target
+#                    `FreeRTOS` (kernel + chip port + heap_5 only). KM0 today.
+#   freertos_glue_km0
+#                    AmebaD SDK FreeRTOS extensions (freertos_backtrace_ext /
+#                    freertos_heap5_config) kept out of the upstream kernel lib.
 #   monitor_km0      KM0 debug monitor / shell (shell_init_ram), SDK app/monitor
 #                    referenced in-place. KM0 only.
 #   app_km0          KM0 LP application image (image2): links the above into
@@ -67,7 +69,8 @@ add_subdirectory(ram_hp)             # KM4-gated internally
 add_subdirectory(usrcfg_common)
 add_subdirectory(usrcfg_lp)          # KM0-gated internally
 add_subdirectory(usrcfg_hp)          # KM4-gated internally
-add_subdirectory(freertos_km0)       # KM0-gated internally (image2 FreeRTOS)
+add_subdirectory(freertos)           # upstream FreeRTOS kernel -> target `FreeRTOS`
+add_subdirectory(freertos_glue_km0)  # SDK FreeRTOS extensions (after freertos)
 add_subdirectory(monitor_km0)        # KM0-gated internally (image2 shell/monitor)
 add_subdirectory(image_tool)         # defines amebad_make_boot_all_bin(...)
 add_subdirectory(common_ld_script)   # shared KM0-image ld fragments + path vars
