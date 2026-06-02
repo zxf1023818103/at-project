@@ -70,8 +70,10 @@ add_subdirectory(usrcfg_common)
 add_subdirectory(usrcfg_lp)          # KM0-gated internally
 add_subdirectory(usrcfg_hp)          # KM4-gated internally
 add_subdirectory(freertos)           # upstream FreeRTOS kernel -> target `FreeRTOS`
-add_subdirectory(freertos_glue_km0)  # SDK FreeRTOS extensions (after freertos)
+add_subdirectory(freertos_glue_km0)  # SDK FreeRTOS extensions, KM0 (after freertos)
+add_subdirectory(freertos_glue_km4)  # SDK FreeRTOS extensions, KM4 (after freertos)
 add_subdirectory(monitor_km0)        # KM0-gated internally (image2 shell/monitor)
+add_subdirectory(monitor_km4)        # KM4-gated internally (image2 shell/monitor)
 add_subdirectory(image_tool)         # defines amebad_make_boot_all_bin(...)
 add_subdirectory(common_ld_script)   # shared KM0-image ld fragments + path vars
 
@@ -81,4 +83,5 @@ if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
     add_subdirectory(app_km0)              # KM0 LP application image (image2)
 elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     add_subdirectory(bootloader_km4)
+    add_subdirectory(app_km4)              # KM4 HP application image (image2)
 endif()

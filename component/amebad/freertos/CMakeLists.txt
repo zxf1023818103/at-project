@@ -15,15 +15,22 @@
 # FreeRTOSConfig.h (project inc_lp), the port's portmacro.h, os_dep and
 # -DCONFIG_PLATFORM_8721D come via amebad_sdk_includes.
 
-# Chip -> GCC port directory. KM0 LP today; KM4 HP is TrustZone-split
-# (RTL8721D_HP/{non_secure,secure}) and gets wired when KM4 image2 lands.
+set(_frt "${CMAKE_SOURCE_DIR}/component/thirdparty/freertos_amebad/FreeRTOS/Source")
+
+# Chip -> GCC port. KM0 LP is a single port.c; KM4 HP (image2 = non-secure)
+# is the TrustZone non_secure port = port.c + portasm.c. The secure/* half of
+# the HP port belongs to the secure image, not image2, so it stays out.
 if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
     set(_port "GCC/RTL8721D_LP")
+    set(_port_srcs "${_frt}/portable/${_port}/port.c")
+elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
+    set(_port "GCC/RTL8721D_HP/non_secure")
+    set(_port_srcs
+        "${_frt}/portable/${_port}/port.c"
+        "${_frt}/portable/${_port}/portasm.c")
 else()
     return()
 endif()
-
-set(_frt "${CMAKE_SOURCE_DIR}/component/thirdparty/freertos_amebad/FreeRTOS/Source")
 
 if(NOT EXISTS "${_frt}/tasks.c")
     message(FATAL_ERROR
@@ -39,7 +46,7 @@ add_library(FreeRTOS STATIC
     "${_frt}/event_groups.c"
     "${_frt}/croutine.c"
     "${_frt}/stream_buffer.c"
-    "${_frt}/portable/${_port}/port.c"
+    ${_port_srcs}
     "${_frt}/portable/MemMang/heap_5.c"
 )
 

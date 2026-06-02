@@ -1,0 +1,110 @@
+# AmebaD KM4 HP application image (image2, non-secure) — produces
+# target_img2_km4.axf. **Bootstrap / WIP**: the full KM4 image2 links the
+# entire WiFi / network / mbedTLS / BT / AT stack (dozens of prebuilt .a plus
+# source groups). This wires the driver-level pieces (FreeRTOS HP, ram_hp,
+# board config, monitor, PMC) and the image2 ld; the rest is future work.
+#
+# Mirrors project_hp/asdk/Makefile linker_image2_ns:
+#   RAM_OBJS -> FreeRTOS(HP) + ram_hp + usrcfg_* + monitor_km4 + main.c
+#   ROM      -> rlx8721d_rom_symbol_acut.ld (HP non-secure PROVIDE table;
+#               CONFIG_LINK_ROM_SYMB=1, no rom_ns.a). Common HAL (UART/RTC/...)
+#               comes from ROM here, NOT ram_common — like bootloader_km4.
+#   APP_LIB  -> prebuilt lib_pmc_hp.a (+ lib_wlan.a / lib_wps.a for WiFi) + -lm
+#               -lstdc++ (KM4 image has C++).
+#
+# img2 ld: rlx8721d_img2_is.ld (non-TrustZone) -> INCLUDE rlx8721d_layout_is.ld
+#   (BD_RAM_NS / KM4_IMG2 @ 0x0e000000 / PSRAM_NS). RSIP (when enabled) @
+#   the XIP cache base 0x0e000000.
+#
+# main.c + the ld/ scripts are project-local copies of the SDK
+# (src_hp/main.c, project_hp ld/).
+
+if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km4")
+    return()
+endif()
+
+set(_src_dir      "${CMAKE_CURRENT_SOURCE_DIR}/src")
+set(_local_ld_dir "${CMAKE_CURRENT_SOURCE_DIR}/ld")
+
+foreach(_p
+        "${_src_dir}/main.c"
+        "${_local_ld_dir}/rlx8721d_img2_is.ld"
+        "${_local_ld_dir}/rlx8721d_layout_is.ld"
+        "${_local_ld_dir}/rlx8721d_rom_symbol_acut.ld")
+    if(NOT EXISTS "${_p}")
+        message(FATAL_ERROR "amebad/app_km4: missing '${_p}'")
+    endif()
+endforeach()
+
+# Prebuilt KM4 vendor archives (tracked in the ameba-rtos-d submodule).
+set(_hp_lib "${CMAKE_SOURCE_DIR}/platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_hp/asdk/lib/application")
+add_library(amebad_pmc_hp STATIC IMPORTED)
+set_target_properties(amebad_pmc_hp PROPERTIES IMPORTED_LOCATION "${_hp_lib}/lib_pmc_hp.a")
+add_library(amebad_wlan STATIC IMPORTED)
+set_target_properties(amebad_wlan PROPERTIES IMPORTED_LOCATION "${_hp_lib}/lib_wlan.a")
+add_library(amebad_wps STATIC IMPORTED)
+set_target_properties(amebad_wps PROPERTIES IMPORTED_LOCATION "${_hp_lib}/lib_wps.a")
+
+# Linker script: cat img2_is.ld + rom_symbol_acut.ld; img2_is.ld does
+# INCLUDE "rlx8721d_layout_is.ld", resolved through -L below.
+set(_img2_ld     "${_local_ld_dir}/rlx8721d_img2_is.ld")
+set(_rom_sym_ld  "${_local_ld_dir}/rlx8721d_rom_symbol_acut.ld")
+set(_layout_ld   "${_local_ld_dir}/rlx8721d_layout_is.ld")
+set(_combined_ld "${CMAKE_CURRENT_BINARY_DIR}/rlx8721d.ld")
+add_custom_command(
+    OUTPUT  "${_combined_ld}"
+    COMMAND "${CMAKE_COMMAND}" -E cat "${_img2_ld}" "${_rom_sym_ld}" > "${_combined_ld}"
+    DEPENDS "${_img2_ld}" "${_rom_sym_ld}" "${_layout_ld}"
+    COMMENT "concat KM4 image2 linker script"
+    VERBATIM
+)
+add_custom_target(amebad_km4_img2_ld DEPENDS "${_combined_ld}")
+
+add_executable(target_img2_km4 "${_src_dir}/main.c")
+# WIP: the image2 link still needs the app/WiFi/mbedTLS/lwIP/log/os_dep/ftl
+# stack (~30 undefined symbols at bootstrap). EXCLUDE_FROM_ALL keeps the
+# default KM4 build (bootloader_km4 + the driver libs) green; build this
+# target explicitly to continue closing the link:
+#   cmake --build <dir> -t target_img2_km4
+set_target_properties(target_img2_km4 PROPERTIES EXCLUDE_FROM_ALL TRUE)
+set_property(TARGET target_img2_km4 APPEND PROPERTY LINK_DEPENDS "${_combined_ld}")
+add_dependencies(target_img2_km4 amebad_km4_img2_ld)
+
+# main.c #includes ftl_int.h (FTL), which lives outside the sdk_includes set.
+target_include_directories(target_img2_km4 SYSTEM PRIVATE
+    "${CMAKE_SOURCE_DIR}/platform/ameba-rtos-d/component/common/file_system/ftl")
+
+# Archives wrapped in --start-group (cross_refs) for circular vendor refs.
+target_link_libraries(target_img2_km4 PRIVATE
+    amebad_sdk_includes
+    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km4,amebad_ram_hp,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_monitor_km4,amebad_pmc_hp,amebad_wlan,amebad_wps>"
+    m
+    stdc++
+)
+
+target_link_options(target_img2_km4 PRIVATE
+    "-T${_combined_ld}"
+    "-L${_local_ld_dir}"
+    "-Wl,--no-enum-size-warning"
+    "-Wl,--warn-common"
+    "-Wl,-Map=$<TARGET_FILE_DIR:target_img2_km4>/target_img2.map"
+)
+
+target_compile_options(target_img2_km4 PRIVATE
+    -Wno-unused-parameter
+    -Wno-unused-variable
+    -Wno-unused-function
+    -Wno-sign-compare
+)
+
+add_custom_command(TARGET target_img2_km4 POST_BUILD
+    COMMAND "${CMAKE_SIZE}" -A --radix=16 "$<TARGET_FILE:target_img2_km4>"
+    COMMAND "${CMAKE_SIZE}" -t --radix=16 "$<TARGET_FILE:target_img2_km4>"
+    COMMENT "section sizes for target_img2_km4"
+    VERBATIM
+)
+
+# Stage 2 (image2 -> km4_image2_all.bin) is NOT wired yet: KM4 image2 has
+# different segments than KM0 (.psram_image2.* instead of .ram_retention, plus
+# .bluetooth_trace) and RSIP @ 0x0e000000, so it needs a KM4 variant of the
+# image_tool helper. Deferred until the image2 link is complete.
