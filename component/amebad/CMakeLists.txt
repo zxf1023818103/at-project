@@ -77,6 +77,7 @@ add_subdirectory(monitor_km4)        # KM4-gated internally (image2 shell/monito
 add_subdirectory(osdep_km4)          # KM4-gated internally (osdep/os abstraction)
 add_subdirectory(ram_common_km4)     # KM4-gated internally (ipc/gdma/flash/libc subset)
 add_subdirectory(ftl_km4)            # KM4-gated internally (flash translation layer)
+add_subdirectory(at_cmd_km4)         # KM4-gated internally (basic AT log/command service)
 add_subdirectory(image_tool)         # defines amebad_make_boot_all_bin(...)
 add_subdirectory(common_ld_script)   # shared KM0-image ld fragments + path vars
 

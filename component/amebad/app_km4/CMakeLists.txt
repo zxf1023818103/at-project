@@ -40,10 +40,8 @@ endforeach()
 set(_hp_lib "${CMAKE_SOURCE_DIR}/platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_hp/asdk/lib/application")
 add_library(amebad_pmc_hp STATIC IMPORTED)
 set_target_properties(amebad_pmc_hp PROPERTIES IMPORTED_LOCATION "${_hp_lib}/lib_pmc_hp.a")
-add_library(amebad_wlan STATIC IMPORTED)
-set_target_properties(amebad_wlan PROPERTIES IMPORTED_LOCATION "${_hp_lib}/lib_wlan.a")
-add_library(amebad_wps STATIC IMPORTED)
-set_target_properties(amebad_wps PROPERTIES IMPORTED_LOCATION "${_hp_lib}/lib_wps.a")
+# (lib_wlan.a / lib_wps.a intentionally not linked — this minimal image2 has no
+# WiFi. They come back when the WiFi stack is wired.)
 
 # Linker script: cat img2_is.ld + rom_symbol_acut.ld; img2_is.ld does
 # INCLUDE "rlx8721d_layout_is.ld", resolved through -L below.
@@ -63,6 +61,7 @@ add_custom_target(amebad_km4_img2_ld DEPENDS "${_combined_ld}")
 add_executable(target_img2_km4
     "${_src_dir}/main.c"
     "${_src_dir}/cm_backtrace_stub.c"   # weak no-op (CmBacktrace lib not in this checkout)
+    "${_src_dir}/minimal_stubs.c"       # weak CRYPTO_Init / rtw_if_wifi_thread (no TLS/WiFi)
 )
 # WIP: the image2 link still needs the app/WiFi/mbedTLS/lwIP/log/os_dep/ftl
 # stack (~30 undefined symbols at bootstrap). EXCLUDE_FROM_ALL keeps the
@@ -82,7 +81,7 @@ target_include_directories(target_img2_km4 SYSTEM PRIVATE
 # plus memcpy/memset — so KM4 doesn't need the ROM memcpy alias KM0 uses.
 target_link_libraries(target_img2_km4 PRIVATE
     amebad_sdk_includes
-    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km4,amebad_osdep_km4,amebad_ram_hp,amebad_ram_common_km4,amebad_ftl_km4,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_monitor_km4,amebad_pmc_hp,amebad_wlan,amebad_wps>"
+    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km4,amebad_osdep_km4,amebad_ram_hp,amebad_ram_common_km4,amebad_ftl_km4,amebad_at_cmd_km4,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_monitor_km4,amebad_pmc_hp>"
     m
     stdc++
     c
@@ -110,7 +109,7 @@ add_custom_command(TARGET target_img2_km4 POST_BUILD
     VERBATIM
 )
 
-# Stage 2 (image2 -> km4_image2_all.bin) is NOT wired yet: KM4 image2 has
-# different segments than KM0 (.psram_image2.* instead of .ram_retention, plus
-# .bluetooth_trace) and RSIP @ 0x0e000000, so it needs a KM4 variant of the
-# image_tool helper. Deferred until the image2 link is complete.
+# Stage 2: split axf -> ram_2 / xip_image2 / psram_2, prepend 32-byte headers,
+# cat (xip + ram_2 + psram_2), 4K pad -> km4_image2_all.bin, optional RSIP @
+# the KM4 XIP cache base 0x0e000000. Helper in image_tool/.
+amebad_make_image2_all_bin_hp(target_img2_km4 km4_image2_all.bin 0x0e000000)

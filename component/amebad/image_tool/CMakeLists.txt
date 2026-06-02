@@ -262,3 +262,88 @@ function(amebad_make_image2_all_bin AXF_TARGET OUT_NAME RSIP_ADDR)
         )
     endif()
 endfunction()
+
+# ===========================================================================
+# amebad_make_image2_all_bin_hp(<axf-target> <out-name> <rsip-xip-addr>)
+#
+# KM4 (HP) image2 packaging. Like the KM0 amebad_make_image2_all_bin but the
+# third segment is PSRAM, not retention, and — unlike KM0's ram_retention —
+# it IS cat'd into the final bin:
+#   ram_2       .ram_image2.entry/text/data    prepend __ram_image2_text_start__
+#   xip_image2  .xip_image2.text               prepend __flash_text_start__
+#   psram_2     .psram_image2.text/data        prepend __psram_image2_text_start__
+#   cat: xip_image2_prepend + ram_2_prepend + psram_2_prepend -> km4_image2_all.bin
+#   pad.sh (4 KB); RSIP (optional) @ the KM4 XIP cache base 0x0e000000.
+#
+# (For the minimal no-PSRAM firmware the .psram_image2 sections are empty, so
+# psram_2 is just a 32-byte header — harmless, matches the SDK.)
+#
+# Source of truth: project_hp/asdk/Makefile image2_is postlink (lines 447-485)
+# + image_tool/imagetool.sh (RSIP @ 0x0e000000).
+# ===========================================================================
+function(amebad_make_image2_all_bin_hp AXF_TARGET OUT_NAME RSIP_ADDR)
+    set(_imgdir   "${CMAKE_CURRENT_BINARY_DIR}")
+    set(_axf      "$<TARGET_FILE:${AXF_TARGET}>")
+    set(_axf_pure "${_imgdir}/target_pure_img2.axf")
+    set(_nmmap    "${_imgdir}/target_img2.map")
+    set(_asmdump  "${_imgdir}/target_img2.asm")
+    set(_ram_bin  "${_imgdir}/ram_2.bin")
+    set(_xip_bin  "${_imgdir}/xip_image2.bin")
+    set(_psr_bin  "${_imgdir}/psram_2.bin")
+    set(_ram_prep "${_imgdir}/ram_2_prepend.bin")
+    set(_xip_prep "${_imgdir}/xip_image2_prepend.bin")
+    set(_psr_prep "${_imgdir}/psram_2_prepend.bin")
+    set(_out_bin  "${_imgdir}/${OUT_NAME}")
+
+    # --- Stage A: split axf -> ram_2 / xip_image2 / psram_2 (+ nm map, asm, pure axf)
+    add_custom_command(TARGET ${AXF_TARGET} POST_BUILD
+        COMMAND bash -c "'${CMAKE_NM}' '${_axf}' | sort > '${_nmmap}'"
+        COMMAND bash -c "'${CMAKE_OBJDUMP}' -d '${_axf}' > '${_asmdump}'"
+        COMMAND "${CMAKE_COMMAND}" -E copy "${_axf}" "${_axf_pure}"
+        COMMAND "${CMAKE_STRIP}" "${_axf_pure}"
+        COMMAND "${CMAKE_OBJCOPY}"
+                -j .ram_image2.entry -j .ram_image2.text -j .ram_image2.data
+                -O binary "${_axf_pure}" "${_ram_bin}"
+        COMMAND "${CMAKE_OBJCOPY}"
+                -j .xip_image2.text
+                -O binary "${_axf_pure}" "${_xip_bin}"
+        COMMAND "${CMAKE_OBJCOPY}"
+                -j .psram_image2.text -j .psram_image2.data
+                -O binary "${_axf_pure}" "${_psr_bin}"
+        BYPRODUCTS
+            "${_nmmap}" "${_asmdump}" "${_axf_pure}"
+            "${_ram_bin}" "${_xip_bin}" "${_psr_bin}"
+        COMMENT "amebad: split ${AXF_TARGET} -> ram_2 / xip_image2 / psram_2"
+        VERBATIM
+    )
+
+    # --- Stage B: prepend 32-byte headers (all three), cat xip+ram_2+psram_2, 4K pad.
+    add_custom_command(TARGET ${AXF_TARGET} POST_BUILD
+        COMMAND bash "${AMEBAD_PREPEND_HEADER_SH}"
+                "${_ram_bin}" __ram_image2_text_start__   "${_nmmap}"
+        COMMAND bash "${AMEBAD_PREPEND_HEADER_SH}"
+                "${_xip_bin}" __flash_text_start__        "${_nmmap}"
+        COMMAND bash "${AMEBAD_PREPEND_HEADER_SH}"
+                "${_psr_bin}" __psram_image2_text_start__ "${_nmmap}"
+        COMMAND bash -c "cat '${_xip_prep}' '${_ram_prep}' '${_psr_prep}' > '${_out_bin}'"
+        COMMAND bash "${AMEBAD_PAD_SH}" "${_out_bin}"
+        BYPRODUCTS "${_ram_prep}" "${_xip_prep}" "${_psr_prep}" "${_out_bin}"
+        COMMENT "amebad: prepend + cat + 4K pad -> ${OUT_NAME}"
+        VERBATIM
+    )
+
+    # --- Stage C: optional RSIP encryption in place (KM4 XIP cache base).
+    if(AMEBAD_RSIP_ENABLE)
+        set(_out_enc "${_imgdir}/${OUT_NAME}.enc")
+        add_custom_command(TARGET ${AXF_TARGET} POST_BUILD
+            COMMAND "${AMEBAD_ENCTOOL}" rsip
+                    "${_out_bin}" "${_out_enc}" "${RSIP_ADDR}"
+                    "${AMEBAD_RSIP_KEY}" "${AMEBAD_RSIP_IV}"
+            COMMAND "${CMAKE_COMMAND}" -E rename "${_out_enc}" "${_out_bin}"
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            BYPRODUCTS "${_out_enc}"
+            COMMENT "amebad: RSIP-encrypt ${OUT_NAME} @ ${RSIP_ADDR}"
+            VERBATIM
+        )
+    endif()
+endfunction()
