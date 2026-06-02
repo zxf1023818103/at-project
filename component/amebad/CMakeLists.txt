@@ -28,6 +28,11 @@
 #                    built from the component/thirdparty/freertos_amebad
 #                    submodule + 2 SDK glue .c. Built only when
 #                    AMEBAD_CHIP==amebad-km0.
+#   monitor_km0      KM0 debug monitor / shell (shell_init_ram), SDK app/monitor
+#                    referenced in-place. KM0 only.
+#   app_km0          KM0 LP application image (image2): links the above into
+#                    target_img2_km0.axf + the prebuilt lib_pmc_lp / lib_wifi_fw.
+#                    KM0 only.
 #
 #   common_ld_script INTERFACE target carrying the KM0-image ld fragments
 #                    shared across boot stages (rlx8721d_layout.ld via -L,
@@ -63,12 +68,14 @@ add_subdirectory(usrcfg_common)
 add_subdirectory(usrcfg_lp)          # KM0-gated internally
 add_subdirectory(usrcfg_hp)          # KM4-gated internally
 add_subdirectory(freertos_km0)       # KM0-gated internally (image2 FreeRTOS)
+add_subdirectory(monitor_km0)        # KM0-gated internally (image2 shell/monitor)
 add_subdirectory(image_tool)         # defines amebad_make_boot_all_bin(...)
 add_subdirectory(common_ld_script)   # shared KM0-image ld fragments + path vars
 
 if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
     add_subdirectory(bootloader_km0)
     add_subdirectory(bootloader_km0_2nd)   # opt-in via AMEBAD_ENABLE_2ND_BOOT
+    add_subdirectory(app_km0)              # KM0 LP application image (image2)
 elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     add_subdirectory(bootloader_km4)
 endif()

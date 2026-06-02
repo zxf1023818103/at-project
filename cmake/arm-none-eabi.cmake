@@ -74,6 +74,15 @@ set(CMAKE_SIZE         "${_prefix}size${_exe}"    CACHE FILEPATH "")
 # build a static library instead of an executable.
 set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
 
+# $<LINK_GROUP:cross_refs,...> -> -Wl,--start-group ... -Wl,--end-group, for
+# resolving circular references among static archives (e.g. the image2 link's
+# prebuilt vendor libs <-> our HAL/FreeRTOS libs). CMake doesn't predefine a
+# LINK_GROUP feature for the Generic (bare-metal) platform, so define one here.
+set(CMAKE_C_LINK_GROUP_USING_cross_refs_SUPPORTED   TRUE)
+set(CMAKE_C_LINK_GROUP_USING_cross_refs   "LINKER:--start-group" "LINKER:--end-group")
+set(CMAKE_CXX_LINK_GROUP_USING_cross_refs_SUPPORTED TRUE)
+set(CMAKE_CXX_LINK_GROUP_USING_cross_refs "LINKER:--start-group" "LINKER:--end-group")
+
 if(AMEBAD_TOOLCHAIN_ROOT)
     set(CMAKE_FIND_ROOT_PATH "${AMEBAD_TOOLCHAIN_ROOT}")
 endif()
