@@ -30,25 +30,13 @@ if(BOUFFALO_CHIP)
     add_subdirectory(component)
 endif()
 
-# AmebaD KM0 bootloader subtree. Gated on AMEBAD_CHIP (set by
-# cmake/amebad-km0.cmake) so the legacy AmebaD SDK flow
+# AmebaD bootloader subtree. Gated on AMEBAD_CHIP (set by
+# cmake/amebad-km{0,4}.cmake) so the legacy AmebaD SDK flow
 # (`cmake -S <root>` with no chip toolchain, used only to produce
-# user_link.list) doesn't enter the bootloader recipe.
+# user_link.list) doesn't enter the bootloader recipe. Per-module
+# add_subdirectory()s live in component/amebad/CMakeLists.txt.
 if(AMEBAD_CHIP MATCHES "^amebad-km[04]$")
-    add_subdirectory(component/amebad/fwlib_headers)
-    add_subdirectory(component/amebad/sdk_includes)
-    add_subdirectory(component/amebad/ram_common)     # KM0-gated (KM4 uses ROM)
-    add_subdirectory(component/amebad/ram_lp)         # KM0-gated
-    add_subdirectory(component/amebad/ram_hp)         # KM4-gated
-    add_subdirectory(component/amebad/usrcfg_common)  # both cores (chip-agnostic .c)
-    add_subdirectory(component/amebad/usrcfg_lp)      # KM0-gated
-    add_subdirectory(component/amebad/usrcfg_hp)      # KM4-gated
-    if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
-        add_subdirectory(component/amebad/bootloader_km0)
-        add_subdirectory(component/amebad/bootloader_km0_2nd)  # opt-in via AMEBAD_ENABLE_2ND_BOOT
-    elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
-        add_subdirectory(component/amebad/bootloader_km4)
-    endif()
+    add_subdirectory(component/amebad)
 endif()
 
 # Forward src/'s AT_USER_SOURCES / AT_USER_SRC_DIR one more scope up so a

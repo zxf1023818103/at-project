@@ -66,6 +66,8 @@ set(CMAKE_AR           "${_prefix}ar${_exe}"      CACHE FILEPATH "")
 set(CMAKE_RANLIB       "${_prefix}ranlib${_exe}"  CACHE FILEPATH "")
 set(CMAKE_OBJCOPY      "${_prefix}objcopy${_exe}" CACHE FILEPATH "")
 set(CMAKE_OBJDUMP      "${_prefix}objdump${_exe}" CACHE FILEPATH "")
+set(CMAKE_NM           "${_prefix}nm${_exe}"      CACHE FILEPATH "")
+set(CMAKE_STRIP        "${_prefix}strip${_exe}"   CACHE FILEPATH "")
 set(CMAKE_SIZE         "${_prefix}size${_exe}"    CACHE FILEPATH "")
 
 # Bare-metal: the compiler-probe link step has no runtime to link against, so

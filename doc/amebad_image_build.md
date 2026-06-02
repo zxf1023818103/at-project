@@ -159,22 +159,143 @@ ROM 里提供的（典型代码示例 `boot_ram_lp.c`/`boot_flash_lp.c` 调到�
 | Include only | C 头文件 | ~70 个 .h | `target_include_directories()` 指向 fwlib/include/ + bootloader/include/ + usrcfg/include/ |
 | ROM PROVIDE | `.ld` 里的常量符号 | KM0: 709 行，KM4: 320 行 | 直接 `cat ld/rlx8721d_rom_symbol_acut.ld >> $(BUILD)/rlx8721d.ld`（保留原 SDK 文件即可） |
 
-## 四、`km{0,4}_image2_all.bin`（application）流水线
+## 四、`km0_image2_all.bin`（application）流水线
 
-跟 boot 是同一套机制，只是换段名 + 换 ld：
+跟 boot stage 是同一套 `link → objcopy 切段 → prepend → cat → imagetool` 骨架，但跟 loader 比有 5 个非平凡差异，下面以 KM0 image2 为模板逐步展开，KM4 那侧的差异另起一小节。
 
-| 维度 | bootloader stage | image2 stage |
+### 4.1 顶层 make 调用链
+
+[Makefile:72](../platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_lp/asdk/Makefile#L72)：
+
+```
+image2: build_target_folder copy_ld_img2 check_toolchain build_info.h make_subdirs linker_image2
+```
+
+跟 loader 的差异：
+- `copy_ld_img2`（[Makefile:475-477](../platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_lp/asdk/Makefile#L475-L477)）改拷 `ld/rlx8721d_img2.ld`（loader 拷的是 `rlx8721d_boot.ld`），后面同样 `cat rlx8721d_rom_symbol_acut.ld >>` 进 `build/rlx8721d.ld`。
+- `make_subdirs`（[Makefile:110-116](../platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_lp/asdk/Makefile#L110-L116)）下钻 `make/Makefile`，递归进 6 个 sub-Makefile（`test` / `os` / `monitor` / `target` / `cmsis` / `project`），每个产 `.o` 进 `build/ram/`。
+  - 对比 loader 走 `make_subdirs_bootloader`：只进 `make/bootloader/`，2 个 `.c`。
+
+### 4.2 link `target_img2.axf` — 输入清单
+
+[Makefile:134](../platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_lp/asdk/Makefile#L134)：
+
+```
+$(LD) $(LD_ARG) target_img2.axf $(RAM_OBJS_LIST) $(LINK_ROM_LIB) $(LINK_APP_LIB)
+```
+
+| 链接输入 | image2 stage 内容 |
+|---|---|
+| `RAM_OBJS_LIST = ./build/ram/*.o` | `make_subdirs` 产物（FreeRTOS / monitor / fwlib / project glue …） |
+| `LINK_ROM_LIB` | 空（`CONFIG_LINK_ROM_SYMB=y` 默认走 `ld` PROVIDE，跟 loader 同） |
+| `LINK_APP_LIB` ([Makefile:62](../platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_lp/asdk/Makefile#L62), [64](../platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_lp/asdk/Makefile#L64)) | `lib/application/lib_pmc_lp.a`（总是）<br>+ `lib/application/lib_wifi_fw.a`（`image2` 目标）<br>或 `lib_wifi_ucps_fw.a`（`ucps_image2` 目标） |
+
+### 4.3 拆 `.axf` → 3 个裸 bin
+
+[Makefile:147-154](../platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_lp/asdk/Makefile#L147-L154) 三次 `FROMELF` 跑在 `target_pure_img2.axf`（strip 过的副本）上：
+
+| 抽出的段 | 输出 bin | 典型大小 |
 |---|---|---|
-| ld 模板 (KM0) | `ld/rlx8721d_boot.ld` | `ld/rlx8721d_img2.ld` |
-| ld 模板 (KM4) | `ld/rlx8721d_img1_s.ld` | `ld/rlx8721d_img2_is.ld`<br>（TZ 时 `rlx8721d_img2_tz.ld`） |
-| axf 名 | `target_loader.axf` | `target_img2.axf` |
-| 抽段（FROMELF） | `.ram_image1.{entry,text,data}` → `ram_1.bin`<br>`.xip_image1.text` → `xip_boot.bin` | `.ram_image2.{entry,text,data}` → `ram_2.bin`<br>`.xip_image2.text` → `xip_image2.bin`<br>**KM0 多**：`.ram_retention.{text,entry}` → `ram_retention.bin`<br>**KM4 多**：`.psram_image2.*` → `psram_2.bin` |
-| prepend symbol | `__ram_start_table_start__`<br>`__flash_boot_text_start__` | `__ram_image2_text_start__`<br>`__flash_text_start__`<br>`__retention_entry_func__`（仅 KM0）<br>`__psram_image2_text_start__`（仅 KM4） |
-| cat 顺序 → 最终 bin | xip_boot + ram_1 → `km{0,4}_boot_all.bin` | xip_image2 + ram_2 [+ ram_retention 或 + psram_2] → `km{0,4}_image2_all.bin` |
-| 编入的 module 范围 | 仅 `bootloader` 一个模块（5 个 .c） | `make_subdirs` — 全部 33（KM4） / 13（KM0）个 module |
-| imagetool.sh 加密 | RSIP @ 0x0800_0000 (KM0) / 0x0800_4000 (KM4)<br>KM4 还可 SBOOT 签名 | RSIP @ 0x0c00_0000 (KM0) / 0x0e00_0000 (KM4) — XIP 区域 |
+| `.ram_image2.{entry,text,data}` | `ram_2.bin` | ~9 KB（FreeRTOS + RAM 常驻代码 / data） |
+| `.xip_image2.text` | `xip_image2.bin` | ~84 KB（XIP code/rodata，主负载） |
+| `.ram_retention.{entry,text}` | `ram_retention.bin` | ~100 B（deep-sleep wake-up stub） |
 
-`km0_image2_all.bin` build 完之后还会被 `OTAPREPENDTOOL`（`gnu_utility/prepend_ota_header.sh`）合并进 KM4 一侧的 `km0_km4_image2.bin`，再由 KM4 的 OTA 流程封成 `OTA_All.bin`。
+对比 loader 只产 2 段（`ram_1.bin` + `xip_boot.bin`）。
+
+linker script ([ld/rlx8721d_img2.ld](../platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_lp/asdk/ld/rlx8721d_img2.ld)) 定义对应 output section → memory region：
+- `.ram_image2.*` → `BD_RAM`
+- `.xip_image2.text` → `KM0_IMG2`（flash，XIP）
+- `.ram_retention.*` → `RETENTION_RAM`
+
+### 4.4 prepend 32 byte 头 —— 注意 magic 跟 loader 不一样
+
+[Makefile:170-172](../platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_lp/asdk/Makefile#L170-L172) 三次 `prepend_header.sh`：
+
+| input bin | nm 里查的 symbol | header magic |
+|---|---|---|
+| `ram_2.bin` | `__ram_image2_text_start__` | `IMG2SIGN = 0x3831_3935_3837_3131`（ASCII `"81958711"`） |
+| `xip_image2.bin` | `__flash_text_start__` | 同上 |
+| `ram_retention.bin` | `__retention_entry_func__` | 同上 |
+
+→ **跟 loader 的关键差异**：[prepend_header.sh:76-84](../platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_lp/asdk/gnu_utility/prepend_header.sh#L76-L84) 里 `if IMAGE_FILENAME == ram_1.bin || == xip_boot.bin` 时用双 pattern (`99 99 96 96 / 3F CC 66 FC`)，**其他文件名一律用 IMG2SIGN**。所以 `km0_image2_all.bin` 头 8 byte 是 `38 31 39 35 38 37 31 31`，跟 `km0_boot_all.bin` 完全不同。
+
+### 4.5 cat + pad → `km0_image2_all.bin`
+
+[Makefile:175-176](../platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_lp/asdk/Makefile#L175-L176)：
+
+```
+cat xip_image2_prepend.bin ram_2_prepend.bin > km0_image2_all.bin
+pad.sh km0_image2_all.bin                   # 向上对齐到 4 KB (0x1000) 用 0xFF
+```
+
+[pad.sh](../platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_lp/asdk/gnu_utility/pad.sh) 实现就是 `newsize = ((filesize - 1) >> 12) + 1) << 12`，跟 4 KB 边界对齐。
+
+SDK reference 实测：`84032 + 9408 = 93440 → pad → 94208 = 0x17000`。
+
+**坑（跟旧文档 + 直觉不一致）**：`ram_retention_prepend.bin` 虽然 4.4 步生成出来了，但**从来没有 cat 进 `km0_image2_all.bin`**。它在 `image/` 留作 orphan — retention RAM 的代码通过 linker LMA 已经落在 `.xip_image2.text` 区域里了，独立 prepend 是 SDK 的历史 vestigial 文件。
+
+→ 对照之下 loader stage 是 `cat xip_boot_prepend ram_1_prepend > km{0,4}_boot_all.bin`，**无 pad**。
+
+### 4.6 imagetool.sh：RSIP + 跨核 KM0/KM4 合并
+
+[Makefile:178](../platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_lp/asdk/Makefile#L178)：
+
+```
+imagetool.sh km0_image2_all.bin $(KM4_BUILDDIR)/asdk/image
+```
+
+参数 `$2 = KM4 的 image 目录`（loader stage 只传 `$1`）。脚本走 [imagetool.sh:144-175](../platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_lp/asdk/gnu_utility/image_tool/imagetool.sh#L144-L175) `km0_image2_all.bin` 分支：
+
+1. `EncTool rsip km0_image2_all.bin km0_image2_all-en.bin **0x0c00_0000** RSIP_KEY RSIP_IV`
+   - 注意 RSIP 入口地址用的是 **XIP cache base** (`0x0c00_0000`)，不是 flash physical base — flash 内容不变，只是 RSIP IV-stream 用 XIP 地址做 counter。
+2. 读 KM4 build 出来的 `km4_image2_all.bin`（从 `$COPY_PATH`），同样 `EncTool rsip` 加密 @ **`0x0e00_0000`**。
+3. `cat km0_image2_all-en.bin km4_image2_all-en.bin > km0_km4_image2_tmp.bin`
+4. （如果 `RDP_ENABLE=1`）`cat km0_km4_image2_tmp.bin km4_image3_all-en.bin > km0_km4_image2.bin`
+5. `cp km0_km4_image2.bin → KM4 dir`
+
+然后 [Makefile:180-182](../platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_lp/asdk/Makefile#L180-L182) 调 `prepend_ota_header.sh` 把 `km0_km4_image2.bin` 包成 KM4 dir 下的 `OTA_All.bin`。
+
+→ 这里有个隐含约束：KM0 的 `image2` 目标必须在 KM4 的 `image2` 目标之后再跑（或者交叉跑），因为 imagetool 在 KM0 这一侧拼合需要 KM4 那边的 `km4_image2_all.bin` 已经存在。`project/amebad/Makefile` 串行 `amebad_lp` → `amebad_hp` 是按这个顺序，但 KM4 的 imagetool 也做了相同的拼合（一边一份）—— 谁后跑谁覆盖。
+
+### 4.7 KM4 image2 stage 差异
+
+跟 KM0 image2 平行，差异：
+
+| 维度 | KM0 image2 | KM4 image2 |
+|---|---|---|
+| ld 模板 | `rlx8721d_img2.ld` | `rlx8721d_img2_is.ld`（TZ off）/ `rlx8721d_img2_tz.ld`（TZ on） |
+| 额外抽段 | `.ram_retention.*` → `ram_retention.bin`（orphan） | `.psram_image2.*` → `psram_2.bin`（**这个是真要 cat 进去**） |
+| 额外 prepend symbol | `__retention_entry_func__`（orphan） | `__psram_image2_text_start__` |
+| 最终 cat 顺序 | `xip_image2 + ram_2 → km0_image2_all.bin` | `xip_image2 + ram_2 + psram_2 → km4_image2_all.bin` |
+| imagetool RSIP 入口 | `0x0c00_0000` | `0x0e00_0000`（外加 TZ 时还要 SBOOT 签名 / RDP 加密 image3） |
+
+### 4.8 vs loader stage 一表对照
+
+| 维度 | loader (`km{0,4}_boot_all.bin`) | image2 (`km{0,4}_image2_all.bin`) |
+|---|---|---|
+| make 目标 | `bootloader` | `image2` / `ucps_image2` |
+| `make_subdirs_*` | `_bootloader`（2 个 `.c`） | `make_subdirs`（6 个 sub-Makefile，~ 全部 module） |
+| 额外 prebuilt lib | 无 | `lib_pmc_lp.a` + `lib_wifi_fw.a` |
+| ld 模板 (KM0) | `rlx8721d_boot.ld` | `rlx8721d_img2.ld` |
+| ld 模板 (KM4) | `rlx8721d_img1_s.ld` | `rlx8721d_img2_is.ld` / `_tz.ld` |
+| FROMELF 抽段 | `.ram_image1.*` + `.xip_image1.text` | `.ram_image2.*` + `.xip_image2.text` + (KM0) `.ram_retention.*` orphan / (KM4) `.psram_image2.*` |
+| prepend magic | `PATTERN_1=0x9999_9696` + `PATTERN_2=0x3FCC_66FC` 双 pattern | `IMG2SIGN=0x3831_3935_3837_3131`（ASCII `"81958711"`） |
+| cat → 最终 bin | `xip_boot + ram_1` | (KM0) `xip_image2 + ram_2` / (KM4) `xip_image2 + ram_2 + psram_2` |
+| pad 后处理 | 无 | `pad.sh` → 4 KB 对齐 |
+| imagetool RSIP 入口 | `0x0800_0000` (KM0) / `0x0800_4000` (KM4)，flash physical base | `0x0c00_0000` (KM0) / `0x0e00_0000` (KM4)，**XIP cache base** |
+| imagetool 跨核合并 | 无 | KM0+KM4 都各自跑 imagetool 时会做 `cat km0_image2-en km4_image2-en > km0_km4_image2.bin` |
+| OTA header | 无 | `prepend_ota_header.sh` 包出 `OTA_All.bin` |
+
+### 4.9 CMake-ify 时的差异点
+
+延续 `component/amebad/image_tool/CMakeLists.txt` 里 `amebad_make_boot_all_bin()` 的设计，image2 至少要：
+
+1. **多抽一段** — KM0 加 `.ram_retention.{entry,text}` (orphan，但 SDK 实际产文件)；KM4 加 `.psram_image2.{entry,text,data,rodata}` (必须 cat 进去)。
+2. **prepend symbol 换** — 见 4.4 表（注意 IMG2SIGN magic 是自动的，`prepend_header.sh` 按文件名判断）。
+3. **cat 顺序换** — `xip_image2_prepend + ram_2_prepend [+ psram_2_prepend]` → `km{0,4}_image2_all.bin`。
+4. **pad.sh 4 KB 对齐** — 单独一步，loader 没有这步。
+5. **RSIP 入口换** — XIP cache base (`0x0c00_0000` / `0x0e00_0000`) 而不是 flash base。
+6. **跨核合并** — 跟今天的 chip toolchain 分离布局正面冲突：每次 cmake 调用只配一个 chip 的 toolchain，没法在一个 build 树里同时拿到 km0 + km4 的产物。要么 (a) 在 project/amebad 顶层 build 系统外串两次 cmake 后做合并；要么 (b) 不再用 chip toolchain，回退到一份 toolchain 多 add_subdirectory + 用 CMake [target language flags] 切 KM0/KM4 ABI。后者改动较大，估计走 (a) 更现实。
 
 ## 五、工具清单
 

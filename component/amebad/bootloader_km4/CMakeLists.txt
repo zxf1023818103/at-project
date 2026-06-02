@@ -1,4 +1,4 @@
-# AmebaD KM4 HP bootloader — produces target_loader.axf.
+# AmebaD KM4 HP bootloader — produces the target_loader_km4 ELF.
 #
 # Stage 1 of the KM4 image pipeline: ELF/AXF link only. Mirrors
 # bootloader_km0/ — same recipe, KM4-specific sources + ld scripts.
@@ -63,15 +63,12 @@ add_custom_command(
 )
 add_custom_target(amebad_km4_loader_ld DEPENDS "${_combined_ld}")
 
-add_executable(target_loader ${_loader_srcs})
-set_target_properties(target_loader PROPERTIES
-    SUFFIX      ".axf"
-    OUTPUT_NAME "target_loader"
-)
-set_property(TARGET target_loader APPEND PROPERTY LINK_DEPENDS "${_combined_ld}")
-add_dependencies(target_loader amebad_km4_loader_ld)
+# Suffixed _km4 — see bootloader_km0/CMakeLists.txt for the rationale.
+add_executable(target_loader_km4 ${_loader_srcs})
+set_property(TARGET target_loader_km4 APPEND PROPERTY LINK_DEPENDS "${_combined_ld}")
+add_dependencies(target_loader_km4 amebad_km4_loader_ld)
 
-target_link_libraries(target_loader PRIVATE
+target_link_libraries(target_loader_km4 PRIVATE
     amebad_sdk_includes
     amebad_usrcfg_common
     amebad_usrcfg_hp
@@ -84,24 +81,29 @@ target_link_libraries(target_loader PRIVATE
 #                                added for parity with KM0)
 #   -Wl,--warn-common            same
 #   -Wl,-Map=<bin>/target_loader.map
-target_link_options(target_loader PRIVATE
+target_link_options(target_loader_km4 PRIVATE
     "-T${_combined_ld}"
     "-L${_local_ld_dir}"
     "-Wl,--no-enum-size-warning"
     "-Wl,--warn-common"
-    "-Wl,-Map=$<TARGET_FILE_DIR:target_loader>/target_loader.map"
+    "-Wl,-Map=$<TARGET_FILE_DIR:target_loader_km4>/target_loader.map"
 )
 
-target_compile_options(target_loader PRIVATE
+target_compile_options(target_loader_km4 PRIVATE
     -Wno-unused-parameter
     -Wno-unused-variable
     -Wno-unused-function
     -Wno-sign-compare
 )
 
-add_custom_command(TARGET target_loader POST_BUILD
-    COMMAND "${CMAKE_SIZE}" -A --radix=16 "$<TARGET_FILE:target_loader>"
-    COMMAND "${CMAKE_SIZE}" -t --radix=16 "$<TARGET_FILE:target_loader>"
-    COMMENT "section sizes for target_loader.axf"
+add_custom_command(TARGET target_loader_km4 POST_BUILD
+    COMMAND "${CMAKE_SIZE}" -A --radix=16 "$<TARGET_FILE:target_loader_km4>"
+    COMMAND "${CMAKE_SIZE}" -t --radix=16 "$<TARGET_FILE:target_loader_km4>"
+    COMMENT "section sizes for target_loader_km4"
     VERBATIM
 )
+
+# Stage 2: split ELF -> ram_1.bin / xip_boot.bin, prepend 32-byte headers,
+# cat -> km4_boot_all.bin, optional RSIP encrypt @ 0x08004000. Helper is
+# defined in component/amebad/image_tool/CMakeLists.txt.
+amebad_make_boot_all_bin(target_loader_km4 km4_boot_all.bin 0x08004000)
