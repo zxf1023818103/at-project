@@ -18,41 +18,37 @@ else()
     return()
 endif()
 
-set(_mon "${CMAKE_CURRENT_SOURCE_DIR}")
-
-# Shared across both cores.
-add_library(amebad_monitor_common STATIC
-    "${_mon}/ram/shell_ram.c"
-    "${_mon}/ram/rtl_trace.c"
-    "${_mon}/ram/low_level_io.c"
+# Vendor-code warning suppression, shared by the libs below.
+set(_monitor_warnings
+    -Wno-unused-parameter
+    -Wno-unused-variable
+    -Wno-unused-function
+    -Wno-sign-compare
 )
-# monitor sources pull freertos_pmu.h / FreeRTOS.h; link the kernel (which
-# PUBLIC-links amebad_sdk_includes for the monitor/swlib/os_dep/fwlib headers).
-target_link_libraries(amebad_monitor_common PUBLIC FreeRTOS)
 
-set(_mon_targets amebad_monitor_common)
+# Shared across both cores. monitor sources pull freertos_pmu.h / FreeRTOS.h;
+# link the kernel (which PUBLIC-links amebad_sdk_includes for the monitor /
+# swlib / os_dep / fwlib headers).
+add_library(amebad_monitor_common STATIC
+    ram/shell_ram.c
+    ram/rtl_trace.c
+    ram/low_level_io.c
+)
+target_link_libraries(amebad_monitor_common PUBLIC FreeRTOS)
+target_compile_options(amebad_monitor_common PRIVATE ${_monitor_warnings})
 
 # Per-core monitor entry; links the shared lib (PUBLIC so consumers that link a
 # per-core monitor also pull amebad_monitor_common).
 if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
-    add_library(amebad_monitor_km0 STATIC "${_mon}/ram/monitor_lp.c")
+    add_library(amebad_monitor_km0 STATIC ram/monitor_lp.c)
     target_link_libraries(amebad_monitor_km0 PUBLIC amebad_monitor_common)
-    list(APPEND _mon_targets amebad_monitor_km0)
+    target_compile_options(amebad_monitor_km0 PRIVATE ${_monitor_warnings})
 elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     add_library(amebad_monitor_km4 STATIC
-        "${_mon}/ram/monitor_hp.c"
-        "${_mon}/rom/shell_rom.c"
-        "${_mon}/rom/monitor_rom.c"
+        ram/monitor_hp.c
+        rom/shell_rom.c
+        rom/monitor_rom.c
     )
     target_link_libraries(amebad_monitor_km4 PUBLIC amebad_monitor_common)
-    list(APPEND _mon_targets amebad_monitor_km4)
+    target_compile_options(amebad_monitor_km4 PRIVATE ${_monitor_warnings})
 endif()
-
-foreach(_t ${_mon_targets})
-    target_compile_options(${_t} PRIVATE
-        -Wno-unused-parameter
-        -Wno-unused-variable
-        -Wno-unused-function
-        -Wno-sign-compare
-    )
-endforeach()
