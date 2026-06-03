@@ -9,7 +9,8 @@ param(
     [string]$Port    = 'COM29',
     [int]   $Baud    = 1500000,
     [int]   $Seconds = 5,
-    [switch]$NoReset
+    [switch]$NoReset,
+    [string]$Send
 )
 $ErrorActionPreference = 'Stop'
 
@@ -24,6 +25,11 @@ try {
         $sp.RtsEnable = $true     # CHIP_EN 低
         Start-Sleep -Milliseconds 120
         $sp.RtsEnable = $false    # CHIP_EN 高 -> 启动
+    }
+    if ($Send) {
+        Start-Sleep -Milliseconds 300
+        Write-Host "[send] '$Send' + CRLF"
+        $sp.Write($Send + "`r`n")
     }
     Write-Host "[log] reading $Port @ $Baud for ${Seconds}s ..."
     $buf = New-Object 'System.Collections.Generic.List[byte]'
