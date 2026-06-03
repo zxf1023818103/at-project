@@ -3,9 +3,9 @@
 # (app/monitor/) into this folder.
 #
 # Split into a shared lib + a per-core lib (the per-core lib links the shared one):
-#   amebad_monitor_common  ram/{shell_ram,rtl_trace,low_level_io}.c  (both cores)
-#   amebad_monitor         per-core entry — KM0: ram/monitor_lp.c;
-#                          KM4: ram/monitor_hp.c + rom/{shell_rom,monitor_rom}.c
+#   amebad_monitor_common  {shell_ram,rtl_trace,low_level_io}.c  (both cores)
+#   amebad_monitor         per-core entry — KM0: monitor_lp.c;
+#                          KM4: monitor_hp.c + {shell_rom,monitor_rom}.c
 # KM0 and KM4 are separate builds, so the per-core lib uses one name (amebad_monitor,
 # no _km0/_km4 suffix — they never coexist). amebad_monitor_common is ABI-specific,
 # compiled under whichever chip toolchain is configured. Headers come from
@@ -30,9 +30,9 @@ set(_monitor_warnings
 # link the kernel (which PUBLIC-links amebad_sdk_includes for the monitor /
 # swlib / os_dep / fwlib headers).
 add_library(amebad_monitor_common STATIC
-    ram/shell_ram.c
-    ram/rtl_trace.c
-    ram/low_level_io.c
+    shell_ram.c
+    rtl_trace.c
+    low_level_io.c
 )
 target_link_libraries(amebad_monitor_common PUBLIC FreeRTOS)
 target_compile_options(amebad_monitor_common PRIVATE ${_monitor_warnings})
@@ -41,12 +41,12 @@ target_compile_options(amebad_monitor_common PRIVATE ${_monitor_warnings})
 # per-core monitor also pull amebad_monitor_common). Same target name on both
 # cores — they're never in the same build.
 if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
-    add_library(amebad_monitor STATIC ram/monitor_lp.c)
+    add_library(amebad_monitor STATIC monitor_lp.c)
 elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     add_library(amebad_monitor STATIC
-        ram/monitor_hp.c
-        rom/shell_rom.c
-        rom/monitor_rom.c
+        monitor_hp.c
+        shell_rom.c
+        monitor_rom.c
     )
 endif()
 target_link_libraries(amebad_monitor PUBLIC amebad_monitor_common)
