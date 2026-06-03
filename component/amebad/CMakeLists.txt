@@ -33,7 +33,8 @@
 #                    amebad_freertos_glue_km0 or _km4 from the same sources.
 #   monitor          AmebaD debug monitor / shell (shell_init_ram), vendored
 #                    from SDK app/monitor. One chip-gated CMakeLists builds
-#                    amebad_monitor_km0 or _km4 from the shared sources.
+#                    amebad_monitor_common (shared) + amebad_monitor (per-core
+#                    entry — monitor_lp on KM0 / monitor_hp+rom on KM4).
 #   app_km0          KM0 LP application image (image2): links the above into
 #                    target_img2_km0.axf + the prebuilt lib_pmc_lp / lib_wifi_fw.
 #                    KM0 only.

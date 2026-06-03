@@ -70,7 +70,7 @@ add_dependencies(target_img2_km0 amebad_km0_img2_ld)
 target_link_libraries(target_img2_km0 PRIVATE
     amebad_sdk_includes
     amebad_common_ld_script
-    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km0,amebad_ram_common,amebad_ram_lp,amebad_usrcfg_common,amebad_usrcfg_lp,amebad_monitor_km0,amebad_monitor_common,amebad_pmc_lp,amebad_wifi_fw>"
+    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km0,amebad_ram_common,amebad_ram_lp,amebad_usrcfg_common,amebad_usrcfg_lp,amebad_monitor,amebad_monitor_common,amebad_pmc_lp,amebad_wifi_fw>"
     m
 )
 

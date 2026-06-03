@@ -4,13 +4,13 @@
 #
 # Split into a shared lib + a per-core lib (the per-core lib links the shared one):
 #   amebad_monitor_common  ram/{shell_ram,rtl_trace,low_level_io}.c  (both cores)
-#   amebad_monitor_km0     ram/monitor_lp.c                          (KM0)
-#   amebad_monitor_km4     ram/monitor_hp.c + rom/{shell_rom,monitor_rom}.c (KM4)
-# The shared sources are ABI-specific, so amebad_monitor_common is compiled under
-# whichever chip toolchain is configured. Target names are kept so the app_km0 /
-# app_km4 link groups don't change (they list both the per-core lib and the
-# common lib). Headers come from amebad_sdk_includes (app/monitor/include,
-# swlib/string, os_dep, fwlib) via the FreeRTOS link below.
+#   amebad_monitor         per-core entry — KM0: ram/monitor_lp.c;
+#                          KM4: ram/monitor_hp.c + rom/{shell_rom,monitor_rom}.c
+# KM0 and KM4 are separate builds, so the per-core lib uses one name (amebad_monitor,
+# no _km0/_km4 suffix — they never coexist). amebad_monitor_common is ABI-specific,
+# compiled under whichever chip toolchain is configured. Headers come from
+# amebad_sdk_includes (app/monitor/include, swlib/string, os_dep, fwlib) via the
+# FreeRTOS link below.
 
 if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
 elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
@@ -37,18 +37,17 @@ add_library(amebad_monitor_common STATIC
 target_link_libraries(amebad_monitor_common PUBLIC FreeRTOS)
 target_compile_options(amebad_monitor_common PRIVATE ${_monitor_warnings})
 
-# Per-core monitor entry; links the shared lib (PUBLIC so consumers that link a
-# per-core monitor also pull amebad_monitor_common).
+# Per-core monitor entry; links the shared lib (PUBLIC so consumers that link the
+# per-core monitor also pull amebad_monitor_common). Same target name on both
+# cores — they're never in the same build.
 if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
-    add_library(amebad_monitor_km0 STATIC ram/monitor_lp.c)
-    target_link_libraries(amebad_monitor_km0 PUBLIC amebad_monitor_common)
-    target_compile_options(amebad_monitor_km0 PRIVATE ${_monitor_warnings})
+    add_library(amebad_monitor STATIC ram/monitor_lp.c)
 elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
-    add_library(amebad_monitor_km4 STATIC
+    add_library(amebad_monitor STATIC
         ram/monitor_hp.c
         rom/shell_rom.c
         rom/monitor_rom.c
     )
-    target_link_libraries(amebad_monitor_km4 PUBLIC amebad_monitor_common)
-    target_compile_options(amebad_monitor_km4 PRIVATE ${_monitor_warnings})
 endif()
+target_link_libraries(amebad_monitor PUBLIC amebad_monitor_common)
+target_compile_options(amebad_monitor PRIVATE ${_monitor_warnings})
