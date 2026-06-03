@@ -18,10 +18,11 @@
 #                    AMEBAD_CHIP==amebad-km0.
 #   ram_hp           KM4-only HAL ".c"s. Built only when AMEBAD_CHIP==amebad-km4.
 #
-#   usrcfg           Board config, one chip-gated CMakeLists over per-group
-#                    subfolders: usrcfg_common (common/ — bootcfg/ipccfg/wificfg,
-#                    built for both cores), usrcfg_lp (lp/ — KM0 flash/intf/
-#                    pinmap/sleep), usrcfg_hp (hp/ — KM4 trustzone/interface).
+#   usrcfg           Board config, one chip-gated CMakeLists over a flat folder;
+#                    the SDK filename infix selects the lib: usrcfg_common
+#                    (rtl8721d_* — bootcfg/ipccfg/wificfg, both cores), usrcfg_lp
+#                    (rtl8721dlp_* — KM0 flash/intf/pinmap/sleep), usrcfg_hp
+#                    (rtl8721dhp_* — KM4 trustzone/interface).
 #
 #   freertos         Upstream FreeRTOS-Kernel V10.6.2 from the
 #                    component/thirdparty/freertos-kernel submodule (shared with
