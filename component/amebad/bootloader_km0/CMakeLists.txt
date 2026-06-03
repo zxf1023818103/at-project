@@ -9,10 +9,10 @@
 # and the LD_ARG block in
 #   platform/ameba-rtos-d/.../project_lp/asdk/Makefile.include.gen (lines 293-313).
 #
-# Sources (src/) and linker scripts (ld/) are project-local copies of the
-# SDK files — see Stage 1.5 in the plan. Resync against the SDK when the
+# Sources and linker scripts are project-local copies of the SDK files (flat in
+# this folder) — see Stage 1.5 in the plan. Resync against the SDK when the
 # platform/ameba-rtos-d submodule pointer moves:
-#   diff -q component/amebad/bootloader_km0/src/boot_ram_lp.c \
+#   diff -q component/amebad/bootloader_km0/boot_ram_lp.c \
 #           platform/ameba-rtos-d/component/soc/realtek/amebad/bootloader/boot_ram_lp.c
 #
 # Headers + IFLAGS come transitively through amebad_sdk_includes.
@@ -28,14 +28,12 @@ if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km0")
         "(AMEBAD_CHIP='${AMEBAD_CHIP}', expected 'amebad-km0')")
 endif()
 
-# Project-local copies of SDK sources / linker scripts.
-set(_src_dir       "${CMAKE_CURRENT_SOURCE_DIR}/src")
-set(_local_ld_dir  "${CMAKE_CURRENT_SOURCE_DIR}/ld")
+# Project-local copies of SDK sources / linker scripts (flat in this folder).
 
 # Sanity check — friendlier than a downstream "file not found" from gcc/ld.
 foreach(_p
-        "${_src_dir}/boot_ram_lp.c"
-        "${_local_ld_dir}/rlx8721d_boot.ld"
+        "${CMAKE_CURRENT_SOURCE_DIR}/boot_ram_lp.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_boot.ld"
         "${AMEBAD_COMMON_LAYOUT_LD}")
     if(NOT EXISTS "${_p}")
         message(FATAL_ERROR "amebad/bootloader_km0: missing '${_p}'")
@@ -43,8 +41,8 @@ foreach(_p
 endforeach()
 
 set(_loader_srcs
-    "${_src_dir}/boot_ram_lp.c"             # SDK: bootloader/boot_ram_lp.c
-    "${_src_dir}/boot_flash_lp.c"           # SDK: bootloader/boot_flash_lp.c
+    "${CMAKE_CURRENT_SOURCE_DIR}/boot_ram_lp.c"             # SDK: bootloader/boot_ram_lp.c
+    "${CMAKE_CURRENT_SOURCE_DIR}/boot_flash_lp.c"           # SDK: bootloader/boot_flash_lp.c
 )
 
 # Linker script: cat boot.ld + rom_symbol_acut.ld into build dir
@@ -52,7 +50,7 @@ set(_loader_srcs
 # layout.ld + rom_symbol_acut.ld are the KM0-image fragments shared via
 # component/amebad/common_ld_script/ (AMEBAD_COMMON_*_LD); only boot.ld
 # stays local to this stage.
-set(_boot_ld       "${_local_ld_dir}/rlx8721d_boot.ld")
+set(_boot_ld       "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_boot.ld")
 set(_rom_symbol_ld "${AMEBAD_COMMON_ROM_SYMBOL_LD}")
 set(_layout_ld     "${AMEBAD_COMMON_LAYOUT_LD}")
 set(_combined_ld   "${CMAKE_CURRENT_BINARY_DIR}/rlx8721d.ld")

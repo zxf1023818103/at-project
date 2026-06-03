@@ -29,16 +29,14 @@ if(NOT AMEBAD_ENABLE_2ND_BOOT)
     return()
 endif()
 
-set(_src_dir       "${CMAKE_CURRENT_SOURCE_DIR}/src")
-set(_local_ld_dir  "${CMAKE_CURRENT_SOURCE_DIR}/ld")
 # layout.ld + rom_symbol_acut.ld are the KM0-image fragments shared via
 # component/amebad/common_ld_script/ (AMEBAD_COMMON_*_LD) — same copies the
 # primary bootloader uses (see the CMAKE_PATCH notes in that layout.ld for
 # the BOOTLOADER2_RAM / KM0_BOOT2 segments). Only boot_2nd.ld is local.
 
 foreach(_p
-        "${_src_dir}/boot_ram_lp_2nd.c"
-        "${_local_ld_dir}/rlx8721d_boot_2nd.ld"
+        "${CMAKE_CURRENT_SOURCE_DIR}/boot_ram_lp_2nd.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_boot_2nd.ld"
         "${AMEBAD_COMMON_LAYOUT_LD}"
         "${AMEBAD_COMMON_ROM_SYMBOL_LD}")
     if(NOT EXISTS "${_p}")
@@ -47,14 +45,14 @@ foreach(_p
 endforeach()
 
 set(_loader_srcs
-    "${_src_dir}/boot_ram_lp_2nd.c"     # SDK: bootloader_2nd/boot_ram_lp_2nd.c
-    "${_src_dir}/boot_flash_lp_2nd.c"   # SDK: bootloader_2nd/boot_flash_lp_2nd.c
+    "${CMAKE_CURRENT_SOURCE_DIR}/boot_ram_lp_2nd.c"     # SDK: bootloader_2nd/boot_ram_lp_2nd.c
+    "${CMAKE_CURRENT_SOURCE_DIR}/boot_flash_lp_2nd.c"   # SDK: bootloader_2nd/boot_flash_lp_2nd.c
 )
 
 # Linker script: cat boot_2nd.ld (local) + rom_symbol_acut.ld (shared) —
 # layout.ld is INCLUDEd from boot_2nd.ld and resolved through the -L that
 # amebad_common_ld_script puts on the link line.
-set(_boot_ld       "${_local_ld_dir}/rlx8721d_boot_2nd.ld")
+set(_boot_ld       "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_boot_2nd.ld")
 set(_rom_symbol_ld "${AMEBAD_COMMON_ROM_SYMBOL_LD}")
 set(_layout_ld     "${AMEBAD_COMMON_LAYOUT_LD}")
 set(_combined_ld   "${CMAKE_CURRENT_BINARY_DIR}/rlx8721d.ld")
@@ -92,7 +90,7 @@ target_link_libraries(target_loader_2nd PRIVATE
 # boot_2nd.ld is -T'd and rom_symbol_acut.ld is cat'd by absolute path.
 target_link_options(target_loader_2nd PRIVATE
     "-T${_combined_ld}"
-    "-L${_local_ld_dir}"
+    "-L${CMAKE_CURRENT_SOURCE_DIR}"
     "-Wl,--no-enum-size-warning"
     "-Wl,--warn-common"
     "-Wl,-Map=$<TARGET_FILE_DIR:target_loader_2nd>/target_loader_2nd.map"

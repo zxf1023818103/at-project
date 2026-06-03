@@ -16,21 +16,18 @@
 #   (BD_RAM_NS / KM4_IMG2 @ 0x0e000000 / PSRAM_NS). RSIP (when enabled) @
 #   the XIP cache base 0x0e000000.
 #
-# main.c + the ld/ scripts are project-local copies of the SDK
-# (src_hp/main.c, project_hp ld/).
+# main.c + the linker scripts are project-local copies of the SDK
+# (src_hp/main.c, project_hp ld/), flat in this folder.
 
 if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     return()
 endif()
 
-set(_src_dir      "${CMAKE_CURRENT_SOURCE_DIR}/src")
-set(_local_ld_dir "${CMAKE_CURRENT_SOURCE_DIR}/ld")
-
 foreach(_p
-        "${_src_dir}/main.c"
-        "${_local_ld_dir}/rlx8721d_img2_is.ld"
-        "${_local_ld_dir}/rlx8721d_layout_is.ld"
-        "${_local_ld_dir}/rlx8721d_rom_symbol_acut.ld")
+        "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_img2_is.ld"
+        "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_layout_is.ld"
+        "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_rom_symbol_acut.ld")
     if(NOT EXISTS "${_p}")
         message(FATAL_ERROR "amebad/app_km4: missing '${_p}'")
     endif()
@@ -45,9 +42,9 @@ set_target_properties(amebad_pmc_hp PROPERTIES IMPORTED_LOCATION "${_hp_lib}/lib
 
 # Linker script: cat img2_is.ld + rom_symbol_acut.ld; img2_is.ld does
 # INCLUDE "rlx8721d_layout_is.ld", resolved through -L below.
-set(_img2_ld     "${_local_ld_dir}/rlx8721d_img2_is.ld")
-set(_rom_sym_ld  "${_local_ld_dir}/rlx8721d_rom_symbol_acut.ld")
-set(_layout_ld   "${_local_ld_dir}/rlx8721d_layout_is.ld")
+set(_img2_ld     "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_img2_is.ld")
+set(_rom_sym_ld  "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_rom_symbol_acut.ld")
+set(_layout_ld   "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_layout_is.ld")
 set(_combined_ld "${CMAKE_CURRENT_BINARY_DIR}/rlx8721d.ld")
 add_custom_command(
     OUTPUT  "${_combined_ld}"
@@ -59,9 +56,9 @@ add_custom_command(
 add_custom_target(amebad_km4_img2_ld DEPENDS "${_combined_ld}")
 
 add_executable(target_img2_km4
-    "${_src_dir}/main.c"
-    "${_src_dir}/cm_backtrace_stub.c"   # weak no-op (CmBacktrace lib not in this checkout)
-    "${_src_dir}/minimal_stubs.c"       # weak CRYPTO_Init / rtw_if_wifi_thread (no TLS/WiFi)
+    "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/cm_backtrace_stub.c"   # weak no-op (CmBacktrace lib not in this checkout)
+    "${CMAKE_CURRENT_SOURCE_DIR}/minimal_stubs.c"       # weak CRYPTO_Init / rtw_if_wifi_thread (no TLS/WiFi)
 )
 # WIP: the image2 link still needs the app/WiFi/mbedTLS/lwIP/log/os_dep/ftl
 # stack (~30 undefined symbols at bootstrap). EXCLUDE_FROM_ALL keeps the
@@ -89,7 +86,7 @@ target_link_libraries(target_img2_km4 PRIVATE
 
 target_link_options(target_img2_km4 PRIVATE
     "-T${_combined_ld}"
-    "-L${_local_ld_dir}"
+    "-L${CMAKE_CURRENT_SOURCE_DIR}"
     "-Wl,--no-enum-size-warning"
     "-Wl,--warn-common"
     "-Wl,-Map=$<TARGET_FILE_DIR:target_img2_km4>/target_img2.map"

@@ -6,9 +6,9 @@
 # Source-of-truth: project_hp/asdk/Makefile (linker_loader rule) +
 # Makefile.include.gen (LD_ARG lines 463-487).
 #
-# Sources (src/) and linker scripts (ld/) are project-local copies of
-# the SDK. Resync with the submodule when its pointer moves:
-#   diff -q component/amebad/bootloader_km4/src/boot_ram_hp.c \
+# Sources and linker scripts are project-local copies of the SDK (flat in this
+# folder). Resync with the submodule when its pointer moves:
+#   diff -q component/amebad/bootloader_km4/boot_ram_hp.c \
 #           platform/ameba-rtos-d/component/soc/realtek/amebad/bootloader/boot_ram_hp.c
 #
 # Headers + IFLAGS via amebad_sdk_includes (KM4 branch selects inc_hp
@@ -27,30 +27,27 @@ if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km4")
         "(AMEBAD_CHIP='${AMEBAD_CHIP}', expected 'amebad-km4')")
 endif()
 
-set(_src_dir       "${CMAKE_CURRENT_SOURCE_DIR}/src")
-set(_local_ld_dir  "${CMAKE_CURRENT_SOURCE_DIR}/ld")
-
 foreach(_p
-        "${_src_dir}/boot_ram_hp.c"
-        "${_local_ld_dir}/rlx8721d_img1_s.ld"
-        "${_local_ld_dir}/rlx8721d_layout_tz.ld")
+        "${CMAKE_CURRENT_SOURCE_DIR}/boot_ram_hp.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_img1_s.ld"
+        "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_layout_tz.ld")
     if(NOT EXISTS "${_p}")
         message(FATAL_ERROR "amebad/bootloader_km4: missing '${_p}'")
     endif()
 endforeach()
 
 set(_loader_srcs
-    "${_src_dir}/boot_ram_hp.c"                  # SDK: bootloader/boot_ram_hp.c
-    "${_src_dir}/boot_flash_hp.c"                # SDK: bootloader/boot_flash_hp.c
-    "${_src_dir}/boot_trustzone_hp.c"            # SDK: bootloader/boot_trustzone_hp.c
+    "${CMAKE_CURRENT_SOURCE_DIR}/boot_ram_hp.c"                  # SDK: bootloader/boot_ram_hp.c
+    "${CMAKE_CURRENT_SOURCE_DIR}/boot_flash_hp.c"                # SDK: bootloader/boot_flash_hp.c
+    "${CMAKE_CURRENT_SOURCE_DIR}/boot_trustzone_hp.c"            # SDK: bootloader/boot_trustzone_hp.c
 )
 
 # Linker script: cat img1_s.ld + rom_symbol_acut_boot.ld into build dir.
 # img1_s.ld does INCLUDE "rlx8721d_layout_tz.ld" (no path), so -L below
-# resolves it from our local ld/ dir.
-set(_boot_ld       "${_local_ld_dir}/rlx8721d_img1_s.ld")
-set(_rom_symbol_ld "${_local_ld_dir}/rlx8721d_rom_symbol_acut_boot.ld")
-set(_layout_ld     "${_local_ld_dir}/rlx8721d_layout_tz.ld")
+# resolves it from this folder.
+set(_boot_ld       "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_img1_s.ld")
+set(_rom_symbol_ld "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_rom_symbol_acut_boot.ld")
+set(_layout_ld     "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_layout_tz.ld")
 set(_combined_ld   "${CMAKE_CURRENT_BINARY_DIR}/rlx8721d.ld")
 
 add_custom_command(
@@ -83,7 +80,7 @@ target_link_libraries(target_loader_km4 PRIVATE
 #   -Wl,-Map=<bin>/target_loader.map
 target_link_options(target_loader_km4 PRIVATE
     "-T${_combined_ld}"
-    "-L${_local_ld_dir}"
+    "-L${CMAKE_CURRENT_SOURCE_DIR}"
     "-Wl,--no-enum-size-warning"
     "-Wl,--warn-common"
     "-Wl,-Map=$<TARGET_FILE_DIR:target_loader_km4>/target_loader.map"
