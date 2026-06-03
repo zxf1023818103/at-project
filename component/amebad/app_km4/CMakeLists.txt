@@ -81,7 +81,7 @@ target_include_directories(target_img2_km4 SYSTEM PRIVATE
 # plus memcpy/memset — so KM4 doesn't need the ROM memcpy alias KM0 uses.
 target_link_libraries(target_img2_km4 PRIVATE
     amebad_sdk_includes
-    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km4,amebad_osdep_km4,amebad_ram_hp,amebad_ram_common_km4,amebad_ftl_km4,amebad_at_cmd_km4,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_monitor_km4,amebad_monitor_common,amebad_pmc_hp>"
+    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km4,amebad_osdep_km4,amebad_ram_hp,amebad_ram_common,amebad_ftl_km4,amebad_at_cmd_km4,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_monitor_km4,amebad_monitor_common,amebad_pmc_hp>"
     m
     stdc++
     c

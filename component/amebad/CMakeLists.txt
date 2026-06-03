@@ -12,11 +12,10 @@
 #                    Picks inc_lp vs. inc_hp based on AMEBAD_CHIP.
 #
 #   ram            RAM-resident HAL drivers (flat folder, one chip-gated
-#                    CMakeLists). Libs: ram_common (rtl8721d_* — shared HAL, KM0
-#                    only; KM4 pulls these from on-chip ROM), ram_lp (rtl8721dlp_*
-#                    — KM0 clk/pinmap/startup/...), ram_hp (rtl8721dhp_* — KM4
-#                    audio/i2s/sd/...), ram_common_km4 (the few rtl8721d_* the KM4
-#                    image2 needs that the HP ROM doesn't provide).
+#                    CMakeLists). Libs: ram_common (rtl8721d_* — shared HAL; KM0
+#                    builds all 20, KM4 builds only the few the HP ROM lacks),
+#                    ram_lp (rtl8721dlp_* — KM0 clk/pinmap/startup/...), ram_hp
+#                    (rtl8721dhp_* — KM4 audio/i2s/sd/...).
 #
 #   usrcfg           Board config, one chip-gated CMakeLists over a flat folder;
 #                    the SDK filename infix selects the lib: usrcfg_common
@@ -69,7 +68,7 @@ endif()
 
 add_subdirectory(fwlib_headers)
 add_subdirectory(sdk_includes)
-add_subdirectory(ram)                # chip-gated: ram_common+ram_lp (KM0) / ram_hp+ram_common_km4 (KM4)
+add_subdirectory(ram)                # chip-gated: ram_common+ram_lp (KM0) / ram_hp+ram_common (subset, KM4)
 add_subdirectory(usrcfg)             # chip-gated: usrcfg_common (+ _lp on KM0 / _hp on KM4)
 add_subdirectory(freertos)           # upstream FreeRTOS kernel -> target `FreeRTOS`
 add_subdirectory(freertos_glue)      # SDK FreeRTOS extensions, chip-gated (after freertos)

@@ -1,17 +1,20 @@
 # amebad_ram — AmebaD RAM-resident HAL drivers, project-local copies of
 # platform/ameba-rtos-d/.../fwlib/{ram_common,ram_lp,ram_hp}/. Flat folder; the
-# SDK filename infix groups them. Four libs (target names kept so the bootloader
-# / app link lists don't change):
-#   amebad_ram_common      rtl8721d_*    shared HAL (UART/I2C/ADC/Flash/...), KM0
-#   amebad_ram_lp          rtl8721dlp_*  KM0-only HAL (clk/pinmap/startup/...)
-#   amebad_ram_hp          rtl8721dhp_*  KM4-only HAL (audio/i2s/sd/ota/...)
-#   amebad_ram_common_km4  the few rtl8721d_* files the KM4 image2 needs but the
-#                          HP ROM doesn't provide (ipc/gdma/flash/libc)
+# SDK filename infix groups them. Three lib names (kept so the bootloader / app
+# link lists don't change):
+#   amebad_ram_common  rtl8721d_*    shared HAL — KM0 compiles all 20; KM4
+#                                    compiles only the few the HP ROM doesn't
+#                                    provide (ipc/gdma/flash/libc). KM0 and KM4
+#                                    are separate builds, so the same target name
+#                                    holds the full set on KM0 / the subset on KM4
+#                                    (no _km4 suffix needed — they never coexist).
+#   amebad_ram_lp      rtl8721dlp_*  KM0-only HAL (clk/pinmap/startup/...)
+#   amebad_ram_hp      rtl8721dhp_*  KM4-only HAL (audio/i2s/sd/ota/...)
 #
-# Why KM4 doesn't just compile amebad_ram_common: the rest of the shared HAL
-# comes from the HP ROM (rom_symbol table), so compiling it would DUPLICATE ROM
-# symbols; also rtl8721d_qdec.c uses an LP-only RCC header. So KM4 takes only the
-# surgical subset (amebad_ram_common_km4), which pulls no LP-only header.
+# Why KM4 doesn't compile all of ram_common: the rest of the shared HAL comes
+# from the HP ROM (rom_symbol table), so compiling it would DUPLICATE ROM
+# symbols; also rtl8721d_qdec.c uses an LP-only RCC header. So KM4's
+# amebad_ram_common is the surgical subset that pulls no LP-only header.
 #
 # Resync when the submodule pointer moves:
 #   diff -r platform/ameba-rtos-d/component/soc/realtek/amebad/fwlib/{ram_common,ram_lp,ram_hp}/ \
@@ -95,13 +98,14 @@ elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     target_compile_options(amebad_ram_hp PRIVATE ${_ram_warnings})
 
     # Subset of the shared HAL the KM4 image2 needs but the HP ROM doesn't give.
-    add_library(amebad_ram_common_km4 STATIC
+    # Same target name as KM0's full set — they're never in the same build.
+    add_library(amebad_ram_common STATIC
         rtl8721d_ipc_api.c
         rtl8721d_gdma_memcpy.c
         rtl8721d_gdma_ram.c
         rtl8721d_flash_ram.c
         rtl8721d_ram_libc.c
     )
-    target_link_libraries(amebad_ram_common_km4 PUBLIC amebad_sdk_includes)
-    target_compile_options(amebad_ram_common_km4 PRIVATE ${_ram_warnings})
+    target_link_libraries(amebad_ram_common PUBLIC amebad_sdk_includes)
+    target_compile_options(amebad_ram_common PRIVATE ${_ram_warnings})
 endif()
