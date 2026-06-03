@@ -11,12 +11,12 @@
 #                    search paths still in-place at platform/ameba-rtos-d/.
 #                    Picks inc_lp vs. inc_hp based on AMEBAD_CHIP.
 #
-#   ram_common       HAL ".c"s shared by KM0 and KM4 (ram_common/ in the SDK).
-#                    KM4 bootloader doesn't link this — KM4 pulls HAL from
-#                    on-chip ROM via rom_symbol_acut_boot.ld PROVIDE.
-#   ram_lp           KM0-only HAL ".c"s (clk, pmc-lp, ...). Built only when
-#                    AMEBAD_CHIP==amebad-km0.
-#   ram_hp           KM4-only HAL ".c"s. Built only when AMEBAD_CHIP==amebad-km4.
+#   ram            RAM-resident HAL drivers (flat folder, one chip-gated
+#                    CMakeLists). Libs: ram_common (rtl8721d_* — shared HAL, KM0
+#                    only; KM4 pulls these from on-chip ROM), ram_lp (rtl8721dlp_*
+#                    — KM0 clk/pinmap/startup/...), ram_hp (rtl8721dhp_* — KM4
+#                    audio/i2s/sd/...), ram_common_km4 (the few rtl8721d_* the KM4
+#                    image2 needs that the HP ROM doesn't provide).
 #
 #   usrcfg           Board config, one chip-gated CMakeLists over a flat folder;
 #                    the SDK filename infix selects the lib: usrcfg_common
@@ -69,15 +69,12 @@ endif()
 
 add_subdirectory(fwlib_headers)
 add_subdirectory(sdk_includes)
-add_subdirectory(ram_common)        # KM0-only consumer in practice; KM4 uses ROM
-add_subdirectory(ram_lp)             # KM0-gated internally
-add_subdirectory(ram_hp)             # KM4-gated internally
+add_subdirectory(ram)                # chip-gated: ram_common+ram_lp (KM0) / ram_hp+ram_common_km4 (KM4)
 add_subdirectory(usrcfg)             # chip-gated: usrcfg_common (+ _lp on KM0 / _hp on KM4)
 add_subdirectory(freertos)           # upstream FreeRTOS kernel -> target `FreeRTOS`
 add_subdirectory(freertos_glue)      # SDK FreeRTOS extensions, chip-gated (after freertos)
 add_subdirectory(monitor)            # chip-gated (image2 shell/monitor)
 add_subdirectory(osdep_km4)          # KM4-gated internally (osdep/os abstraction)
-add_subdirectory(ram_common_km4)     # KM4-gated internally (ipc/gdma/flash/libc subset)
 add_subdirectory(ftl_km4)            # KM4-gated internally (flash translation layer)
 add_subdirectory(at_cmd_km4)         # KM4-gated internally (basic AT log/command service)
 add_subdirectory(image_tool)         # defines amebad_make_{boot,image2}_all_bin*(...)
