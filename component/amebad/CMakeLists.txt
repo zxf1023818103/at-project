@@ -73,7 +73,7 @@ add_subdirectory(usrcfg)             # chip-gated: usrcfg_common (+ _lp on KM0 /
 add_subdirectory(freertos)           # upstream FreeRTOS kernel -> target `FreeRTOS`
 add_subdirectory(freertos_glue)      # SDK FreeRTOS extensions, chip-gated (after freertos)
 add_subdirectory(monitor)            # chip-gated (image2 shell/monitor)
-add_subdirectory(osdep_km4)          # KM4-gated internally (osdep/os abstraction)
+add_subdirectory(osdep)              # KM4-gated internally (osdep/os abstraction)
 add_subdirectory(ftl_km4)            # KM4-gated internally (flash translation layer)
 add_subdirectory(at_cmd_km4)         # KM4-gated internally (basic AT log/command service)
 add_subdirectory(image_tool)         # defines amebad_make_{boot,image2}_all_bin*(...)
