@@ -1,19 +1,9 @@
-# amebad_usrcfg — AmebaD board / chip configuration data (boot config, IPC,
-# WiFi, flash, pinmap, sleep, TrustZone, interface config), project-local copies
-# of platform/ameba-rtos-d/.../fwlib/usrcfg/. Flat folder; the SDK filename infix
-# selects the group (same split the SDK's usrcfg Makefile uses). One chip-gated
-# CMakeLists builds three libs:
-#   amebad_usrcfg_common  rtl8721d_*.c    board cfg shared by both cores
-#   amebad_usrcfg_lp      rtl8721dlp_*.c  KM0-only (flash/intf/pinmap/sleep)
-#   amebad_usrcfg_hp      rtl8721dhp_*.c  KM4-only (TrustZone/interface)
-#
-# amebad_usrcfg_common is not chip-gated (its .c only #include "ameba_soc.h", no
-# LP-specific macros) — it is compiled under whichever chip toolchain is active.
-# The three are independent (no inter-link); the bootloader / app link lists name
-# common + the per-core lib. Target names are kept so those consumers don't change.
-#
-# NB the rtl8721d_*.c glob matches only the common files — "rtl8721dlp_" /
-# "rtl8721dhp_" have no '_' at that position so they're excluded.
+# amebad_usrcfg — AmebaD board / chip configuration data, project-local copies
+# of platform/ameba-rtos-d/.../fwlib/usrcfg/. Three libs (target names kept so
+# the bootloader / app link lists don't change):
+#   amebad_usrcfg_common  board cfg shared by both cores (bootcfg/ipccfg/wificfg)
+#   amebad_usrcfg_lp      KM0-only (flash/intf/pinmap/sleep)
+#   amebad_usrcfg_hp      KM4-only (TrustZone/interface)
 #
 # Resync when the submodule pointer moves:
 #   diff -r platform/ameba-rtos-d/component/soc/realtek/amebad/fwlib/usrcfg/ \
@@ -25,32 +15,45 @@ else()
     return()
 endif()
 
-# Chip-agnostic board config — built for both cores.
-file(GLOB _common CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/rtl8721d_*.c")
-add_library(amebad_usrcfg_common STATIC ${_common})
-# OTA region macros (LS_IMG2_OTA{1,2}_ADDR) come from amebad_sdk_includes — see
-# its CMakeLists.txt for the AMEBAD_OTA*_ADDR cmake options.
+# Chip-agnostic board config — built for both cores. OTA region macros
+# (LS_IMG2_OTA{1,2}_ADDR) come from amebad_sdk_includes.
+add_library(amebad_usrcfg_common STATIC
+    rtl8721d_bootcfg.c
+    rtl8721d_ipccfg.c
+    rtl8721d_wificfg.c
+)
 target_link_libraries(amebad_usrcfg_common PUBLIC amebad_sdk_includes)
-
-set(_usrcfg_targets amebad_usrcfg_common)
+target_compile_options(amebad_usrcfg_common PRIVATE
+    -Wno-unused-parameter
+    -Wno-unused-variable
+    -Wno-unused-function
+    -Wno-sign-compare
+)
 
 if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
-    file(GLOB _lp CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/rtl8721dlp_*.c")
-    add_library(amebad_usrcfg_lp STATIC ${_lp})
+    add_library(amebad_usrcfg_lp STATIC
+        rtl8721dlp_flashcfg.c
+        rtl8721dlp_intfcfg.c
+        rtl8721dlp_pinmapcfg.c
+        rtl8721dlp_sleepcfg.c
+    )
     target_link_libraries(amebad_usrcfg_lp PUBLIC amebad_sdk_includes)
-    list(APPEND _usrcfg_targets amebad_usrcfg_lp)
-elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
-    file(GLOB _hp CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/rtl8721dhp_*.c")
-    add_library(amebad_usrcfg_hp STATIC ${_hp})
-    target_link_libraries(amebad_usrcfg_hp PUBLIC amebad_sdk_includes)
-    list(APPEND _usrcfg_targets amebad_usrcfg_hp)
-endif()
-
-foreach(_t ${_usrcfg_targets})
-    target_compile_options(${_t} PRIVATE
+    target_compile_options(amebad_usrcfg_lp PRIVATE
         -Wno-unused-parameter
         -Wno-unused-variable
         -Wno-unused-function
         -Wno-sign-compare
     )
-endforeach()
+elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
+    add_library(amebad_usrcfg_hp STATIC
+        rtl8721dhp_boot_trustzonecfg.c
+        rtl8721dhp_intfcfg.c
+    )
+    target_link_libraries(amebad_usrcfg_hp PUBLIC amebad_sdk_includes)
+    target_compile_options(amebad_usrcfg_hp PRIVATE
+        -Wno-unused-parameter
+        -Wno-unused-variable
+        -Wno-unused-function
+        -Wno-sign-compare
+    )
+endif()
