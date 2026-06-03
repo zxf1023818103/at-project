@@ -19,9 +19,15 @@ RSIP: off by default (plain image, for boards without RSIP fused). For an
 RSIP-fused board, rebuild both trees with -DAMEBAD_RSIP_ENABLE=ON and the *_all
 bins come out encrypted; this script then just cats/lays them the same way.
 
-Usage:
+Usage (preferred — via the CMake wrapper, from either core's build dir):
+    cmake --build build/km0 -t amebad_image_all
+  or directly:
     python3 component/amebad/image_tool/build_image_all.py [--out PATH] [--no-build]
 Output (default): build/amebad/Image_All.bin
+
+The CMake target `amebad_image_all` (defined by amebad_make_image_all_bin() in
+component/amebad/image_tool/CMakeLists.txt) is just a thin wrapper that runs this
+script — prefer it so the invocation lives in the build, not in muscle memory.
 """
 import argparse
 import os

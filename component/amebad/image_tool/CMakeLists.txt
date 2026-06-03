@@ -40,6 +40,15 @@ foreach(_p "${AMEBAD_PREPEND_HEADER_SH}" "${AMEBAD_PAD_SH}" "${AMEBAD_ENCTOOL}")
     endif()
 endforeach()
 
+# Cross-core Image_All.bin assembler (see amebad_make_image_all_bin at the
+# bottom of this file). Our own orchestration script + the python to run it.
+set(AMEBAD_BUILD_IMAGE_ALL_PY "${CMAKE_CURRENT_SOURCE_DIR}/build_image_all.py"
+    CACHE INTERNAL "AmebaD cross-core image assembler (build both cores + lay out)")
+if(NOT EXISTS "${AMEBAD_BUILD_IMAGE_ALL_PY}")
+    message(FATAL_ERROR "amebad/image_tool: missing '${AMEBAD_BUILD_IMAGE_ALL_PY}'")
+endif()
+find_program(AMEBAD_PYTHON3 NAMES python3 python)
+
 # === RSIP encryption (optional). Mirrors security_config.sh defaults. The
 # SDK also ships with RSIP_ENABLE=0; flip on when you need a flash image
 # the SoC will boot with RSIP fused.
@@ -343,6 +352,54 @@ function(amebad_make_image2_all_bin_hp AXF_TARGET OUT_NAME RSIP_ADDR)
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
             BYPRODUCTS "${_out_enc}"
             COMMENT "amebad: RSIP-encrypt ${OUT_NAME} @ ${RSIP_ADDR}"
+            VERBATIM
+        )
+    endif()
+endfunction()
+
+# ===========================================================================
+# amebad_make_image_all_bin([OUT <path>])
+#
+# Cross-core final step. The per-core packaging functions above run as
+# POST_BUILD on a single axf and produce km{0,4}_boot_all.bin /
+# km{0,4}_image2_all.bin within one build tree. The flashable Image_All.bin,
+# though, needs BOTH cores' outputs — and KM0 / KM4 are independent CMake build
+# trees (different toolchain files), so the assembly can't live inside a
+# single-core build. That orchestration is build_image_all.py: it configures +
+# builds both trees (driving the per-core POST_BUILD packaging above),
+# cross-core-merges the image2 halves, and lays km0_boot / km4_boot /
+# km0_km4_image2 into Image_All.bin.
+#
+# This wraps that script as the standalone `amebad_image_all` custom target:
+#
+#       cmake --build <km0-or-km4-build-dir> -t amebad_image_all
+#
+# The target has no dependencies in the current tree — building it shells out to
+# build_image_all.py, which (re)builds both cores and assembles. Use this
+# instead of invoking build_image_all.py by hand. OUT overrides the script's
+# default output (build/amebad/Image_All.bin under the repo root).
+# ===========================================================================
+function(amebad_make_image_all_bin)
+    cmake_parse_arguments(_img "" "OUT" "" ${ARGN})
+
+    if(NOT AMEBAD_PYTHON3)
+        message(FATAL_ERROR
+            "amebad_make_image_all_bin: python3 not found (needed to run "
+            "${AMEBAD_BUILD_IMAGE_ALL_PY})")
+    endif()
+
+    set(_args)
+    if(_img_OUT)
+        list(APPEND _args --out "${_img_OUT}")
+    endif()
+
+    # One target per build tree; guard against a double call in the same configure.
+    if(NOT TARGET amebad_image_all)
+        add_custom_target(amebad_image_all
+            COMMAND "${AMEBAD_PYTHON3}" "${AMEBAD_BUILD_IMAGE_ALL_PY}" ${_args}
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            USES_TERMINAL
+            COMMENT "amebad: build both cores + assemble Image_All.bin (build_image_all.py)"
             VERBATIM
         )
     endif()

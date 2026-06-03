@@ -44,13 +44,16 @@
 #                    rlx8721d_rom_symbol_acut.ld via cat). Must be added
 #                    before the bootloaders so the target + the
 #                    AMEBAD_COMMON_*_LD path vars are in scope.
-#   image_tool       CMake helper module — defines
-#                    amebad_make_boot_all_bin(<axf-target> <out-name> <rsip-addr>)
-#                    which wraps the SDK's stage-2 pipeline (objcopy split ->
-#                    prepend 32-byte headers -> cat -> optional RSIP via
-#                    EncTool). Local copies of prepend_header.sh + EncTool.
-#                    Must be added before bootloader_km{0,4} so the function
-#                    is in scope by the time those CMakeLists call it.
+#   image_tool       CMake helper module — defines the per-core packaging
+#                    functions amebad_make_boot_all_bin / amebad_make_image2_all_bin
+#                    (+ _hp) which wrap the SDK's stage-2 pipeline (objcopy split
+#                    -> prepend 32-byte headers -> cat -> optional RSIP via
+#                    EncTool) as POST_BUILD steps, plus amebad_make_image_all_bin()
+#                    which wraps the cross-core assembler build_image_all.py as the
+#                    `amebad_image_all` target. Local copies of prepend_header.sh +
+#                    EncTool + build_image_all.py. Must be added before
+#                    bootloader_km{0,4}/app_km{0,4} so the functions are in scope
+#                    when those CMakeLists call them.
 #
 #   bootloader_km0   KM0 1st-stage loader (target_loader.axf, 2 .c files).
 #   bootloader_km0_2nd
@@ -79,7 +82,9 @@ add_subdirectory(osdep_km4)          # KM4-gated internally (osdep/os abstractio
 add_subdirectory(ram_common_km4)     # KM4-gated internally (ipc/gdma/flash/libc subset)
 add_subdirectory(ftl_km4)            # KM4-gated internally (flash translation layer)
 add_subdirectory(at_cmd_km4)         # KM4-gated internally (basic AT log/command service)
-add_subdirectory(image_tool)         # defines amebad_make_boot_all_bin(...)
+add_subdirectory(image_tool)         # defines amebad_make_{boot,image2}_all_bin*(...)
+                                     #   + amebad_make_image_all_bin() (-> target
+                                     #     amebad_image_all, wraps build_image_all.py)
 add_subdirectory(common_ld_script)   # shared KM0-image ld fragments + path vars
 
 if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
@@ -90,3 +95,8 @@ elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     add_subdirectory(bootloader_km4)
     add_subdirectory(app_km4)              # KM4 HP application image (image2)
 endif()
+
+# Cross-core final image. `cmake --build <km0-or-km4-build-dir> -t amebad_image_all`
+# runs build_image_all.py to (re)build both cores and assemble the flashable
+# Image_All.bin. Defined in both core configures; invoke from either.
+amebad_make_image_all_bin()
