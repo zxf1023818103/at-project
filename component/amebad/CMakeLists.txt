@@ -76,7 +76,7 @@ add_subdirectory(freertos_glue)      # SDK FreeRTOS extensions, chip-gated (afte
 add_subdirectory(monitor)            # chip-gated (image2 shell/monitor)
 add_subdirectory(osdep)              # KM4-gated internally (osdep/os abstraction)
 add_subdirectory(ftl)                # KM4-gated internally (flash translation layer)
-add_subdirectory(at_cmd_km4)         # KM4-gated internally (basic AT log/command service)
+add_subdirectory(at_cmd)             # KM4-gated internally (basic AT log/command service)
 add_subdirectory(image_tool)         # defines amebad_make_{boot,image2}_all_bin*(...)
                                      #   + amebad_make_image_all_bin() (-> target
                                      #     amebad_image_all, wraps build_image_all.py)
