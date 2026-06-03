@@ -25,8 +25,13 @@ SECTIONS
 	.ram_image1.text . :
 	{
 		/* image1 text */
-		*(.boot.ram.text*)    
+		*(.boot.ram.text*)
 		*(.boot.rodata*)
+		/* CMAKE_PATCH: same as bootloader_km0 — at -Os GCC merges the boot's
+		 * string literals into .rodata.str1.1, which the rules above miss, so
+		 * they orphan into XIP flash and km4_boot faults reading them before it
+		 * can start image2. Pull all rodata into the RAM image. */
+		*(.rodata*)
 	} > BOOTLOADER_RAM_S
 
 	.ram_image1.data . :

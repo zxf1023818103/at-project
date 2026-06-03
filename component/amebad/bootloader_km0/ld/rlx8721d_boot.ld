@@ -23,8 +23,15 @@ SECTIONS
 	.ram_image1.text . :
 	{
 		/* image1 text */
-		*(.boot.ram.text*)    
+		*(.boot.ram.text*)
 		*(.boot.rodata*)
+		/* CMAKE_PATCH: at -Os GCC merges the boot's string literals (DBG_8195A
+		 * format strings) into .rodata.str1.1, which the rules above don't
+		 * catch. Without this they get orphaned into XIP flash; km0_boot runs
+		 * from RAM before XIP is usable and faults dereferencing them -> hang
+		 * before it can load image2. Pull all rodata into the RAM image (this
+		 * is what the SDK loader's .ram_image1.text ends up containing too). */
+		*(.rodata*)
 	} > BOOTLOADER_RAM
 
 	.ram_image1.data . :
