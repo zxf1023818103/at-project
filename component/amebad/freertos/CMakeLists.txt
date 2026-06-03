@@ -1,71 +1,88 @@
-# FreeRTOS — upstream FreeRTOS v10.2.0 kernel, built straight from the
-# component/thirdparty/freertos_amebad submodule. Target is named `FreeRTOS`
-# so consumers link it as target_link_libraries(<tgt> FreeRTOS).
+# FreeRTOS — upstream FreeRTOS-Kernel V10.6.2, built straight from the
+# component/thirdparty/freertos-kernel submodule (the same kernel Bouffalo uses;
+# see component/bouffalo_sdk/CMakeLists.txt). The produced kernel target
+# `freertos_kernel` is ALIASed to `FreeRTOS` so every existing consumer keeps
+# linking target_link_libraries(<tgt> FreeRTOS) unchanged.
 #
-# Pure upstream kernel only: the 7 generic .c + the chip's GCC port + heap_5.
-# The AmebaD SDK FreeRTOS *extensions* (freertos_backtrace_ext,
-# freertos_heap5_config) are NOT upstream — they live in the separate
-# amebad_freertos_glue_km0 component.
+# This replaces the old fork-specific FreeRTOS v10.2.0 (component/thirdparty/
+# freertos_amebad, full-distro layout compiled file-by-file). The upstream
+# kernel ships its own CMakeLists with the FREERTOS_PORT / freertos_config /
+# FREERTOS_HEAP contract, so AmebaD now consumes it the standard way:
+# add_subdirectory + an ARMv8-M GCC port chosen per core.
 #
-# The submodule (v10.2.0) predates FreeRTOS-Kernel's own CMakeLists, so we
-# compile its Source/ tree directly instead of add_subdirectory'ing it. If the
-# fork later grows an upstream CMakeLists, this can switch to add_subdirectory +
-# the standard freertos_kernel target.
+#   KM0 (LP) = Cortex-M23 -> GCC_ARM_CM0   (ARMv6-M port, see below)
+#   KM4 (HP) image2 = Cortex-M33, non-secure, no TrustZone -> GCC_ARM_CM33_NTZ_NONSECURE
 #
-# FreeRTOSConfig.h (project inc_lp), the port's portmacro.h, os_dep and
-# -DCONFIG_PLATFORM_8721D come via amebad_sdk_includes.
+# The SDK's RTL8721D_LP/HP ports were stock-ARM derivatives with no functional
+# divergence (tickless idle is config-driven via external SDK sleep hooks, not a
+# port change), so the upstream ARM ports are functionally equivalent — BUT the
+# port *family* matters and must match what the SDK ran:
+#   - KM4 SDK port = ARMv8-M CM33 (FPU, resets MSP from VTOR[0]); KM4 image2's
+#     vector table has a valid initial-SP word, so the native CM33_NTZ port works.
+#   - KM0 SDK port = ARMv6-M CM0 ("The MSP stack is not reset as ... there is no
+#     vector table offset register"). The native ARMv8-M CM23_NTZ port resets MSP
+#     from VTOR[0] in vStartFirstTask, but KM0 image2's VTOR[0] is NOT a valid
+#     stack top -> the start-scheduler SVC faults (HardFault, xPSR ISR=11). So KM0
+#     uses the upstream ARMv6-M CM0 port (runs fine on the M23, exactly as the SDK
+#     LP port did) which never touches MSP.
+#
+# heap_5 (FREERTOS_HEAP 5): the heap region table is supplied at runtime by the
+# glue's freertos_heap5_config.c (vPortDefineHeapRegions over the AmebaD memory
+# map) — see component/amebad/freertos_glue/ + freertos_glue_km{0,4}.
+#
+# FreeRTOSConfig.h: our config/FreeRTOSConfig.h override (#include_next to the
+# SDK's inc_lp/inc_hp version) is carried by the freertos_config INTERFACE below.
 
-set(_frt "${CMAKE_SOURCE_DIR}/component/thirdparty/freertos_amebad/FreeRTOS/Source")
-
-# Chip -> GCC port. KM0 LP is a single port.c; KM4 HP (image2 = non-secure)
-# is the TrustZone non_secure port = port.c + portasm.c. The secure/* half of
-# the HP port belongs to the secure image, not image2, so it stays out.
 if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
-    set(_port "GCC/RTL8721D_LP")
-    set(_port_srcs "${_frt}/portable/${_port}/port.c")
+    set(_frt_port GCC_ARM_CM0)
 elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
-    set(_port "GCC/RTL8721D_HP/non_secure")
-    set(_port_srcs
-        "${_frt}/portable/${_port}/port.c"
-        "${_frt}/portable/${_port}/portasm.c")
+    set(_frt_port GCC_ARM_CM33_NTZ_NONSECURE)
 else()
     return()
 endif()
 
-if(NOT EXISTS "${_frt}/tasks.c")
+set(_kernel_src "${CMAKE_SOURCE_DIR}/component/thirdparty/freertos-kernel")
+if(NOT EXISTS "${_kernel_src}/tasks.c")
     message(FATAL_ERROR
-        "FreeRTOS: '${_frt}/tasks.c' missing — run "
-        "'git submodule update --init component/thirdparty/freertos_amebad'")
+        "FreeRTOS: '${_kernel_src}/tasks.c' missing — run "
+        "'git submodule update --init component/thirdparty/freertos-kernel'")
 endif()
 
-add_library(FreeRTOS STATIC
-    "${_frt}/tasks.c"
-    "${_frt}/list.c"
-    "${_frt}/queue.c"
-    "${_frt}/timers.c"
-    "${_frt}/event_groups.c"
-    "${_frt}/croutine.c"
-    "${_frt}/stream_buffer.c"
-    ${_port_srcs}
-    "${_frt}/portable/MemMang/heap_5.c"
-)
+# --- freertos_config: the upstream kernel CMake mandates this INTERFACE target
+# to locate FreeRTOSConfig.h. amebad_sdk_includes already carries the full
+# FreeRTOSConfig.h search order — our config/ override FIRST, then the SDK base
+# config (inc_lp/inc_hp) + platform_autoconf.h + the kernel headers — so this is
+# just a thin alias that satisfies the kernel's "freertos_config must exist"
+# contract. (config/ lives on amebad_sdk_includes, not here, so every consumer —
+# not only the kernel — sees the same config, e.g. tickless-idle off.)
+if(NOT TARGET freertos_config)
+    add_library(freertos_config INTERFACE)
+    target_link_libraries(freertos_config INTERFACE amebad_sdk_includes)
+endif()
 
-# FreeRTOS API headers from the submodule (source of truth); PUBLIC so consumers
-# that #include "FreeRTOS.h" resolve the same version. Listed on the target so
-# they precede the SDK's freertos include paths from amebad_sdk_includes.
-target_include_directories(FreeRTOS SYSTEM PUBLIC
-    "${_frt}/include"
-    "${_frt}/portable/${_port}"
-)
+# Port + heap selection for the upstream kernel CMakeLists. CACHE ... FORCE so we
+# win over the kernel's own default (set(FREERTOS_HEAP "4" CACHE ...)). km0/km4
+# configure into separate build dirs, so the per-core port value never clashes.
+set(FREERTOS_PORT "${_frt_port}" CACHE STRING "FreeRTOS port name" FORCE)
+set(FREERTOS_HEAP "5"            CACHE STRING "FreeRTOS heap model" FORCE)
 
-# FreeRTOSConfig.h (inc_lp), os_dep, fwlib headers + CONFIG_PLATFORM_8721D.
-# PUBLIC because FreeRTOS.h pulls FreeRTOSConfig.h — consumers need the set.
-target_link_libraries(FreeRTOS PUBLIC amebad_sdk_includes)
+if(NOT TARGET freertos_kernel)
+    add_subdirectory("${_kernel_src}"
+                     "${CMAKE_BINARY_DIR}/component/thirdparty/freertos-kernel")
+endif()
 
-# Vendor code — suppress -Wall/-Wextra noise we don't own.
-target_compile_options(FreeRTOS PRIVATE
-    -Wno-unused-parameter
-    -Wno-unused-variable
-    -Wno-unused-function
-    -Wno-sign-compare
-)
+# Keep the `FreeRTOS` name every consumer already links.
+if(NOT TARGET FreeRTOS)
+    add_library(FreeRTOS ALIAS freertos_kernel)
+endif()
+
+# The upstream kernel CMakeLists compiles with -Wall -Wextra -Wpedantic -Werror
+# (directory-scoped). The AmebaD FreeRTOSConfig.h (empty configASSERT, etc.) can
+# trip set-but-unused / pedantic warnings inside the otherwise-clean kernel
+# sources. Demote -Werror on the kernel targets so config-driven warnings don't
+# fail the build (warnings stay visible). Same spirit as the warning-silencing
+# the thirdparty zlib / littlefs / cjson targets get.
+target_compile_options(freertos_kernel PRIVATE -Wno-error)
+if(TARGET freertos_kernel_port)
+    target_compile_options(freertos_kernel_port PRIVATE -Wno-error)
+endif()

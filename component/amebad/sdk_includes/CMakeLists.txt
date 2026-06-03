@@ -19,13 +19,16 @@
 
 if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
     set(_proj_inc_dir   "inc_lp")
-    # KM0 port is flat: portable/GCC/RTL8721D_LP/{port.c,portmacro.h}
-    set(_freertos_ports "RTL8721D_LP")
+    # KM0 runs the upstream ARMv6-M CM0 port (matches the SDK LP port; the native
+    # ARMv8-M CM23_NTZ port faults on scheduler start because it resets MSP from
+    # KM0 image2's VTOR[0], which is not a valid stack top — see
+    # component/amebad/freertos/CMakeLists.txt). Must match the kernel's port so
+    # portmacro.h (pulled in by FreeRTOS.h) is consistent everywhere.
+    set(_kernel_port    "GCC/ARM_CM0")
 elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     set(_proj_inc_dir   "inc_hp")
-    # KM4 port is split for TrustZone-M: portable/GCC/RTL8721D_HP/{non_secure,secure}/...
-    # SDK IFLAGS (project_hp/.../Makefile.include.gen:171-172) lists both.
-    set(_freertos_ports "RTL8721D_HP/non_secure" "RTL8721D_HP/secure")
+    # KM4 image2 = Cortex-M33, non-secure, no TrustZone -> ARM_CM33_NTZ non-secure.
+    set(_kernel_port    "GCC/ARM_CM33_NTZ/non_secure")
 else()
     message(FATAL_ERROR
         "amebad_sdk_includes: AMEBAD_CHIP='${AMEBAD_CHIP}' not supported "
@@ -92,25 +95,35 @@ target_compile_definitions(amebad_sdk_includes INTERFACE
 set(_sdk_base "${CMAKE_SOURCE_DIR}/platform/ameba-rtos-d")
 set(_sdk_soc  "${_sdk_base}/component/soc/realtek/amebad")
 set(_os       "${_sdk_base}/component/os")
-set(_freertos "${_os}/freertos/freertos_v10.2.0/Source")
 set(_common   "${_sdk_base}/component/common")
 set(_proj     "${_sdk_base}/project/realtek_amebaD_va0_example")
 
-# Expand chip-specific FreeRTOS port list to absolute paths.
-set(_freertos_port_paths)
-foreach(_port IN LISTS _freertos_ports)
-    list(APPEND _freertos_port_paths "${_freertos}/portable/GCC/${_port}")
-endforeach()
+# FreeRTOS headers come from the upstream V10.6.2 kernel
+# (component/thirdparty/freertos-kernel), NOT the SDK's bundled v10.2.0 tree.
+# These paths are on amebad_sdk_includes (not only the freertos_kernel target)
+# because the SDK headers drag FreeRTOS in widely: ameba_soc.h -> freertos_pmu.h
+# -> "FreeRTOS.h", so every TU that includes ameba_soc.h (ram_common, ram_hp,
+# usrcfg, ...) needs FreeRTOS.h + portmacro.h on its path even though it doesn't
+# link the kernel lib. Same new headers the kernel itself compiles against, so
+# there is no version skew. The SDK's v10.2.0 Source/include + GCC/RTL8721D_*
+# port dirs are intentionally gone.
+set(_kernel "${CMAKE_SOURCE_DIR}/component/thirdparty/freertos-kernel")
 
 target_include_directories(amebad_sdk_includes SYSTEM INTERFACE
-    # project-local chip configs (Kconfig autoconf + board opts)
+    # FreeRTOSConfig.h: our driver-only override FIRST, so its #include_next
+    # chains down to the SDK base config in inc_lp/inc_hp below. Putting the
+    # override here (not only on freertos_config) keeps every consumer's config
+    # consistent (e.g. tickless-idle off), not just the kernel/glue/app.
+    "${CMAKE_SOURCE_DIR}/component/amebad/freertos/config"
+    # project-local chip configs (Kconfig autoconf + board opts + base FreeRTOSConfig.h)
     "${_proj}/inc/${_proj_inc_dir}"
-    # OS / FreeRTOS
+    # upstream FreeRTOS-Kernel V10.6.2 headers + the per-core port (portmacro.h)
+    "${_kernel}/include"
+    "${_kernel}/portable/${_kernel_port}"
+    # OS abstraction (non-kernel): freertos_service.h, os_dep, ...
     "${_os}"
     "${_os}/freertos"
     "${_os}/os_dep/include"
-    "${_freertos}/include"
-    ${_freertos_port_paths}
     # SoC-level
     "${_sdk_soc}/cmsis"
     "${_sdk_soc}/app/monitor/include"

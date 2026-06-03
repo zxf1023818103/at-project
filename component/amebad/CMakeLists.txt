@@ -24,12 +24,14 @@
 #   usrcfg_lp        KM0 trustzone/sleep/audio-lp board config.
 #   usrcfg_hp        KM4 trustzone/sleep/audio-hp board config.
 #
-#   freertos         Upstream FreeRTOS v10.2.0 kernel from the
-#                    component/thirdparty/freertos_amebad submodule. Target
-#                    `FreeRTOS` (kernel + chip port + heap_5 only). KM0 today.
+#   freertos         Upstream FreeRTOS-Kernel V10.6.2 from the
+#                    component/thirdparty/freertos-kernel submodule (shared with
+#                    Bouffalo), via add_subdirectory + a per-core ARMv8-M GCC
+#                    port. Target `FreeRTOS` (ALIAS of freertos_kernel).
 #   freertos_glue_km0
 #                    AmebaD SDK FreeRTOS extensions (freertos_backtrace_ext /
-#                    freertos_heap5_config) kept out of the upstream kernel lib.
+#                    freertos_heap5_config), vendored under
+#                    component/amebad/freertos_glue/, kept out of the kernel lib.
 #   monitor_km0      KM0 debug monitor / shell (shell_init_ram), SDK app/monitor
 #                    referenced in-place. KM0 only.
 #   app_km0          KM0 LP application image (image2): links the above into

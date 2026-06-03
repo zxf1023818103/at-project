@@ -26,6 +26,7 @@ extern void shell_uart_irq_rom(void *Data);
 int main(void)
 {
     DiagPrintf("\n\r[KM4] at-project minimal image2 — basic AT log\n\r");
+    DiagPrintf("[KM4] FreeRTOS kernel %s\n\r", tskKERNEL_VERSION_NUMBER);
 
     /* Bring up the AT log / shell console (no WiFi / BT). Mirrors the SDK
        example main's console init: ROM shell + RAM shell, then register and
