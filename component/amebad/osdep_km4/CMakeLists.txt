@@ -6,27 +6,27 @@
 #   osdep_service.c      the generic OSDEP service layer
 #   psram_reserve.c      PSRAM heap reserve (g_Psram_heap_inited, ...)
 #
-# KM0 image2 didn't need these; KM4's main/monitor/HAL do. Sources referenced
-# in-place from the SDK. KM4 toolchain only.
+# KM0 image2 didn't need these; KM4's main/monitor/HAL do. Sources vendored out
+# of the SDK into src/ (headers still come from amebad_sdk_includes' os/os_dep
+# paths). KM4 toolchain only.
 
 if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     return()
 endif()
 
-set(_os "${CMAKE_SOURCE_DIR}/platform/ameba-rtos-d/component/os")
+set(_src "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
-foreach(_p freertos/freertos_service.c os_dep/device_lock.c
-           os_dep/osdep_service.c os_dep/psram_reserve.c)
-    if(NOT EXISTS "${_os}/${_p}")
-        message(FATAL_ERROR "amebad_osdep_km4: missing '${_os}/${_p}'")
+foreach(_p freertos_service.c device_lock.c osdep_service.c psram_reserve.c)
+    if(NOT EXISTS "${_src}/${_p}")
+        message(FATAL_ERROR "amebad_osdep_km4: missing '${_src}/${_p}'")
     endif()
 endforeach()
 
 add_library(amebad_osdep_km4 STATIC
-    "${_os}/freertos/freertos_service.c"
-    "${_os}/os_dep/device_lock.c"
-    "${_os}/os_dep/osdep_service.c"
-    "${_os}/os_dep/psram_reserve.c"
+    "${_src}/freertos_service.c"
+    "${_src}/device_lock.c"
+    "${_src}/osdep_service.c"
+    "${_src}/psram_reserve.c"
 )
 
 target_link_libraries(amebad_osdep_km4 PUBLIC FreeRTOS)

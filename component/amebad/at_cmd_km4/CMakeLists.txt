@@ -19,15 +19,17 @@ if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     return()
 endif()
 
-set(_at "${CMAKE_SOURCE_DIR}/platform/ameba-rtos-d/component/common/api/at_cmd")
+set(_src "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
-if(NOT EXISTS "${_at}/log_service.c")
-    message(FATAL_ERROR "amebad_at_cmd_km4: missing '${_at}/log_service.c'")
+if(NOT EXISTS "${_src}/log_service.c")
+    message(FATAL_ERROR "amebad_at_cmd_km4: missing '${_src}/log_service.c'")
 endif()
 
+# log_service.c vendored out of the SDK (api/at_cmd); at_cmd_stubs.c is our own
+# weak-stub source. The at_cmd / lwip *headers* still come from the SDK.
 add_library(amebad_at_cmd_km4 STATIC
-    "${_at}/log_service.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/at_cmd_stubs.c"
+    "${_src}/log_service.c"
+    "${_src}/at_cmd_stubs.c"
 )
 
 # config_km4/ FIRST so its platform_opts.h (#include_next + CONFIG_WLAN/BT=0)

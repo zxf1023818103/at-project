@@ -72,9 +72,9 @@ set_target_properties(target_img2_km4 PROPERTIES EXCLUDE_FROM_ALL TRUE)
 set_property(TARGET target_img2_km4 APPEND PROPERTY LINK_DEPENDS "${_combined_ld}")
 add_dependencies(target_img2_km4 amebad_km4_img2_ld)
 
-# main.c #includes ftl_int.h (FTL), which lives outside the sdk_includes set.
+# main.c #includes ftl_int.h (FTL) — vendored alongside ftl.c in ftl_km4/src/.
 target_include_directories(target_img2_km4 SYSTEM PRIVATE
-    "${CMAKE_SOURCE_DIR}/platform/ameba-rtos-d/component/common/file_system/ftl")
+    "${CMAKE_SOURCE_DIR}/component/amebad/ftl_km4/src")
 
 # Archives wrapped in --start-group (cross_refs) for circular vendor refs.
 # libc (-lc) supplies __libc_init_array (KM4 has C++ global ctors; KM0 didn't)

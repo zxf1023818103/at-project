@@ -6,16 +6,16 @@
 # (ram/monitor_lp.c, ram/shell_ram.c, ram/rtl_trace.c, ram/low_level_io.c —
 # KM0 uses monitor_lp, not monitor_hp).
 #
-# Sources are referenced in-place from the SDK (not mirrored): they need no
-# project patches, and the build already depends on platform/ameba-rtos-d for
-# the ~30 SDK header paths carried by amebad_sdk_includes. Resync is automatic
-# when the submodule pointer moves.
+# Sources are vendored into the shared component/amebad/monitor/ folder (one
+# copy, compiled per-ABI by monitor_km0 + monitor_km4 — mirrors freertos_glue/);
+# the monitor *headers* still come from amebad_sdk_includes (app/monitor/include,
+# swlib/string, os_dep, fwlib).
 
 if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km0")
     return()
 endif()
 
-set(_mon "${CMAKE_SOURCE_DIR}/platform/ameba-rtos-d/component/soc/realtek/amebad/app/monitor/ram")
+set(_mon "${CMAKE_SOURCE_DIR}/component/amebad/monitor/ram")
 
 foreach(_p monitor_lp.c shell_ram.c rtl_trace.c low_level_io.c)
     if(NOT EXISTS "${_mon}/${_p}")

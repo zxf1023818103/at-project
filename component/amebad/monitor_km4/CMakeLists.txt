@@ -3,13 +3,14 @@
 # Mirrors project_hp make/app/monitor CSRC: ram/monitor_hp.c (HP, not the LP
 # monitor_lp.c) + ram/shell_ram.c + ram/rtl_trace.c + ram/low_level_io.c.
 # (The rom/* shell_rom/monitor_rom come from on-chip ROM via the symbol table,
-# so they're not compiled here.) Sources referenced in-place from the SDK.
+# so they're not compiled here.) Sources vendored into the shared
+# component/amebad/monitor/ folder (shared with monitor_km0, compiled per-ABI).
 
 if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     return()
 endif()
 
-set(_mon "${CMAKE_SOURCE_DIR}/platform/ameba-rtos-d/component/soc/realtek/amebad/app/monitor")
+set(_mon "${CMAKE_SOURCE_DIR}/component/amebad/monitor")
 
 # project_hp make/app/monitor CSRC: ram/{monitor_hp,shell_ram,rtl_trace,
 # low_level_io} + rom/{shell_rom,monitor_rom} (the rom/ files are RAM-resident
