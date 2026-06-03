@@ -32,8 +32,9 @@
 #                    freertos_heap5_config / freertos_hooks), vendored here and
 #                    kept out of the kernel lib. One chip-gated CMakeLists builds
 #                    amebad_freertos_glue_km0 or _km4 from the same sources.
-#   monitor_km0      KM0 debug monitor / shell (shell_init_ram), SDK app/monitor
-#                    referenced in-place. KM0 only.
+#   monitor          AmebaD debug monitor / shell (shell_init_ram), vendored
+#                    from SDK app/monitor. One chip-gated CMakeLists builds
+#                    amebad_monitor_km0 or _km4 from the shared sources.
 #   app_km0          KM0 LP application image (image2): links the above into
 #                    target_img2_km0.axf + the prebuilt lib_pmc_lp / lib_wifi_fw.
 #                    KM0 only.
@@ -73,8 +74,7 @@ add_subdirectory(usrcfg_lp)          # KM0-gated internally
 add_subdirectory(usrcfg_hp)          # KM4-gated internally
 add_subdirectory(freertos)           # upstream FreeRTOS kernel -> target `FreeRTOS`
 add_subdirectory(freertos_glue)      # SDK FreeRTOS extensions, chip-gated (after freertos)
-add_subdirectory(monitor_km0)        # KM0-gated internally (image2 shell/monitor)
-add_subdirectory(monitor_km4)        # KM4-gated internally (image2 shell/monitor)
+add_subdirectory(monitor)            # chip-gated (image2 shell/monitor)
 add_subdirectory(osdep_km4)          # KM4-gated internally (osdep/os abstraction)
 add_subdirectory(ram_common_km4)     # KM4-gated internally (ipc/gdma/flash/libc subset)
 add_subdirectory(ftl_km4)            # KM4-gated internally (flash translation layer)
