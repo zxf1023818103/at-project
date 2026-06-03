@@ -28,10 +28,10 @@
 #                    component/thirdparty/freertos-kernel submodule (shared with
 #                    Bouffalo), via add_subdirectory + a per-core ARMv8-M GCC
 #                    port. Target `FreeRTOS` (ALIAS of freertos_kernel).
-#   freertos_glue_km0
-#                    AmebaD SDK FreeRTOS extensions (freertos_backtrace_ext /
-#                    freertos_heap5_config), vendored under
-#                    component/amebad/freertos_glue/, kept out of the kernel lib.
+#   freertos_glue    AmebaD SDK FreeRTOS extensions (freertos_backtrace_ext /
+#                    freertos_heap5_config / freertos_hooks), vendored here and
+#                    kept out of the kernel lib. One chip-gated CMakeLists builds
+#                    amebad_freertos_glue_km0 or _km4 from the same sources.
 #   monitor_km0      KM0 debug monitor / shell (shell_init_ram), SDK app/monitor
 #                    referenced in-place. KM0 only.
 #   app_km0          KM0 LP application image (image2): links the above into
@@ -72,8 +72,7 @@ add_subdirectory(usrcfg_common)
 add_subdirectory(usrcfg_lp)          # KM0-gated internally
 add_subdirectory(usrcfg_hp)          # KM4-gated internally
 add_subdirectory(freertos)           # upstream FreeRTOS kernel -> target `FreeRTOS`
-add_subdirectory(freertos_glue_km0)  # SDK FreeRTOS extensions, KM0 (after freertos)
-add_subdirectory(freertos_glue_km4)  # SDK FreeRTOS extensions, KM4 (after freertos)
+add_subdirectory(freertos_glue)      # SDK FreeRTOS extensions, chip-gated (after freertos)
 add_subdirectory(monitor_km0)        # KM0-gated internally (image2 shell/monitor)
 add_subdirectory(monitor_km4)        # KM4-gated internally (image2 shell/monitor)
 add_subdirectory(osdep_km4)          # KM4-gated internally (osdep/os abstraction)
