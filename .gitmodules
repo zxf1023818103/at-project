@@ -41,7 +41,3 @@
 [submodule "component/thirdparty/cmsis"]
 	path = component/thirdparty/cmsis
 	url = https://github.com/ARM-software/CMSIS_5.git
-[submodule "component/freertos_amebad"]
-	path = component/thirdparty/freertos_amebad
-	url = https://github.com/zxf1023818103/FreeRTOS-Kernel.git
-	branch = ameba-d-port
