@@ -9,20 +9,17 @@
 # APP_LIB   -> prebuilt lib_pmc_lp.a (PMC/SOCPS deep-sleep) + lib_wifi_fw.a
 #              (wifi_FW_init_ram; CONFIG_WIFI_FW_EN=1) + libm
 #
-# main.c + ld/rlx8721d_img2.ld are project-local copies of the SDK
-# (src_lp/main.c, ld/rlx8721d_img2.ld). rlx8721d_layout.ld + the ROM symbol
+# main.c + rlx8721d_img2.ld are project-local copies of the SDK (src_lp/main.c,
+# ld/rlx8721d_img2.ld), flat in this folder. rlx8721d_layout.ld + the ROM symbol
 # table are shared via component/amebad/common_ld_script.
 
 if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km0")
     return()
 endif()
 
-set(_src_dir      "${CMAKE_CURRENT_SOURCE_DIR}/src")
-set(_local_ld_dir "${CMAKE_CURRENT_SOURCE_DIR}/ld")
-
 foreach(_p
-        "${_src_dir}/main.c"
-        "${_local_ld_dir}/rlx8721d_img2.ld"
+        "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_img2.ld"
         "${AMEBAD_COMMON_LAYOUT_LD}"
         "${AMEBAD_COMMON_ROM_SYMBOL_LD}")
     if(NOT EXISTS "${_p}")
@@ -43,8 +40,8 @@ set_target_properties(amebad_wifi_fw PROPERTIES
 # Linker script: cat img2.ld + rom_symbol_acut.ld into the build dir; img2.ld
 # does INCLUDE "rlx8721d_layout.ld" (no path), resolved through the -L that
 # amebad_common_ld_script puts on the link line.
-set(_img2_ld     "${_local_ld_dir}/rlx8721d_img2.ld")
-set(_romalias_ld "${_local_ld_dir}/rlx8721d_img2_romalias.ld")
+set(_img2_ld     "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_img2.ld")
+set(_romalias_ld "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_img2_romalias.ld")
 set(_combined_ld "${CMAKE_CURRENT_BINARY_DIR}/rlx8721d.ld")
 # img2.ld + ROM symbol table + memcpy/memset->ROM aliases (alias fragment last,
 # so _memcpy/_memset are defined by the time its PROVIDEs evaluate).
@@ -59,7 +56,7 @@ add_custom_command(
 )
 add_custom_target(amebad_km0_img2_ld DEPENDS "${_combined_ld}")
 
-add_executable(target_img2_km0 "${_src_dir}/main.c")
+add_executable(target_img2_km0 "${CMAKE_CURRENT_SOURCE_DIR}/main.c")
 set_property(TARGET target_img2_km0 APPEND PROPERTY LINK_DEPENDS "${_combined_ld}")
 add_dependencies(target_img2_km0 amebad_km0_img2_ld)
 
