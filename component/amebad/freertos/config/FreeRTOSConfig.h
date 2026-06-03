@@ -6,7 +6,7 @@
  * This file is found FIRST (the freertos_config INTERFACE puts this config/
  * dir ahead of inc_lp/inc_hp), pulls in that SDK base config via
  * #include_next, then applies the minimal deltas the driver-only V10.6.2
- * build needs. Same #include_next layering used by config_km4/platform_opts.h.
+ * build needs. Same #include_next layering used by amebad/config/platform_opts.h.
  *
  * NOTE: do NOT guard with FREERTOS_CONFIG_H — that is the SDK config's own
  * guard; reusing it here would suppress the #include_next base config.

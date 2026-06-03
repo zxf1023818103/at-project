@@ -9,7 +9,7 @@
 #                     minimal build — atcmd_sys.c cascades into the mbed gpio/
 #                     adc/sys HAL; atcmd_mp.c is manufacturing test).
 #
-# "Basic only": the config_km4/ override (first on the include path) forces
+# "Basic only": the config/ override (first on the include path) forces
 # CONFIG_WLAN / CONFIG_BT off, so log_service.c doesn't register the wifi/bt/
 # mqtt command tables (which would pull the whole network stack). The result is
 # the AT log framework running with the built-in log commands; richer AT+ sets
@@ -26,10 +26,10 @@ add_library(amebad_at_cmd STATIC
     at_cmd_stubs.c
 )
 
-# config_km4/ FIRST so its platform_opts.h (#include_next + CONFIG_WLAN/BT=0)
+# config/ FIRST so its platform_opts.h (#include_next + CONFIG_WLAN/BT=0)
 # intercepts the SDK's. Then FreeRTOS headers + the rest via sdk_includes.
 target_include_directories(amebad_at_cmd BEFORE PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/../config_km4")
+    "${CMAKE_CURRENT_SOURCE_DIR}/../config")
 
 # log_service.c -> lwip_netconf.h -> tcpip.h: a header-only dependency on lwip
 # (it registers, but with CONFIG_WLAN off doesn't *call*, the network AT

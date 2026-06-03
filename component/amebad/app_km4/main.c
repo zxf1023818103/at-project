@@ -4,8 +4,8 @@
  * Driver-only bootstrap: instead of the SDK example app (wifi + mbedTLS + the
  * example_entry tree), this is a minimal main that brings up just the basic AT
  * log / shell console over UART and starts the FreeRTOS scheduler. WiFi, BT and
- * mbedTLS are intentionally NOT pulled in (see component/amebad/config_km4 and
- * at_cmd_km4 — CONFIG_WLAN/BT forced off, only atcmd_sys registered).
+ * mbedTLS are intentionally NOT pulled in (see component/amebad/config and
+ * at_cmd — CONFIG_WLAN/BT forced off, only atcmd_sys registered).
  *
  * By the time KM4 main() runs, the KM0 bootloader + KM4 app_start have set up
  * clocks / PSRAM / flash and handed console control to KM4, so main() only has
