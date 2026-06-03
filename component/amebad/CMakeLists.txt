@@ -18,11 +18,10 @@
 #                    AMEBAD_CHIP==amebad-km0.
 #   ram_hp           KM4-only HAL ".c"s. Built only when AMEBAD_CHIP==amebad-km4.
 #
-#   usrcfg_common    Chip-agnostic board config (bootcfg / ipccfg / wificfg).
-#                    Built once per chip toolchain — the same .c is compiled
-#                    twice on disk for KM0 ABI vs. KM4 ABI without duplicating.
-#   usrcfg_lp        KM0 trustzone/sleep/audio-lp board config.
-#   usrcfg_hp        KM4 trustzone/sleep/audio-hp board config.
+#   usrcfg           Board config, one chip-gated CMakeLists over per-group
+#                    subfolders: usrcfg_common (common/ — bootcfg/ipccfg/wificfg,
+#                    built for both cores), usrcfg_lp (lp/ — KM0 flash/intf/
+#                    pinmap/sleep), usrcfg_hp (hp/ — KM4 trustzone/interface).
 #
 #   freertos         Upstream FreeRTOS-Kernel V10.6.2 from the
 #                    component/thirdparty/freertos-kernel submodule (shared with
@@ -72,9 +71,7 @@ add_subdirectory(sdk_includes)
 add_subdirectory(ram_common)        # KM0-only consumer in practice; KM4 uses ROM
 add_subdirectory(ram_lp)             # KM0-gated internally
 add_subdirectory(ram_hp)             # KM4-gated internally
-add_subdirectory(usrcfg_common)
-add_subdirectory(usrcfg_lp)          # KM0-gated internally
-add_subdirectory(usrcfg_hp)          # KM4-gated internally
+add_subdirectory(usrcfg)             # chip-gated: usrcfg_common (+ _lp on KM0 / _hp on KM4)
 add_subdirectory(freertos)           # upstream FreeRTOS kernel -> target `FreeRTOS`
 add_subdirectory(freertos_glue)      # SDK FreeRTOS extensions, chip-gated (after freertos)
 add_subdirectory(monitor)            # chip-gated (image2 shell/monitor)
