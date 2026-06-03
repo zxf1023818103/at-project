@@ -20,7 +20,7 @@ RSIP-fused board, rebuild both trees with -DAMEBAD_RSIP_ENABLE=ON and the *_all
 bins come out encrypted; this script then just cats/lays them the same way.
 
 Usage:
-    python3 component/amebad/build_image_all.py [--out PATH] [--no-build]
+    python3 component/amebad/image_tool/build_image_all.py [--out PATH] [--no-build]
 Output (default): build/amebad/Image_All.bin
 """
 import argparse
@@ -28,7 +28,8 @@ import os
 import subprocess
 import sys
 
-REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+# This script lives in component/amebad/image_tool/ -> repo root is three up.
+REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 # (flash offset, basename, build dir relative path under the build tree)
 KM0_BOOT  = ("component/amebad/bootloader_km0/km0_boot_all.bin")
