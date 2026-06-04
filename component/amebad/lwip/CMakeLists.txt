@@ -28,6 +28,9 @@ set(LWIP_DIR "${CMAKE_SOURCE_DIR}/component/thirdparty/lwip_amebad")
 set(LWIP_INCLUDE_DIRS
     "${CMAKE_CURRENT_SOURCE_DIR}/config"
     "${LWIP_DIR}/src/include"
+    # Realtek port files (ethernetif.c / lwip_intf.c) use FLAT lwip includes
+    # ("err.h", not "lwip/err.h"), so the lwip header dir itself is on the path.
+    "${LWIP_DIR}/src/include/lwip"
     "${LWIP_DIR}/port/realtek"
     "${LWIP_DIR}/port/realtek/freertos"
 )
@@ -48,13 +51,27 @@ target_compile_options(lwipcore PRIVATE
     -Wno-sign-compare
 )
 
-# Port: FreeRTOS sys_arch (mutex/sem/mbox/thread over FreeRTOS). ethernetif +
-# bridgeif deferred (need the WiFi driver). Links lwipcore -> consumers that link
-# amebad_lwip get the whole TCP/IP stack + its headers.
+# Port: FreeRTOS sys_arch (mutex/sem/mbox/thread over FreeRTOS) + ethernetif (the
+# netif <-> WiFi driver bridge: TX via rltk_wlan_send, RX hand-off to tcpip_input).
+# ethernetif.c reaches into the driver's osdep headers (skbuff/wlan_intf) and the
+# wifi API (wifi_constants), so it links amebad_wlan (header surface) + the wifi
+# header interface. Consumers linking amebad_lwip get the whole TCP/IP stack +
+# netif + headers.
 add_library(amebad_lwip STATIC
     "${LWIP_DIR}/port/realtek/freertos/sys_arch.c"
+    "${LWIP_DIR}/port/realtek/freertos/ethernetif.c"
 )
-target_link_libraries(amebad_lwip PUBLIC lwipcore amebad_sdk_includes FreeRTOS)
+target_link_libraries(amebad_lwip PUBLIC
+    lwipcore
+    amebad_sdk_includes
+    amebad_wlan              # driver osdep headers (skbuff.h / wlan_intf.h)
+    amebad_wifi_headers      # <wifi/wifi_conf.h> / wifi_constants.h
+    FreeRTOS
+)
+# ethernetif.h lives in the lwip realtek port dir; expose it so the driver glue +
+# lwip_netconf's `#include <ethernetif.h>` resolves.
+target_include_directories(amebad_lwip PUBLIC
+    "${LWIP_DIR}/port/realtek/freertos")
 target_compile_options(amebad_lwip PRIVATE
     -Wno-unused-parameter
     -Wno-unused-variable

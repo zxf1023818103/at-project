@@ -45,13 +45,57 @@ else()
         "AMEBAD_WLAN_VARIANT='${AMEBAD_WLAN_VARIANT}' invalid (expected '', lp, lt, mp)")
 endif()
 
+# Header surface carried by the driver libs: the flat public API headers (this
+# dir), the driver-internal osdep headers (osdep/: skbuff/wlan_intf/lwip_intf/
+# wireless/bt_intf/wrapper.h), the ROM wlan-ram-map header (rom/), and the
+# core/option headers vendored beside the glue sources (src/: rtw_opt_crypto_ssl.h).
+set(_wlan_inc
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/osdep"
+    "${CMAKE_CURRENT_SOURCE_DIR}/rom"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src")
+
 # GLOBAL so the sibling app_km4 dir (and future WiFi components) can link them.
 add_library(amebad_wlan STATIC IMPORTED GLOBAL)
 set_target_properties(amebad_wlan PROPERTIES
     IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/${_wlan_lib}"
-    INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}")
+    INTERFACE_INCLUDE_DIRECTORIES "${_wlan_inc}")
 
 add_library(amebad_wps STATIC IMPORTED GLOBAL)
 set_target_properties(amebad_wps PROPERTIES
     IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/lib_wps.a"
     INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}")
+
+# --- WiFi driver SOURCE glue (not in lib_wlan.a) -----------------------------
+# The 7 driver source files the SDK keeps outside the prebuilt lib so they stay
+# tunable: the lwip<->driver bridge (osdep/lwip_intf.c) and the core/option
+# tables (skb pool sizing, RF params for RTL8721D, WLAN ram map, TX power by
+# rate / power limit, crypto-ssl option). Compiled here into amebad_wlan_glue;
+# joins the KM4 image2 link group alongside the prebuilt libs.
+add_library(amebad_wlan_glue STATIC EXCLUDE_FROM_ALL
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/lwip_intf.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/rtw_opt_skbuf.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/rtw_opt_rf_para_rtl8721d.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/rtw_opt_wlan_ram_map.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/rtw_opt_power_by_rate.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/rtw_opt_power_limit.c"
+    # rtw_opt_crypto_ssl.c — the WiFi driver's TLS/crypto option (WPA-Enterprise /
+    # EAP-TLS connect path). Written against the SDK's mbedtls 2.4.0 (uses the now-
+    # private mbedtls_ecp_point.X/Y/Z, removed in the shared mbedtls 3.6.4). Not on
+    # the scan path, so it stays vendored-but-uncompiled here; wire it (with a 3.x
+    # port) when WPA-Enterprise/connect lands. Its symbols are weak-stubbed if the
+    # driver references them at link.
+)
+# GLOBAL visibility for app_km4's link group.
+set_target_properties(amebad_wlan_glue PROPERTIES EXCLUDE_FROM_ALL TRUE)
+target_link_libraries(amebad_wlan_glue PUBLIC
+    amebad_sdk_includes
+    amebad_wlan
+    amebad_osdep
+    amebad_lwip
+    amebad_wifi_headers      # lwip_intf.c -> <wifi/wifi_util.h>
+    FreeRTOS
+)
+target_compile_options(amebad_wlan_glue PRIVATE
+    -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function
+    -Wno-sign-compare -Wno-unused-but-set-variable)
