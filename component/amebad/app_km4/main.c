@@ -31,16 +31,24 @@ extern void shell_uart_irq_rom(void *Data);
  * the AP list. Connect / DHCP / AT commands are follow-on work. Mirrors the
  * SDK's wlan_network()/init_thread but trimmed (no interactive mode).         */
 
-/* Called once per AP found, then once more with scan_complete = RTW_TRUE. */
+/* Called once per AP found, then once more with scan_complete = RTW_TRUE.
+ * NB: DiagPrintf is Realtek's limited ROM printf — it does NOT support
+ * space-padded width specifiers like %2u / %4d (only %0Nx-style). Feeding it
+ * those mis-parses the format, shifts vararg consumption, and a following %s
+ * then dereferences a garbage pointer -> fault. Stick to plain %d / %x / %s. */
 static rtw_result_t wifi_scan_print(rtw_scan_handler_result_t *malloced_scan_result)
 {
     if (malloced_scan_result->scan_complete != RTW_TRUE) {
         rtw_scan_result_t *ap = &malloced_scan_result->ap_details;
-        ap->SSID.val[ap->SSID.len] = '\0';   /* room: val[33], len <= 32 */
-        DiagPrintf("[KM4][scan] %02x:%02x:%02x:%02x:%02x:%02x  ch%2u  %4d dBm  %s\n\r",
+        char ssid[33];
+        int n = ap->SSID.len;
+        if (n < 0 || n > 32) n = 0;
+        for (int i = 0; i < n; i++) ssid[i] = (char)ap->SSID.val[i];
+        ssid[n] = '\0';
+        DiagPrintf("[KM4][scan] %02x:%02x:%02x:%02x:%02x:%02x  ch %d  %d dBm  %s\n\r",
                    ap->BSSID.octet[0], ap->BSSID.octet[1], ap->BSSID.octet[2],
                    ap->BSSID.octet[3], ap->BSSID.octet[4], ap->BSSID.octet[5],
-                   ap->channel, ap->signal_strength, (char *)ap->SSID.val);
+                   (int)ap->channel, (int)ap->signal_strength, ssid);
     } else {
         DiagPrintf("[KM4][scan] ==== scan complete ====\n\r");
     }
