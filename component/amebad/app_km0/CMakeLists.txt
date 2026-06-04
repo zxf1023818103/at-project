@@ -27,17 +27,16 @@ foreach(_p
     endif()
 endforeach()
 
-# Prebuilt vendor archives (PMC/SOCPS deep-sleep + wifi_FW), vendored into the
-# tree (component/amebad/prebuilt/) — binary blobs with no source to compile, so
-# they are copied in rather than referenced from platform/ameba-rtos-d. Resync
-# from project_lp/asdk/lib/application when the submodule pointer moves.
-set(_lp_lib "${CMAKE_SOURCE_DIR}/component/amebad/prebuilt")
+# Prebuilt vendor archives (binary blobs, no source to compile, vendored in-tree).
+# PMC/SOCPS deep-sleep lives with its header in the pmu/ component (lib +
+# rtl8721d_freertos_pmu.h together); wifi_FW stays in prebuilt/. Resync from
+# project_lp/asdk/lib/application when the submodule pointer moves.
 add_library(amebad_pmc_lp STATIC IMPORTED)
 set_target_properties(amebad_pmc_lp PROPERTIES
-    IMPORTED_LOCATION "${_lp_lib}/lib_pmc_lp.a")
+    IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/component/amebad/pmu/lib_pmc_lp.a")
 add_library(amebad_wifi_fw STATIC IMPORTED)
 set_target_properties(amebad_wifi_fw PROPERTIES
-    IMPORTED_LOCATION "${_lp_lib}/lib_wifi_fw.a")
+    IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/component/amebad/prebuilt/lib_wifi_fw.a")
 
 # Linker script: cat img2.ld + rom_symbol_acut.ld into the build dir; img2.ld
 # does INCLUDE "rlx8721d_layout.ld" (no path), resolved through the -L that

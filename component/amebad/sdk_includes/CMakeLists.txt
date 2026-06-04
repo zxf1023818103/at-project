@@ -143,7 +143,8 @@ target_include_directories(amebad_sdk_includes SYSTEM INTERFACE
     "${CMAKE_SOURCE_DIR}/component/amebad/monitor"
     "${CMAKE_SOURCE_DIR}/component/amebad/xmodem"
     "${_sdk_soc}/swlib/string"
-    "${_sdk_soc}/misc"
+    # PMU: rtl8721d_freertos_pmu.h moved to the pmu component (with lib_pmc_*.a).
+    "${CMAKE_SOURCE_DIR}/component/amebad/pmu"
     # common APIs — platform_stdlib.h etc. (api + api/platform). at_cmd headers
     # (log_service.h / atcmd_*.h) moved onto the at_cmd component; lwip_netconf.h
     # moved to lwip/config.

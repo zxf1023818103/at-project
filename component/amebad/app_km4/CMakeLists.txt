@@ -33,12 +33,12 @@ foreach(_p
     endif()
 endforeach()
 
-# Prebuilt KM4 vendor archive (PMC), vendored into the tree
-# (component/amebad/prebuilt/) — binary blob, copied in rather than referenced
-# from platform/ameba-rtos-d. Resync from project_hp/asdk/lib/application.
-set(_hp_lib "${CMAKE_SOURCE_DIR}/component/amebad/prebuilt")
+# Prebuilt KM4 vendor archive (PMC), vendored in-tree with its header in the pmu/
+# component (lib_pmc_hp.a + rtl8721d_freertos_pmu.h). Resync from
+# project_hp/asdk/lib/application.
 add_library(amebad_pmc_hp STATIC IMPORTED)
-set_target_properties(amebad_pmc_hp PROPERTIES IMPORTED_LOCATION "${_hp_lib}/lib_pmc_hp.a")
+set_target_properties(amebad_pmc_hp PROPERTIES
+    IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/component/amebad/pmu/lib_pmc_hp.a")
 # (lib_wlan.a / lib_wps.a intentionally not linked — this minimal image2 has no
 # WiFi. They come back when the WiFi stack is wired.)
 
