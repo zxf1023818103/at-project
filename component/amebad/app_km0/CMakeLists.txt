@@ -27,13 +27,8 @@ foreach(_p
     endif()
 endforeach()
 
-# Prebuilt vendor archives (binary blobs, no source to compile, vendored in-tree).
-# PMC/SOCPS deep-sleep lives with its header in the pmu/ component (lib +
-# rtl8721d_freertos_pmu.h together); wifi_FW stays in prebuilt/. Resync from
-# project_lp/asdk/lib/application when the submodule pointer moves.
-add_library(amebad_pmc_lp STATIC IMPORTED)
-set_target_properties(amebad_pmc_lp PROPERTIES
-    IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/component/amebad/pmu/lib_pmc_lp.a")
+# amebad_pmc_lp (PMC/SOCPS deep-sleep prebuilt lib) is defined by the pmu/
+# component. wifi_FW stays a prebuilt blob here (no header/module of its own yet).
 add_library(amebad_wifi_fw STATIC IMPORTED)
 set_target_properties(amebad_wifi_fw PROPERTIES
     IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/component/amebad/prebuilt/lib_wifi_fw.a")
