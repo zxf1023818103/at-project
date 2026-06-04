@@ -8,7 +8,9 @@ if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     return()
 endif()
 
-set(_base "${CMAKE_SOURCE_DIR}/platform/ameba-rtos-d/component/common")
+# mbed HAL headers are vendored into the in-tree sdk_headers mirror (not pulled
+# from platform/ameba-rtos-d anymore).
+set(_base "${CMAKE_SOURCE_DIR}/component/amebad/sdk_headers/component/common")
 
 add_library(amebad_ftl STATIC
     ftl.c

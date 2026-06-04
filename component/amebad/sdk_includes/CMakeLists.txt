@@ -97,11 +97,17 @@ target_compile_definitions(amebad_sdk_includes INTERFACE
     "AMEBAD_RSIP_MASK_ENTRY0_PAGES=${AMEBAD_RSIP_MASK_ENTRY0_PAGES}"
 )
 
-set(_sdk_base "${CMAKE_SOURCE_DIR}/platform/ameba-rtos-d")
+# Now points at the IN-TREE vendored mirror (component/amebad/sdk_headers), not
+# platform/ameba-rtos-d. Only the 33 headers the build actually pulls (per the
+# compiler dependency files) were copied in, preserving the SDK's component/...
+# layout so cross-includes resolve. Resync from the submodule with:
+#   for f in <the kept include roots>; copy the used *.h ... (or re-derive from
+#   the *.o.d / compiler_depend.make of a fresh build).
+set(_sdk_base "${CMAKE_SOURCE_DIR}/component/amebad/sdk_headers")
 set(_sdk_soc  "${_sdk_base}/component/soc/realtek/amebad")
 set(_os       "${_sdk_base}/component/os")
 set(_common   "${_sdk_base}/component/common")
-set(_proj     "${_sdk_base}/project/realtek_amebaD_va0_example")
+set(_proj     "${_sdk_base}")
 
 # FreeRTOS headers come from the upstream V10.6.2 kernel
 # (component/thirdparty/freertos-kernel), NOT the SDK's bundled v10.2.0 tree.
@@ -133,7 +139,6 @@ target_include_directories(amebad_sdk_includes SYSTEM INTERFACE
     "${_sdk_soc}/cmsis"
     "${_sdk_soc}/app/monitor/include"
     "${_sdk_soc}/app/xmodem"
-    "${_sdk_soc}/swlib/include"
     "${_sdk_soc}/swlib/string"
     "${_sdk_soc}/misc"
     # common APIs
