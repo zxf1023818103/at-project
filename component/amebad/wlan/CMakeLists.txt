@@ -97,5 +97,6 @@ target_link_libraries(amebad_wlan_glue PUBLIC
     FreeRTOS
 )
 target_compile_options(amebad_wlan_glue PRIVATE
+    -fcommon   # legacy Realtek tentative-definition globals (see wifi/CMakeLists)
     -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function
     -Wno-sign-compare -Wno-unused-but-set-variable)

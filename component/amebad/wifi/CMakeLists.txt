@@ -55,8 +55,12 @@ target_link_libraries(amebad_wifi PUBLIC
     FreeRTOS
 )
 
-# Vendor code — quiet the warnings we don't own (same set as the other vendored
-# components). -Wno-error too in case the tree is built with -Werror.
+# Vendor code — quiet the warnings we don't own. -fcommon: the legacy Realtek
+# headers declare globals (uart_buf, ...) without `extern`, so every TU that
+# includes them emits a tentative definition. The SDK builds with the old GCC
+# default (-fcommon, which merges them); GCC 10 defaults to -fno-common (each
+# becomes a strong def -> "multiple definition"), so restore -fcommon here.
 target_compile_options(amebad_wifi PRIVATE
+    -fcommon
     -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function
     -Wno-sign-compare -Wno-unused-but-set-variable)

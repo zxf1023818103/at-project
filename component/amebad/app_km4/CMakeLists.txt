@@ -42,12 +42,13 @@ endforeach()
 # INCLUDE "rlx8721d_layout_is.ld", resolved through -L below.
 set(_img2_ld     "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_img2_is.ld")
 set(_rom_sym_ld  "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_rom_symbol_acut.ld")
+set(_rom_wifi_ld "${CMAKE_CURRENT_SOURCE_DIR}/rom_symbol_wifi.ld")   # extra ROM PROVIDEs (PAD_CMD) for lib_wlan
 set(_layout_ld   "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_layout_is.ld")
 set(_combined_ld "${CMAKE_CURRENT_BINARY_DIR}/rlx8721d.ld")
 add_custom_command(
     OUTPUT  "${_combined_ld}"
-    COMMAND "${CMAKE_COMMAND}" -E cat "${_img2_ld}" "${_rom_sym_ld}" > "${_combined_ld}"
-    DEPENDS "${_img2_ld}" "${_rom_sym_ld}" "${_layout_ld}"
+    COMMAND "${CMAKE_COMMAND}" -E cat "${_img2_ld}" "${_rom_sym_ld}" "${_rom_wifi_ld}" > "${_combined_ld}"
+    DEPENDS "${_img2_ld}" "${_rom_sym_ld}" "${_rom_wifi_ld}" "${_layout_ld}"
     COMMENT "concat KM4 image2 linker script"
     VERBATIM
 )
@@ -57,6 +58,7 @@ add_executable(target_img2_km4
     "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/cm_backtrace_stub.c"   # weak no-op (CmBacktrace lib not in this checkout)
     "${CMAKE_CURRENT_SOURCE_DIR}/minimal_stubs.c"       # weak CRYPTO_Init / rtw_if_wifi_thread (no TLS/WiFi)
+    "${CMAKE_CURRENT_SOURCE_DIR}/wifi_scan_compat.c"    # weak wifi_mode + connect/EAP/promisc stubs (scan only)
 )
 # WIP: the image2 link still needs the app/WiFi/mbedTLS/lwIP/log/os_dep/ftl
 # stack (~30 undefined symbols at bootstrap). EXCLUDE_FROM_ALL keeps the
@@ -76,7 +78,7 @@ target_include_directories(target_img2_km4 SYSTEM PRIVATE
 # plus memcpy/memset — so KM4 doesn't need the ROM memcpy alias KM0 uses.
 target_link_libraries(target_img2_km4 PRIVATE
     amebad_sdk_includes
-    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km4,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_ftl,amebad_at_cmd,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_monitor,amebad_monitor_common,amebad_pmc_hp>"
+    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km4,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_ftl,amebad_at_cmd,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_monitor,amebad_monitor_common,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_lwip,lwipcore,amebad_wlan,amebad_wps>"
     m
     stdc++
     c

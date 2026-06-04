@@ -17,28 +17,79 @@
 #include "ameba_soc.h"
 #include "FreeRTOS.h"
 #include "task.h"
+#include "wifi_conf.h"   /* wifi_on / wifi_scan_networks + rtw_* scan structs */
+#include "netconf.h"     /* LwIP_Init */
 
 /* basic AT log / shell console (monitor shell over the log UART) */
 extern void shell_init_rom(u32 TBLSz, void *pTBL);
 extern void shell_init_ram(void);
 extern void shell_uart_irq_rom(void *Data);
 
+/* ---- WiFi bring-up (scan milestone) ------------------------------------- *
+ * Prove the KM4 host driver + KM0 WiFi FW + dual-core IPC handshake are all
+ * live by running LwIP_Init -> wifi_on(STA) -> wifi_scan_networks and printing
+ * the AP list. Connect / DHCP / AT commands are follow-on work. Mirrors the
+ * SDK's wlan_network()/init_thread but trimmed (no interactive mode).         */
+
+/* Called once per AP found, then once more with scan_complete = RTW_TRUE. */
+static rtw_result_t wifi_scan_print(rtw_scan_handler_result_t *malloced_scan_result)
+{
+    if (malloced_scan_result->scan_complete != RTW_TRUE) {
+        rtw_scan_result_t *ap = &malloced_scan_result->ap_details;
+        ap->SSID.val[ap->SSID.len] = '\0';   /* room: val[33], len <= 32 */
+        DiagPrintf("[KM4][scan] %02x:%02x:%02x:%02x:%02x:%02x  ch%2u  %4d dBm  %s\n\r",
+                   ap->BSSID.octet[0], ap->BSSID.octet[1], ap->BSSID.octet[2],
+                   ap->BSSID.octet[3], ap->BSSID.octet[4], ap->BSSID.octet[5],
+                   ap->channel, ap->signal_strength, (char *)ap->SSID.val);
+    } else {
+        DiagPrintf("[KM4][scan] ==== scan complete ====\n\r");
+    }
+    return RTW_SUCCESS;
+}
+
+static void wifi_bringup_thread(void *param)
+{
+    (void)param;
+
+    DiagPrintf("[KM4] LwIP_Init()\n\r");
+    LwIP_Init();
+
+    DiagPrintf("[KM4] wifi_on(RTW_MODE_STA)...\n\r");
+    if (wifi_on(RTW_MODE_STA) < 0) {
+        DiagPrintf("[KM4] wifi_on FAILED\n\r");
+        vTaskDelete(NULL);
+        return;
+    }
+    DiagPrintf("[KM4] wifi_on OK (heap 0x%x); scanning...\n\r",
+               (unsigned int)xPortGetFreeHeapSize());
+
+    if (wifi_scan_networks(wifi_scan_print, NULL) != RTW_SUCCESS)
+        DiagPrintf("[KM4] wifi_scan_networks: failed to start\n\r");
+
+    vTaskDelete(NULL);
+}
+
 int main(void)
 {
-    DiagPrintf("\n\r[KM4] at-project minimal image2 — basic AT log\n\r");
+    DiagPrintf("\n\r[KM4] at-project image2 — WiFi scan bring-up\n\r");
     DiagPrintf("[KM4] FreeRTOS kernel %s\n\r", tskKERNEL_VERSION_NUMBER);
 
-    /* Bring up the AT log / shell console (no WiFi / BT). Mirrors the SDK
-       example main's console init: ROM shell + RAM shell, then register and
-       enable the LOGUART RX ISR (shell_uart_irq_rom) so typed commands are
-       actually captured — shell_init_ram() alone enables the IRQ but doesn't
-       register the handler, so without this the console is output-only. */
+    /* Bring up the AT log / shell console. Mirrors the SDK example main's
+       console init: ROM shell + RAM shell, then register and enable the LOGUART
+       RX ISR (shell_uart_irq_rom) so typed commands are captured. */
     shell_init_rom(0, 0);
     shell_init_ram();
     InterruptRegister((IRQ_FUN)shell_uart_irq_rom, UART_LOG_IRQ, (u32)NULL, 5);
     InterruptEn(UART_LOG_IRQ, 5);
 
-    /* Run. The console / shell runs as FreeRTOS task(s) from here. */
+    /* WiFi bring-up runs as its own task (wifi_on blocks up to ~20s waiting for
+       the driver thread, so it must not be on the main/idle path). Stack sized
+       like the SDK init_thread (1280 words). */
+    if (xTaskCreate(wifi_bringup_thread, "wifi_bringup", (512 + 768), NULL,
+                    tskIDLE_PRIORITY + 3, NULL) != pdPASS)
+        DiagPrintf("[KM4] xTaskCreate(wifi_bringup) failed\n\r");
+
+    /* Run. Console / shell + the bring-up task run as FreeRTOS tasks. */
     vTaskStartScheduler();
 
     for (;;) {
