@@ -144,10 +144,12 @@ target_include_directories(amebad_sdk_includes SYSTEM INTERFACE
     "${CMAKE_SOURCE_DIR}/component/amebad/xmodem"
     "${_sdk_soc}/swlib/string"
     "${_sdk_soc}/misc"
-    # common APIs
+    # common APIs — platform_stdlib.h etc. (api + api/platform). at_cmd headers
+    # (log_service.h / atcmd_*.h) moved onto the at_cmd component; lwip_netconf.h
+    # moved to lwip/config.
     "${_common}/api"
     "${_common}/api/platform"
-    "${_common}/api/at_cmd"
+    "${CMAKE_SOURCE_DIR}/component/amebad/at_cmd"
     # autoconf.h (the global Kconfig autoconf) lives in the WLAN driver's include/
     # — a Realtek quirk. Needed by inc_lp/main.h + sys_arch.c even with WiFi off;
     # the rest of the WLAN driver headers are not pulled by the minimal build.
