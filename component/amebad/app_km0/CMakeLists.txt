@@ -27,9 +27,11 @@ foreach(_p
     endif()
 endforeach()
 
-# Prebuilt vendor archives (tracked in the ameba-rtos-d submodule). Referenced
-# in-place as IMPORTED libs — they're binary blobs with no source to compile.
-set(_lp_lib "${CMAKE_SOURCE_DIR}/platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_lp/asdk/lib/application")
+# Prebuilt vendor archives (PMC/SOCPS deep-sleep + wifi_FW), vendored into the
+# tree (component/amebad/prebuilt/) — binary blobs with no source to compile, so
+# they are copied in rather than referenced from platform/ameba-rtos-d. Resync
+# from project_lp/asdk/lib/application when the submodule pointer moves.
+set(_lp_lib "${CMAKE_SOURCE_DIR}/component/amebad/prebuilt")
 add_library(amebad_pmc_lp STATIC IMPORTED)
 set_target_properties(amebad_pmc_lp PROPERTIES
     IMPORTED_LOCATION "${_lp_lib}/lib_pmc_lp.a")

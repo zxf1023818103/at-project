@@ -33,8 +33,10 @@ foreach(_p
     endif()
 endforeach()
 
-# Prebuilt KM4 vendor archives (tracked in the ameba-rtos-d submodule).
-set(_hp_lib "${CMAKE_SOURCE_DIR}/platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_hp/asdk/lib/application")
+# Prebuilt KM4 vendor archive (PMC), vendored into the tree
+# (component/amebad/prebuilt/) — binary blob, copied in rather than referenced
+# from platform/ameba-rtos-d. Resync from project_hp/asdk/lib/application.
+set(_hp_lib "${CMAKE_SOURCE_DIR}/component/amebad/prebuilt")
 add_library(amebad_pmc_hp STATIC IMPORTED)
 set_target_properties(amebad_pmc_hp PROPERTIES IMPORTED_LOCATION "${_hp_lib}/lib_pmc_hp.a")
 # (lib_wlan.a / lib_wps.a intentionally not linked — this minimal image2 has no
