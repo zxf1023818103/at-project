@@ -131,14 +131,17 @@ target_include_directories(amebad_sdk_includes SYSTEM INTERFACE
     # upstream FreeRTOS-Kernel V10.6.2 headers + the per-core port (portmacro.h)
     "${_kernel}/include"
     "${_kernel}/portable/${_kernel_port}"
-    # OS abstraction (non-kernel): freertos_service.h, os_dep, ...
-    "${_os}"
-    "${_os}/freertos"
-    "${_os}/os_dep/include"
-    # SoC-level
+    # OS abstraction headers now live with their owning components, not in the
+    # sdk_headers mirror: freertos glue headers (freertos_service/pmu/heap5_config/
+    # backtrace_ext/cmsis_os.h) with freertos_glue, osdep headers (osdep_service/
+    # psram_reserve/device_lock/tcm_heap.h) with osdep.
+    "${CMAKE_SOURCE_DIR}/component/amebad/freertos_glue"
+    "${CMAKE_SOURCE_DIR}/component/amebad/osdep"
+    # SoC-level. monitor (shell/monitor_rom/rtl_trace.h) + xmodem (xmodem_*.h)
+    # headers also moved onto their components.
     "${_sdk_soc}/cmsis"
-    "${_sdk_soc}/app/monitor/include"
-    "${_sdk_soc}/app/xmodem"
+    "${CMAKE_SOURCE_DIR}/component/amebad/monitor"
+    "${CMAKE_SOURCE_DIR}/component/amebad/xmodem"
     "${_sdk_soc}/swlib/string"
     "${_sdk_soc}/misc"
     # common APIs
