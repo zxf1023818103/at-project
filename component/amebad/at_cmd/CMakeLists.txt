@@ -38,6 +38,7 @@ target_include_directories(amebad_at_cmd BEFORE PRIVATE
 # the headers from there instead of platform/ameba-rtos-d/.../lwip_v2.2.0.
 set(_lwip "${CMAKE_SOURCE_DIR}/component/thirdparty/lwip_amebad")
 target_include_directories(amebad_at_cmd SYSTEM PRIVATE
+    "${CMAKE_SOURCE_DIR}/component/amebad/lwip/config"  # vendored lwipopts.h
     "${_lwip}/src/include"
     "${_lwip}/src/include/lwip"
     "${_lwip}/src/include/netif"

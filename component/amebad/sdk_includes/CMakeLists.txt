@@ -1,21 +1,26 @@
-# amebad_sdk_includes — chip-aware INTERFACE bundle of all SDK include
-# paths that AmebaD vendor headers expect on the search path.
+# amebad_sdk_includes — chip-aware INTERFACE bundle of the SDK include paths the
+# AmebaD vendored headers still expect on the search path.
 #
-# Mirrors IFLAGS from
-#   platform/ameba-rtos-d/.../project_lp/asdk/Makefile.include.gen (lines 146-211).
-# SDK MISS paths (cmsis/device, fwlib/rom_map_lp, wifi_fw/include,
-# swlib/os_dep/*, swlib/std_lib/*, mbed/.../include, $(ROOTDIR)/../git_code/...)
-# are skipped — gcc would accept them silently but they don't exist in the
-# submodule.
+# Pruned to the LOAD-BEARING set only: the broad out-of-tree
+# (platform/ameba-rtos-d) header dirs that ameba_soc.h + the os abstraction +
+# the project config genuinely drag in. The dead/replaceable ones were dropped —
+# WLAN driver (minus the one include/ that holds the global autoconf.h), lwip
+# v1.4.1, INIC, polarssl, the SDK's mbedtls-2.4.0 (replaced with the SHARED
+# component/thirdparty/mbedtls), test/example/utilities, api/wifi, api/network,
+# mbed HAL (moved onto the ftl target, its only consumer). lwipopts.h moved to
+# the vendored component/amebad/lwip/config.
 #
-# Chip-gated: KM0 uses inc_lp + FreeRTOS RTL8721D_LP; KM4 uses inc_hp +
-# FreeRTOS RTL8721D_HP. The other ~30 paths are chip-agnostic.
+# In-tree members (NOT out-of-tree): amebad_fwlib_headers (69 chip/HAL headers),
+# our freertos/config override, the upstream freertos-kernel headers, shared
+# mbedtls/include.
 #
-# Members linked via this INTERFACE:
-#   - amebad_fwlib_headers      (project-local 69 chip-register / HAL headers)
-#   - inc_lp / inc_hp           (Kconfig autoconf + board opts; chip-selected)
-#   - ~30 SDK subdirs           (FreeRTOS, swlib, app, common/api, wlan, lwip,
-#                                mbedtls, ...)
+# What remains out-of-tree (the irreducible SDK header surface — would need
+# vendoring those headers in-tree to remove): inc_lp/inc_hp (project config +
+# base FreeRTOSConfig.h), os + os/freertos + os_dep, soc cmsis/monitor/xmodem/
+# swlib/misc, common api/api-platform/api-at_cmd, and wlan/realtek/include
+# (just for autoconf.h).
+#
+# Chip-gated: KM0 uses inc_lp; KM4 uses inc_hp.
 
 if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
     set(_proj_inc_dir   "inc_lp")
@@ -134,38 +139,13 @@ target_include_directories(amebad_sdk_includes SYSTEM INTERFACE
     # common APIs
     "${_common}/api"
     "${_common}/api/platform"
-    "${_common}/api/wifi"
-    "${_common}/api/network"
-    "${_common}/api/network/include"
     "${_common}/api/at_cmd"
-    "${_common}/api/wifi/rtw_wpa_supplicant/src"
-    "${_common}/test"
-    "${_common}/example"
-    "${_common}/utilities"
-    # WLAN driver headers
+    # autoconf.h (the global Kconfig autoconf) lives in the WLAN driver's include/
+    # — a Realtek quirk. Needed by inc_lp/main.h + sys_arch.c even with WiFi off;
+    # the rest of the WLAN driver headers are not pulled by the minimal build.
     "${_common}/drivers/wlan/realtek/include"
-    "${_common}/drivers/wlan/realtek/src/hci"
-    "${_common}/drivers/wlan/realtek/src/osdep"
-    "${_common}/drivers/wlan/realtek/src/hal"
-    "${_common}/drivers/wlan/realtek/src/hal/OUTSRC"
-    "${_common}/drivers/wlan/realtek/src/hal/rtl8711b"
-    "${_common}/drivers/wlan/realtek/wlan_ram_map/rom"
-    # network / lwip 1.4.1
-    "${_common}/network"
-    "${_common}/network/lwip/lwip_v1.4.1/src/include"
-    "${_common}/network/lwip/lwip_v1.4.1/src/include/lwip"
-    "${_common}/network/lwip/lwip_v1.4.1/src/include/netif"
-    "${_common}/network/lwip/lwip_v1.4.1/src/include/ipv4"
-    "${_common}/network/lwip/lwip_v1.4.1/port/realtek"
-    "${_common}/network/lwip/lwip_v1.4.1/port/realtek/freertos"
-    # INIC
-    "${_common}/drivers/inic/rtl8711b"
-    # SSL — polarssl + mbedtls (rtl8721d_ota.h default-on HTTPS_OTA_UPDATE
-    # pulls mbedtls/version.h into every TU that includes ameba_soc.h)
-    "${_common}/network/ssl/polarssl-1.3.8/include"
-    "${_common}/network/ssl/ssl_ram_map/rom"
-    "${_common}/network/ssl/mbedtls-2.4.0/include"
-    "${_common}/network/ssl/mbedtls_ram_map/rom"
-    # mbed HAL
-    "${_common}/mbed/targets/hal/rtl8721d"
+    # SSL — rtl8721d_ota.h (default-on HTTPS_OTA_UPDATE) pulls mbedtls/version.h
+    # into every TU that includes ameba_soc.h. Take it from the SHARED upstream
+    # Mbed TLS (component/thirdparty/mbedtls), not the SDK's mbedtls-2.4.0.
+    "${CMAKE_SOURCE_DIR}/component/thirdparty/mbedtls/include"
 )

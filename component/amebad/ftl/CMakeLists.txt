@@ -16,12 +16,15 @@ add_library(amebad_ftl STATIC
 )
 
 # ftl.c -> ftl.h / ftl_int.h (vendored beside it) + flash_api.h (mbed hal_ext);
-# flash_api.c -> pinmap.h (mbed hal) + objects.h/PinNames.h (mbed targets,
-# already in sdk_includes' mbed/targets/hal/rtl8721d).
+# flash_api.h/.c -> pinmap.h (mbed hal) + device.h/objects.h/PinNames.h (mbed
+# targets). These mbed HAL header dirs are ftl-specific, so they live here on the
+# ftl target — not in amebad_sdk_includes (which carries only the broadly-needed
+# SDK headers).
 target_include_directories(amebad_ftl SYSTEM PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${_base}/mbed/hal_ext"
-    "${_base}/mbed/hal")
+    "${_base}/mbed/hal"
+    "${_base}/mbed/targets/hal/rtl8721d")
 target_link_libraries(amebad_ftl PUBLIC amebad_sdk_includes)
 
 target_compile_options(amebad_ftl PRIVATE
