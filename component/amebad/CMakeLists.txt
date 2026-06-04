@@ -78,6 +78,7 @@ add_subdirectory(osdep)              # KM4-gated internally (osdep/os abstractio
 add_subdirectory(ftl)                # KM4-gated internally (flash translation layer)
 add_subdirectory(at_cmd)             # KM4-gated internally (basic AT log/command service)
 add_subdirectory(mbedtls)            # KM4-gated: shared upstream Mbed TLS v3.6.4
+add_subdirectory(lwip)               # KM4-gated: shared lwip (thirdparty/lwip_amebad)
 add_subdirectory(image_tool)         # defines amebad_make_{boot,image2}_all_bin*(...)
                                      #   + amebad_make_image_all_bin() (-> target
                                      #     amebad_image_all, wraps build_image_all.py)

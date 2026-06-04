@@ -33,9 +33,10 @@ target_include_directories(amebad_at_cmd BEFORE PRIVATE
 
 # log_service.c -> lwip_netconf.h -> tcpip.h: a header-only dependency on lwip
 # (it registers, but with CONFIG_WLAN off doesn't *call*, the network AT
-# commands). KM4 uses lwip v2.2.0 (sdk_includes carries the KM0 v1.4.1 paths),
-# so add the v2.2.0 search paths here. project_hp Makefile.include.gen:232-237.
-set(_lwip "${CMAKE_SOURCE_DIR}/platform/ameba-rtos-d/component/common/network/lwip/lwip_v2.2.0")
+# commands). KM4 lwip is now the shared component/thirdparty/lwip_amebad submodule
+# (lwip v2.2.0 + Realtek patches — same source the SDK shipped in-place), so take
+# the headers from there instead of platform/ameba-rtos-d/.../lwip_v2.2.0.
+set(_lwip "${CMAKE_SOURCE_DIR}/component/thirdparty/lwip_amebad")
 target_include_directories(amebad_at_cmd SYSTEM PRIVATE
     "${_lwip}/src/include"
     "${_lwip}/src/include/lwip"
