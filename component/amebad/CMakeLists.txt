@@ -80,6 +80,7 @@ add_subdirectory(at_cmd)             # KM4-gated internally (basic AT log/comman
 add_subdirectory(mbedtls)            # KM4-gated: shared upstream Mbed TLS v3.6.4
 add_subdirectory(lwip)               # KM4-gated: shared lwip (thirdparty/lwip_amebad)
 add_subdirectory(pmu)                # chip-gated: prebuilt PMC lib (lib_pmc_lp/hp.a) + pmu headers
+add_subdirectory(wlan)               # KM4-gated: host WiFi driver libs (lib_wlan/wps.a) + API headers
 add_subdirectory(image_tool)         # defines amebad_make_{boot,image2}_all_bin*(...)
                                      #   + amebad_make_image_all_bin() (-> target
                                      #     amebad_image_all, wraps build_image_all.py)

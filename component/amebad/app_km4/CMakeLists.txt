@@ -33,9 +33,10 @@ foreach(_p
     endif()
 endforeach()
 
-# amebad_pmc_hp (KM4 PMC prebuilt lib) is defined by the pmu/ component.
-# (lib_wlan.a / lib_wps.a intentionally not linked — this minimal image2 has no
-# WiFi. They come back when the WiFi stack is wired.)
+# amebad_pmc_hp (KM4 PMC prebuilt lib) is defined by the pmu/ component;
+# amebad_wlan / amebad_wps (host WiFi driver libs) by the wlan/ component.
+# (amebad_wlan / amebad_wps intentionally not linked — this minimal image2 has
+# no WiFi. Add them to the link group when the WiFi stack is wired.)
 
 # Linker script: cat img2_is.ld + rom_symbol_acut.ld; img2_is.ld does
 # INCLUDE "rlx8721d_layout_is.ld", resolved through -L below.

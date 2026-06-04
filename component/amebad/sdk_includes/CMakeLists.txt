@@ -17,8 +17,8 @@
 # What remains out-of-tree (the irreducible SDK header surface — would need
 # vendoring those headers in-tree to remove): inc_lp/inc_hp (project config +
 # base FreeRTOSConfig.h), os + os/freertos + os_dep, soc cmsis/monitor/xmodem/
-# swlib/misc, common api/api-platform/api-at_cmd, and wlan/realtek/include
-# (just for autoconf.h).
+# swlib/misc, common api/api-platform/api-at_cmd, and the wlan component's
+# headers (just for autoconf.h; lib_wlan.a/lib_wps.a live there too).
 #
 # Chip-gated: KM0 uses inc_lp; KM4 uses inc_hp.
 
@@ -154,7 +154,10 @@ target_include_directories(amebad_sdk_includes SYSTEM INTERFACE
     # autoconf.h (the global Kconfig autoconf) lives in the WLAN driver's include/
     # — a Realtek quirk. Needed by inc_lp/main.h + sys_arch.c even with WiFi off;
     # the rest of the WLAN driver headers are not pulled by the minimal build.
-    "${_common}/drivers/wlan/realtek/include"
+    # Moved out of the sdk_headers mirror onto the wlan component (with lib_wlan.a
+    # / lib_wps.a). Ungated here (autoconf.h is needed on BOTH cores); the wlan
+    # component itself is KM4-gated for the prebuilt libs.
+    "${CMAKE_SOURCE_DIR}/component/amebad/wlan"
     # SSL — rtl8721d_ota.h (default-on HTTPS_OTA_UPDATE) pulls mbedtls/version.h
     # into every TU that includes ameba_soc.h. Take it from the SHARED upstream
     # Mbed TLS (component/thirdparty/mbedtls), not the SDK's mbedtls-2.4.0.
