@@ -133,7 +133,7 @@ target_include_directories(amebad_sdk_includes SYSTEM INTERFACE
     "${_kernel}/portable/${_kernel_port}"
     # OS abstraction headers now live with their owning components, not in the
     # sdk_headers mirror: freertos glue headers (freertos_service/pmu/heap5_config/
-    # backtrace_ext/cmsis_os.h) with freertos_glue, osdep headers (osdep_service/
+    # backtrace_ext.h) with freertos_glue, osdep headers (osdep_service/
     # psram_reserve/device_lock/tcm_heap.h) with osdep.
     "${CMAKE_SOURCE_DIR}/component/amebad/freertos_glue"
     "${CMAKE_SOURCE_DIR}/component/amebad/osdep"
