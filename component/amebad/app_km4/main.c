@@ -31,6 +31,7 @@ extern void amebad_freertos_tcp_set_ready(void);
 extern void iperf_client_start(void);
 extern void iperf_server_start(void);
 extern void iperf_udp_client_start(void);
+extern void iperf_udp_server_start(void);
 
 #define WLAN_STA_IDX  0
 
@@ -62,11 +63,12 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
         DiagPrintf( "[KM4] gateway   %d.%d.%d.%d\n\r",
                     (int)( ulGW & 0xff ), (int)( ( ulGW >> 8 ) & 0xff ),
                     (int)( ( ulGW >> 16 ) & 0xff ), (int)( ( ulGW >> 24 ) & 0xff ) );
-        /* TCP TX test (device client -> WSL `iperf -s`). The UDP discriminator
-         * (iperf_udp_client_start) proved the driver path does 22 Mbps, so the
-         * ~11 Mbps TCP plateau was a too-small TCP TX window — now enlarged via
-         * FREERTOS_SO_WIN_PROPERTIES in iperf_client.c. */
-        iperf_client_start();
+        /* RX-path discriminator: device UDP RX sink (host `iperf -u -c <ip>
+         * -b 40M -t 15`). Tests whether the driver->IP-task RX delivery is
+         * tick-quantized (the suspected ACK-clock governor behind the ~11 Mbps
+         * TCP cap). Swap back to iperf_client_start() (TCP TX) afterwards. */
+        iperf_udp_server_start();
+        ( void ) iperf_client_start;
         ( void ) iperf_udp_client_start;
         ( void ) iperf_server_start;
     }
