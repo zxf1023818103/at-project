@@ -19,11 +19,13 @@
 #define ipconfigUSE_TCP                         1       /* iperf throughput test */
 #define ipconfigUSE_DHCP                        1
 
-/* TCP tuning for throughput (WiFi ~tens of Mbps). */
-#define ipconfigTCP_WIN_SEG_COUNT               32
+/* TCP tuning for throughput. Window must cover the bandwidth-delay product;
+ * with power-save OFF the WiFi RTT drops to ~1-2 ms, but keep generous buffers
+ * so the sender can keep the pipe full. */
+#define ipconfigTCP_WIN_SEG_COUNT               64
 #define ipconfigUSE_TCP_WIN                      1
-#define ipconfigTCP_RX_BUFFER_LENGTH            ( 8 * 1460 )
-#define ipconfigTCP_TX_BUFFER_LENGTH            ( 8 * 1460 )
+#define ipconfigTCP_RX_BUFFER_LENGTH            ( 24 * 1460 )   /* ~35 KB */
+#define ipconfigTCP_TX_BUFFER_LENGTH            ( 24 * 1460 )   /* ~35 KB */
 #define ipconfigTCP_MSS                         ( 1500 - 40 )   /* 1460 */
 #define ipconfigTCP_TIME_TO_LIVE                128
 #define ipconfigIGNORE_UNKNOWN_PACKETS          0
@@ -48,7 +50,7 @@
 #define ipconfigBYTE_ORDER                      pdFREERTOS_LITTLE_ENDIAN
 
 /* Buffers (BufferAllocation_2 = heap). Bump for TCP throughput. */
-#define ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS  24
+#define ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS  40
 #define ipconfigEVENT_QUEUE_LENGTH              ( ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS + 5 )
 #define ipconfigUSE_CALLBACKS                   0
 

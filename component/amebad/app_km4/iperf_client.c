@@ -18,8 +18,8 @@ extern void DiagPrintf( const char *, ... );
 
 #define IPERF_SERVER_IP   FreeRTOS_inet_addr_quick( 192, 168, 2, 73 )   /* WSL host */
 #define IPERF_PORT        5001
-#define IPERF_SECONDS     10
-#define IPERF_TXBUF       1460
+#define IPERF_SECONDS     15
+#define IPERF_TXBUF       8192   /* big chunks per send -> fewer calls, fuller window */
 
 static uint8_t ucTxBuf[ IPERF_TXBUF ];
 
@@ -107,6 +107,8 @@ void iperf_client_start( void )
     if( !started )
     {
         started = 1;
+        /* +2 (below the WiFi driver's xmit thread — raising it above starves the
+         * actual transmit and throughput drops). */
         xTaskCreate( prvIperfClientTask, "iperf", 1024, NULL, tskIDLE_PRIORITY + 2, NULL );
     }
 }

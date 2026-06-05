@@ -29,6 +29,7 @@ extern NetworkInterface_t *pxRealtek_FillInterfaceDescriptor(BaseType_t xEMACInd
 extern void amebad_register_wlan_netif(int idx, unsigned char *mac);
 extern void amebad_freertos_tcp_set_ready(void);
 extern void iperf_client_start(void);
+extern void iperf_server_start(void);
 
 #define WLAN_STA_IDX  0
 
@@ -60,7 +61,11 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
         DiagPrintf( "[KM4] gateway   %d.%d.%d.%d\n\r",
                     (int)( ulGW & 0xff ), (int)( ( ulGW >> 8 ) & 0xff ),
                     (int)( ( ulGW >> 16 ) & 0xff ), (int)( ( ulGW >> 24 ) & 0xff ) );
-        iperf_client_start();   /* kick the TX-throughput test against the WSL iperf -s */
+        /* Default = TX test (device client -> WSL `iperf -s`). For the RX
+         * (download) test instead, start iperf_server_start() and run
+         * `iperf -c <device-ip>` on the host. */
+        iperf_client_start();
+        ( void ) iperf_server_start;
     }
     else
     {
@@ -90,6 +95,9 @@ static void wifi_bringup_thread( void *param )
     unsigned char mac[ 6 ] = { 0 };
     int i;
     ( void ) param;
+
+    /* Throughput: run KM4 at max clock (default may be lower for power). */
+    SystemSetCpuClk( CLK_KM4_200M );
 
     DiagPrintf( "[KM4] wifi_on(RTW_MODE_STA)...\n\r" );
     if( wifi_on( RTW_MODE_STA ) < 0 )
@@ -130,7 +138,17 @@ static void wifi_bringup_thread( void *param )
         vTaskDelete( NULL );
         return;
     }
-    DiagPrintf( "[KM4] associated; waiting for DHCP...\n\r" );
+    /* Throughput: fully disable power-save. wifi_set_power_mode(ips,lps) with
+     * both 0 turns OFF inactive-PS AND leisure-PS (the latter sleeps the radio
+     * mid-association during brief idle -> high RTT + low TCP throughput).
+     * wifi_disable_powersave() alone left IPS on (observed ~17 ms RTT). */
+    wifi_set_power_mode( 0, 0 );
+    wifi_disable_powersave();
+    {
+        int rssi = 0;
+        wifi_get_rssi( &rssi );
+        DiagPrintf( "[KM4] associated; power-save off; RSSI %d dBm; waiting for DHCP...\n\r", rssi );
+    }
 
     vTaskDelete( NULL );
 }
