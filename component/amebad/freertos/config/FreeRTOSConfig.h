@@ -33,4 +33,8 @@
 #undef configUSE_TICKLESS_IDLE
 #define configUSE_TICKLESS_IDLE 0
 
+/* NB: configTICK_RATE_HZ must stay 1000 — bumping it (tried 2000) hard-faults
+ * on boot (the SDK/driver hardcodes a 1 ms tick assumption somewhere). So the
+ * ~1-packet-per-tick throughput pacing can't be lifted via the tick rate. */
+
 #endif /* AT_AMEBAD_FREERTOSCONFIG_OVERRIDE_H */
