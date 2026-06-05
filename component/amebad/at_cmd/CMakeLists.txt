@@ -31,19 +31,12 @@ add_library(amebad_at_cmd STATIC
 target_include_directories(amebad_at_cmd BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/../config")
 
-# log_service.c -> lwip_netconf.h -> tcpip.h: a header-only dependency on lwip
-# (it registers, but with CONFIG_WLAN off doesn't *call*, the network AT
-# commands). KM4 lwip is now the shared component/thirdparty/lwip_amebad submodule
-# (lwip v2.2.0 + Realtek patches — same source the SDK shipped in-place), so take
-# the headers from there instead of platform/ameba-rtos-d/.../lwip_v2.2.0.
-set(_lwip "${CMAKE_SOURCE_DIR}/component/thirdparty/lwip_amebad")
+# log_service.c -> atcmd_wifi.h/atcmd_lwip.h -> lwip_netconf.h: only needs
+# NET_IF_NUM from the lwip-free shim now. lwip is gone — the transparent-socket AT
+# commands (the only lwip-header consumers) are ATVER_2-only and not built here
+# (CONFIG_EXAMPLE_UART_ATCMD=0), so their lwip includes are #if'd out.
 target_include_directories(amebad_at_cmd SYSTEM PRIVATE
-    "${CMAKE_SOURCE_DIR}/component/amebad/lwip/config"  # vendored lwipopts.h
-    "${_lwip}/src/include"
-    "${_lwip}/src/include/lwip"
-    "${_lwip}/src/include/netif"
-    "${_lwip}/port/realtek"
-    "${_lwip}/port/realtek/freertos")
+    "${CMAKE_SOURCE_DIR}/component/amebad/lwip/config")  # lwip_netconf.h (vendored shim)
 
 target_link_libraries(amebad_at_cmd PUBLIC FreeRTOS)
 

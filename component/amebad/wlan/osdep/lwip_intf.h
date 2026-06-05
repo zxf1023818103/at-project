@@ -28,7 +28,11 @@ struct netif;
 //----- ------------------------------------------------------------------
 // Ethernet Buffer
 //----- ------------------------------------------------------------------
-#if defined(CONFIG_MBED_ENABLED)
+/* The driver TX/RX scatter-gather descriptor. Defined here unconditionally — it
+ * used to come from ethernetif.h (lwip netif port) on the non-MBED path, but lwip
+ * is removed (IP stack is FreeRTOS-Plus-TCP). struct netif is forward-declared
+ * below; the RX hand-off is amebad_tcp_netif_input (FreeRTOS+TCP realtek_netif.c),
+ * reached via netif_rx() in the rewritten lwip_intf.c. */
 struct eth_drv_sg {
     unsigned int			buf;
     unsigned int			len;
@@ -36,9 +40,6 @@ struct eth_drv_sg {
 
 #define MAX_ETH_DRV_SG		32
 #define MAX_ETH_MSG			1540
-#else
-#include "ethernetif.h"  // moved to ethernetif.h by jimmy 12/2/2015
-#endif
 //----- ------------------------------------------------------------------
 // Wlan Interface Provided
 //----- ------------------------------------------------------------------

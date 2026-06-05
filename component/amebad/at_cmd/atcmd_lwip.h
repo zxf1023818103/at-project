@@ -3,6 +3,10 @@
 
 #include "main.h"
 #include "osdep_service.h"
+/* lwip headers are only needed by the transparent-socket AT commands, which are
+ * compiled only under ATVER_2 (CONFIG_EXAMPLE_UART_ATCMD). This minimal build is
+ * ATVER_1, so they're excluded — that's what lets lwip be removed entirely. */
+#if (ATCMD_VER == ATVER_2)
 #include <lwip/opt.h>
 #include "lwip/sockets.h"
 #include "lwip/api.h"
@@ -15,7 +19,8 @@
 #include "lwip/tcpip.h"
 #include "lwip/pbuf.h"
 #include "lwip/netdb.h"
-#include "lwip_netconf.h"
+#endif
+#include "lwip_netconf.h"   /* lwip-free shim: NET_IF_NUM */
 
 #define	_AT_TRANSPORT_MODE_					"ATP1"
 #define	_AT_TRANSPORT_LOCAL_PORT_			"ATP2"

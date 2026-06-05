@@ -40,18 +40,12 @@ target_include_directories(amebad_freertos_tcp PUBLIC
     "${FT}/source/include"
     "${FT}/source/portable/Compiler/GCC"          # pack_struct_start/end.h
 )
-# realtek_xnetif.c needs lwip's struct netif + NET_IF_NUM (the one lwip-typed
-# dependency); pull the lwip headers (NOT the lwip lib).
+# realtek_xnetif.c needs the lwip-free netif shim (lwip_netconf.h: vendored
+# struct netif + NET_IF_NUM) and the wlan driver osdep headers (lwip_intf.h
+# structs / rltk_* decls — headers only; symbols resolve at the exe link via the
+# cross_refs group, so do NOT *link* amebad_wlan here -> cycle). lwip is gone.
 target_include_directories(amebad_freertos_tcp PRIVATE
-    "${CMAKE_SOURCE_DIR}/component/thirdparty/lwip_amebad/src/include"
-    "${CMAKE_SOURCE_DIR}/component/thirdparty/lwip_amebad/src/include/lwip"
-    # lwip's arch.h does `#include "arch/cc.h"` -> port/realtek/arch/cc.h, so the
-    # PARENT of arch/ (port/realtek) goes on the path (same trick as amebad/lwip).
-    "${CMAKE_SOURCE_DIR}/component/thirdparty/lwip_amebad/port/realtek"
-    "${CMAKE_SOURCE_DIR}/component/amebad/lwip/config"
-    # wlan driver osdep headers (lwip_intf.h structs / rltk_* decls) — headers
-    # only; the actual symbols resolve at the exe link via the cross_refs group,
-    # so we must NOT *link* amebad_wlan here (it's a group member -> cycle).
+    "${CMAKE_SOURCE_DIR}/component/amebad/lwip/config"     # lwip_netconf.h (vendored shim)
     "${CMAKE_SOURCE_DIR}/component/amebad/wlan/osdep"
 )
 
