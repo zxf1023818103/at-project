@@ -42,7 +42,11 @@ add_library(amebad_wifi STATIC EXCLUDE_FROM_ALL
     "${CMAKE_CURRENT_SOURCE_DIR}/wifi_util.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/wifi_ind.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/wlan_network.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/lwip_netconf.c"
+    # lwip_netconf.c (LwIP_Init / xnetif / lwip DHCP) is intentionally NOT built:
+    # the FreeRTOS+TCP bring-up replaces lwip's IP role. xnetif[] is provided by
+    # component/amebad/freertos_tcp/realtek_xnetif.c, and wifi_conf.c's lwip
+    # references (LwIP_Init / LwIP_DHCP / netif_add / dhcp_*) are weak-stubbed in
+    # app_km4 (freertos_tcp_compat.c) — they are not on the connect path we use.
 )
 
 target_link_libraries(amebad_wifi PUBLIC
@@ -50,7 +54,7 @@ target_link_libraries(amebad_wifi PUBLIC
     amebad_sdk_includes
     amebad_wlan              # wlan public + osdep/rom headers
     amebad_osdep
-    amebad_lwip              # lwipcore + sys_arch + ethernetif
+    amebad_lwip_headers      # lwip headers only (struct netif etc.) — not the lib (FreeRTOS+TCP build)
     amebad_wpa_supplicant    # supplicant config headers (connect path)
     FreeRTOS
 )

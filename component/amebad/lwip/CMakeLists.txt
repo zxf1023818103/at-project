@@ -35,6 +35,20 @@ set(LWIP_INCLUDE_DIRS
     "${LWIP_DIR}/port/realtek/freertos"
 )
 
+# Header-only INTERFACE: the lwip + arch + config include dirs, WITHOUT the lwip
+# library. Consumers that only need lwip headers at compile time (the wlan driver
+# glue, the wifi api, the FreeRTOS+TCP bridge's xnetif) link this instead of
+# amebad_lwip — linking the lib would drag lwipcore into their dependency closure
+# and form a cycle with the app's cross_refs link group (and, for the
+# FreeRTOS+TCP build, pull in the unused lwip IP stack).
+add_library(amebad_lwip_headers INTERFACE)
+target_include_directories(amebad_lwip_headers SYSTEM INTERFACE
+    "${LWIP_DIR}/port/realtek/freertos"        # ethernetif.h
+    ${LWIP_INCLUDE_DIRS})
+# Pure include dirs — NO library/FreeRTOS link (those would re-enter the app's
+# cross_refs group and form a cycle). Consumers link FreeRTOS/amebad_sdk_includes
+# themselves, which is what resolves lwipopts.h's platform + sys.h headers.
+
 # Defines lwipcore (EXCLUDE_FROM_ALL) from lwipnoapps_SRCS, generates lwip/init.h.
 include("${LWIP_DIR}/src/Filelists.cmake")
 
