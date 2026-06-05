@@ -46,6 +46,16 @@ static void prvIperfClientTask( void *pvParameters )
         return;
     }
 
+    /* NB: enlarging the TCP TX window does NOT help here — tested lTxWinSize
+     * 12 (default) vs 32: throughput stayed ~10-11 Mbps while RTT inflated
+     * 13->38 ms (pure bufferbloat). TCP is drain-rate limited, not window
+     * limited: the IP task services a TCP socket with pending TX at usTimeout =
+     * 1 tick min (FreeRTOS_TCP_IP.c ~L604), so with the window kept full it
+     * sends ~1 ACK-freed segment per OS tick ≈ ~900 pps ≈ 11 Mbps. UDP (no ACK
+     * clock) hits 1930 pps / 22.7 Mbps on the same radio, so the cap is the
+     * tick-quantized TCP servicing, not the driver. Raising configTICK_RATE_HZ
+     * (the direct lever) hard-faults the driver. Left at the default window. */
+
     ( void ) memset( &xServer, 0, sizeof( xServer ) );
     xServer.sin_family = FREERTOS_AF_INET;
     xServer.sin_port = FreeRTOS_htons( IPERF_PORT );

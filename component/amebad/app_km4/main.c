@@ -30,6 +30,7 @@ extern void amebad_register_wlan_netif(int idx, unsigned char *mac);
 extern void amebad_freertos_tcp_set_ready(void);
 extern void iperf_client_start(void);
 extern void iperf_server_start(void);
+extern void iperf_udp_client_start(void);
 
 #define WLAN_STA_IDX  0
 
@@ -61,12 +62,12 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
         DiagPrintf( "[KM4] gateway   %d.%d.%d.%d\n\r",
                     (int)( ulGW & 0xff ), (int)( ( ulGW >> 8 ) & 0xff ),
                     (int)( ( ulGW >> 16 ) & 0xff ), (int)( ( ulGW >> 24 ) & 0xff ) );
-        /* Default = TX test (device client -> WSL `iperf -s`). For the RX
-         * (download) test instead, start iperf_server_start() and run
-         * `iperf -c <device-ip>` on the host. */
-        /* Default = TX test (device client -> WSL `iperf -s`). For RX, start
-         * iperf_server_start() and run `iperf -c <device-ip>` on the host. */
+        /* TCP TX test (device client -> WSL `iperf -s`). The UDP discriminator
+         * (iperf_udp_client_start) proved the driver path does 22 Mbps, so the
+         * ~11 Mbps TCP plateau was a too-small TCP TX window — now enlarged via
+         * FREERTOS_SO_WIN_PROPERTIES in iperf_client.c. */
         iperf_client_start();
+        ( void ) iperf_udp_client_start;
         ( void ) iperf_server_start;
     }
     else

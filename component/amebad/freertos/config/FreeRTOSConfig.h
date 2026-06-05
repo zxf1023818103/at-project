@@ -34,7 +34,12 @@
 #define configUSE_TICKLESS_IDLE 0
 
 /* NB: configTICK_RATE_HZ must stay 1000 — bumping it (tried 2000) hard-faults
- * on boot (the SDK/driver hardcodes a 1 ms tick assumption somewhere). So the
- * ~1-packet-per-tick throughput pacing can't be lifted via the tick rate. */
+ * on boot (the SDK/driver hardcodes a 1 ms tick assumption somewhere). This
+ * matters for TCP throughput: a TCP socket with pending TX is re-serviced at
+ * usTimeout = 1 tick min (FreeRTOS+TCP FreeRTOS_TCP_IP.c ~L604), so with the
+ * send window kept full it pushes ~1 ACK-freed segment per tick ≈ ~930 pps ≈
+ * 11 Mbps. Measured: TCP TX ~10.9 Mbps. UDP TX (no ACK clock) hits 1930 pps /
+ * 22.7 Mbps on the same radio/driver — so the radio is NOT the cap; the
+ * tick-quantized TCP servicing is, and it can't be lifted via the tick rate. */
 
 #endif /* AT_AMEBAD_FREERTOSCONFIG_OVERRIDE_H */
