@@ -63,13 +63,12 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
         DiagPrintf( "[KM4] gateway   %d.%d.%d.%d\n\r",
                     (int)( ulGW & 0xff ), (int)( ( ulGW >> 8 ) & 0xff ),
                     (int)( ( ulGW >> 16 ) & 0xff ), (int)( ( ulGW >> 24 ) & 0xff ) );
-        /* TCP TX test (device -> WSL `iperf -s`). Measuring the effect of
-         * BufferAllocation_1 (static net buffers, no per-packet malloc) on the
-         * ~11 Mbps TCP cap. UDP RX sink (iperf_udp_server_start) kept for the
-         * RX-rate discriminator. */
+        /* Default = TCP TX (device -> WSL `iperf -s`); also exercises the
+         * rewritten FreeRTOS+TCP RX bridge via the ACK path. The UDP TX/RX and
+         * TCP-sink probes are kept available for throughput diagnostics. */
         iperf_client_start();
-        ( void ) iperf_udp_server_start;
         ( void ) iperf_udp_client_start;
+        ( void ) iperf_udp_server_start;
         ( void ) iperf_server_start;
     }
     else

@@ -3,75 +3,79 @@
   * This module is a confidential and proprietary property of RealTek and
   * possession or use of this module requires written permission of RealTek.
   *
-  * Copyright(c) 2016, Realtek Semiconductor Corporation. All rights reserved. 
+  * Copyright(c) 2016, Realtek Semiconductor Corporation. All rights reserved.
   *
 ******************************************************************************/
 
-//#define _LWIP_INTF_C_
+/*
+ * FreeRTOS-Plus-TCP rewrite of the Realtek WiFi-driver <-> IP-stack seam.
+ *
+ * Upstream this file bridged the driver to lwIP (CONFIG_LWIP_LAYER): it delivered
+ * RX through lwIP's ethernetif_recv(&xnetif[idx]), validated destination IPs
+ * against xnetif's lwIP ip_addr, and read IP/GW/MASK out of xnetif for WOWLAN.
+ * This build runs FreeRTOS-Plus-TCP instead, so those lwIP-specific paths are
+ * replaced. The entry points the prebuilt lib_wlan.a calls keep their (lwIP-free)
+ * signatures — rltk_wlan_set_netif_info / rltk_wlan_send / rltk_wlan_recv /
+ * netif_rx / netif_is_valid_IP / netif_get_hwaddr / netif_*_sleep_processing — but
+ * the stack work is delegated to the FreeRTOS+TCP NetworkInterface
+ * (component/amebad/freertos_tcp/realtek_netif.c) via the amebad_tcp_* helpers
+ * below. No lwIP types are referenced here. The TX/RX skb copy is driver-only and
+ * now compiles unconditionally (it never depended on the IP stack).
+ *
+ * One lwIP-typed shim remains *outside* this file: the prebuilt driver and the
+ * vendored wifi_conf.c still reference `xnetif[]` + LwIP_GetMAC for the connect-
+ * time management-frame filter — that minimal array lives in realtek_xnetif.c.
+ */
 #include <autoconf.h>
 #include <lwip_intf.h>
-#if (CONFIG_LWIP_LAYER == 1)
-#include <lwip/netif.h>
-#endif
-#if !defined(CONFIG_MBED_ENABLED)
-#include <lwip_netconf.h>
-#include <ethernetif.h>
-#endif
 #include <osdep_service.h>
 #include <wifi/wifi_util.h>
 
 #ifdef WIFI_PERFORMANCE_MONITOR
 #include <wifi_performance_monitor.h>
 #else
-#define WIFI_MONITOR_TIMER_START(x) 
-#define WIFI_MONITOR_TIMER_END(x, len) 
-#endif
-//----- ------------------------------------------------------------------
-// External Reference
-//----- ------------------------------------------------------------------
-#if (CONFIG_LWIP_LAYER == 1)
-extern struct netif xnetif[];			//LWIP netif
+#define WIFI_MONITOR_TIMER_START(x)
+#define WIFI_MONITOR_TIMER_END(x, len)
 #endif
 
+#ifndef NET_IF_NUM
+#define NET_IF_NUM 2
+#endif
+
+/* ---- FreeRTOS+TCP NetworkInterface glue (realtek_netif.c) ------------------ */
+extern void            amebad_tcp_netif_input( int idx, unsigned int len );        /* RX -> IP task */
+extern int             amebad_tcp_is_valid_ip( int idx, const unsigned char * ip_dest );
+extern unsigned char * amebad_tcp_get_addr( int idx, int kind );                   /* 0=IP 1=GW 2=MASK */
+
+/* Per-VIF MAC, set by the driver via rltk_wlan_set_netif_info(), returned by
+ * netif_get_hwaddr(). (Replaces stashing the MAC in lwIP's xnetif[].hwaddr.) */
+static unsigned char wlan_hwaddr[ NET_IF_NUM ][ 6 ];
+
 /**
- *      rltk_wlan_set_netif_info - set netif hw address and register dev pointer to netif device
- *      @idx_wlan: netif index
- *			    0 for STA only or SoftAP only or STA in STA+SoftAP concurrent mode, 
- *			    1 for SoftAP in STA+SoftAP concurrent mode
- *      @dev: register netdev pointer to LWIP. Reserved.
- *      @dev_addr: set netif hw address
- *
- *      Return Value: None
- */     
+ *      rltk_wlan_set_netif_info - register a VIF's MAC with this glue.
+ *      @idx_wlan: netif index (0 STA / 1 SoftAP in concurrent)
+ *      @dev: reserved (was the lwIP netdev pointer) — unused
+ *      @dev_addr: interface MAC
+ */
 void rltk_wlan_set_netif_info(int idx_wlan, void * dev, unsigned char * dev_addr)
 {
-#if (CONFIG_LWIP_LAYER == 1)
-#if defined(CONFIG_MBED_ENABLED)
-	//rtw_memcpy(xnetif[idx_wlan]->hwaddr, dev_addr, 6);
-	//set netif hwaddr later
-#else
-	rtw_memcpy(xnetif[idx_wlan].hwaddr, dev_addr, 6);
-	xnetif[idx_wlan].state = dev;
-#endif
-#endif
+	( void ) dev;
+	if( ( idx_wlan >= 0 ) && ( idx_wlan < NET_IF_NUM ) ) {
+		rtw_memcpy( wlan_hwaddr[ idx_wlan ], dev_addr, 6 );
+	}
 }
 
 /**
- *      rltk_wlan_send - send IP packets to WLAN. Called by low_level_output().
- *      @idx: netif index
- *      @sg_list: data buffer list
- *      @sg_len: size of each data buffer
- *      @total_len: total data len
- *
- *      Return Value: None
- */     
+ *      rltk_wlan_send - send IP packets to WLAN. Called by the stack's output
+ *      path (FreeRTOS+TCP NetworkInterfaceOutput -> here). Driver-skb only —
+ *      independent of which IP stack is on top.
+ */
 int rltk_wlan_send(int idx, struct eth_drv_sg *sg_list, int sg_len, int total_len)
 {
-#if (CONFIG_LWIP_LAYER == 1)
 	struct eth_drv_sg *last_sg;
 	struct sk_buff *skb = NULL;
 	int ret = 0;
-	
+
 	WIFI_MONITOR_TIMER_START(wifi_time_test.wlan_send_time);
 	if(idx == -1){
 		DBG_ERR("netif is DOWN");
@@ -88,7 +92,7 @@ int rltk_wlan_send(int idx, struct eth_drv_sg *sg_list, int sg_len, int total_le
 		return -1;
 	}
 	restore_flags();
-	
+
 	WIFI_MONITOR_TIMER_START(wifi_time_test.wlan_send_time1);
 	skb = rltk_wlan_alloc_skb(total_len);
 	WIFI_MONITOR_TIMER_END(wifi_time_test.wlan_send_time1, total_len);
@@ -114,23 +118,18 @@ exit:
 	rltk_wlan_tx_dec(idx);
 	restore_flags();
 	return ret;
-#endif
 }
 
 /**
- *      rltk_wlan_recv - indicate packets to LWIP. Called by ethernetif_recv().
- *      @idx: netif index
- *      @sg_list: data buffer list
- *      @sg_len: size of each data buffer
- *
- *      Return Value: None
- */     
+ *      rltk_wlan_recv - copy a pending RX frame out of the driver into the caller's
+ *      scatter-gather buffer. Called by amebad_tcp_netif_input() (the RX bridge).
+ *      Driver-skb only — stack-independent.
+ */
 void rltk_wlan_recv(int idx, struct eth_drv_sg *sg_list, int sg_len)
 {
-#if (CONFIG_LWIP_LAYER == 1)
 	struct eth_drv_sg *last_sg;
 	struct sk_buff *skb;
-	
+
 	DBG_TRACE("%s is called", __FUNCTION__);
 	if(idx == -1){
 		DBG_ERR("skb is NULL");
@@ -145,89 +144,28 @@ void rltk_wlan_recv(int idx, struct eth_drv_sg *sg_list, int sg_len)
 			skb_pull(skb, sg_list->len);
 		}
 	}
-#endif
 }
 
+/*
+ *      netif_is_valid_IP - driver RX filter: is this destination IP for us?
+ *      Delegated to the FreeRTOS+TCP endpoint (accept-on-uncertainty is safe).
+ */
 int netif_is_valid_IP(int idx, unsigned char *ip_dest)
 {
 #if defined(CONFIG_MBED_ENABLED)
 	return 1;
 #else
-#if CONFIG_LWIP_LAYER == 1
-	struct netif * pnetif = &xnetif[idx];
-
-	ip_addr_t addr = { 0 };
-
-#ifdef CONFIG_MEMORY_ACCESS_ALIGNED
-	unsigned int temp;
-	memcpy(&temp, ip_dest, sizeof(unsigned int));
-	u32_t *ip_dest_addr = &temp;
-#else
-	u32_t *ip_dest_addr  = (u32_t*)ip_dest;
-#endif
-
-#if LWIP_VERSION_MAJOR >= 2
-	ip_addr_set_ip4_u32(&addr, *ip_dest_addr);
-#else
-	addr.addr = *ip_dest_addr;
-#endif
-
-#if (LWIP_VERSION_MAJOR >= 2)
-	if((ip_addr_get_ip4_u32(netif_ip_addr4(pnetif))) == 0)
-		return 1;
-#else
-
-	if(pnetif->ip_addr.addr == 0)
-		return 1;
-#endif
-
-	if(ip_addr_ismulticast(&addr) || ip_addr_isbroadcast(&addr,pnetif)){
-		return 1;
-	}
-
-	//if(ip_addr_netcmp(&(pnetif->ip_addr), &addr, &(pnetif->netmask))) //addr&netmask
-	//	return 1;
-
-	if(ip_addr_cmp(&(pnetif->ip_addr),&addr))
-		return 1;
-
-	DBG_TRACE("invalid IP: %d.%d.%d.%d ",ip_dest[0],ip_dest[1],ip_dest[2],ip_dest[3]);
-#endif	
-#ifdef CONFIG_DONT_CARE_TP
-	if(pnetif->flags & NETIF_FLAG_IPSWITCH)
-		return 1;
-	else
-#endif
-	return 0;
+	return amebad_tcp_is_valid_ip(idx, ip_dest);
 #endif
 }
 
 #if !defined(CONFIG_MBED_ENABLED)
-int netif_get_idx(struct netif* pnetif)
-{
-#if (CONFIG_LWIP_LAYER == 1)
-	int idx = pnetif - xnetif;
-
-	switch(idx) {
-	case 0:
-		return 0;
-	case 1:
-		return 1;
-	default:
-		return -1;
-	}
-#else	
-	return -1;
-#endif
-}
-
 unsigned char *netif_get_hwaddr(int idx_wlan)
 {
-#if (CONFIG_LWIP_LAYER == 1)
-	return xnetif[idx_wlan].hwaddr;
-#else
+	if( ( idx_wlan >= 0 ) && ( idx_wlan < NET_IF_NUM ) ) {
+		return wlan_hwaddr[ idx_wlan ];
+	}
 	return NULL;
-#endif
 }
 #endif
 
@@ -241,15 +179,17 @@ void set_callback_func(emac_callback p, void *data)
 }
 #endif
 
+/*
+ *      netif_rx - the driver hands an RX frame up (task context). Route it to the
+ *      FreeRTOS+TCP RX bridge instead of lwIP's ethernetif_recv(&xnetif[idx]).
+ */
 void netif_rx(int idx, unsigned int len)
 {
 	WIFI_MONITOR_TIMER_START(wifi_time_test.netif_rx_time);
-#if (CONFIG_LWIP_LAYER == 1)
 #if defined(CONFIG_MBED_ENABLED)
 	emac_callback_func(emac_callback_data, NULL, len);
 #else
-	ethernetif_recv(&xnetif[idx], len);
-#endif
+	amebad_tcp_netif_input(idx, len);
 #endif
 #if (CONFIG_INIC_EN == 1)
         inic_netif_rx(idx, len);
@@ -257,68 +197,30 @@ void netif_rx(int idx, unsigned int len)
 	WIFI_MONITOR_TIMER_END(wifi_time_test.netif_rx_time, len);
 }
 
+/* FreeRTOS+TCP has no lwIP ARP-timer to re-arm on sleep wake; these were the lwIP
+ * tickless hooks (lwip_PRE/POST_SLEEP_PROCESSING). No-ops here — power-save /
+ * tickless idle is off in this driver-only build. */
 void netif_post_sleep_processing(void)
 {
-#if (CONFIG_LWIP_LAYER == 1)
-#if defined(CONFIG_MBED_ENABLED)
-#else
-	lwip_POST_SLEEP_PROCESSING();	//For FreeRTOS tickless to enable Lwip ARP timer when leaving IPS - Alex Fang
-#endif
-#endif
 }
 
 void netif_pre_sleep_processing(void)
 {
-#if (CONFIG_LWIP_LAYER == 1)
-#if defined(CONFIG_MBED_ENABLED)
-#else
-	lwip_PRE_SLEEP_PROCESSING();
-#endif
-#endif
 }
 
 #ifdef CONFIG_WOWLAN
 int rtw_default_netif_idx = 0;
 void rltk_wlan_set_default_idx(int idx){
-#if (CONFIG_LWIP_LAYER == 1)
 	rtw_default_netif_idx = idx;
-#endif
-	return;
 }
 
 unsigned char *rltk_wlan_get_ip(int idx){
-#if (CONFIG_LWIP_LAYER == 1)
-	if(rtw_default_netif_idx)
-		return LwIP_GetIP(&xnetif[rtw_default_netif_idx]);
-	else
-		return LwIP_GetIP(&xnetif[idx]);
-#else
-	return NULL;
-#endif
-
+	return amebad_tcp_get_addr(rtw_default_netif_idx ? rtw_default_netif_idx : idx, 0);
 }
 unsigned char *rltk_wlan_get_gw(int idx){
-#if (CONFIG_LWIP_LAYER == 1)
-		if(rtw_default_netif_idx)
-			return LwIP_GetGW(&xnetif[rtw_default_netif_idx]);
-		else
-			return LwIP_GetGW(&xnetif[idx]);
-#else
-		return NULL;
-#endif
-
+	return amebad_tcp_get_addr(rtw_default_netif_idx ? rtw_default_netif_idx : idx, 1);
 }
-
 unsigned char *rltk_wlan_get_gwmask(int idx){
-#if (CONFIG_LWIP_LAYER == 1)
-		if(rtw_default_netif_idx)
-			return LwIP_GetMASK(&xnetif[rtw_default_netif_idx]);
-		else
-			return LwIP_GetMASK(&xnetif[idx]);
-#else
-		return NULL;
-#endif
-
+	return amebad_tcp_get_addr(rtw_default_netif_idx ? rtw_default_netif_idx : idx, 2);
 }
 #endif
-

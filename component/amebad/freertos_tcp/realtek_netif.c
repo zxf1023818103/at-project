@@ -4,14 +4,16 @@
  *
  * Data path:
  *   TX  FreeRTOS+TCP IP task -> xNetworkInterfaceOutput() -> rltk_wlan_send()
- *   RX  driver -> netif_rx(idx,len) [vendored lwip_intf.c] -> ethernetif_recv()
- *       [OVERRIDDEN here] -> copy via rltk_wlan_recv() into a NetworkBuffer ->
+ *   RX  driver -> netif_rx(idx,len) [vendored lwip_intf.c] -> amebad_tcp_netif_input()
+ *       [here] -> copy via rltk_wlan_recv() into a NetworkBuffer ->
  *       xSendEventStructToIPTask(eNetworkRxEvent)
  *
- * We reuse the vendored lwip_intf.c (it owns netif_rx / rltk_wlan_send / recv /
- * netif_get_idx and calls ethernetif_recv). `struct netif` is only used as an
- * opaque per-VIF handle here (idx recovery via netif_get_idx), so this file does
- * NOT pull lwip headers. The xnetif[] storage the driver/lwip_intf touch lives in
+ * The vendored lwip_intf.c is now stack-agnostic: it owns netif_rx /
+ * rltk_wlan_send / rltk_wlan_recv and calls the amebad_tcp_* helpers defined
+ * here (amebad_tcp_netif_input for RX, amebad_tcp_is_valid_ip for the driver's IP
+ * filter, amebad_tcp_get_addr for WOWLAN IP/GW/MASK) — no lwIP types cross the
+ * seam, so idx is passed directly (no netif pointer / netif_get_idx). The minimal
+ * lwIP-typed xnetif[] the prebuilt driver + wifi_conf.c still need lives in
  * realtek_xnetif.c.
  */
 #include "FreeRTOS.h"
@@ -26,8 +28,6 @@ struct eth_drv_sg { unsigned int buf; unsigned int len; };
 extern int  rltk_wlan_send( int idx, struct eth_drv_sg * sg_list, int sg_len, int total_len );
 extern void rltk_wlan_recv( int idx, struct eth_drv_sg * sg_list, int sg_len );
 extern unsigned char rltk_wlan_running( unsigned char idx );
-struct netif;                                   /* opaque — only netif_get_idx used */
-extern int  netif_get_idx( struct netif * pnetif );
 extern int  wifi_is_connected_to_ap( void );
 
 #define WLAN_STA_IDX    0
@@ -118,17 +118,18 @@ NetworkInterface_t * pxRealtek_FillInterfaceDescriptor( BaseType_t xEMACIndex,
     return pxInterface;
 }
 
-/* ===== RX bridge: overrides the lwip port's ethernetif_recv ================ *
+/* ===== RX bridge ============================================================ *
  * The driver delivers a frame by calling netif_rx(idx,len) (vendored
- * lwip_intf.c), which calls ethernetif_recv(&xnetif[idx], len). We copy the
- * frame out of the driver into a NetworkBufferDescriptor and hand it to the IP
- * task. NB: we MUST always drain the driver (rltk_wlan_recv) even when dropping,
- * or the driver's RX ring stalls. */
-void ethernetif_recv( struct netif * netif, int total_len )
+ * lwip_intf.c), which now calls amebad_tcp_netif_input(idx,len) here (the lwIP
+ * port's ethernetif_recv(&xnetif[idx]) is gone). We copy the frame out of the
+ * driver into a NetworkBufferDescriptor and hand it to the IP task. NB: we MUST
+ * always drain the driver (rltk_wlan_recv) even when dropping, or the driver's
+ * RX ring stalls. */
+void amebad_tcp_netif_input( int idx, unsigned int len )
 {
     NetworkBufferDescriptor_t * pxBuf;
     struct eth_drv_sg sg;
-    int idx = netif_get_idx( netif );
+    int total_len = ( int ) len;
 
     if( ( total_len <= 0 ) || ( total_len > ( int ) ( ipconfigNETWORK_MTU + 14 + 4 ) ) )
     {
@@ -179,6 +180,74 @@ void ethernetif_recv( struct netif * netif, int total_len )
     {
         vReleaseNetworkBufferAndDescriptor( pxBuf );
     }
+}
+
+/* ===== Driver RX filter + address getters (called from lwip_intf.c) ======== *
+ * Replace lwip_intf.c's old lwIP-xnetif lookups. The driver asks "is this dest
+ * IP for us?" (netif_is_valid_IP) and WOWLAN asks for IP/GW/MASK; both now read
+ * the FreeRTOS+TCP endpoint. Filtering errs toward ACCEPT — dropping a valid
+ * frame breaks RX, whereas accepting an extra one only costs the IP task a
+ * routing check it would do anyway. */
+int amebad_tcp_is_valid_ip( int idx, const unsigned char * ip_dest )
+{
+    uint32_t ulDest = 0, ulOurIP = 0, ulMask = 0;
+    NetworkEndPoint_t * pxEP;
+    ( void ) idx;
+
+    if( ip_dest == NULL )
+    {
+        return 1;
+    }
+    ( void ) memcpy( &ulDest, ip_dest, sizeof( ulDest ) );   /* network byte order */
+
+    pxEP = ( pxMyInterface != NULL ) ? FreeRTOS_FirstEndPoint( pxMyInterface ) : NULL;
+    if( pxEP != NULL )
+    {
+        ulOurIP = pxEP->ipv4_settings.ulIPAddress;
+        ulMask  = pxEP->ipv4_settings.ulNetMask;
+    }
+
+    if( ulOurIP == 0 )                       return 1;   /* no IP yet -> accept */
+    if( ulDest == ulOurIP )                  return 1;   /* unicast to us */
+    if( ( ip_dest[ 0 ] & 0xF0 ) == 0xE0 )    return 1;   /* 224.0.0.0/4 multicast */
+    if( ulDest == 0xFFFFFFFFu )              return 1;   /* 255.255.255.255 */
+    if( ( ulMask != 0 ) && ( ( ulDest | ulMask ) == 0xFFFFFFFFu ) )
+    {
+        return 1;                                        /* directed (subnet) broadcast */
+    }
+    return 0;
+}
+
+/* kind: 0=IP 1=GW 2=MASK. Returns a pointer to a 4-byte (network-order) address;
+ * cached per-kind so the three can be held at once. */
+unsigned char * amebad_tcp_get_addr( int idx, int kind )
+{
+    static uint32_t ulAddrCache[ 3 ];
+    NetworkEndPoint_t * pxEP;
+    ( void ) idx;
+
+    if( ( kind < 0 ) || ( kind > 2 ) )
+    {
+        return NULL;
+    }
+    pxEP = ( pxMyInterface != NULL ) ? FreeRTOS_FirstEndPoint( pxMyInterface ) : NULL;
+    if( pxEP == NULL )
+    {
+        ulAddrCache[ kind ] = 0;
+    }
+    else if( kind == 0 )
+    {
+        ulAddrCache[ kind ] = pxEP->ipv4_settings.ulIPAddress;
+    }
+    else if( kind == 1 )
+    {
+        ulAddrCache[ kind ] = pxEP->ipv4_settings.ulGatewayAddress;
+    }
+    else
+    {
+        ulAddrCache[ kind ] = pxEP->ipv4_settings.ulNetMask;
+    }
+    return ( unsigned char * ) &ulAddrCache[ kind ];
 }
 
 /* ===== Application hooks the stack requires ================================ */
