@@ -78,7 +78,7 @@ add_subdirectory(osdep)              # KM4-gated internally (osdep/os abstractio
 add_subdirectory(ftl)                # KM4-gated internally (flash translation layer)
 add_subdirectory(at_cmd)             # KM4-gated internally (basic AT log/command service)
 add_subdirectory(mbedtls)            # KM4-gated: shared upstream Mbed TLS v3.6.4
-add_subdirectory(lwip)               # KM4-gated: shared lwip (thirdparty/lwip_amebad)
+add_subdirectory(lwip)               # KM4-gated: residual lwip-free netif shim (lwip removed)
 add_subdirectory(freertos_tcp)       # KM4-gated: FreeRTOS-Plus-TCP V4.0.0 (DHCP bring-up, EXCLUDE)
 add_subdirectory(pmu)                # chip-gated: prebuilt PMC lib (lib_pmc_lp/hp.a) + pmu headers
 add_subdirectory(wlan)               # KM4-gated: host WiFi driver libs (lib_wlan/wps.a) + API headers
