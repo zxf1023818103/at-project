@@ -8,8 +8,8 @@
 ******************************************************************************/
 
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __NETCONF_H
-#define __NETCONF_H
+#ifndef __NETIF_SHIM_H
+#define __NETIF_SHIM_H
 
 #ifdef __cplusplus
  extern "C" {

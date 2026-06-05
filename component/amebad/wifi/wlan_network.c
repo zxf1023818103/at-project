@@ -18,7 +18,7 @@
 #include "wlan_intf.h"
 #include "wifi_constants.h"
 #endif
-#include "lwip_netconf.h"
+#include "netif_shim.h"
 #include <platform/platform_stdlib.h>
 #include "osdep_service.h"
 

@@ -54,7 +54,7 @@ target_link_libraries(amebad_wifi PUBLIC
     amebad_sdk_includes
     amebad_wlan              # wlan public + osdep/rom headers
     amebad_osdep
-    amebad_lwip_headers      # lwip headers only (struct netif etc.) — not the lib (FreeRTOS+TCP build)
+    amebad_netif_shim        # vendored struct netif + NET_IF_NUM (lwip removed)
     amebad_wpa_supplicant    # supplicant config headers (connect path)
     FreeRTOS
 )

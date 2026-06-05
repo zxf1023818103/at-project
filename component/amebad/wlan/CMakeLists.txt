@@ -92,7 +92,7 @@ target_link_libraries(amebad_wlan_glue PUBLIC
     amebad_sdk_includes
     amebad_wlan
     amebad_osdep
-    amebad_lwip_headers      # lwip headers only (struct netif / ethernetif.h) — not the lib
+    amebad_netif_shim        # vendored struct netif + eth_drv_sg (lwip removed)
     amebad_wifi_headers      # lwip_intf.c -> <wifi/wifi_util.h>
     FreeRTOS
 )

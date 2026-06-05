@@ -6,7 +6,7 @@ extern "C" {
 #endif
 
 #include "main.h"
-#include "lwip_netconf.h"
+#include "netif_shim.h"
 //#include "../../mbed/hal_ext/crypto_api.h"
 #include "MQTTClient.h"
 #include "MQTTPublish.h"

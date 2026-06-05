@@ -40,12 +40,12 @@ target_include_directories(amebad_freertos_tcp PUBLIC
     "${FT}/source/include"
     "${FT}/source/portable/Compiler/GCC"          # pack_struct_start/end.h
 )
-# realtek_xnetif.c needs the lwip-free netif shim (lwip_netconf.h: vendored
-# struct netif + NET_IF_NUM) and the wlan driver osdep headers (lwip_intf.h
-# structs / rltk_* decls — headers only; symbols resolve at the exe link via the
-# cross_refs group, so do NOT *link* amebad_wlan here -> cycle). lwip is gone.
+# realtek_xnetif.c needs the netif shim (netif_shim.h: vendored struct netif +
+# NET_IF_NUM) and the wlan driver osdep headers (lwip_intf.h structs / rltk_*
+# decls — headers only; symbols resolve at the exe link via the cross_refs group,
+# so do NOT *link* amebad_wlan here -> cycle). lwip is gone.
 target_include_directories(amebad_freertos_tcp PRIVATE
-    "${CMAKE_SOURCE_DIR}/component/amebad/lwip/config"     # lwip_netconf.h (vendored shim)
+    "${CMAKE_SOURCE_DIR}/component/amebad/netif_shim"      # netif_shim.h (vendored shim)
     "${CMAKE_SOURCE_DIR}/component/amebad/wlan/osdep"
 )
 

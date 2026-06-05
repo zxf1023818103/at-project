@@ -29,7 +29,7 @@
 #endif
 
 // TODO: remove this file
-#include "lwip_netconf.h"
+#include "netif_shim.h"
 #if 0
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"

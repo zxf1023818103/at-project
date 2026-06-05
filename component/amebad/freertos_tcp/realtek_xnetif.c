@@ -1,16 +1,15 @@
 /*
  * xnetif[] storage for the Realtek WiFi driver glue.
  *
- * The vendored Realtek port (component/amebad/wlan/src/lwip_intf.c) references a
- * global `struct netif xnetif[NET_IF_NUM]` and accesses its fields (hwaddr, ...),
- * so the array must be a real lwip `struct netif` — this is the ONLY lwip-typed
- * dependency we keep when running FreeRTOS+TCP instead of lwip. Normally
- * lwip_netconf.c defines it; for the FreeRTOS+TCP build lwip_netconf.c is not
- * compiled (it also drags in LwIP_Init / the lwip IP stack), so the array is
- * defined here in isolation. lwip_intf.c uses it purely as a per-VIF handle
- * (netif_get_idx) and to stash the MAC; no lwip IP processing runs on it.
+ * The prebuilt driver (lib_wlan.a) and the vendored wifi_conf.c reference a global
+ * `struct netif xnetif[NET_IF_NUM]` and access its fields (hwaddr@+50,
+ * hwaddr_len@+56) on a 72-byte stride. lwIP is removed — `struct netif` is the
+ * layout-asserted vendored shim from netif_shim.h (the irreducible driver ABI),
+ * NOT lwIP. The array is defined here; amebad_register_wlan_netif() stashes the
+ * MAC and LwIP_GetMAC() returns it (load-bearing on the connect-path mgmt-frame
+ * filter). No IP processing runs on it — the IP stack is FreeRTOS-Plus-TCP.
  */
-#include "lwip_netconf.h"    /* lwip-free: vendored struct netif + NET_IF_NUM */
+#include "netif_shim.h"    /* lwip-free: vendored struct netif + NET_IF_NUM */
 
 struct netif xnetif[ NET_IF_NUM ];
 

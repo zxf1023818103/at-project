@@ -20,7 +20,7 @@
 #include "lwip/pbuf.h"
 #include "lwip/netdb.h"
 #endif
-#include "lwip_netconf.h"   /* lwip-free shim: NET_IF_NUM */
+#include "netif_shim.h"   /* lwip-free shim: NET_IF_NUM */
 
 #define	_AT_TRANSPORT_MODE_					"ATP1"
 #define	_AT_TRANSPORT_LOCAL_PORT_			"ATP2"

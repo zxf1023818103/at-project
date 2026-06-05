@@ -31,12 +31,12 @@ add_library(amebad_at_cmd STATIC
 target_include_directories(amebad_at_cmd BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/../config")
 
-# log_service.c -> atcmd_wifi.h/atcmd_lwip.h -> lwip_netconf.h: only needs
-# NET_IF_NUM from the lwip-free shim now. lwip is gone — the transparent-socket AT
+# log_service.c -> atcmd_wifi.h/atcmd_lwip.h -> netif_shim.h: only needs
+# NET_IF_NUM from the netif shim now. lwip is gone — the transparent-socket AT
 # commands (the only lwip-header consumers) are ATVER_2-only and not built here
 # (CONFIG_EXAMPLE_UART_ATCMD=0), so their lwip includes are #if'd out.
 target_include_directories(amebad_at_cmd SYSTEM PRIVATE
-    "${CMAKE_SOURCE_DIR}/component/amebad/lwip/config")  # lwip_netconf.h (vendored shim)
+    "${CMAKE_SOURCE_DIR}/component/amebad/netif_shim")  # netif_shim.h (vendored shim)
 
 target_link_libraries(amebad_at_cmd PUBLIC FreeRTOS)
 
