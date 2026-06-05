@@ -2,10 +2,10 @@
 //#include <flash/stm32_flash.h>
 #if !defined(CONFIG_MBED_ENABLED) && !defined(CONFIG_PLATFOMR_CUSTOMER_RTOS)
 #include "main.h"
-#include <lwip_netconf.h>
-#include <lwip/sockets.h>
-#include <dhcp/dhcps.h>
-#include "tcpip.h"
+#include <lwip_netconf.h>   /* lwip-free: vendored struct netif + LwIP_*/netif_* decls */
+/* lwip removed: <lwip/sockets.h> (keepalive offload — gated off below),
+ * <dhcp/dhcps.h> (AP DHCP server) and "tcpip.h" are gone. The few symbols
+ * wifi_conf.c still references are declared in lwip_netconf.h. */
 #endif
 #include <platform/platform_stdlib.h>
 #include <wifi/wifi_conf.h>

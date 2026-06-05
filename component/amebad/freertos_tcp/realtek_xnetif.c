@@ -10,8 +10,7 @@
  * defined here in isolation. lwip_intf.c uses it purely as a per-VIF handle
  * (netif_get_idx) and to stash the MAC; no lwip IP processing runs on it.
  */
-#include "lwip/netif.h"
-#include "lwip_netconf.h"    /* NET_IF_NUM */
+#include "lwip_netconf.h"    /* lwip-free: vendored struct netif + NET_IF_NUM */
 
 struct netif xnetif[ NET_IF_NUM ];
 

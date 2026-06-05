@@ -65,35 +65,9 @@ target_compile_options(lwipcore PRIVATE
     -Wno-sign-compare
 )
 
-# Port: FreeRTOS sys_arch (mutex/sem/mbox/thread over FreeRTOS) + ethernetif (the
-# netif <-> WiFi driver bridge: TX via rltk_wlan_send, RX hand-off to tcpip_input).
-# ethernetif.c reaches into the driver's osdep headers (skbuff/wlan_intf) and the
-# wifi API (wifi_constants), so it links amebad_wlan (header surface) + the wifi
-# header interface. Consumers linking amebad_lwip get the whole TCP/IP stack +
-# netif + headers.
-add_library(amebad_lwip STATIC
-    "${LWIP_DIR}/port/realtek/freertos/sys_arch.c"
-    "${LWIP_DIR}/port/realtek/freertos/ethernetif.c"
-)
-target_link_libraries(amebad_lwip PUBLIC
-    lwipcore
-    amebad_sdk_includes
-    amebad_wlan              # driver osdep headers (skbuff.h / wlan_intf.h)
-    amebad_wifi_headers      # <wifi/wifi_conf.h> / wifi_constants.h
-    FreeRTOS
-)
-# ethernetif.h lives in the lwip realtek port dir; expose it so the driver glue +
-# lwip_netconf's `#include <ethernetif.h>` resolves.
-target_include_directories(amebad_lwip PUBLIC
-    "${LWIP_DIR}/port/realtek/freertos")
-target_compile_options(amebad_lwip PRIVATE
-    -Wno-unused-parameter
-    -Wno-unused-variable
-    -Wno-unused-function
-    -Wno-sign-compare
-)
-
-# Nothing links amebad_lwip yet (sockets / net_sockets not wired), so keep it out
-# of the default build; a consumer linking it pulls it in, or build explicitly:
-#   cmake --build <dir> -t amebad_lwip
-set_target_properties(amebad_lwip PROPERTIES EXCLUDE_FROM_ALL TRUE)
+# NB: the lwip netif port (sys_arch.c + ethernetif.c, formerly target `amebad_lwip`)
+# is gone — the IP stack is FreeRTOS-Plus-TCP, and the driver<->stack bridge lives
+# in component/amebad/freertos_tcp (realtek_netif.c). lwipcore above is kept ONLY
+# because Filelists.cmake's configure_file generates lwip/init.h, which lwipopts.h /
+# lwip_netconf.h still #include for version info; both lwipcore and this whole dir
+# are removed once those headers are dropped (the LwIP-removal Phase D).

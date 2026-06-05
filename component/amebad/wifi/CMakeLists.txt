@@ -4,8 +4,8 @@
 #   wifi/wifi_conf.c   wifi_on / wifi_off / wifi_scan_networks / wifi_connect ...
 #   wifi/wifi_util.c   ioctl/iwpriv helpers the API is built on
 #   wifi/wifi_ind.c    event indication dispatch (driver -> app callbacks)
-#   network/wlan_network.c   wlan_network() bring-up entry (LwIP_Init + wifi_on)
-#   network/lwip_netconf.c   LwIP_Init / netif setup (registers ethernetif)
+#   network/wlan_network.c   wlan_network() bring-up entry (compiled but unused;
+#                            its LwIP_Init() call is gc-section'd away — no caller)
 #
 # Layout: all api/wifi + api/network files sit flat in this dir. Rooted includes
 # the WiFi sources use (`<wifi/wifi_conf.h>`, `<at_cmd/atcmd_wifi.h>`) resolve by
@@ -42,11 +42,11 @@ add_library(amebad_wifi STATIC EXCLUDE_FROM_ALL
     "${CMAKE_CURRENT_SOURCE_DIR}/wifi_util.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/wifi_ind.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/wlan_network.c"
-    # lwip_netconf.c (LwIP_Init / xnetif / lwip DHCP) is intentionally NOT built:
-    # the FreeRTOS+TCP bring-up replaces lwip's IP role. xnetif[] is provided by
-    # component/amebad/freertos_tcp/realtek_xnetif.c, and wifi_conf.c's lwip
-    # references (LwIP_Init / LwIP_DHCP / netif_add / dhcp_*) are weak-stubbed in
-    # app_km4 (freertos_tcp_compat.c) — they are not on the connect path we use.
+    # NB: lwip_netconf.c (LwIP_Init / xnetif / lwip DHCP) was deleted — the
+    # FreeRTOS+TCP bring-up replaces lwip's IP role. xnetif[] is provided by
+    # component/amebad/freertos_tcp/realtek_xnetif.c, and wifi_conf.c's residual
+    # lwip references (netif_add / dhcp_* etc.) are weak-stubbed in app_km4
+    # (freertos_tcp_compat.c) — not on the connect path we use.
 )
 
 target_link_libraries(amebad_wifi PUBLIC
