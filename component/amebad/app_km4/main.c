@@ -28,6 +28,7 @@ extern NetworkInterface_t *pxRealtek_FillInterfaceDescriptor(BaseType_t xEMACInd
                                                              NetworkInterface_t *pxInterface);
 extern void amebad_register_wlan_netif(int idx, unsigned char *mac);
 extern void amebad_freertos_tcp_set_ready(void);
+extern void iperf_client_start(void);
 
 #define WLAN_STA_IDX  0
 
@@ -59,6 +60,7 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
         DiagPrintf( "[KM4] gateway   %d.%d.%d.%d\n\r",
                     (int)( ulGW & 0xff ), (int)( ( ulGW >> 8 ) & 0xff ),
                     (int)( ( ulGW >> 16 ) & 0xff ), (int)( ( ulGW >> 24 ) & 0xff ) );
+        iperf_client_start();   /* kick the TX-throughput test against the WSL iperf -s */
     }
     else
     {

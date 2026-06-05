@@ -16,8 +16,17 @@
 #define ipconfigIPv4_BACKWARD_COMPATIBLE        1
 
 #define ipconfigUSE_IPv6                        0
-#define ipconfigUSE_TCP                         0       /* DHCP is UDP — no TCP needed */
+#define ipconfigUSE_TCP                         1       /* iperf throughput test */
 #define ipconfigUSE_DHCP                        1
+
+/* TCP tuning for throughput (WiFi ~tens of Mbps). */
+#define ipconfigTCP_WIN_SEG_COUNT               32
+#define ipconfigUSE_TCP_WIN                      1
+#define ipconfigTCP_RX_BUFFER_LENGTH            ( 8 * 1460 )
+#define ipconfigTCP_TX_BUFFER_LENGTH            ( 8 * 1460 )
+#define ipconfigTCP_MSS                         ( 1500 - 40 )   /* 1460 */
+#define ipconfigTCP_TIME_TO_LIVE                128
+#define ipconfigIGNORE_UNKNOWN_PACKETS          0
 #define ipconfigDHCP_REGISTER_HOSTNAME          0
 #define ipconfigUSE_DNS                         0
 #define ipconfigUSE_LLMNR                       0
@@ -38,8 +47,8 @@
 #define ipconfigNETWORK_MTU                     1500
 #define ipconfigBYTE_ORDER                      pdFREERTOS_LITTLE_ENDIAN
 
-/* Buffers (BufferAllocation_2 = heap). 8 descriptors is plenty for DHCP. */
-#define ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS  8
+/* Buffers (BufferAllocation_2 = heap). Bump for TCP throughput. */
+#define ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS  24
 #define ipconfigEVENT_QUEUE_LENGTH              ( ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS + 5 )
 #define ipconfigUSE_CALLBACKS                   0
 
