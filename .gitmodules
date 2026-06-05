@@ -42,3 +42,6 @@
 	path = component/thirdparty/lwip_amebad
 	url = https://github.com/zxf1023818103/lwip.git
 	branch = ameba-d-port
+[submodule "component/thirdparty/freertos-plus-tcp"]
+	path = component/thirdparty/freertos-plus-tcp
+	url = https://github.com/FreeRTOS/FreeRTOS-Plus-TCP.git
