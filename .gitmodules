@@ -38,9 +38,6 @@
 	path = component/lfs_image/mklittlefs
 	url = https://github.com/zxf1023818103/mklittlefs.git
 	branch = at-project
-[submodule "component/thirdparty/cmsis"]
-	path = component/thirdparty/cmsis
-	url = https://github.com/ARM-software/CMSIS_5.git
 [submodule "component/lwip_amebad"]
 	path = component/thirdparty/lwip_amebad
 	url = https://github.com/zxf1023818103/lwip.git
