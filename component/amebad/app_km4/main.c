@@ -63,12 +63,12 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
         DiagPrintf( "[KM4] gateway   %d.%d.%d.%d\n\r",
                     (int)( ulGW & 0xff ), (int)( ( ulGW >> 8 ) & 0xff ),
                     (int)( ( ulGW >> 16 ) & 0xff ), (int)( ( ulGW >> 24 ) & 0xff ) );
-        /* RX-path discriminator: device UDP RX sink (host `iperf -u -c <ip>
-         * -b 40M -t 15`). Tests whether the driver->IP-task RX delivery is
-         * tick-quantized (the suspected ACK-clock governor behind the ~11 Mbps
-         * TCP cap). Swap back to iperf_client_start() (TCP TX) afterwards. */
-        iperf_udp_server_start();
-        ( void ) iperf_client_start;
+        /* TCP TX test (device -> WSL `iperf -s`). Measuring the effect of
+         * BufferAllocation_1 (static net buffers, no per-packet malloc) on the
+         * ~11 Mbps TCP cap. UDP RX sink (iperf_udp_server_start) kept for the
+         * RX-rate discriminator. */
+        iperf_client_start();
+        ( void ) iperf_udp_server_start;
         ( void ) iperf_udp_client_start;
         ( void ) iperf_server_start;
     }

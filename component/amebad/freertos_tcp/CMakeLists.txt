@@ -8,6 +8,12 @@
 # Realtek NetworkInterface (realtek_netif.c: TX/RX bridge + app hooks) + the
 # xnetif[] storage the vendored lwip_intf.c needs (realtek_xnetif.c).
 #
+# NB: BufferAllocation_1 (static pool) was tried to cut per-packet pvPortMalloc
+# but its ~61 KB BSS overran SRAM the closed lib_wlan.a hardcodes as free (link
+# didn't catch it — driver RAM is invisible to our ld), faulting the driver at
+# wifi_connect. And the per-packet cost is ~0.5-0.8 ms (closed-driver path), not
+# malloc (µs), so it wouldn't have helped. Staying on heap (_2).
+#
 # KM4 only. EXCLUDE_FROM_ALL until app_km4 links it (build with
 # `cmake --build <dir> -t amebad_freertos_tcp`).
 
