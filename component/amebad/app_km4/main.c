@@ -64,6 +64,8 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
         /* Default = TX test (device client -> WSL `iperf -s`). For the RX
          * (download) test instead, start iperf_server_start() and run
          * `iperf -c <device-ip>` on the host. */
+        /* Default = TX test (device client -> WSL `iperf -s`). For RX, start
+         * iperf_server_start() and run `iperf -c <device-ip>` on the host. */
         iperf_client_start();
         ( void ) iperf_server_start;
     }
@@ -130,13 +132,19 @@ static void wifi_bringup_thread( void *param )
     FreeRTOS_IPInit_Multi();
     amebad_freertos_tcp_set_ready();
 
-    DiagPrintf( "[KM4] wifi_connect(AIoT)...\n\r" );
-    if( wifi_connect( "AIoT", RTW_SECURITY_WPA2_AES_PSK, "123456789",
-                      4, 9, 0, NULL ) != RTW_SUCCESS )
+    /* Connect to the 5 GHz AIoT BSSID (ch 40) specifically — the SSID "AIoT"
+     * exists on both bands; plain wifi_connect("AIoT") picked the 2.4 GHz
+     * BSSID (..83). 5 GHz (..84) is far less congested -> higher throughput. */
     {
-        DiagPrintf( "[KM4] wifi_connect FAILED\n\r" );
-        vTaskDelete( NULL );
-        return;
+        unsigned char bssid_5g[ 6 ] = { 0x9c, 0x9d, 0x7e, 0x59, 0x3e, 0x84 };
+        DiagPrintf( "[KM4] wifi_connect_bssid(AIoT 5G 9c:9d:7e:59:3e:84)...\n\r" );
+        if( wifi_connect_bssid( bssid_5g, "AIoT", RTW_SECURITY_WPA2_AES_PSK,
+                                "123456789", 6, 4, 9, 0, NULL ) != RTW_SUCCESS )
+        {
+            DiagPrintf( "[KM4] wifi_connect_bssid FAILED\n\r" );
+            vTaskDelete( NULL );
+            return;
+        }
     }
     /* Throughput: fully disable power-save. wifi_set_power_mode(ips,lps) with
      * both 0 turns OFF inactive-PS AND leisure-PS (the latter sleeps the radio
