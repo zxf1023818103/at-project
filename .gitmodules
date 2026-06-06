@@ -41,3 +41,8 @@
 [submodule "component/thirdparty/freertos-plus-tcp"]
 	path = component/thirdparty/freertos-plus-tcp
 	url = https://github.com/FreeRTOS/FreeRTOS-Plus-TCP.git
+[submodule "component/thirdparty/wolfssl"]
+	path = component/thirdparty/wolfssl
+	url = https://github.com/wolfSSL/wolfssl.git
+	branch = v5.9.1-stable
+	shallow = true
