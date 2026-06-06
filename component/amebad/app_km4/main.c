@@ -201,6 +201,30 @@ static void wifi_bringup_thread( void *param )
         return;
     }
 
+#ifdef AT_PROJECT_HCI
+    /* BLE DTM image: WiFi is on (DTM needs that for coex), so bring up the BT
+     * controller (gnt_bt + bte_init = HCI patch download + reset), then optionally
+     * open the HCI bridge. Skip wifi_connect/iperf — DTM only needs WiFi on. */
+    {
+        extern void bt_dtm_bringup( void );
+        extern void bt_dtm_enter_bridge( uint32_t, uint8_t );
+        ( void ) bt_dtm_enter_bridge;
+        /* Bring up the BT controller: gnt_bt + bte_init downloads the firmware
+         * patch over HCI-UART and runs the HCI init sequence (read version / read
+         * ROM / set baud / download patch / HCI reset) — i.e. it exercises real
+         * HCI command/event round-trips, visible on the console. */
+        bt_dtm_bringup();
+        /* Hand the console to a host BT-test tool: open the transparent HCI bridge.
+         * This takes over COM29 as a raw HCI pipe (the RAM shell is gone until
+         * reset). The host syncs on the "entering HCI bridge" marker printed by
+         * bt_dtm_enter_bridge() and then drives raw HCI — see project/amebad/hci_test.ps1.
+         * host_baud = 1500000 keeps the current console rate so COM29 doesn't re-rate. */
+        bt_dtm_enter_bridge( 1500000, 0 );
+        vTaskDelete( NULL );
+        return;
+    }
+#endif
+
     /* TEST: can we read country code from surrounding hotspots' beacons?
      * Runs a clean active scan before associating. */
     dump_surrounding_country_codes();

@@ -86,6 +86,36 @@ add_dependencies(target_img2_km4 amebad_km4_img2_ld)
 target_include_directories(target_img2_km4 SYSTEM PRIVATE
     "${CMAKE_SOURCE_DIR}/component/amebad/ftl")
 
+# BLE controller HCI test image: link the controller bring-up + HCI transport
+# (amebad_hci, no btgap.a) and auto-enter the DTM/HCI bridge at boot. OFF by default.
+option(AMEBAD_ENABLE_HCI "Build the BLE controller HCI test image (bring-up + HCI bridge)" OFF)
+set(_hci_grp "")
+if(AMEBAD_ENABLE_HCI)
+    # btgap.a (Realtek upper stack) not used — controller bring-up runs via
+    # hci_tp_open() directly (component/amebad/hci/hci_nostack.c). Just amebad_hci.
+    set(_hci_grp ",amebad_hci")
+    set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
+                 APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_HCI)
+    # The controller firmware blob (normal BLE-DTM vs MP/RF-test, selected by
+    # AMEBAD_HCI_FW_MP). In the EXECUTABLE (not amebad_hci) so its STRONG
+    # rtlbt_(mp_)fw / _len always link and override the weak {0} stubs in
+    # hci_fw_stub.c — a strong blob inside the archive would not get pulled.
+    set(_hci_root "${CMAKE_SOURCE_DIR}/component/amebad/hci")
+    if(AMEBAD_HCI_FW_MP)
+        set(_hci_fw_src "${_hci_root}/hci_mp_patch.c")
+    else()
+        set(_hci_fw_src "${_hci_root}/hci_normal_patch.c")
+    endif()
+    set_source_files_properties("${_hci_fw_src}" PROPERTIES
+        COMPILE_OPTIONS "-Wno-unused-variable;-Wno-unused-const-variable")
+    # newlib syscall stubs (_write/_sbrk/...) for the HCI source's _rtl_printf/abort
+    # — in the EXECUTABLE so they resolve libc.a's references (lib members to the
+    # left of libc don't get pulled for right-side refs).
+    target_sources(target_img2_km4 PRIVATE
+        "${_hci_root}/hci_syscalls.c"
+        "${_hci_fw_src}")
+endif()
+
 # Archives wrapped in --start-group (cross_refs) for circular vendor refs.
 # libc (-lc) supplies __libc_init_array (KM4 has C++ global ctors; KM0 didn't)
 # plus memcpy/memset — so KM4 doesn't need the ROM memcpy alias KM0 uses.
@@ -93,7 +123,7 @@ target_link_libraries(target_img2_km4 PRIVATE
     amebad_sdk_includes
     amebad_mbedtls_rom   # INTERFACE: ROM mbedTLS 2.4.0 headers + MBEDTLS_CONFIG_FILE (no archive)
     amebad_wolfssl       # wolfCrypt v5.9.1 (benchmark); before the group so its pvPortMalloc/DiagPrintf refs resolve
-    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km4,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_ftl,amebad_at_cmd,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_monitor,amebad_monitor_common,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,amebad_wlan,amebad_wps>"
+    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km4,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_ftl,amebad_at_cmd,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_monitor,amebad_monitor_common,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,amebad_wlan,amebad_wps${_hci_grp}>"
     m
     stdc++
     c
