@@ -25,7 +25,6 @@ endif()
 # Header surface, shared with consumers that only need the API decls (e.g. the
 # wlan driver glue's `#include <wifi/wifi_util.h>`, ethernetif). GLOBAL so any
 # sibling can pick it up without a link edge.
-set(_sdk_mir "${CMAKE_SOURCE_DIR}/component/amebad/sdk_headers/component/common")
 add_library(amebad_wifi_headers INTERFACE)
 target_include_directories(amebad_wifi_headers SYSTEM INTERFACE
     "${CMAKE_SOURCE_DIR}/component/amebad"  # -> <wifi/wifi_conf.h>, <at_cmd/atcmd_wifi.h>

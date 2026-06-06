@@ -11,14 +11,15 @@
 # (IP stack = FreeRTOS-Plus-TCP); the residual driver/netif ABI shim is
 # component/amebad/netif_shim/netif_shim.h.
 #
-# In-tree members (NOT out-of-tree): amebad_fwlib_headers (69 chip/HAL headers),
-# our freertos/config override, the upstream freertos-kernel headers, shared
-# mbedtls/include.
+# In-tree members (NOT out-of-tree): the 4 SDK platform headers vendored flat in
+# THIS component's platform/ (platform_stdlib*.h / dlist.h / time64.h),
+# amebad_fwlib_headers (69 chip/HAL headers), our freertos/config override, the
+# upstream freertos-kernel headers, shared mbedtls/include.
 #
 # What remains out-of-tree (the irreducible SDK header surface — would need
 # vendoring those headers in-tree to remove): os + os/freertos + os_dep, soc
-# cmsis/monitor/xmodem/swlib/misc, common api/api-platform/api-at_cmd, and the
-# wlan component's headers (just for autoconf.h; lib_wlan.a/lib_wps.a live there).
+# cmsis/monitor/xmodem/swlib/misc, and the wlan component's headers (just for
+# autoconf.h; lib_wlan.a/lib_wps.a live there).
 #
 # The per-core project config (base FreeRTOSConfig.h + platform_opts/autoconf +
 # main.h) is now in-tree, owned by the app component: app_km0 (KM0) /
@@ -99,16 +100,12 @@ target_compile_definitions(amebad_sdk_includes INTERFACE
     "AMEBAD_RSIP_MASK_ENTRY0_PAGES=${AMEBAD_RSIP_MASK_ENTRY0_PAGES}"
 )
 
-# Now points at the IN-TREE vendored mirror (component/amebad/sdk_headers), not
-# platform/ameba-rtos-d. Only the 33 headers the build actually pulls (per the
-# compiler dependency files) were copied in, preserving the SDK's component/...
-# layout so cross-includes resolve. Resync from the submodule with:
-#   for f in <the kept include roots>; copy the used *.h ... (or re-derive from
-#   the *.o.d / compiler_depend.make of a fresh build).
-set(_sdk_base "${CMAKE_SOURCE_DIR}/component/amebad/sdk_headers")
-set(_sdk_soc  "${_sdk_base}/component/soc/realtek/amebad")
-set(_os       "${_sdk_base}/component/os")
-set(_common   "${_sdk_base}/component/common")
+# The last vendored SDK headers left in-tree are the 4 platform headers
+# (platform_stdlib.h / platform_stdlib_rtl8721d.h / dlist.h / time64.h), now flat
+# under platform/ in THIS component (was the deep component/common/api/platform/
+# SDK-mirror nesting). Exposed on the include path below as both
+# <platform/platform_stdlib.h> (this dir) and <platform_stdlib.h> (the platform/
+# subdir) — both forms are in use (9 in-tree TUs take the platform/-prefixed one).
 
 # FreeRTOS headers come from the upstream V10.6.2 kernel
 # (component/thirdparty/freertos-kernel), NOT the SDK's bundled v10.2.0 tree.
@@ -146,11 +143,12 @@ target_include_directories(amebad_sdk_includes SYSTEM INTERFACE
     "${CMAKE_SOURCE_DIR}/component/amebad/monitor"
     # PMU: rtl8721d_freertos_pmu.h moved to the pmu component (with lib_pmc_*.a).
     "${CMAKE_SOURCE_DIR}/component/amebad/pmu"
-    # common APIs — platform_stdlib.h etc. (api + api/platform). at_cmd headers
-    # (log_service.h / atcmd_*.h) moved onto the at_cmd component; lwip_netconf.h
-    # moved to lwip/config.
-    "${_common}/api"
-    "${_common}/api/platform"
+    # common platform headers — platform_stdlib.h / dlist.h / time64.h, now flat
+    # in THIS component (see note above). This dir -> <platform/platform_stdlib.h>;
+    # platform/ -> <platform_stdlib.h>. at_cmd headers (log_service.h / atcmd_*.h)
+    # moved onto the at_cmd component; lwip_netconf.h moved to lwip/config.
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/platform"
     "${CMAKE_SOURCE_DIR}/component/amebad/at_cmd"
     # autoconf.h (the global Kconfig autoconf) lives in the WLAN driver's include/
     # — a Realtek quirk. Needed by the app config main.h + sys_arch.c even with WiFi off;

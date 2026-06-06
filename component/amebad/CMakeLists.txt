@@ -13,9 +13,12 @@
 #                    lacks), ram_lp (rtl8721dlp_* — KM0 clk/pinmap/startup/...),
 #                    ram_hp (rtl8721dhp_* — KM4 audio/i2s/sd/...). (Merge of the
 #                    former fwlib_headers/ + ram/.)
-#   sdk_includes     INTERFACE target carrying the remaining ~30 SDK header
-#                    search paths still in-place at platform/ameba-rtos-d/.
-#                    Picks app_km0 vs. app_km4 based on AMEBAD_CHIP.
+#   sdk_headers      Holds the 4 SDK platform headers vendored flat (platform/)
+#                    AND defines the amebad_sdk_includes INTERFACE target — the
+#                    chip-aware bundle of the remaining SDK header search paths
+#                    (most still in-place at platform/ameba-rtos-d/). Picks
+#                    app_km0 vs. app_km4 based on AMEBAD_CHIP. (Was the separate
+#                    sdk_includes component, now folded in here.)
 #
 #   usrcfg           Board config, one chip-gated CMakeLists over a flat folder;
 #                    the SDK filename infix selects the lib: usrcfg_common
@@ -71,7 +74,7 @@ add_subdirectory(fwlib)              # chip fwlib: headers (amebad_fwlib_headers
 add_subdirectory(xmodem)             # ROM xmodem headers (amebad_xmodem) + xmodem.ld symbols; linked by sdk_includes below
 add_subdirectory(string_rom)         # ROM swlib-string headers (amebad_string_rom) + string_rom_km{4,0}.ld; linked by sdk_includes below
 add_subdirectory(cmsis_rom)          # CMSIS core/DSP/mpu headers (amebad_cmsis_rom) + cmsis_rom_km{4,0}.ld; linked by sdk_includes below
-add_subdirectory(sdk_includes)       # aggregates amebad_fwlib_headers + xmodem/string_rom/cmsis_rom + SDK include paths; consumed by the ram HAL libs (forward ref) and app/boot
+add_subdirectory(sdk_headers)        # flat platform/ headers + defines amebad_sdk_includes (aggregates fwlib_headers/xmodem/string_rom/cmsis_rom + SDK include paths); consumed by the ram HAL libs (forward ref) and app/boot
 add_subdirectory(usrcfg)             # chip-gated: usrcfg_common (+ _lp on KM0 / _hp on KM4)
 add_subdirectory(freertos)           # upstream FreeRTOS kernel -> target `FreeRTOS`
 add_subdirectory(freertos_glue)      # SDK FreeRTOS extensions, chip-gated (after freertos)
