@@ -37,6 +37,10 @@ endif()
 # add_subdirectory()s live in component/amebad/CMakeLists.txt.
 if(AMEBAD_CHIP MATCHES "^amebad-km[04]$")
     add_subdirectory(component/amebad)
+    # NimBLE host glue (component/nimble) on top of component/amebad/hci. KM4-only
+    # (the component itself early-returns for km0). Upstream is the submodule
+    # component/thirdparty/nimble.
+    add_subdirectory(component/nimble)
 endif()
 
 # Forward src/'s AT_USER_SOURCES / AT_USER_SRC_DIR one more scope up so a

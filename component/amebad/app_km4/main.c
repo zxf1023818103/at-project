@@ -225,6 +225,19 @@ static void wifi_bringup_thread( void *param )
     }
 #endif
 
+#ifdef AT_PROJECT_NIMBLE
+    /* NimBLE host image: start the Apache NimBLE host (controller bring-up + host +
+     * advertising) on top of our HCI transport (component/nimble). Then FALL THROUGH
+     * to the normal WiFi connect + FreeRTOS+TCP + iperf path so WiFi traffic and BLE
+     * run concurrently — exercising WiFi/BT coex (P5). amebad_nimble_start() spawns
+     * its own host/RX tasks and returns. */
+    {
+        extern void amebad_nimble_start( void );
+        amebad_nimble_start();
+        /* fall through -> dump_surrounding_country_codes + wifi_connect + iperf */
+    }
+#endif
+
     /* TEST: can we read country code from surrounding hotspots' beacons?
      * Runs a clean active scan before associating. */
     dump_surrounding_country_codes();

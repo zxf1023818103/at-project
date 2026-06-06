@@ -46,3 +46,6 @@
 	url = https://github.com/wolfSSL/wolfssl.git
 	branch = v5.9.1-stable
 	shallow = true
+[submodule "component/thirdparty/nimble"]
+	path = component/thirdparty/nimble
+	url = https://github.com/apache/mynewt-nimble

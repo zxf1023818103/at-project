@@ -151,6 +151,16 @@ void hci_uart_set_baudrate(uint32_t baudrate)
     UART_SetBaud(HCI_UART_DEV, baudrate);
 }
 
+/* Blocking single-byte write to the controller HCI UART. Used by a host stack's
+ * TX path (e.g. NimBLE transport, component/nimble/transport_amebad.c) so it can
+ * push H4 cmd/ACL bytes without pulling the SoC UART headers into its TU. */
+void hci_ctrl_putc(unsigned char b)
+{
+    while (!UART_Writable(HCI_UART_DEV))
+        ;
+    UART_CharPut(HCI_UART_DEV, b);
+}
+
 void hci_uart_rx_disable(T_HCI_UART *hci_adapter)
 {
     /* We disable received data available and rx timeout interrupt, then

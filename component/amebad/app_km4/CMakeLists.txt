@@ -86,20 +86,20 @@ add_dependencies(target_img2_km4 amebad_km4_img2_ld)
 target_include_directories(target_img2_km4 SYSTEM PRIVATE
     "${CMAKE_SOURCE_DIR}/component/amebad/ftl")
 
-# BLE controller HCI test image: link the controller bring-up + HCI transport
-# (amebad_hci, no btgap.a) and auto-enter the DTM/HCI bridge at boot. OFF by default.
-option(AMEBAD_ENABLE_HCI "Build the BLE controller HCI test image (bring-up + HCI bridge)" OFF)
+# BLE images on top of component/amebad/hci (no btgap.a):
+#   AMEBAD_ENABLE_HCI    — raw HCI / DTM bridge test image (auto-enter bridge).
+#   AMEBAD_ENABLE_NIMBLE — Apache NimBLE host (LE/GATT/Mesh/coex), via component/nimble.
+# Both ride the same controller bring-up (amebad_hci + firmware blob + newlib
+# syscalls); NimBLE additionally links the `nimble` lib. Pick one. OFF by default.
+option(AMEBAD_ENABLE_HCI    "Build the BLE controller HCI test image (bring-up + HCI bridge)" OFF)
+option(AMEBAD_ENABLE_NIMBLE "Build the NimBLE host image (LE/GATT/Mesh/coex on amebad_hci)" OFF)
 set(_hci_grp "")
-if(AMEBAD_ENABLE_HCI)
-    # btgap.a (Realtek upper stack) not used — controller bring-up runs via
-    # hci_tp_open() directly (component/amebad/hci/hci_nostack.c). Just amebad_hci.
+if(AMEBAD_ENABLE_HCI OR AMEBAD_ENABLE_NIMBLE)
+    # Shared controller bits — bring-up via hci_tp_open() (component/amebad/hci/
+    # hci_nostack.c), firmware blob + newlib syscalls in the EXECUTABLE so their
+    # STRONG defs override the weak {0} stubs (a blob inside the archive wouldn't
+    # get pulled).
     set(_hci_grp ",amebad_hci")
-    set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
-                 APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_HCI)
-    # The controller firmware blob (normal BLE-DTM vs MP/RF-test, selected by
-    # AMEBAD_HCI_FW_MP). In the EXECUTABLE (not amebad_hci) so its STRONG
-    # rtlbt_(mp_)fw / _len always link and override the weak {0} stubs in
-    # hci_fw_stub.c — a strong blob inside the archive would not get pulled.
     set(_hci_root "${CMAKE_SOURCE_DIR}/component/amebad/hci")
     if(AMEBAD_HCI_FW_MP)
         set(_hci_fw_src "${_hci_root}/hci_mp_patch.c")
@@ -108,12 +108,17 @@ if(AMEBAD_ENABLE_HCI)
     endif()
     set_source_files_properties("${_hci_fw_src}" PROPERTIES
         COMPILE_OPTIONS "-Wno-unused-variable;-Wno-unused-const-variable")
-    # newlib syscall stubs (_write/_sbrk/...) for the HCI source's _rtl_printf/abort
-    # — in the EXECUTABLE so they resolve libc.a's references (lib members to the
-    # left of libc don't get pulled for right-side refs).
     target_sources(target_img2_km4 PRIVATE
         "${_hci_root}/hci_syscalls.c"
         "${_hci_fw_src}")
+endif()
+if(AMEBAD_ENABLE_NIMBLE)
+    set(_hci_grp ",amebad_hci,nimble")
+    set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
+                 APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_NIMBLE)
+elseif(AMEBAD_ENABLE_HCI)
+    set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
+                 APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_HCI)
 endif()
 
 # Archives wrapped in --start-group (cross_refs) for circular vendor refs.
