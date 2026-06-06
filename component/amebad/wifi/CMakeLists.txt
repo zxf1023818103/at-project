@@ -30,7 +30,6 @@ add_library(amebad_wifi_headers INTERFACE)
 target_include_directories(amebad_wifi_headers SYSTEM INTERFACE
     "${CMAKE_SOURCE_DIR}/component/amebad"  # -> <wifi/wifi_conf.h>, <at_cmd/atcmd_wifi.h>
     "${CMAKE_CURRENT_SOURCE_DIR}"           # -> flat "wifi_conf.h" / "main.h" / "netconf.h"
-    "${_sdk_mir}/example"                   # -> <wlan_fast_connect/example_wlan_fast_connect.h>
     # mbed HAL (flattened): spdio_api.h / flash_api.h / pinmap.h / device.h /
     # objects.h / PinNames.h — now one flat dir in the mbed component.
     "${CMAKE_SOURCE_DIR}/component/amebad/mbed"

@@ -3,6 +3,7 @@
 #if !defined(CONFIG_MBED_ENABLED) && !defined(CONFIG_PLATFOMR_CUSTOMER_RTOS)
 #include "main.h"
 #include <netif_shim.h>   /* lwip-free: vendored struct netif + LwIP_*/netif_* decls */
+#include "wifi_fast_connect.h"  /* wlan-lib fast-connect API: struct wlan_fast_reconnect + p_*_callback / psk_* (lib_wlan.a) */
 /* lwip removed: <lwip/sockets.h> (keepalive offload — gated off below),
  * <dhcp/dhcps.h> (AP DHCP server) and "tcpip.h" are gone. The few symbols
  * wifi_conf.c still references are declared in netif_shim.h. */
@@ -15,7 +16,7 @@
 #include <device_lock.h>
 
 #if CONFIG_EXAMPLE_WLAN_FAST_CONNECT || (defined(CONFIG_JD_SMART) && CONFIG_JD_SMART)
-#include "wlan_fast_connect/example_wlan_fast_connect.h"
+/* fast-connect API now from wifi_fast_connect.h, included unconditionally above */
 #if defined(CONFIG_FAST_DHCP) && CONFIG_FAST_DHCP
 #include "flash_api.h"
 #include "device_lock.h"
@@ -1869,8 +1870,8 @@ int wifi_rf_off(void)
  * completes; we wake wifi_on() off that instead of polling rltk_wlan_running()
  * once a second — removing up to ~1 s of bring-up latency from the 1 Hz poll
  * granularity. The semaphore is persistent (lazy-created, drained each arm), so
- * the failure/early-return paths need no cleanup. */
-extern int ( *p_wlan_init_done_callback )( void );
+ * the failure/early-return paths need no cleanup. (p_wlan_init_done_callback is
+ * declared in wifi_fast_connect.h, included at the top.) */
 static _sema g_wifi_init_done_sema = NULL;
 static int wifi_internal_init_done_cb( void )
 {

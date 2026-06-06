@@ -70,7 +70,7 @@
 
 #if (defined(CONFIG_EXAMPLE_UART_ATCMD) && (CONFIG_EXAMPLE_UART_ATCMD))
 #include "wifi_structures.h"
-#include <wlan_fast_connect/example_wlan_fast_connect.h>
+#include <wifi_fast_connect.h>   /* relocated to the wlan component */
 typedef struct _UART_LOG_CONF_{
 	u32 BaudRate;
 	u8 DataBits;
@@ -165,7 +165,7 @@ extern void uart_at_send_buf(u8 *buf, u32 len);
 #elif (defined(CONFIG_EXAMPLE_SPI_ATCMD) && (CONFIG_EXAMPLE_SPI_ATCMD))
 
 #include "wifi_structures.h"
-#include <wlan_fast_connect/example_wlan_fast_connect.h>
+#include <wifi_fast_connect.h>   /* relocated to the wlan component */
 
 typedef struct _SPI_LOG_CONF_{
     int frequency;
