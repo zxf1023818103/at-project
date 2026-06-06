@@ -45,7 +45,19 @@ file(GLOB _nb_src
     "${_nb}/nimble/transport/src/*.c"
     "${_nb}/nimble/transport/common/hci_h4/src/*.c"   # H4 framing state machine (custom transport uses it)
     "${_nb}/nimble/host/mesh/src/*.c"        # BLE Mesh
-    "${_nb}/ext/tinycrypt/src/*.c"           # SM AES/ECDH
+    "${_nb}/ext/tinycrypt/src/*.c"           # SM CMAC + helpers (AES/ECC swapped to wolfCrypt below)
+)
+
+# SM crypto on wolfCrypt, not tinycrypt: drop the tinycrypt AES block + the
+# micro-ecc P-256, and supply tc_aes_encrypt / uECC_* over wolfCrypt in
+# wolfcrypt_sm_glue.c. cmac_mode.c / utils.c / aes_decrypt.c stay (CMAC rides on
+# our tc_aes_encrypt). See wolfcrypt_sm_glue.c header for the curve_secp256r1 stubs.
+list(REMOVE_ITEM _nb_src
+    "${_nb}/ext/tinycrypt/src/aes_encrypt.c"
+    "${_nb}/ext/tinycrypt/src/ecc.c"
+    "${_nb}/ext/tinycrypt/src/ecc_dh.c"
+    "${_nb}/ext/tinycrypt/src/ecc_dsa.c"
+    "${_nb}/ext/tinycrypt/src/ecc_platform_specific.c"
 )
 
 # Drop mesh CLI / shell / example-model helpers — they #include <console/console.h>
@@ -72,6 +84,7 @@ add_library(nimble STATIC EXCLUDE_FROM_ALL
     ${_nb_src}
     "${CMAKE_CURRENT_SOURCE_DIR}/transport_amebad.c"   # custom HCI transport (LL side) -> amebad_hci
     "${CMAKE_CURRENT_SOURCE_DIR}/coex_amebad.c"        # WiFi/BT coex glue -> lib_wlan (P5)
+    "${CMAKE_CURRENT_SOURCE_DIR}/wolfcrypt_sm_glue.c"  # SM AES/ECDH on wolfCrypt (replaces tinycrypt)
     "${CMAKE_CURRENT_SOURCE_DIR}/nimble_app.c"         # amebad_nimble_start() + host task
 )
 
@@ -106,6 +119,17 @@ target_link_libraries(nimble PUBLIC
     amebad_sdk_includes  # platform_stdlib.h / DiagPrintf (our glue)
     amebad_wlan          # rltk_coex_* (coex, P5)
 )
+
+# wolfCrypt headers + WOLFSSL_USER_SETTINGS for wolfcrypt_sm_glue.c — as COMPILE
+# requirements only, NOT a link edge. amebad_wolfssl's wc_* symbols link into the
+# executable via app_km4's cross_refs LINK_GROUP (nimble is in that group). A real
+# link dep here would cycle: nimble ∈ group, and amebad_wolfssl needs FreeRTOS which
+# is also ∈ group. The generator expressions resolve at generate time regardless of
+# subdirectory order.
+target_include_directories(nimble SYSTEM PRIVATE
+    $<TARGET_PROPERTY:amebad_wolfssl,INTERFACE_INCLUDE_DIRECTORIES>)
+target_compile_definitions(nimble PRIVATE
+    $<TARGET_PROPERTY:amebad_wolfssl,INTERFACE_COMPILE_DEFINITIONS>)
 
 # porting/npl/freertos/src/npl_os_freertos.c does `#include NIMBLE_NPL_OS_EXTRA_INCLUDE`
 # to get CMSIS SCB (for its in_isr() check). Point it at the AmebaD SoC umbrella

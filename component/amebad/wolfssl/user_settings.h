@@ -81,6 +81,7 @@ extern "C" {
 #undef  NO_AES
 #define HAVE_AES_CBC
 #define WOLFSSL_AES_COUNTER
+#define WOLFSSL_AES_DIRECT           /* single-block ECB (wc_AesEncryptDirect) — NimBLE SM e()/CMAC */
 #define HAVE_AESGCM
 #define GCM_TABLE_4BIT               /* ~256 B table, good speed/size on M (eval §5) */
 

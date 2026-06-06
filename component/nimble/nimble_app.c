@@ -25,6 +25,7 @@ extern void amebad_nimble_coex_init(void);
 extern void amebad_nimble_coex_set_conn(int connected); /* coex_amebad.c: BLE-active hint -> WiFi */
 extern void bt_dtm_bringup(void);                   /* hci_dtm.c: controller bring-up */
 extern void nimble_amebad_transport_start_rx(void); /* transport_amebad.c: HCI RX task */
+extern void amebad_nimble_sm_crypto_selftest(void); /* wolfcrypt_sm_glue.c: SM crypto KAT */
 
 #define NIMBLE_DEV_NAME   "amebad-nimble"
 
@@ -175,6 +176,9 @@ void
 amebad_nimble_start(void)
 {
     int rc;
+
+    /* 0. verify the wolfCrypt-backed SM crypto (AES + AES-CMAC + ECDH P-256) before the host runs */
+    amebad_nimble_sm_crypto_selftest();
 
     /* 1. controller up over our HCI (gnt_bt + trace + patch download + HCI reset) */
     DiagPrintf("\n\r[NimBLE] controller bring-up (bt_dtm_bringup) ...\n\r");

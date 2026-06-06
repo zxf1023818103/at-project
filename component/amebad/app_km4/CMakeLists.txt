@@ -127,8 +127,10 @@ endif()
 target_link_libraries(target_img2_km4 PRIVATE
     amebad_sdk_includes
     amebad_mbedtls_rom   # INTERFACE: ROM mbedTLS 2.4.0 headers + MBEDTLS_CONFIG_FILE (no archive)
-    amebad_wolfssl       # wolfCrypt v5.9.1 (benchmark); before the group so its pvPortMalloc/DiagPrintf refs resolve
-    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km4,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_ftl,amebad_at_cmd,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_monitor,amebad_monitor_common,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,amebad_wlan,amebad_wps${_hci_grp}>"
+    # amebad_wolfssl is INSIDE the group: NimBLE's SM crypto (nimble, in the group)
+    # pulls wc_* (wc_ecc_*/wc_AesEncryptDirect) that the bench didn't, so wolfCrypt
+    # must rescan alongside nimble — wolfCrypt<->FreeRTOS<->nimble are mutually refed.
+    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km4,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_ftl,amebad_at_cmd,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_monitor,amebad_monitor_common,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,amebad_wlan,amebad_wps,amebad_wolfssl${_hci_grp}>"
     m
     stdc++
     c
