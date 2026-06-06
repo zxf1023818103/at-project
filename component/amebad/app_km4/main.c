@@ -103,6 +103,13 @@ static void wifi_bringup_thread( void *param )
     /* Throughput: run KM4 at max clock (default may be lower for power). */
     SystemSetCpuClk( CLK_KM4_200M );
 
+    /* Known-answer test of the ROM mbedTLS 2.4.0 software crypto (AES/SHA/MD5/
+     * HMAC). Scheduler is up here, so the HMAC alloc path has a heap. */
+    {
+        extern void rom_mbedtls_kat( void );
+        rom_mbedtls_kat();
+    }
+
     DiagPrintf( "[KM4] wifi_on(RTW_MODE_STA)...\n\r" );
     if( wifi_on( RTW_MODE_STA ) < 0 )
     {

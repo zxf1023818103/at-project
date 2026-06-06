@@ -68,6 +68,9 @@ if(NOT AMEBAD_CHIP MATCHES "^amebad-km[04]$")
 endif()
 
 add_subdirectory(fwlib_headers)
+add_subdirectory(xmodem)             # ROM xmodem headers (amebad_xmodem) + xmodem.ld symbols; linked by sdk_includes below
+add_subdirectory(string_rom)         # ROM swlib-string headers (amebad_string_rom) + string_rom_km{4,0}.ld; linked by sdk_includes below
+add_subdirectory(cmsis_rom)          # CMSIS core/DSP/mpu headers (amebad_cmsis_rom) + cmsis_rom_km{4,0}.ld; linked by sdk_includes below
 add_subdirectory(sdk_includes)
 add_subdirectory(ram)                # chip-gated: ram_common+ram_lp (KM0) / ram_hp+ram_common (subset, KM4)
 add_subdirectory(usrcfg)             # chip-gated: usrcfg_common (+ _lp on KM0 / _hp on KM4)
@@ -75,15 +78,15 @@ add_subdirectory(freertos)           # upstream FreeRTOS kernel -> target `FreeR
 add_subdirectory(freertos_glue)      # SDK FreeRTOS extensions, chip-gated (after freertos)
 add_subdirectory(monitor)            # chip-gated (image2 shell/monitor)
 add_subdirectory(osdep)              # KM4-gated internally (osdep/os abstraction)
+add_subdirectory(mbed)               # KM4-gated: flattened mbed HAL (amebad_mbed: flash_api.c + headers), consumed by ftl/wifi
 add_subdirectory(ftl)                # KM4-gated internally (flash translation layer)
 add_subdirectory(at_cmd)             # KM4-gated internally (basic AT log/command service)
-add_subdirectory(mbedtls)            # KM4-gated: shared upstream Mbed TLS v3.6.4
+add_subdirectory(mbedtls_rom)        # KM4-gated: headers to call ROM mbedTLS 2.4.0 as SW (no build)
 add_subdirectory(netif_shim)         # KM4-gated: residual driver<->netif ABI shim (lwip removed)
 add_subdirectory(freertos_tcp)       # KM4-gated: FreeRTOS-Plus-TCP V4.0.0 (DHCP bring-up, EXCLUDE)
 add_subdirectory(pmu)                # chip-gated: prebuilt PMC lib (lib_pmc_lp/hp.a) + pmu headers
-add_subdirectory(wlan)               # KM4-gated: host WiFi driver libs (lib_wlan/wps.a) + API headers
-add_subdirectory(eap)                # KM4-gated: EAP/802.1X supplicant lib (lib_eap.a, WPA-Enterprise)
-add_subdirectory(wpa_supplicant)     # KM4-gated: WiFi supplicant config/glue source + headers
+add_subdirectory(wlan)               # KM4-gated: host WiFi driver libs (lib_wlan*.a) + API headers
+add_subdirectory(wpa_supplicant)     # KM4-gated: supplicant cores (lib_wps.a + lib_eap.a) + config/glue source + headers
 add_subdirectory(wifi)               # KM4-gated: host WiFi API + bring-up (amebad_wifi, EXCLUDE)
 add_subdirectory(image_tool)         # defines amebad_make_{boot,image2}_all_bin*(...)
                                      #   + amebad_make_image_all_bin() (-> target

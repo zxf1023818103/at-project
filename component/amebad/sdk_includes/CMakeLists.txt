@@ -42,7 +42,7 @@ else()
 endif()
 
 add_library(amebad_sdk_includes INTERFACE)
-target_link_libraries(amebad_sdk_includes INTERFACE amebad_fwlib_headers)
+target_link_libraries(amebad_sdk_includes INTERFACE amebad_fwlib_headers amebad_xmodem amebad_string_rom amebad_cmsis_rom)
 
 # OTA region — base addresses for the two image2 partitions. Default
 # values match SDK upstream (rtl8721d_ota.h #define defaults). Override
@@ -138,12 +138,11 @@ target_include_directories(amebad_sdk_includes SYSTEM INTERFACE
     # psram_reserve/device_lock/tcm_heap.h) with osdep.
     "${CMAKE_SOURCE_DIR}/component/amebad/freertos_glue"
     "${CMAKE_SOURCE_DIR}/component/amebad/osdep"
-    # SoC-level. monitor (shell/monitor_rom/rtl_trace.h) + xmodem (xmodem_*.h)
-    # headers also moved onto their components.
-    "${_sdk_soc}/cmsis"
+    # SoC-level. monitor (shell/monitor_rom/rtl_trace.h) headers live here;
+    # xmodem (xmodem_*.h) + swlib-string (strproc/memproc/printf/diag...) + CMSIS
+    # (core_cm*/arm_math/mpu...) headers come via the amebad_xmodem /
+    # amebad_string_rom / amebad_cmsis_rom targets linked above.
     "${CMAKE_SOURCE_DIR}/component/amebad/monitor"
-    "${CMAKE_SOURCE_DIR}/component/amebad/xmodem"
-    "${_sdk_soc}/swlib/string"
     # PMU: rtl8721d_freertos_pmu.h moved to the pmu component (with lib_pmc_*.a).
     "${CMAKE_SOURCE_DIR}/component/amebad/pmu"
     # common APIs — platform_stdlib.h etc. (api + api/platform). at_cmd headers

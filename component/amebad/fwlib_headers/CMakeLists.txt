@@ -16,9 +16,22 @@
 #
 # Marked SYSTEM so -Wall / -Wextra / -Wpointer-arith on the consuming
 # target don't fire on Realtek-vendor code we don't own.
+#
+# fwlib_rom_km{4,0}.ld: the mask-ROM addresses of the fwlib HAL functions these
+# headers declare (UART_/GPIO_/FLASH_/RCC_/GDMA_/EFUSE_/CPU_ClkGet/Set DiagPrintf ...),
+# partitioned out of the per-core rlx8721d_rom_symbol_acut.ld so the HAL symbols
+# live with the headers that declare them. Each KM-image link stage cats the one
+# for its core (boot/runtime/fault/FFT symbols stay in the core table). Exposed
+# via AMEBAD_FWLIB_ROM_KM{4,0}_LD; KM4 ROM addresses != KM0 ROM addresses, hence
+# two tables.
 
 add_library(amebad_fwlib_headers INTERFACE)
 
 target_include_directories(amebad_fwlib_headers SYSTEM INTERFACE
     "${CMAKE_CURRENT_SOURCE_DIR}"
 )
+
+set(AMEBAD_FWLIB_ROM_KM4_LD "${CMAKE_CURRENT_SOURCE_DIR}/fwlib_rom_km4.ld"
+    CACHE INTERNAL "AmebaD KM4 (HP) fwlib HAL ROM-symbol PROVIDE linker script")
+set(AMEBAD_FWLIB_ROM_KM0_LD "${CMAKE_CURRENT_SOURCE_DIR}/fwlib_rom_km0.ld"
+    CACHE INTERNAL "AmebaD KM0 (LP) fwlib HAL ROM-symbol PROVIDE linker script")

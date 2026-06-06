@@ -42,13 +42,17 @@ endforeach()
 # INCLUDE "rlx8721d_layout_is.ld", resolved through -L below.
 set(_img2_ld     "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_img2_is.ld")
 set(_rom_sym_ld  "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_rom_symbol_acut.ld")
+set(_rom_fwlib_ld "${AMEBAD_FWLIB_ROM_KM4_LD}")                      # KM4 fwlib HAL ROM symbols (fwlib_headers)
+set(_rom_str_ld  "${AMEBAD_STRING_ROM_KM4_LD}")                      # KM4 swlib-string ROM symbols (string_rom)
+set(_rom_cmsis_ld "${AMEBAD_CMSIS_ROM_KM4_LD}")                      # KM4 CMSIS mpu/DSP ROM symbols (cmsis_rom)
 set(_rom_wifi_ld "${CMAKE_CURRENT_SOURCE_DIR}/rom_symbol_wifi.ld")   # extra ROM PROVIDEs (PAD_CMD) for lib_wlan
+set(_rom_mbed_ld "${CMAKE_SOURCE_DIR}/component/amebad/mbedtls_rom/mbedtls_rom.ld")  # ROM mbedTLS 2.4.0 + ssl ram map symbols
 set(_layout_ld   "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_layout_is.ld")
 set(_combined_ld "${CMAKE_CURRENT_BINARY_DIR}/rlx8721d.ld")
 add_custom_command(
     OUTPUT  "${_combined_ld}"
-    COMMAND "${CMAKE_COMMAND}" -E cat "${_img2_ld}" "${_rom_sym_ld}" "${_rom_wifi_ld}" > "${_combined_ld}"
-    DEPENDS "${_img2_ld}" "${_rom_sym_ld}" "${_rom_wifi_ld}" "${_layout_ld}"
+    COMMAND "${CMAKE_COMMAND}" -E cat "${_img2_ld}" "${_rom_sym_ld}" "${_rom_fwlib_ld}" "${_rom_str_ld}" "${_rom_cmsis_ld}" "${_rom_wifi_ld}" "${_rom_mbed_ld}" > "${_combined_ld}"
+    DEPENDS "${_img2_ld}" "${_rom_sym_ld}" "${_rom_fwlib_ld}" "${_rom_str_ld}" "${_rom_cmsis_ld}" "${_rom_wifi_ld}" "${_rom_mbed_ld}" "${_layout_ld}"
     COMMENT "concat KM4 image2 linker script"
     VERBATIM
 )
@@ -64,6 +68,8 @@ add_executable(target_img2_km4
     "${CMAKE_CURRENT_SOURCE_DIR}/iperf_server.c"        # iperf2 TCP sink (RX throughput from WSL iperf -c)
     "${CMAKE_CURRENT_SOURCE_DIR}/iperf_udp_client.c"    # iperf2 UDP blast (bottleneck discriminator: driver vs TCP pacing)
     "${CMAKE_CURRENT_SOURCE_DIR}/iperf_udp_server.c"    # UDP RX sink (discriminator: is the RX/ACK delivery path tick-quantized?)
+    "${CMAKE_CURRENT_SOURCE_DIR}/rom_mbedtls_kat.c"     # known-answer test of the ROM mbedTLS 2.4.0 software crypto
+    "${CMAKE_SOURCE_DIR}/component/amebad/mbedtls_rom/rom_mbedtls.c"  # ROM mbedTLS ram-map glue (use_hw_crypto_func=0)
 )
 # WIP: the image2 link still needs the app/WiFi/mbedTLS/lwIP/log/os_dep/ftl
 # stack (~30 undefined symbols at bootstrap). EXCLUDE_FROM_ALL keeps the
@@ -83,6 +89,7 @@ target_include_directories(target_img2_km4 SYSTEM PRIVATE
 # plus memcpy/memset — so KM4 doesn't need the ROM memcpy alias KM0 uses.
 target_link_libraries(target_img2_km4 PRIVATE
     amebad_sdk_includes
+    amebad_mbedtls_rom   # INTERFACE: ROM mbedTLS 2.4.0 headers + MBEDTLS_CONFIG_FILE (no archive)
     "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km4,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_ftl,amebad_at_cmd,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_monitor,amebad_monitor_common,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,amebad_wlan,amebad_wps>"
     m
     stdc++

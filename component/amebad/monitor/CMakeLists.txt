@@ -18,6 +18,14 @@ else()
     return()
 endif()
 
+# monitor_rom.ld: the KM0 mask-ROM addresses of the shell_*/cmd_* ROM functions
+# the KM0 monitor (monitor_lp.c) uses. Partitioned out of the shared KM0 ROM
+# symbol table so they live with the monitor component; each KM0-image link stage
+# cats it via AMEBAD_MONITOR_ROM_LD. KM4 builds the shell from source (shell_rom.c
+# / monitor_rom.c) so there is no KM4 table.
+set(AMEBAD_MONITOR_ROM_LD "${CMAKE_CURRENT_SOURCE_DIR}/monitor_rom.ld"
+    CACHE INTERNAL "AmebaD KM0 monitor/shell ROM-symbol PROVIDE linker script")
+
 # Vendor-code warning suppression, shared by the libs below.
 set(_monitor_warnings
     -Wno-unused-parameter

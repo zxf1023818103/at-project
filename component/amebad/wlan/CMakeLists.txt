@@ -61,10 +61,8 @@ set_target_properties(amebad_wlan PROPERTIES
     IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/${_wlan_lib}"
     INTERFACE_INCLUDE_DIRECTORIES "${_wlan_inc}")
 
-add_library(amebad_wps STATIC IMPORTED GLOBAL)
-set_target_properties(amebad_wps PROPERTIES
-    IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/lib_wps.a"
-    INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}")
+# amebad_wps (lib_wps.a — the WPS/supplicant core) moved to the wpa_supplicant
+# component, consolidated with lib_eap.a + the supplicant source/headers.
 
 # --- WiFi driver SOURCE glue (not in lib_wlan.a) -----------------------------
 # The 7 driver source files the SDK keeps outside the prebuilt lib so they stay

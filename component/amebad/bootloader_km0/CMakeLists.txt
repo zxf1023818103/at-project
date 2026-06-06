@@ -58,8 +58,8 @@ set(_combined_ld   "${CMAKE_CURRENT_BINARY_DIR}/rlx8721d.ld")
 add_custom_command(
     OUTPUT  "${_combined_ld}"
     COMMAND "${CMAKE_COMMAND}" -E cat "${_boot_ld}" "${_rom_symbol_ld}"
-                                       > "${_combined_ld}"
-    DEPENDS "${_boot_ld}" "${_rom_symbol_ld}" "${_layout_ld}"
+                                       "${AMEBAD_FWLIB_ROM_KM0_LD}" "${AMEBAD_STRING_ROM_KM0_LD}" "${AMEBAD_CMSIS_ROM_KM0_LD}" "${AMEBAD_MONITOR_ROM_LD}" "${AMEBAD_XMODEM_ROM_SYMBOL_LD}" > "${_combined_ld}"
+    DEPENDS "${_boot_ld}" "${_rom_symbol_ld}" "${AMEBAD_FWLIB_ROM_KM0_LD}" "${AMEBAD_STRING_ROM_KM0_LD}" "${AMEBAD_CMSIS_ROM_KM0_LD}" "${AMEBAD_MONITOR_ROM_LD}" "${AMEBAD_XMODEM_ROM_SYMBOL_LD}" "${_layout_ld}"
     COMMENT "concat KM0 loader linker script"
     VERBATIM
 )

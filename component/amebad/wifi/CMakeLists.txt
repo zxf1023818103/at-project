@@ -11,8 +11,8 @@
 # the WiFi sources use (`<wifi/wifi_conf.h>`, `<at_cmd/atcmd_wifi.h>`) resolve by
 # exposing component/amebad as a root — `wifi/` and `at_cmd/` are real sibling
 # component dirs under it. Flat includes (`"wifi_conf.h"`, `"main.h"`) resolve
-# via this dir. Network-service / example / mbed rooted headers (`<dhcp/...>`,
-# `<wlan_fast_connect/...>`, spdio_api.h) come from the sdk_headers mirror roots.
+# via this dir. Example rooted headers (`<wlan_fast_connect/...>`) come from the
+# sdk_headers mirror root; the mbed HAL headers from the mbed component.
 #
 # KM4-only. EXCLUDE_FROM_ALL until app_km4 links it (build explicitly with
 # `cmake --build <dir> -t amebad_wifi`). Resync from component/common/api/{wifi,
@@ -30,11 +30,10 @@ add_library(amebad_wifi_headers INTERFACE)
 target_include_directories(amebad_wifi_headers SYSTEM INTERFACE
     "${CMAKE_SOURCE_DIR}/component/amebad"  # -> <wifi/wifi_conf.h>, <at_cmd/atcmd_wifi.h>
     "${CMAKE_CURRENT_SOURCE_DIR}"           # -> flat "wifi_conf.h" / "main.h" / "netconf.h"
-    "${_sdk_mir}/network"                   # -> <dhcp/dhcps.h>
     "${_sdk_mir}/example"                   # -> <wlan_fast_connect/example_wlan_fast_connect.h>
-    "${_sdk_mir}/mbed/hal_ext"              # -> spdio_api.h / flash_api.h
-    "${_sdk_mir}/mbed/hal"                  # -> pinmap.h (pulled by flash_api.h)
-    "${_sdk_mir}/mbed/targets/hal/rtl8721d" # -> device.h / objects.h / PinNames.h
+    # mbed HAL (flattened): spdio_api.h / flash_api.h / pinmap.h / device.h /
+    # objects.h / PinNames.h — now one flat dir in the mbed component.
+    "${CMAKE_SOURCE_DIR}/component/amebad/mbed"
 )
 
 add_library(amebad_wifi STATIC EXCLUDE_FROM_ALL
