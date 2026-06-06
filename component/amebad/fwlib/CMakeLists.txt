@@ -1,32 +1,54 @@
-# amebad_ram — AmebaD RAM-resident HAL drivers, project-local copies of
-# platform/ameba-rtos-d/.../fwlib/{ram_common,ram_lp,ram_hp}/. Flat folder; the
-# SDK filename infix groups them. Three lib names (kept so the bootloader / app
-# link lists don't change):
+# amebad_fwlib — Realtek AmebaD (RTL8721D) chip fwlib: headers + ROM-symbol
+# linker scripts + the RAM-resident HAL driver sources, in one component.
+# (Merge of the former fwlib_headers/ and ram/ — both were extracts of the same
+# SDK subtree platform/ameba-rtos-d/.../fwlib/: include/ -> the headers here,
+# {ram_common,ram_lp,ram_hp}/ -> the rtl8721d*_*.c here.)
+#
+# Produces:
+#   amebad_fwlib_headers  INTERFACE — 69 .h (chip regs, HAL inlines, the
+#                         ameba_soc.h umbrella every AmebaD source pulls in).
+#                         SYSTEM so -Wall/-Wextra don't fire on vendor headers.
+#   AMEBAD_FWLIB_ROM_KM{4,0}_LD  cache vars -> fwlib_rom_km{4,0}.ld: the mask-ROM
+#                         addresses of the HAL functions these headers declare
+#                         (UART_/GPIO_/FLASH_/RCC_/GDMA_/EFUSE_/CPU_ClkGet/Set
+#                         DiagPrintf ...), partitioned out of the per-core
+#                         rlx8721d_rom_symbol_acut.ld. KM4 addrs != KM0 addrs.
+#   amebad_ram_common / _lp / _hp  STATIC — the RAM HAL the ROM doesn't provide.
+#
+# Resync when the submodule pointer moves:
+#   diff -r platform/ameba-rtos-d/component/soc/realtek/amebad/fwlib/include/ \
+#           component/amebad/fwlib/        # headers
+#   diff -r platform/ameba-rtos-d/.../fwlib/{ram_common,ram_lp,ram_hp}/ \
+#           component/amebad/fwlib/        # sources
+
+# ---- Headers + ROM-symbol linker scripts (both cores need these) ----
+add_library(amebad_fwlib_headers INTERFACE)
+target_include_directories(amebad_fwlib_headers SYSTEM INTERFACE
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+set(AMEBAD_FWLIB_ROM_KM4_LD "${CMAKE_CURRENT_SOURCE_DIR}/fwlib_rom_km4.ld"
+    CACHE INTERNAL "AmebaD KM4 (HP) fwlib HAL ROM-symbol PROVIDE linker script")
+set(AMEBAD_FWLIB_ROM_KM0_LD "${CMAKE_CURRENT_SOURCE_DIR}/fwlib_rom_km0.ld"
+    CACHE INTERNAL "AmebaD KM0 (LP) fwlib HAL ROM-symbol PROVIDE linker script")
+
+# ---- RAM-resident HAL drivers (chip-gated) ----
+# Three lib names, kept so the bootloader / app link lists don't change:
 #   amebad_ram_common  rtl8721d_*    shared HAL — KM0 compiles all 20; KM4
 #                                    compiles only the few the HP ROM doesn't
 #                                    provide (ipc/gdma/flash/libc). KM0 and KM4
 #                                    are separate builds, so the same target name
-#                                    holds the full set on KM0 / the subset on KM4
-#                                    (no _km4 suffix needed — they never coexist).
+#                                    holds the full set on KM0 / the subset on KM4.
 #   amebad_ram_lp      rtl8721dlp_*  KM0-only HAL (clk/pinmap/startup/...)
 #   amebad_ram_hp      rtl8721dhp_*  KM4-only HAL (audio/i2s/sd/ota/...)
-#
 # Why KM4 doesn't compile all of ram_common: the rest of the shared HAL comes
-# from the HP ROM (rom_symbol table), so compiling it would DUPLICATE ROM
-# symbols; also rtl8721d_qdec.c uses an LP-only RCC header. So KM4's
-# amebad_ram_common is the surgical subset that pulls no LP-only header.
+# from the HP ROM (rom_symbol table), so compiling it would DUPLICATE ROM symbols;
+# also rtl8721d_qdec.c uses an LP-only RCC header. So KM4's amebad_ram_common is
+# the surgical subset that pulls no LP-only header.
 #
-# Resync when the submodule pointer moves:
-#   diff -r platform/ameba-rtos-d/component/soc/realtek/amebad/fwlib/{ram_common,ram_lp,ram_hp}/ \
-#           component/amebad/ram/
+# Note: amebad_sdk_includes (linked below) is created by a later add_subdirectory
+# (sdk_includes) — a cross-directory forward reference CMake resolves at generate.
 
-if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
-elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
-else()
-    return()
-endif()
-
-# Vendor-code warning suppression, shared by the libs below.
 set(_ram_warnings
     -Wno-unused-parameter
     -Wno-unused-variable

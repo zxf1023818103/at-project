@@ -4,18 +4,18 @@
 #
 # Layout:
 #
-#   fwlib_headers    INTERFACE target carrying component/soc/realtek/amebad/
-#                    fwlib/include/ (the 69 chip register / HAL inline headers)
-#                    after they were mirrored out of the SDK into this tree.
+#   fwlib            The SDK fwlib subtree (flat folder, one CMakeLists). Carries
+#                    the INTERFACE target amebad_fwlib_headers (fwlib/include/ —
+#                    the 69 chip register / HAL inline headers), the
+#                    AMEBAD_FWLIB_ROM_KM{4,0}_LD ROM-symbol ld vars, AND the
+#                    RAM-resident HAL driver libs: ram_common (rtl8721d_* — shared
+#                    HAL; KM0 builds all 20, KM4 builds only the few the HP ROM
+#                    lacks), ram_lp (rtl8721dlp_* — KM0 clk/pinmap/startup/...),
+#                    ram_hp (rtl8721dhp_* — KM4 audio/i2s/sd/...). (Merge of the
+#                    former fwlib_headers/ + ram/.)
 #   sdk_includes     INTERFACE target carrying the remaining ~30 SDK header
 #                    search paths still in-place at platform/ameba-rtos-d/.
-#                    Picks inc_lp vs. inc_hp based on AMEBAD_CHIP.
-#
-#   ram            RAM-resident HAL drivers (flat folder, one chip-gated
-#                    CMakeLists). Libs: ram_common (rtl8721d_* — shared HAL; KM0
-#                    builds all 20, KM4 builds only the few the HP ROM lacks),
-#                    ram_lp (rtl8721dlp_* — KM0 clk/pinmap/startup/...), ram_hp
-#                    (rtl8721dhp_* — KM4 audio/i2s/sd/...).
+#                    Picks app_km0 vs. app_km4 based on AMEBAD_CHIP.
 #
 #   usrcfg           Board config, one chip-gated CMakeLists over a flat folder;
 #                    the SDK filename infix selects the lib: usrcfg_common
@@ -67,12 +67,11 @@ if(NOT AMEBAD_CHIP MATCHES "^amebad-km[04]$")
         "(AMEBAD_CHIP='${AMEBAD_CHIP}', expected 'amebad-km0' or 'amebad-km4')")
 endif()
 
-add_subdirectory(fwlib_headers)
+add_subdirectory(fwlib)              # chip fwlib: headers (amebad_fwlib_headers) + ROM-symbol ld vars + RAM HAL libs (amebad_ram_common/_lp/_hp, chip-gated)
 add_subdirectory(xmodem)             # ROM xmodem headers (amebad_xmodem) + xmodem.ld symbols; linked by sdk_includes below
 add_subdirectory(string_rom)         # ROM swlib-string headers (amebad_string_rom) + string_rom_km{4,0}.ld; linked by sdk_includes below
 add_subdirectory(cmsis_rom)          # CMSIS core/DSP/mpu headers (amebad_cmsis_rom) + cmsis_rom_km{4,0}.ld; linked by sdk_includes below
-add_subdirectory(sdk_includes)
-add_subdirectory(ram)                # chip-gated: ram_common+ram_lp (KM0) / ram_hp+ram_common (subset, KM4)
+add_subdirectory(sdk_includes)       # aggregates amebad_fwlib_headers + xmodem/string_rom/cmsis_rom + SDK include paths; consumed by the ram HAL libs (forward ref) and app/boot
 add_subdirectory(usrcfg)             # chip-gated: usrcfg_common (+ _lp on KM0 / _hp on KM4)
 add_subdirectory(freertos)           # upstream FreeRTOS kernel -> target `FreeRTOS`
 add_subdirectory(freertos_glue)      # SDK FreeRTOS extensions, chip-gated (after freertos)

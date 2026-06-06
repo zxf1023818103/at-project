@@ -28,10 +28,11 @@ foreach(_p
 endforeach()
 
 # amebad_pmc_lp (PMC/SOCPS deep-sleep prebuilt lib) is defined by the pmu/
-# component. wifi_FW stays a prebuilt blob here (no header/module of its own yet).
+# component. lib_wifi_fw.a is the KM0 WiFi firmware blob — a prebuilt with no
+# header/module of its own, so it lives right here in app_km0 (its only consumer).
 add_library(amebad_wifi_fw STATIC IMPORTED)
 set_target_properties(amebad_wifi_fw PROPERTIES
-    IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/component/amebad/prebuilt/lib_wifi_fw.a")
+    IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/lib_wifi_fw.a")
 
 # Linker script: cat img2.ld + rom_symbol_acut.ld into the build dir; img2.ld
 # does INCLUDE "rlx8721d_layout.ld" (no path), resolved through the -L that

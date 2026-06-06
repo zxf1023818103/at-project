@@ -16,15 +16,16 @@
 # mbedtls/include.
 #
 # What remains out-of-tree (the irreducible SDK header surface — would need
-# vendoring those headers in-tree to remove): inc_lp/inc_hp (project config +
-# base FreeRTOSConfig.h), os + os/freertos + os_dep, soc cmsis/monitor/xmodem/
-# swlib/misc, common api/api-platform/api-at_cmd, and the wlan component's
-# headers (just for autoconf.h; lib_wlan.a/lib_wps.a live there too).
+# vendoring those headers in-tree to remove): os + os/freertos + os_dep, soc
+# cmsis/monitor/xmodem/swlib/misc, common api/api-platform/api-at_cmd, and the
+# wlan component's headers (just for autoconf.h; lib_wlan.a/lib_wps.a live there).
 #
-# Chip-gated: KM0 uses inc_lp; KM4 uses inc_hp.
+# The per-core project config (base FreeRTOSConfig.h + platform_opts/autoconf +
+# main.h) is now in-tree, owned by the app component: app_km0 (KM0) /
+# app_km4 (KM4). Chip-gated below via _proj_cfg_inc.
 
 if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
-    set(_proj_inc_dir   "inc_lp")
+    set(_proj_cfg_inc   "${CMAKE_SOURCE_DIR}/component/amebad/app_km0")       # project config (flattened from sdk_headers/inc/inc_lp)
     # KM0 runs the upstream ARMv6-M CM0 port (matches the SDK LP port; the native
     # ARMv8-M CM23_NTZ port faults on scheduler start because it resets MSP from
     # KM0 image2's VTOR[0], which is not a valid stack top — see
@@ -32,7 +33,7 @@ if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
     # portmacro.h (pulled in by FreeRTOS.h) is consistent everywhere.
     set(_kernel_port    "GCC/ARM_CM0")
 elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
-    set(_proj_inc_dir   "inc_hp")
+    set(_proj_cfg_inc   "${CMAKE_SOURCE_DIR}/component/amebad/app_km4")       # project config (flattened from sdk_headers/inc/inc_hp)
     # KM4 image2 = Cortex-M33, non-secure, no TrustZone -> ARM_CM33_NTZ non-secure.
     set(_kernel_port    "GCC/ARM_CM33_NTZ/non_secure")
 else()
@@ -56,7 +57,7 @@ target_link_libraries(amebad_sdk_includes INTERFACE amebad_fwlib_headers amebad_
 #   - Consumed everywhere via SDK macro LS_IMG2_OTA{1,2}_ADDR:
 #       * boot stage:   usrcfg_common/src/rtl8721d_bootcfg.c (OTA_Region[])
 #       * image2 stage: SDK misc/rtl8721d_ota.c (OtaTargetHdr lookup, etc.)
-#     fwlib_headers/rtl8721d_ota.h provides the default via #ifndef so
+#     fwlib/rtl8721d_ota.h provides the default via #ifndef so
 #     the CMake -D injection below cleanly overrides it (no -Wmacro-redefined).
 #
 # Lives in sdk_includes (not usrcfg_common) because the macro reaches
@@ -108,7 +109,6 @@ set(_sdk_base "${CMAKE_SOURCE_DIR}/component/amebad/sdk_headers")
 set(_sdk_soc  "${_sdk_base}/component/soc/realtek/amebad")
 set(_os       "${_sdk_base}/component/os")
 set(_common   "${_sdk_base}/component/common")
-set(_proj     "${_sdk_base}")
 
 # FreeRTOS headers come from the upstream V10.6.2 kernel
 # (component/thirdparty/freertos-kernel), NOT the SDK's bundled v10.2.0 tree.
@@ -123,12 +123,13 @@ set(_kernel "${CMAKE_SOURCE_DIR}/component/thirdparty/freertos-kernel")
 
 target_include_directories(amebad_sdk_includes SYSTEM INTERFACE
     # FreeRTOSConfig.h: our driver-only override FIRST, so its #include_next
-    # chains down to the SDK base config in inc_lp/inc_hp below. Putting the
+    # chains down to the per-core app config (app_km{4,0}) below. Putting the
     # override here (not only on freertos_config) keeps every consumer's config
     # consistent (e.g. tickless-idle off), not just the kernel/glue/app.
     "${CMAKE_SOURCE_DIR}/component/amebad/freertos/config"
-    # project-local chip configs (Kconfig autoconf + board opts + base FreeRTOSConfig.h)
-    "${_proj}/inc/${_proj_inc_dir}"
+    # project-local chip configs (Kconfig autoconf + board opts + base
+    # FreeRTOSConfig.h) — now owned by the per-core app component (app_km{4,0}).
+    "${_proj_cfg_inc}"
     # upstream FreeRTOS-Kernel V10.6.2 headers + the per-core port (portmacro.h)
     "${_kernel}/include"
     "${_kernel}/portable/${_kernel_port}"
@@ -152,7 +153,7 @@ target_include_directories(amebad_sdk_includes SYSTEM INTERFACE
     "${_common}/api/platform"
     "${CMAKE_SOURCE_DIR}/component/amebad/at_cmd"
     # autoconf.h (the global Kconfig autoconf) lives in the WLAN driver's include/
-    # — a Realtek quirk. Needed by inc_lp/main.h + sys_arch.c even with WiFi off;
+    # — a Realtek quirk. Needed by the app config main.h + sys_arch.c even with WiFi off;
     # the rest of the WLAN driver headers are not pulled by the minimal build.
     # Moved out of the sdk_headers mirror onto the wlan component (with lib_wlan.a
     # / lib_wps.a). Ungated here (autoconf.h is needed on BOTH cores); the wlan

@@ -31,7 +31,7 @@
 # map) — see component/amebad/freertos_glue/ + freertos_glue_km{0,4}.
 #
 # FreeRTOSConfig.h: our config/FreeRTOSConfig.h override (#include_next to the
-# SDK's inc_lp/inc_hp version) is carried by the freertos_config INTERFACE below.
+# per-core app_km{4,0}/inc version) is carried by the freertos_config INTERFACE below.
 
 if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
     set(_frt_port GCC_ARM_CM0)
@@ -50,8 +50,8 @@ endif()
 
 # --- freertos_config: the upstream kernel CMake mandates this INTERFACE target
 # to locate FreeRTOSConfig.h. amebad_sdk_includes already carries the full
-# FreeRTOSConfig.h search order — our config/ override FIRST, then the SDK base
-# config (inc_lp/inc_hp) + platform_autoconf.h + the kernel headers — so this is
+# FreeRTOSConfig.h search order — our config/ override FIRST, then the per-core app base
+# config (app_km{4,0}/inc) + platform_autoconf.h + the kernel headers — so this is
 # just a thin alias that satisfies the kernel's "freertos_config must exist"
 # contract. (config/ lives on amebad_sdk_includes, not here, so every consumer —
 # not only the kernel — sees the same config, e.g. tickless-idle off.)

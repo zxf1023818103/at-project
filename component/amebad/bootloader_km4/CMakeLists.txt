@@ -11,8 +11,8 @@
 #   diff -q component/amebad/bootloader_km4/boot_ram_hp.c \
 #           platform/ameba-rtos-d/component/soc/realtek/amebad/bootloader/boot_ram_hp.c
 #
-# Headers + IFLAGS via amebad_sdk_includes (KM4 branch selects inc_hp
-# + FreeRTOS RTL8721D_HP port). HAL drivers are pulled from on-chip
+# Headers + IFLAGS via amebad_sdk_includes (KM4 branch selects app_km4
+# project config + FreeRTOS RTL8721D_HP port). HAL drivers are pulled from on-chip
 # ROM via rom_symbol_acut_boot.ld PROVIDE — KM4 bootloader links NO
 # ram_* libs (SDK Makefile only edits drivers/ for KM4, never ram_common).
 # Board config (bootcfg, trustzonecfg) comes via amebad_usrcfg_common
