@@ -20,9 +20,10 @@ Platform SDKs are managed as git submodules under `platform/`. Run `git submodul
 - Flash layout: derived from `platform/bouffalo_sdk/bsp/board/<BOARD>/config/partition_cfg_*.toml`; `project/bouffalo/tools/build_whole.py` reads it and drives `BLFlashCommand --build` to produce `whole_flash_data.bin`
 
 ### Realtek Ameba D (RTL8721D / RTL8710C)
-- SDK: `platform/ameba-rtos-d` (Make, dual-core: KM0 LP + KM4 HP)
-- Build: `cd project/amebad && make`
-- Output: `project/amebad/out/Image_All.bin` (assembled from KM0/KM4 images)
+- SDK: `platform/ameba-rtos-d` (driver-only, dual-core: KM0 LP + KM4 HP)
+- Build: `cd project/amebad && make` — drives the in-tree **CMake + Ninja** two-core build (`build/km0`, `build/km4`, toolchain files `cmake/amebad-km{0,4}.cmake`) via `component/amebad/image_tool/build_image_all.py`. Options: `make NIMBLE=ON` (NimBLE host + wolfSSL SM crypto), `make HCI=ON` (bare HCI/DTM test image), `make distclean` (drop build trees, e.g. to switch generator). Needs the ASDK ARM toolchain at `toolchain/` (gitignored, install separately).
+- Output: `build/amebad/Image_All.bin` (KM0+KM4 boot + image2; flash @ 0x08000000 via `project/amebad/flash.ps1`)
+- Build system / image pipeline: `doc/build_system.md`, `doc/amebad_image_build.md`; the layout-sensitive XIP boot-hang gotcha: `doc/amebad_xip_layout_boot_hang.md`
 
 ### Realtek Ameba Dplus (RTL8711Dx) and Green 2 (RTL8711F)
 - SDK: `platform/ameba-rtos` (Python + CMake build via `ameba.py`)

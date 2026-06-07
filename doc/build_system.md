@@ -18,7 +18,17 @@
 
 # Ameba D
 
-`project/amebad/Makefile` 入口未变，仍然递归 `make` 到 SDK 的 `project_hp` / `project_lp`。
+`project/amebad/Makefile` 现在驱动**树内 CMake + Ninja 双核构建**(driver-only),不再递归 SDK 的
+`project_hp` / `project_lp`:
+
+- `make` 配置两核 `build/km0`、`build/km4`(toolchain file `cmake/amebad-km{0,4}.cmake`,生成器 `-G Ninja`;
+  检测到旧的非-Ninja build 树会自动 wipe),再跑 `component/amebad/image_tool/build_image_all.py` 编两核
+  (`cmake --build`,生成器无关)+ 拼出烧录用 `build/amebad/Image_All.bin`。
+- `make NIMBLE=ON`(NimBLE host + wolfSSL SM)/ `make HCI=ON`(裸 HCI/DTM)切 BLE 镜像;`make distclean` 删 build 树。
+- 镜像流水线(boot/image2 段切分 + prepend)见 [amebad_image_build.md](amebad_image_build.md)。
+
+> 下面是早期"SDK `make` + 把 `src/` 编成 `libat_user.a`"的过渡方案;driver-only CMake 接管后,`make` 已不走这条
+> SDK 路径,留作历史参考。
 
 用户代码不再走 SDK 原本的 `find $(CUSTOM_SRC_DIR) -name "*.c[pp]"` + `ar` 流程。
 现在 `platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_hp/asdk/make/project/library/Makefile` 的 `lib:` 目标会：

@@ -1,5 +1,9 @@
 # AmebaD 双核 boot+image build 流水线调查
 
+> **现状(已落地)**:CMake + Ninja 已接管这条流水线。入口 `cd project/amebad && make`(树内两核
+> `build/km0`/`build/km4` + `component/amebad/image_tool/build_image_all.py` → `build/amebad/Image_All.bin`),
+> 见 [build_system.md](build_system.md)。本文是当初为"自己写 CMake 接管"做的 SDK 机制调查,留作原理参考。
+
 目标：搞清楚 `platform/ameba-rtos-d` 是怎么把双核源码编出最终烧录用的几个 `.bin`，为后续自己写 CMake/CMake-ify 接管 build 系统铺路。重点放在 `km0_boot_all.bin` / `km4_boot_all.bin` 两个 bootloader 镜像。
 
 参考兄弟文档：[ameba_image_download.md](ameba_image_download.md)（烧录侧）、[amebadplus_ota_image.md](amebadplus_ota_image.md)（AmebaDplus OTA 布局）、[bouffalo_elf_to_bin_pipeline.md](bouffalo_elf_to_bin_pipeline.md)（同位的 Bouffalo 流水线）。

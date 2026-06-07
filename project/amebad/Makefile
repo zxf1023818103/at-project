@@ -1,28 +1,52 @@
-.PHONY: all clean
-default: all
+# AmebaD (RTL8721D) driver-only image build — CMake + Ninja.
+#
+# Replaces the old GCC-RELEASE SDK-Makefile build. Drives the two-core CMake
+# trees (build/km0, build/km4) + component/amebad/image_tool/build_image_all.py
+# and produces the flashable build/amebad/Image_All.bin.
+#
+#   make                 # plain driver-only image (WiFi / iperf)
+#   make NIMBLE=ON       # NimBLE host image (LE/GATT + wolfSSL SM crypto)
+#   make HCI=ON          # bare HCI / DTM test image (mutually exclusive with NIMBLE)
+#   make clean           # ninja clean both cores
+#   make distclean       # delete build/km0 build/km4 build/amebad
+#
+# Output: build/amebad/Image_All.bin  (flash @ 0x08000000; see project/amebad/flash.ps1)
+# Prereqs: `git submodule update --init --recursive` + ASDK toolchain at toolchain/.
 
-all: amebad
+.PHONY: all image configure clean distclean
 
-SHELL := /bin/bash
+REPO       := $(abspath $(CURDIR)/../..)
+GEN        := Ninja
+BUILD_TYPE := MinSizeRel
+NIMBLE     ?= OFF          # ON -> NimBLE host
+HCI        ?= OFF          # ON -> bare HCI/DTM
+IMAGE      := $(REPO)/build/amebad/Image_All.bin
 
-amebad_lp:
-	@make -C ../../platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_lp
+all: image
 
-amebad_hp: amebad_lp
-	@make -C ../../platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_hp
+# (Re)configure both cores with Ninja. CMake can't change a tree's generator in
+# place, so wipe any non-Ninja tree first (lets you switch from the old Makefiles
+# build). Re-running just updates the NIMBLE/HCI cache vars.
+configure:
+	@for c in km0 km4; do d=$(REPO)/build/$$c; \
+	  [ -f $$d/build.ninja ] || rm -rf $$d; done
+	cd $(REPO) && cmake -S . -B build/km0 -G $(GEN) \
+	  -DAMEBAD_CHIP=amebad-km0 -DCMAKE_TOOLCHAIN_FILE=cmake/amebad-km0.cmake \
+	  -DCMAKE_BUILD_TYPE=$(BUILD_TYPE)
+	cd $(REPO) && cmake -S . -B build/km4 -G $(GEN) \
+	  -DAMEBAD_CHIP=amebad-km4 -DCMAKE_TOOLCHAIN_FILE=cmake/amebad-km4.cmake \
+	  -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) \
+	  -DAMEBAD_ENABLE_NIMBLE=$(NIMBLE) -DAMEBAD_ENABLE_HCI=$(HCI)
 
-amebad: amebad_hp clean
-	@mkdir out
-	@cp ../../platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_lp/asdk/image/km0_boot_all.bin ./out/
-	@cp ../../platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_hp/asdk/image/km4_boot_all.bin ./out/
-	@cp ../../platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_hp/asdk/image/km0_km4_image2.bin ./out/
-	@cp ../../platform/ameba-rtos-d/project/realtek_amebaD_va0_example/GCC-RELEASE/project_hp/asdk/image/OTA_All.bin ./out/
-	@dd if=/dev/zero status=none bs=1 count=$$((0x400000)) | tr '\000' '\377' > ./out/Image_All.bin
-	@dd if=./out/km0_boot_all.bin status=none of=./out/Image_All.bin bs=1 seek=0 conv=notrunc
-	@dd if=./out/km4_boot_all.bin status=none of=./out/Image_All.bin bs=1 seek=$$((0x4000)) conv=notrunc
-	@dd if=./out/km0_km4_image2.bin status=none of=./out/Image_All.bin bs=1 seek=$$((0x6000)) conv=notrunc
-	@dd if=../lfs.bin status=none of=./out/Image_All.bin bs=1 seek=$$((0x300000)) conv=notrunc
-	@md5sum ./out/Image_All.bin
+# build_image_all.py builds both cores (cmake --build, generator-agnostic — reuses
+# the Ninja trees configured above) and assembles the flashable image.
+image: configure
+	python3 $(REPO)/component/amebad/image_tool/build_image_all.py --out $(IMAGE)
+	@echo "==> $(IMAGE)"
 
 clean:
-	@rm -rf ./out/
+	@[ -f $(REPO)/build/km0/build.ninja ] && cmake --build $(REPO)/build/km0 -t clean || true
+	@[ -f $(REPO)/build/km4/build.ninja ] && cmake --build $(REPO)/build/km4 -t clean || true
+
+distclean:
+	rm -rf $(REPO)/build/km0 $(REPO)/build/km4 $(REPO)/build/amebad
