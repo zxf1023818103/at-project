@@ -20,6 +20,7 @@ GEN        := Ninja
 BUILD_TYPE := MinSizeRel
 NIMBLE     ?= OFF          # ON -> NimBLE host
 HCI        ?= OFF          # ON -> bare HCI/DTM
+WOLFASM    ?= OFF          # ON -> wolfCrypt Thumb2 symmetric/hash asm
 IMAGE      := $(REPO)/build/amebad/Image_All.bin
 
 all: image
@@ -36,7 +37,8 @@ configure:
 	cd $(REPO) && cmake -S . -B build/km4 -G $(GEN) \
 	  -DAMEBAD_CHIP=amebad-km4 -DCMAKE_TOOLCHAIN_FILE=cmake/amebad-km4.cmake \
 	  -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) \
-	  -DAMEBAD_ENABLE_NIMBLE=$(NIMBLE) -DAMEBAD_ENABLE_HCI=$(HCI)
+	  -DAMEBAD_ENABLE_NIMBLE=$(NIMBLE) -DAMEBAD_ENABLE_HCI=$(HCI) \
+	  -DAMEBAD_WOLFSSL_ARMASM=$(WOLFASM)
 
 # build_image_all.py builds both cores (cmake --build, generator-agnostic — reuses
 # the Ninja trees configured above) and assembles the flashable image.
