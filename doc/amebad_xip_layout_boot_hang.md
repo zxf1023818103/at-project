@@ -78,6 +78,26 @@ rc = mp_to_unsigned_bin_len(key->pubkey.y, pub + 32, 32);
 **注意这是"绕过"而非"根治"**:潜伏故障还在。以后若在 `app_start` 之前再加 ~1KB 代码(例如
 NimBLE BLE Mesh 拉更多 wolfCrypt/host 代码),`app_start` 的 callee 可能又被顶到坏位置而复发。
 
+### 3.1 探索过但**未采用**的备选修法(2026-06-07)
+
+> **采用的方案仍是 §3 的 `mp_to_unsigned_bin_len`。** 下面这些都试过/验证过,但最终**回退、不采用**
+> ——记录于此供后人参考。当前代码:`wolfcrypt_sm_glue.c` 用 `mp_to_unsigned_bin_len`,
+> `user_settings.h`/`wolfmath.c` 无任何 gate 改动。
+
+**(a) gate 掉死 hex 分支(验证可 boot,但未采用——需改 wolfssl submodule)**:`wc_ecc_export_public_raw`
+拉进 sp_tohex/sp_radix_size,是因为 `wc_export_int`(wolfmath.c)有个 `#ifdef WC_MP_TO_RADIX` 的 hex
+分支(`WC_TYPE_HEX_STR` → `mp_radix_size`/`mp_tohex`);我们只走 `WC_TYPE_UNSIGNED_BIN`,那段是死代码。
+`WC_MP_TO_RADIX` 被 `types.h` 在 `HAVE_ECC && HAVE_ECC_KEY_EXPORT` 时强制打开(config 关不掉)。
+做法:自定义开关 `AMEBAD_NO_MP_HEX_EXPORT` + 把 wolfmath.c guard 改成
+`#if defined(WC_MP_TO_RADIX) && !defined(AMEBAD_NO_MP_HEX_EXPORT)` → sp_tohex/sp_radix_size 被
+`--gc-sections` 丢弃 → KM4 正常 boot 且 `wc_ecc_export_public_raw` 可用(实测 BOOT,`ble_sync=2`)。
+**未采用原因**:要 patch wolfssl submodule(维护负担);§3 的 `mp_to_unsigned_bin_len` 同样有效且只动我们自己的 glue。
+
+**(b) 失败的尝试**:① 把 sp_tohex 等用 ld 排到 `.text` 头部凑"均匀平移"→ 仍崩(app_start 落 0x0e062fbc,
+非干净均匀);② 把它们放进 `.ram_image2.text`(RAM)→ boot 时 HardFault(破坏 image2 RAM 拷贝/布局);
+③ 换 -O2 / 去 `-fno-jump-tables` 向 SDK codegen 对齐 → 仍崩(只是又一次布局轮盘赌)。**注意**:潜伏的
+XIP 取指 HW 敏感性始终在,以上"绕过"都只是不再触发它,治本需 Realtek(见本文 §5 / `amebad_xip_boot_hang_realtek_report.md`)。
+
 ---
 
 ## 4. 排查方法论(避免重蹈)
@@ -98,9 +118,49 @@ NimBLE BLE Mesh 拉更多 wolfCrypt/host 代码),`app_start` 的 callee 可能�
 
 ---
 
-## 5. 未结(根治需 SWD)
+## 5. SWD 定位结果(2026-06-07,已接 CMSIS-DAP)
 
-精确到"哪个 boot callee、落到哪个 XIP 地址、为什么那个地址执行就挂",软件手段(串口非确定 +
-map 静态分析)已到顶。要根治需 **SWD/JTAG halt 挂死的 KM4 读 PC/寄存器**(板子目前只接 COM29 串口;
-AmebaD 的 openocd + CMSIS-DAP + gdb 路径见 [[reference_ameba_openocd_flash]])。怀疑与 KM4 XIP
-flash cache / 某段 flash 物理地址的取指行为有关(与 [[reference_amebad_boot_rodata_xip]] 同族)。
+用 [[reference_amebad_openocd_debug]] 的 OpenOCD + RV CMSIS-DAP 把挂死的 KM4 halt 住,把 §1 的"未结"
+推进到了取指层面。**复现**:`uECC_make_key` 改回 `wc_ecc_export_public_raw`(拉 sp_tohex ~1KB),
+`app_start` 0x0e062c18→**0x0e062fc4(+0x3AC)**,image2 大小不变(再证位置非大小)。
+
+**故障签名(确定性,多次一致)**:
+- 落点 PC 死循环在 ROM `0x10104468`(=`BOOT_ROM_ResetVsr`,见 [[reference_amebad_chplan_reboot_handshake]]),
+  LR=0xffffffb9(EXC_RETURN);**SFSR(0xE000EDE4)=0x48 = SecureFault AUVIOL + SFARVALID**,
+  **SFAR(0xE000EDE8)=0x37ffe537(野地址,执行跳飞)**;CFSR/HFSR=0;全局(uxCurrentNumberOfTasks 等)
+  全是垃圾值 ⇒ **.bss 清零前就挂**。
+- 地址断点验证:从 app_start 放出,第一个 callee 的正确目标 ROM `0x10110794` 与 VectorTableOverride 都
+  **不命中** ⇒ **app_start 自己的第一条 `blx r3` 就跳飞**,到不了任何 callee。
+  (与 §2 实验3"钉 app_start 后挂的是 callee"统一为:**位置相关,谁落进坏区间谁跑飞**;钉 app_start 只换"谁倒霉",治标不治本。)
+
+**根因坐实 = KM4 XIP 取指 desync 一条 cache-line(0x20)**:本镜像 **RSIP 关**(image_tool
+`AMEBAD_RSIP_ENABLE=OFF`,明文),排除加密 desync。单步 app_start 的 PC 轨迹(c4→c6→c8→**cc**→d0)
+把"CPU 执行 `ELF[地址+0x20]` 内容"套进去**完全吻合**(c8 处 ELF 是 2B `ldr`,但 CPU 走了 4B=
+`ELF[0xe062fe8]` 的 `str.w`);debugger 总线读 XIP 同样偏 +0x20(`mdw 0xe062fc4`=`ELF[0xe062fe4]`)。
+即 **CPU 从 XIP 这段坏地址取到的指令整体偏了一条 cache-line(32B)** → 第一条间接跳转装到错位字 →
+跳 0x37ffe537。**坐实 §1 怀疑的"flash cache 取指行为",量化为 32B/一行的 fetch 错位。**
+
+**调试踩坑**:① `reset halt`(sysresetreq)会落进 `BOOT_ROM_ResetVsr` 自旋等 reset 握手
+(driver-only 不置位),手动 `mww 0x480003f8 0x02000201` 补握手才会继续 boot 到 app_start
+(见 [[reference_amebad_chplan_reboot_handshake]]);② OpenOCD `cortex_m vector_catch all` **抓不到**
+M33 的 SecureFault(DEMCR 无该向量位);③ OpenOCD 对 XIP 的逐指令单步/寄存器读不可靠(寄存器返 PC 值、
+XIP 读时有时无),可靠信号是地址断点命中 + 自由运行后的 SFSR/SFAR + 单步 PC 轨迹的步长。
+
+**仍未根治**:还差"为什么这段 flash 物理地址取指会偏一条 cache-line"。
+
+### 已排除的修复/假设(2026-06-07,均实测)
+
+| 假设/修复 | 验证手段 | 结果 |
+|---|---|---|
+| 钉 app_start 到固定地址 | SWD:从 app_start 放出,第一个 callee(ROM 0x10110794)/VectorTableOverride 都不命中,app_start **第一条 `blx r3` 就跳飞** | ❌ 证伪(谁落进坏区间谁挂,钉它只换倒霉鬼) |
+| I-cache 持旧行 | `bootloader_km4/boot_ram_hp.c` 跳前加 `Cache_Flush()`(SCB InvalidateI/D) | ❌ **无效**:invalidate 后从 flash 重填**仍 +0x20** ⇒ 不是 cache 旧行 |
+| FLASH MMU 区越界 | 读 `RSIP->FLASH_MMU`(0x48000630):KM4 XIP entry1 映射 `0x0e000000–0x0e097fff`,offset 0x05fe6000(minus);app_start 两位置都在区内、离上界(0xe097fff)很远,XIP 代码最高才 0xe088xxx | ❌ 排除(未越界) |
+| 换 SPIC 读模式(cache on=16B 读) | 先读 app_start **入口** CCR=0x201 ⇒ **IC/DC=0,入口 cache 本来就关**(SDK 到 app_start:416 才开),即默认就是 4B 读;故反过来在 image1 跳前 `Cache_Enable(ENABLE)` 改 16B 读 | ❌ **仍挂**,但 **SFAR 从 0x37ffe537 变 0x37ff6537**(差 1 bit)⇒ **两种读模式都误取、只是错得不同** ⇒ 与读宽度无关,是这段物理地址取出的数据本身坏 |
+
+⇒ **软件侧杠杆全部证伪**。根因是 **Realtek SPIC/RSIP-MMU/flash IP 对某段物理地址的取指/映射行为**(cache 开关两种读模式都坏、错值不同;非 cache 旧行、非 MMU 越界、非 app_start 位置)。IP 级(Realtek confidential),软件改不动;真要根治得问 Realtek FAE。**唯一可用方案 = `mp_to_unsigned_bin_len` 绕过 + 避免 boot-critical 代码涨到坏区间**(可加构建期护栏)。
+
+### 调试踩坑(SWD)
+- `reset halt`(sysresetreq)落进 `BOOT_ROM_ResetVsr`(0x10104468)自旋等 reset 握手,driver-only 不置位,手动 `mww 0x480003f8 0x02000201` 补握手才会 boot 到 app_start(见 [[reference_amebad_chplan_reboot_handshake]])。
+- OpenOCD `cortex_m vector_catch all` 抓不到 M33 SecureFault;对 RSIP/XIP 的逐指令单步与寄存器读不可靠(寄存器返 PC 值、XIP 读时有时无),可靠信号 = 地址断点命中 + 自由运行后的 SFSR/SFAR + 单步 PC 步长。
+
+**当前结论**:`mp_to_unsigned_bin_len` 绕过仍是唯一可用方案;**钉 app_start / image1 Cache_Flush 均已实测证伪,勿再试。**
