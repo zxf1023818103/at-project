@@ -1849,11 +1849,14 @@ _WEAK void wifi_set_country_code(void)
 	//wifi_change_channel_plan(0x25); // Support 2.4G and 5G, ex: 0x25 = 2G_FCC1, 5G_FCC1
 
 	/* Set regulatory domain to China so 5 GHz U-NII-3 (ch149-165) is allowed and
-	 * we can associate to the ch149 AIoT AP. The channel-plan change triggers a
-	 * reboot whose ROM path waits on the 0x480003f8 bit25 inter-core reset
-	 * handshake — now serviced via the KM4 IPC set up in main() (IPC_INTHandler +
-	 * ipc_table_init), like the stock SDK. See memory
-	 * reference-amebad-chplan-reboot-handshake. */
+	 * we can reach a ch149 AP. (The auto-detect variant
+	 * wifi_scan_country_code_and_set_channel_plan() hangs here: its internal
+	 * extended-country scan, wifi_scan_networks_with_extended_countryinfo, stalls
+	 * reliably in this driver-only image — same scan that hung as
+	 * dump_surrounding_country_codes; the plain SSID scan works, the extended one
+	 * doesn't.) The channel-plan change triggers a reboot whose ROM path waits on
+	 * the 0x480003f8 bit25 inter-core reset handshake — now serviced via the KM4
+	 * IPC set up in main(). See memory reference-amebad-chplan-reboot-handshake. */
 	wifi_set_country(RTW_COUNTRY_CN);
 }
 

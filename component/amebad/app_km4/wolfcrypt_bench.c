@@ -28,8 +28,18 @@
 #include <wolfssl/wolfcrypt/asn_public.h>
 #include <wolfssl/certs_test.h>
 
+/* ROM mbedTLS 2.4.0 (software path) — for the cross-library comparison. */
+#include "rom_mbedtls_crypto.h"
+#include "rom_mbedtls.h"
+
 #include <stddef.h>
 extern void DiagPrintf(const char *fmt, ...);
+extern void SystemSetCpuClk(unsigned char CpuClk);   /* 0=200M 1=100M 2=50M 3=25M */
+/* ROM mbedTLS shares the crypto engine / ROM ssl-ram-map with the WiFi driver,
+ * so all ROM-mbedTLS use must be serialized under RT_DEV_LOCK_CRYPTO. */
+extern void device_mutex_lock(int device);
+extern void device_mutex_unlock(int device);
+#define RT_DEV_LOCK_CRYPTO 2
 
 /* wolfSSL XMALLOC_USER hooks -> FreeRTOS heap (avoids newlib malloc/_sbrk on
  * this -nostdlib image). XREALLOC is never referenced in this wolfCrypt config. */
@@ -245,4 +255,87 @@ void wolfcrypt_bench(void)
     wc_FreeRng(&rng);
     vPortFree(buf);
     DiagPrintf("[WCB] ===== benchmark done =====\n\r");
+}
+
+/* ============================================================================
+ * crypto_clock_bench — ROM-mbedTLS (software) vs wolfCrypt on the SAME algorithms
+ * across KM4 CPU clocks (200/100/50/25 MHz). cyc_now() counts true CPU cycles
+ * (each SysTick decrement == 1 CPU cycle), so it stays correct across
+ * SystemSetCpuClk(); KB/s is derived with the known clock. The clock is restored
+ * to 200 MHz before each print so the LOG UART (at 200 MHz) is never garbled.
+ *
+ * Equal work both libs: SHA-256 = 32x one-shot 4 KB hashes; AES-128-CBC = chained
+ * 128 KB encrypt. cyc/B is clock-independent (CPU efficiency, incl. XIP-flash wait
+ * states at higher clocks); KB/s is the wall-clock throughput at that clock.
+ * ============================================================================ */
+void crypto_clock_bench(void)
+{
+    enum { BUF = 4096, ITERS = 32 };
+    const unsigned int TOT = (unsigned int)BUF * ITERS;     /* 128 KB / measurement */
+    static const struct { unsigned char clk; const char *name; unsigned int hz; } CK[] = {
+        { 0, "200 MHz", 200000000u },
+        { 1, "100 MHz", 100000000u },
+        { 2, "50 MHz",   50000000u },
+        { 3, "25 MHz",   25000000u },
+    };
+    static const unsigned char k16[16] = { 0 };
+    static const unsigned char iv0[16] = { 0 };
+    unsigned char *buf, *out;
+    unsigned int ci, i, n;
+
+    cyc_init();
+    device_mutex_lock(RT_DEV_LOCK_CRYPTO);
+    rom_mbedtls_init();                 /* force ROM mbedTLS software path (shared ram-map) */
+    device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
+    buf = (unsigned char *)pvPortMalloc(BUF);
+    out = (unsigned char *)pvPortMalloc(BUF);
+    if (!buf || !out) { DiagPrintf("[CCB] OOM\n\r"); if (buf) vPortFree(buf); if (out) vPortFree(out); return; }
+    for (i = 0; i < BUF; i++) buf[i] = (unsigned char)i;
+
+    DiagPrintf("\n\r[CCB] ===== ROM-mbedTLS vs wolfCrypt across CPU clocks =====\n\r");
+    DiagPrintf("[CCB] %d KB/measurement; SHA-256 32x4KB one-shot, AES-128-CBC 128KB chained\n\r", TOT/1024u);
+
+    for (ci = 0; ci < sizeof(CK)/sizeof(CK[0]); ci++) {
+        unsigned long long c_msha, c_wsha, c_maes, c_waes, t0;
+
+        SystemSetCpuClk(CK[ci].clk);
+
+        /* SHA-256: 32 one-shot 4 KB hashes (equal work both libs).
+         * ROM-mbedTLS under RT_DEV_LOCK_CRYPTO; wolfCrypt is standalone (no lock). */
+        { unsigned char d[32]; device_mutex_lock(RT_DEV_LOCK_CRYPTO); t0 = cyc_now();
+          for (n = 0; n < ITERS; n++) mbedtls_sha256(buf, BUF, d, 0);
+          c_msha = cyc_now() - t0; device_mutex_unlock(RT_DEV_LOCK_CRYPTO); }
+        { wc_Sha256 s; unsigned char d[32]; t0 = cyc_now();
+          for (n = 0; n < ITERS; n++) { wc_InitSha256(&s); wc_Sha256Update(&s, buf, BUF); wc_Sha256Final(&s, d); }
+          c_wsha = cyc_now() - t0; }
+
+        /* AES-128-CBC encrypt: chained 128 KB (IV chains across the 32 blocks) */
+        { mbedtls_aes_context a; unsigned char iv[16];
+          device_mutex_lock(RT_DEV_LOCK_CRYPTO);
+          mbedtls_aes_init(&a); mbedtls_aes_setkey_enc(&a, k16, 128); memcpy(iv, iv0, 16);
+          t0 = cyc_now();
+          for (n = 0; n < ITERS; n++) mbedtls_aes_crypt_cbc(&a, MBEDTLS_AES_ENCRYPT, BUF, iv, buf, out);
+          c_maes = cyc_now() - t0; mbedtls_aes_free(&a);
+          device_mutex_unlock(RT_DEV_LOCK_CRYPTO); }
+        { Aes a; wc_AesInit(&a, NULL, INVALID_DEVID); wc_AesSetKey(&a, k16, 16, iv0, AES_ENCRYPTION);
+          t0 = cyc_now();
+          for (n = 0; n < ITERS; n++) wc_AesCbcEncrypt(&a, out, buf, BUF);
+          c_waes = cyc_now() - t0; wc_AesFree(&a); }
+
+        SystemSetCpuClk(0);             /* back to 200 MHz for a clean UART print */
+
+        DiagPrintf("[CCB] ---- %s ----\n\r", CK[ci].name);
+        #define CCB_ROW(nm, cyc) do { \
+            unsigned int cpb = (unsigned int)((unsigned long long)(cyc) * 100ull / TOT); \
+            unsigned int kb  = (unsigned int)((unsigned long long)TOT * CK[ci].hz / (cyc) / 1024u); \
+            DiagPrintf("[CCB]   %s: %d.%d%d cyc/B, %d KB/s\n\r", nm, cpb/100, (cpb%100)/10, cpb%10, kb); \
+        } while (0)
+        CCB_ROW("SHA-256     mbedTLS-ROM", c_msha);
+        CCB_ROW("SHA-256     wolfCrypt  ", c_wsha);
+        CCB_ROW("AES-128-CBC mbedTLS-ROM", c_maes);
+        CCB_ROW("AES-128-CBC wolfCrypt  ", c_waes);
+        #undef CCB_ROW
+    }
+    DiagPrintf("[CCB] ===== done =====\n\r");
+    vPortFree(buf); vPortFree(out);
 }

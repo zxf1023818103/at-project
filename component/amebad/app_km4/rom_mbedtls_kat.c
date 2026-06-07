@@ -18,6 +18,11 @@
 #include "rom_mbedtls.h"
 
 extern int DiagPrintf(const char *fmt, ...);
+/* ROM mbedTLS shares the crypto engine / ROM ssl-ram-map with the WiFi driver,
+ * so serialize all ROM-mbedTLS use under RT_DEV_LOCK_CRYPTO. */
+extern void device_mutex_lock(int device);
+extern void device_mutex_unlock(int device);
+#define RT_DEV_LOCK_CRYPTO 2
 
 static int g_pass, g_fail;
 
@@ -43,6 +48,7 @@ static void kat_report(const char *name, const unsigned char *got,
 void rom_mbedtls_kat(void)
 {
     DiagPrintf("\r\n[KAT] ===== ROM mbedTLS 2.4.0 software crypto KAT =====\r\n");
+    device_mutex_lock(RT_DEV_LOCK_CRYPTO);   /* ROM ram-map shared with WiFi driver */
     rom_mbedtls_init();   /* force software path + wire ram-map calloc/free */
 
     g_pass = g_fail = 0;
@@ -175,5 +181,6 @@ void rom_mbedtls_kat(void)
         kat_report("HMAC-SHA256     ", out, want, 32);
     }
 
+    device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
     DiagPrintf("[KAT] ===== result: %d passed, %d failed =====\r\n", g_pass, g_fail);
 }

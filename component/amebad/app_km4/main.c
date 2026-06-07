@@ -158,6 +158,64 @@ static void dump_surrounding_country_codes( void )
     vPortFree( sb.buf );
 }
 
+/* Result of the directed SSID scan (filled by scan_print_handler). */
+typedef struct {
+    int            found;
+    unsigned char  channel;
+    rtw_security_t security;
+    int            rssi;
+} found_ap_t;
+
+/*
+ * wifi_scan_networks_with_ssid results handler. The scan buffer holds one record
+ * per AP found (a FULL all-channel scan, since no pscan is set before it):
+ *   [0]=len [1..6]=bssid [7..10]=rssi(int) [11]=enc_alg [12]=wps [13]=channel
+ *   [14..]=ssid (len-14 bytes)
+ * Prints every AP, and records the target SSID's real channel + security so the
+ * connect uses a concrete security type (never RTW_SECURITY_UNKNOWN) — the bug in
+ * wifi_connect_simple was leaving security unknown / pscan-restricting the scan.
+ */
+static int scan_print_handler( char *buf, int buflen, char *target_ssid, void *user_data )
+{
+    found_ap_t *fa = (found_ap_t *) user_data;
+    int plen = 0;
+
+    DiagPrintf( "[SCAN] ==== APs (probing SSID '%s') ====\n\r", target_ssid );
+    while( plen < buflen )
+    {
+        unsigned char *r = (unsigned char *)( buf + plen );
+        int len = r[ 0 ];
+        int ssid_len, n, rssi;
+        unsigned char enc, ch;
+        char ssidbuf[ 33 ];
+        if( len == 0 ) break;
+        ssid_len = len - 14;
+        enc = r[ 11 ];
+        ch  = r[ 13 ];
+        memcpy( &rssi, buf + plen + 7, 4 );
+        n = ( ssid_len > 32 ) ? 32 : ( ssid_len < 0 ? 0 : ssid_len );
+        memcpy( ssidbuf, buf + plen + 14, n );
+        ssidbuf[ n ] = 0;
+        DiagPrintf( "[SCAN] %02x:%02x:%02x:%02x:%02x:%02x ch=%d rssi=%d enc=%d ssid=%s\n\r",
+                    r[1], r[2], r[3], r[4], r[5], r[6], ch, rssi, enc, ssidbuf );
+        if( ssid_len == (int) strlen( target_ssid )
+            && memcmp( buf + plen + 14, target_ssid, ssid_len ) == 0 )
+        {
+            fa->found   = 1;
+            fa->channel = ch;
+            fa->rssi    = rssi;
+            if( enc == RTW_ENCODE_ALG_NONE )      fa->security = RTW_SECURITY_OPEN;
+            else if( enc == RTW_ENCODE_ALG_WEP )  fa->security = RTW_SECURITY_WEP_PSK;
+            else if( enc == RTW_ENCODE_ALG_TKIP ) fa->security = RTW_SECURITY_WPA2_TKIP_PSK;
+            else if( enc == RTW_ENCODE_ALG_CCMP ) fa->security = RTW_SECURITY_WPA2_AES_PSK;
+            else                                  fa->security = RTW_SECURITY_WPA2_AES_PSK;
+        }
+        plen += len;
+    }
+    DiagPrintf( "[SCAN] ==== end ====\n\r" );
+    return 0;
+}
+
 static void wifi_bringup_thread( void *param )
 {
     char mac_str[ 20 ] = { 0 };   /* wifi_get_mac_address fills "xx:xx:xx:xx:xx:xx" */
@@ -269,15 +327,36 @@ static void wifi_bringup_thread( void *param )
     FreeRTOS_IPInit_Multi();
     amebad_freertos_tcp_set_ready();
 
-    /* Connect to SSID "AIoT" by name (no BSSID pin). wifi_connect_simple scans for
-     * the SSID to learn its security mode + channel, sets partial-channel (pscan),
-     * then joins (channel=0 -> auto-detect from the scan). */
-    DiagPrintf( "[KM4] wifi_connect_simple(AIoT)...\n\r" );
-    if( wifi_connect_simple( "AIoT", "123456789", 0 ) != RTW_SUCCESS )
+    /* Connect to "AIoT" the explicit way (wifi_connect_simple leaves security
+     * UNKNOWN and pscan-restricts its own scan): FIRST do a directed FULL
+     * all-channel scan (no pscan set yet) so we reliably find the AP + its real
+     * channel + security, PRINT every result, THEN pscan that channel and connect
+     * with the discovered security type. */
     {
-        DiagPrintf( "[KM4] wifi_connect_simple FAILED\n\r" );
-        vTaskDelete( NULL );
-        return;
+        const char *kSsid = "Zeng";
+        found_ap_t  fa = { 0, 0, RTW_SECURITY_OPEN, 0 };
+        u8 ch, pscan = PSCAN_ENABLE;
+
+        DiagPrintf( "[KM4] scan for '%s' (all channels)...\n\r", kSsid );
+        wifi_scan_networks_with_ssid( scan_print_handler, &fa, 1000,
+                                      (char *) kSsid, strlen( kSsid ) );
+        if( !fa.found )
+        {
+            DiagPrintf( "[KM4] '%s' not found in scan — abort\n\r", kSsid );
+            vTaskDelete( NULL );
+            return;
+        }
+        DiagPrintf( "[KM4] found '%s' ch=%d rssi=%d sec=0x%x; pscan + connect...\n\r",
+                    kSsid, fa.channel, fa.rssi, (unsigned) fa.security );
+        ch = fa.channel;
+        wifi_set_pscan_chan( &ch, &pscan, 1 );
+        if( wifi_connect( (char *) kSsid, fa.security, "123456789",
+                          (int) strlen( kSsid ), 9, 0, NULL ) != RTW_SUCCESS )
+        {
+            DiagPrintf( "[KM4] wifi_connect FAILED\n\r" );
+            vTaskDelete( NULL );
+            return;
+        }
     }
     /* Throughput: fully disable power-save (IPS + LPS off). */
     wifi_set_power_mode( 0, 0 );
@@ -307,6 +386,11 @@ static void wifi_bringup_thread( void *param )
     {
         extern void wolfcrypt_bench( void );
         wolfcrypt_bench();
+    }
+    /* ROM-mbedTLS vs wolfCrypt on the same algos across CPU clocks (200/100/50/25). */
+    {
+        extern void crypto_clock_bench( void );
+        crypto_clock_bench();
     }
 
     vTaskDelete( NULL );
