@@ -401,7 +401,7 @@ static void wifi_handshake_done_hdl( char* buf, int buf_len, int flags, void* us
 	( void ) buf_len;
 	( void ) flags;
 	( void ) userdata;
-	
+
 	rtw_join_status = JOIN_COMPLETE | JOIN_SECURITY_COMPLETE | JOIN_ASSOCIATED | JOIN_AUTHENTICATED | JOIN_LINK_READY|JOIN_HANDSHAKE_DONE | JOIN_CONNECTING;
 	if(join_user_data != NULL)
 		rtw_up_sema(&join_user_data->join_sema);
@@ -1822,9 +1822,10 @@ _WEAK void wifi_set_mib(void)
 	wext_set_powersave_mode(1);
 #endif
 #ifdef CONFIG_SAE_SUPPORT
-	// set to 'ENABLE' when using WPA3
-	wext_set_support_wpa3(ENABLE);
-#endif	
+	// DISABLED: this driver-only image doesn't link the SAE supplicant; if the
+	// target AP is WPA3/SAE, association with WPA2-PSK blocks. Force WPA2 path.
+	wext_set_support_wpa3(DISABLE);
+#endif
 	wext_set_ant_div_gpio(0);
     wext_set_bw40_enable(0);    //default disable 40m
 	wext_set_softap_gkey_rekey(DISABLE);
@@ -1846,6 +1847,14 @@ _WEAK void wifi_set_country_code(void)
 {
 	//wifi_set_country(RTW_COUNTRY_US); // 2.4G only
 	//wifi_change_channel_plan(0x25); // Support 2.4G and 5G, ex: 0x25 = 2G_FCC1, 5G_FCC1
+
+	/* Set regulatory domain to China so 5 GHz U-NII-3 (ch149-165) is allowed and
+	 * we can associate to the ch149 AIoT AP. The channel-plan change triggers a
+	 * reboot whose ROM path waits on the 0x480003f8 bit25 inter-core reset
+	 * handshake — now serviced via the KM4 IPC set up in main() (IPC_INTHandler +
+	 * ipc_table_init), like the stock SDK. See memory
+	 * reference-amebad-chplan-reboot-handshake. */
+	wifi_set_country(RTW_COUNTRY_CN);
 }
 
 //----------------------------------------------------------------------------//

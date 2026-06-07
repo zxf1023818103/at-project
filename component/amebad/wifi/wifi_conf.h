@@ -181,6 +181,20 @@ int wifi_connect(
 	void 				*semaphore);
 
 /**
+ * @brief  Join a Wi-Fi network by SSID, auto-detecting security mode and channel.
+ *		Internally scans for @p ssid (@ref wifi_scan_networks_with_ssid) to learn its
+ *		security type + channel, narrows the join scan to that channel
+ *		(@ref wifi_set_pscan_chan), then calls @ref wifi_connect. Avoids the slow
+ *		full-channel scan a bare @ref wifi_connect does.
+ * @param[in]  ssid: A null terminated string containing the SSID name of the network to join.
+ * @param[in]  password: Cleartext security key (NULL for open networks).
+ * @param[in]  channel: Target channel, or 0 to auto-detect from the SSID scan.
+ * @return  RTW_SUCCESS on success; an RTW error code otherwise.
+ * @note  Please make sure the Wi-Fi is enabled before invoking this function. (@ref wifi_on())
+ */
+int wifi_connect_simple(char *ssid, char *password, int channel);
+
+/**
  * @brief  Join a Wi-Fi network with specified BSSID.
  * 		Scan for, associate and authenticate with a Wi-Fi network.
  *		On successful return, the system is ready to send data packets.

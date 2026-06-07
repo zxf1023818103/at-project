@@ -168,29 +168,31 @@ static void wifi_bringup_thread( void *param )
     /* Throughput: run KM4 at max clock (default may be lower for power). */
     SystemSetCpuClk( CLK_KM4_200M );
 
-    /* Known-answer test of the ROM mbedTLS 2.4.0 software crypto (AES/SHA/MD5/
-     * HMAC). Scheduler is up here, so the HMAC alloc path has a heap. */
-    {
-        extern void rom_mbedtls_kat( void );
-        rom_mbedtls_kat();
-    }
+    /* Set up the KM4 side of the KM4<->KM0 IPC, exactly as the SDK's main() does
+     * before WiFi. The WiFi driver self-registers its own data IPC channel (so
+     * scan/wifi_on basically work without this), but the GENERAL IPC dispatch
+     * (ipc_table_init + the IPC_IRQ handler) is what services KM0-side
+     * coordination — including the inter-core RESET handshake (0x480003f8 bit25)
+     * that the channel-plan reboot waits on. Without this, that reboot spins in
+     * ROM forever. See memory reference-amebad-chplan-reboot-handshake. */
+    InterruptRegister( (IRQ_FUN)IPC_INTHandler, IPC_IRQ, (u32)IPCM0_DEV, 5 );
+    InterruptEn( IPC_IRQ, 5 );
+    ipc_table_init();
 
-    /* Comparative test of rom_ssl_ram_map.h's hw_crypto_* (IPSEC HW engine) vs
-     * ROM mbedTLS SW: rom_hwcrypto_compare() (app_km4/rom_hwcrypto_test.c).
-     * RESULT: SW = FIPS-197 MATCH; HW CRYPTO_Init faults — SecureFault on the
-     * first crypto-peripheral access (~0x48012000 is secure-attributed, NS image
-     * can't reach it). Disabled by default since it halts boot; re-enable to retest. */
-#if 0
-    {
-        extern void rom_hwcrypto_compare( void );
-        rom_hwcrypto_compare();
-    }
-#endif
+    /* Create the WiFi-indication worker thread before bringing WiFi up. With
+     * CONFIG_WIFI_IND_USE_THREAD=1 (platform_opts.h), driver events (CONNECT,
+     * FOURWAY_HANDSHAKE_DONE, DISCONNECT) are dispatched to the registered
+     * handlers via this worker. The SDK's init_thread() calls it before wifi_on;
+     * we'd skipped it, so wifi_connect's join completion (posted by the 4-way-done
+     * handler) never fired -> association hung after "start assoc". Scan was
+     * unaffected (it uses its own scan-done callback, not this event worker). */
+    wifi_manager_init();
 
-    /* On-target wolfCrypt benchmark (runs before wifi_on for a quiet CPU). */
+    /* SDK main() does this before WiFi (loads efuse-derived boot/cal config into
+     * the driver). Matching it for full pre-WiFi parity with the stock SDK. */
     {
-        extern void wolfcrypt_bench( void );
-        wolfcrypt_bench();
+        extern void rtw_efuse_boot_write( void );
+        rtw_efuse_boot_write();
     }
 
     DiagPrintf( "[KM4] wifi_on(RTW_MODE_STA)...\n\r" );
@@ -239,8 +241,10 @@ static void wifi_bringup_thread( void *param )
 #endif
 
     /* TEST: can we read country code from surrounding hotspots' beacons?
-     * Runs a clean active scan before associating. */
-    dump_surrounding_country_codes();
+     * Runs a clean active scan before associating.
+     * TEMP-DISABLED: the extended-country-info scan mode appears to hang here;
+     * wifi_connect_simple does its own plain SSID scan, so skip this diagnostic. */
+    /* dump_surrounding_country_codes(); */
 
     /* Bring up FreeRTOS+TCP BEFORE associating: the driver starts delivering RX
      * (beacons/probes) during association, and the RX bridge needs the buffer
@@ -265,30 +269,44 @@ static void wifi_bringup_thread( void *param )
     FreeRTOS_IPInit_Multi();
     amebad_freertos_tcp_set_ready();
 
-    /* Connect to the 5 GHz AIoT BSSID (ch 40) specifically — the SSID "AIoT"
-     * exists on both bands; plain wifi_connect("AIoT") picked the 2.4 GHz
-     * BSSID (..83). 5 GHz (..84) is far less congested -> higher throughput. */
+    /* Connect to SSID "AIoT" by name (no BSSID pin). wifi_connect_simple scans for
+     * the SSID to learn its security mode + channel, sets partial-channel (pscan),
+     * then joins (channel=0 -> auto-detect from the scan). */
+    DiagPrintf( "[KM4] wifi_connect_simple(AIoT)...\n\r" );
+    if( wifi_connect_simple( "AIoT", "123456789", 0 ) != RTW_SUCCESS )
     {
-        unsigned char bssid_5g[ 6 ] = { 0x9c, 0x9d, 0x7e, 0x59, 0x3e, 0x84 };
-        DiagPrintf( "[KM4] wifi_connect_bssid(AIoT 5G 9c:9d:7e:59:3e:84)...\n\r" );
-        if( wifi_connect_bssid( bssid_5g, "AIoT", RTW_SECURITY_WPA2_AES_PSK,
-                                "123456789", 6, 4, 9, 0, NULL ) != RTW_SUCCESS )
-        {
-            DiagPrintf( "[KM4] wifi_connect_bssid FAILED\n\r" );
-            vTaskDelete( NULL );
-            return;
-        }
+        DiagPrintf( "[KM4] wifi_connect_simple FAILED\n\r" );
+        vTaskDelete( NULL );
+        return;
     }
-    /* Throughput: fully disable power-save. wifi_set_power_mode(ips,lps) with
-     * both 0 turns OFF inactive-PS AND leisure-PS (the latter sleeps the radio
-     * mid-association during brief idle -> high RTT + low TCP throughput).
-     * wifi_disable_powersave() alone left IPS on (observed ~17 ms RTT). */
+    /* Throughput: fully disable power-save (IPS + LPS off). */
     wifi_set_power_mode( 0, 0 );
     wifi_disable_powersave();
     {
         int rssi = 0;
         wifi_get_rssi( &rssi );
         DiagPrintf( "[KM4] associated; power-save off; RSSI %d dBm; waiting for DHCP...\n\r", rssi );
+    }
+
+    /* Crypto/SSL self-tests run AFTER WiFi is connected (boot goes straight into
+     * WiFi bring-up first). The ROM mbedTLS KAT + wolfCrypt benchmark are pure
+     * software crypto, independent of the link. */
+    {
+        extern void rom_mbedtls_kat( void );
+        rom_mbedtls_kat();
+    }
+    /* HW IPSEC engine compare is gated off: CRYPTO_Init faults (SecureFault) — the
+     * crypto peripheral (~0x48012000) is secure-attributed and unreachable from
+     * this NS driver-only image. Re-enable to retest. */
+#if 0
+    {
+        extern void rom_hwcrypto_compare( void );
+        rom_hwcrypto_compare();
+    }
+#endif
+    {
+        extern void wolfcrypt_bench( void );
+        wolfcrypt_bench();
     }
 
     vTaskDelete( NULL );
