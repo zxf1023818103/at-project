@@ -7,7 +7,7 @@ allowed-tools: [Bash, Read, Edit]
 
 # Ameba OpenOCD + GDB flash SOP
 
-This skill assumes the at-project repo at `/home/zxf/at-project` with `platform/ameba-rtos` submodule. Working flow verified on amebadplus / RTL8711Dx with RV CMSIS-DAP probe.
+This skill assumes the at-project repo at `/home/zxf10/at-project` with `platform/ameba-rtos` submodule. Working flow verified on amebadplus / RTL8711Dx with RV CMSIS-DAP probe.
 
 ## Pre-flight (one-time)
 
@@ -21,7 +21,7 @@ This skill assumes the at-project repo at `/home/zxf/at-project` with `platform/
 ## Connection check only (no flash)
 
 ```
-cd /home/zxf/at-project/platform/ameba-rtos/tools/scripts/jlink_script/openocd
+cd /home/zxf10/at-project/platform/ameba-rtos/tools/scripts/jlink_script/openocd
 '/mnt/c/Users/zxf10/AppData/Roaming/xPacks/@xpack-dev-tools/openocd/0.12.0-7.1/.content/bin/openocd.exe' \
   -c "set ADAPTER_TYPE daplink" -c "set ADAPTER_SPEED 3000" \
   -f <soc>_openocd.cfg -c "init; exit"
@@ -36,7 +36,7 @@ Two terminals.
 ### Terminal A — start OpenOCD with SDK-expected ports
 
 ```
-cd /home/zxf/at-project/platform/ameba-rtos/tools/scripts/jlink_script/openocd
+cd /home/zxf10/at-project/platform/ameba-rtos/tools/scripts/jlink_script/openocd
 '/mnt/c/Users/zxf10/AppData/Roaming/xPacks/@xpack-dev-tools/openocd/0.12.0-7.1/.content/bin/openocd.exe' \
   -c "set ADAPTER_TYPE daplink" -c "set ADAPTER_SPEED 3000" \
   -f <soc>_openocd.cfg \
@@ -52,10 +52,10 @@ Wait for `Listening on port 2335 for gdb connections`.
 The SDK's `gdb.py` defaults to picking the toolchain gdb from CMakeCache. That's broken on Ubuntu 24 — easier to skip `gdb.py` and copy its constructed command, then swap in `/usr/bin/gdb-multiarch`. Concretely:
 
 ```
-cd /home/zxf/at-project/project/ameba/build_RTL8711Dx/build/project_km4
+cd /home/zxf10/at-project/project/ameba/build_RTL8711Dx/build/project_km4
 /usr/bin/gdb-multiarch --batch \
   -ex 'set architecture armv8-m.main' \
-  -ex 'set $SCRIPT_DIR="/home/zxf/at-project/platform/ameba-rtos/tools/scripts/gnu_script"' \
+  -ex 'set $SCRIPT_DIR="/home/zxf10/at-project/platform/ameba-rtos/tools/scripts/gnu_script"' \
   -ex 'set $GDB_PORT=2335' \
   -ex 'set $FlashFileSize='$(stat -c%s ./image/km0_km4_app.bin) \
   -ex 'set $XIPBootSize='$(stat -c%s ./image/km4_boot_all.bin) \
@@ -67,7 +67,7 @@ cd /home/zxf/at-project/project/ameba/build_RTL8711Dx/build/project_km4
   -ex 'set $BIN_IMG2_ALL="./image/km0_km4_app.bin"' \
   -ex 'set $BIN_IMG1_BOOT="./image/km4_boot_all.bin"' \
   -ex 'set $BIN_KM4_IMG3="./image/km4_image3_all.bin"' \
-  -x /home/zxf/at-project/platform/ameba-rtos/tools/scripts/gnu_script/rtl_gdb_flash_write.txt
+  -x /home/zxf10/at-project/platform/ameba-rtos/tools/scripts/gnu_script/rtl_gdb_flash_write.txt
 ```
 
 Numbers above are for `amebadplus` from `ameba_gdb_config.json5`. For other SoCs look up the matching `REG_VARS` / `FLASH_PARAMS` block in that JSON5 file. Make sure `flash_loader_ram_1.bin` and `target_FPGA.axf` exist in `$SCRIPT_DIR` — `gdb.py` normally copies them from `component/soc/<soc>/project/project_<core>/gnu_utility/gdb_floader/`. If they aren't there, copy manually.
@@ -157,8 +157,8 @@ powershell.exe -NoProfile -Command "
 - **`--no-reset` is mandatory** here. AmebaFlash's default post-download "reset" toggles DTR/RTS, which on a board where those lines aren't wired to nRESET/strap (typical for AmebaGreen2 SWD bench) does nothing useful — but more importantly, if it ever did, it'd reboot into the locked firmware again. Just power-cycle / re-inject UARTBURN if you need to verify.
 - **The SDK ships `AmebaFlash.exe` without its `Devices/` subdir staged next to the binary**. First run will fail with `Flashloader not exists: ...dist\\Devices\\Floaders\\floader_amebagreen2.bin`. Fix by **copying** (not symlinking — UNC `\\wsl.localhost\` can't traverse WSL symlinks) the parent `Devices/` next to `AmebaFlash.exe`:
   ```bash
-  cp -r /home/zxf/at-project/platform/ameba-rtos/tools/ameba/Flash/Devices \
-        /home/zxf/at-project/platform/ameba-rtos/tools/ameba/Flash/dist/Devices
+  cp -r /home/zxf10/at-project/platform/ameba-rtos/tools/ameba/Flash/Devices \
+        /home/zxf10/at-project/platform/ameba-rtos/tools/ameba/Flash/dist/Devices
   ```
 - **0x15 sync byte is at 1.5 Mbps, not 115200** on Green2 (AmebaD emits at 115200 — different ROM). To sanity-check UART burn mode is live, sniff COM22 @ 1500000 8N1 — should see a continuous `0x15` stream. At 115200 you'll just see `0xFF`.
 - **AmebaFlash needs a *fresh* UART burn mode entry per run.** Each failed attempt or even the success itself closes COM22, which momentarily toggles the host's DTR/RTS line. Even though those aren't wired to anything on this board, the chip leaves burn mode anyway (we've seen the 0x15 stream go silent after one round-trip). Always **re-inject UARTBURN via SWD right before each AmebaFlash invocation** — don't try to chain two runs against one injection.
