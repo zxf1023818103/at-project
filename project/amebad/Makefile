@@ -20,7 +20,7 @@ GEN        := Ninja
 BUILD_TYPE := MinSizeRel
 NIMBLE     ?= OFF          # ON -> NimBLE host
 HCI        ?= OFF          # ON -> bare HCI/DTM
-WOLFASM    ?= OFF          # ON -> wolfCrypt Thumb2 symmetric/hash asm
+WOLFASM    ?= ON           # ON -> wolfCrypt Thumb2 symmetric/hash asm (faster; OFF = portable C)
 IMAGE      := $(REPO)/build/amebad/Image_All.bin
 
 all: image
