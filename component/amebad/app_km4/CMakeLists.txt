@@ -177,7 +177,7 @@ target_link_options(target_img2_km4 PRIVATE
 # Secure-world (IMG3) demo: clamp the NS FreeRTOS heap below the secure RAM
 # (0x10077000) that the bootloader's BOOT_RAM_TZCfg marks Secure/NSC, so NS
 # allocations never fault into it. (img2_is.ld reads __tz_sram_top__.) The IMG3
-# secure image (target_img3_km4) is laid into flash by build_image_all.py and
+# secure image (app_km4_secure) is laid into flash by build_image_all.py and
 # loaded by the bootloader; the NS↔S veneer call is wired in a follow-on step.
 if(AMEBAD_ENABLE_TZ_DEMO)
     target_link_options(target_img2_km4 PRIVATE
@@ -185,9 +185,9 @@ if(AMEBAD_ENABLE_TZ_DEMO)
     # Link the CMSE import library (absolute veneer addresses rdp_protection_entry
     # @0x1007b000 / BOOT_IMG3 @0x1007b008) so the NS app resolves the IMG3 veneers,
     # and make sure the secure image builds first.
-    add_dependencies(target_img2_km4 target_img3_km4)
+    add_dependencies(target_img2_km4 app_km4_secure)
     target_link_options(target_img2_km4 PRIVATE
-        "${CMAKE_BINARY_DIR}/component/amebad/img3/cmse_implib.lib")
+        "${CMAKE_BINARY_DIR}/component/amebad/app_km4_secure/cmse_implib.lib")
 endif()
 
 # XIP boot-hang dodge: shift the whole .xip_image2.text block by AMEBAD_XIP_PAD

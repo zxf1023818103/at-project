@@ -42,7 +42,7 @@ KM0_BOOT  = ("component/amebad/bootloader_km0/km0_boot_all.bin")
 KM0_IMG2  = ("component/amebad/app_km0/km0_image2_all.bin")
 KM4_BOOT  = ("component/amebad/bootloader_km4/km4_boot_all.bin")
 KM4_IMG2  = ("component/amebad/app_km4/km4_image2_all.bin")
-KM4_IMG3  = ("component/amebad/img3/km4_image3_all.bin")  # secure-world demo only
+KM4_IMG3  = ("component/amebad/app_km4_secure/km4_image3_all.bin")  # secure-world demo only
 
 OFF_KM0_BOOT  = 0x0000
 OFF_KM4_BOOT  = 0x4000
@@ -108,7 +108,7 @@ def main():
         build("km0", args.km0_build, ["target_loader_km0", "target_img2_km0"])
         km4_targets = ["target_loader_km4", "target_img2_km4"]
         if tz_demo:
-            km4_targets.append("target_img3_km4")   # secure-world (IMG3) demo
+            km4_targets.append("app_km4_secure")   # secure-world (IMG3) demo
         build("km4", args.km4_build, km4_targets)
 
     km0_boot = read(os.path.join(args.km0_build, KM0_BOOT))

@@ -71,7 +71,7 @@ if(NOT AMEBAD_CHIP MATCHES "^amebad-km[04]$")
 endif()
 
 # Secure-world (IMG3 / RDP-style TrustZone-M) demo. OFF by default. When ON:
-#  - img3/ builds the secure image (target_img3_km4) + km4_image3_all.bin
+#  - app_km4_secure/ builds the secure image (target app_km4_secure) + km4_image3_all.bin
 #  - the KM4 bootloader is built with CONFIG_TRUSTZONE_EN=1 so it loads IMG3
 #    (BOOT_FLASH_Image3Load) and BOOT_RAM_TZCfg programs the SAU/IDAU
 #  - app_km4 carves the top secure RAM (BD_RAM_S/NSC) out of the NS region and
@@ -132,7 +132,7 @@ if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
 elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     add_subdirectory(bootloader_km4)
     add_subdirectory(app_km4)              # KM4 HP application image (image2)
-    add_subdirectory(img3)                 # KM4 secure-world image (IMG3) demo, opt-in AMEBAD_ENABLE_TZ_DEMO
+    add_subdirectory(app_km4_secure)       # KM4 secure-world image (IMG3), opt-in AMEBAD_ENABLE_TZ_DEMO
 endif()
 
 # Cross-core final image. `cmake --build <km0-or-km4-build-dir> -t amebad_image_all`
