@@ -73,7 +73,14 @@ SECTIONS
 		__bfsram_end__ = .;
 	} > BD_RAM_NS
 
-	.xip_image2.text : 
+	/* FIX (sp_tohex boot hang): force the section's VMA to KM4_IMG2 ORIGIN
+	 * (0x0E000020) regardless of its alignment. A 0x40-aligned input (e.g. from
+	 * sp_int.c) would otherwise raise the output section alignment to 0x40 and push
+	 * __flash_text_start__ to 0x0E000040 — but the image2 header + the ROM's linear
+	 * XIP MMU map the content right after the 32-byte header (XIP 0x0E000020), so a
+	 * non-0x20 start displaces all code by the gap -> wild branch -> SecureFault
+	 * AUVIOL at boot. Pinning the VMA keeps __flash_text_start__ = 0x0E000020. */
+	.xip_image2.text ORIGIN(KM4_IMG2) :
 	{
 		__flash_text_start__ = .;
 

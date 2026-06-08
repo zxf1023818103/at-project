@@ -34,24 +34,22 @@
  * BLOCK) is used ONLY for ECC point blinding (ECC_TIMING_RESISTANT), never for key
  * material.
  *
- * BOOT GOTCHA (do not reintroduce): uECC_make_key exports the public key with
- * mp_to_unsigned_bin_len(), NOT wc_ecc_export_public_raw(). The latter goes through
- * wc_export_int (wolfmath.c), which references the hex/decimal stringifiers
- * sp_tohex/sp_radix_size — ~1 KB of code. Merely LINKING it makes KM4 hang in
- * app_start BEFORE main(), deterministically.
+ * Public-key export uses wc_ecc_export_public_raw() — the natural wolfCrypt API.
  *
- * The function is NOT special and it is never even called at boot. PROVEN mechanism:
- * that ~1 KB lands in XIP .text *ahead of* app_start, so it shifts app_start and the
- * boot-path functions up by ~1008 bytes onto a position where execution-from-XIP
- * faults — a latent address/position-dependent boot fault (cf. the .rodata->XIP boot
- * trap elsewhere in this SDK). Disproven alternatives, all on-target via bleak:
- *   - total image size: padding ~2 KB of .rodata AFTER all .text (same final size,
- *     app_start NOT shifted) boots fine -> it's the shift, not the size.
- *   - psram / newlib pull / symbol-resolution flip / init_array ctors / RAM layout:
- *     ruled out (RAM sections byte-identical hang-vs-boot; ld --cref shows no new
- *     object/newlib/symbol-flip; only XIP .text end moves, by 0x3F0).
- * Fix = keep every ECC path off wc_export_int; mp_to_unsigned_bin_len is the plain
- * unsigned-bin path (no hex) and is already in the image.
+ * HISTORICAL BOOT HANG (root-caused + fixed 2026-06-08): linking this path used to
+ * hang KM4 in app_start before main() (SecureFault AUVIOL). It was long mis-blamed
+ * on a "Realtek XIP fetch" HW quirk; the real cause is a LINKER SECTION-ALIGNMENT
+ * bug. wc_ecc_export_public_raw -> wc_export_int (wolfmath.c) pulls sp_tohex's TU
+ * (sp_int.c), which carries a 0x40-aligned input section; that raises the output
+ * .xip_image2.text alignment to 0x40. KM4_IMG2 ORIGIN is only 0x20-aligned
+ * (0x0E000020), so the section starts at 0x0E000040 and __flash_text_start__ moves
+ * +0x20 — but the 32-byte image2 header and the boot ROM's *linear* XIP MMU both map
+ * the code right after the header (XIP 0x0E000020). The 0x20 gap displaces all code
+ * -0x20, so every branch/entry lands +0x20 off -> wild jump -> AUVIOL.
+ * FIX (app_km4/rlx8721d_img2_is.ld): pin the section VMA with
+ *   .xip_image2.text ORIGIN(KM4_IMG2) :
+ * so __flash_text_start__ stays 0x0E000020 regardless of input alignment. General
+ * (guards any 0x40-aligned input), so wc_ecc_export_public_raw is safe to use.
  */
 #include <wolfssl/wolfcrypt/settings.h>
 #include <wolfssl/wolfcrypt/aes.h>
@@ -175,14 +173,11 @@ uECC_make_key(uint8_t *p_public_key, uint8_t *p_private_key, uECC_Curve curve)
         if (rc == 0) {
             rc = wc_ecc_make_pub(key, (ecc_point *)0);
         }
-        /* Export X||Y via mp_to_unsigned_bin_len, NOT wc_ecc_export_public_raw — see
-         * the BOOT GOTCHA at the top of this file (the latter pulls wc_export_int->
-         * sp_tohex, whose presence hangs KM4 at boot). */
+        /* Export X(32)||Y(32) big-endian. Safe now — see the section-alignment fix
+         * in the file header (the old sp_tohex boot hang is fixed in the linker). */
         if (rc == 0) {
-            rc = mp_to_unsigned_bin_len(key->pubkey.x, p_public_key, 32);
-        }
-        if (rc == 0) {
-            rc = mp_to_unsigned_bin_len(key->pubkey.y, p_public_key + 32, 32);
+            word32 xl = 32, yl = 32;
+            rc = wc_ecc_export_public_raw(key, p_public_key, &xl, p_public_key + 32, &yl);
         }
         wc_ecc_free(key);
         vPortFree(key);
