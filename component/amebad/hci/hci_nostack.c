@@ -17,18 +17,20 @@
 #include <string.h>
 #include <stdarg.h>
 #include "platform_stdlib.h"   /* DiagPrintf */
-#include "osif.h"              /* osif_delay / osif_mem_alloc / osif_mem_free */
+#include "FreeRTOS.h"          /* pvPortMalloc / vPortFree */
+#include "osif.h"              /* osif_delay */
+#include "os_mem.h"            /* os_mem_zalloc_intern / os_mem_free prototypes + RAM_TYPE */
 #include "hci_tp.h"            /* hci_tp_open, P_HCI_TP_OPEN_CB / RX_IND */
 #include "hci_uart.h"          /* hci_uart_recv */
 
-/* ---- the 4 utility symbols btgap.a used to provide (re-impl over osif) ---- */
+/* ---- the 4 utility symbols btgap.a used to provide (re-impl over FreeRTOS) ---- */
 void os_delay(uint32_t ms)            { osif_delay(ms); }
-void os_mem_free(void *p_block)       { osif_mem_free(p_block); }
+void os_mem_free(void *p_block)       { vPortFree(p_block); }   /* heap_4 vPortFree is NULL-safe */
 void *os_mem_zalloc_intern(RAM_TYPE ram_type, size_t size,
                            const char *p_func, uint32_t file_line)
 {
-    (void)p_func; (void)file_line;
-    void *p = osif_mem_alloc(ram_type, size);
+    (void)ram_type; (void)p_func; (void)file_line;
+    void *p = pvPortMalloc(size);
     if (p)
         memset(p, 0, size);
     return p;

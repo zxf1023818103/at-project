@@ -386,11 +386,11 @@ bool hci_uart_malloc(void)
 {
     if(hci_uart_obj == NULL)
     {
-        hci_uart_obj = osif_mem_alloc(RAM_TYPE_DATA_ON, sizeof(T_HCI_UART)); //reopen not need init uart
+        hci_uart_obj = pvPortMalloc(sizeof(T_HCI_UART)); //reopen not need init uart
 
         if(!hci_uart_obj)
         {
-            hci_board_debug("hci_uart_malloc: need %d, left %d\r\n", sizeof(T_HCI_UART), osif_mem_peek(RAM_TYPE_DATA_ON));
+            hci_board_debug("hci_uart_malloc: need %d, left %d\r\n", sizeof(T_HCI_UART), xPortGetFreeHeapSize());
             return false;
         }
         memset(hci_uart_obj, 0, sizeof(T_HCI_UART));
@@ -412,7 +412,7 @@ bool hci_uart_free(void)
     }
     else
     {
-        osif_mem_free(hci_uart_obj);
+        vPortFree(hci_uart_obj);
         hci_uart_obj = NULL;
     }
     return true;

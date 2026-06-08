@@ -4,15 +4,16 @@
  *
  * The original SDK file exported 49 osif_* wrappers; this driver-only image uses
  * the BT controller transport only (no Realtek upper stack / btgap.a, host =
- * NimBLE which has its own porting layer), so just 10 are referenced — by
+ * NimBLE which has its own porting layer), so just 7 are referenced — by
  * hci_uart.c and hci_nostack.c. The rest (timers, mutexes, signals, msg queues,
- * scheduler control, lock/unlock, aligned alloc, sys_time) had no caller and were
- * dropped. Re-add a wrapper here if a future consumer needs it; the FreeRTOS call
- * it maps to is one line.
+ * scheduler control, lock/unlock, sys_time) had no caller; the memory wrappers
+ * (osif_mem_alloc/free/peek) were pure FreeRTOS skins, so their callers use
+ * pvPortMalloc / vPortFree / xPortGetFreeHeapSize directly instead. Re-add a
+ * wrapper here if a future consumer needs it; the FreeRTOS call it maps to is one
+ * line.
  *
  * Semantics preserved from the SDK: sem_take/sem_give pick the FromISR variant in
- * ISR context; wait_ms == 0xFFFFFFFF means block forever (portMAX_DELAY);
- * osif_mem_* ignore RAM_TYPE and use the single FreeRTOS heap. KM4 only.
+ * ISR context; wait_ms == 0xFFFFFFFF means block forever (portMAX_DELAY). KM4 only.
  */
 #include <stdint.h>
 #include <FreeRTOS.h>
@@ -100,26 +101,4 @@ bool osif_sem_give(void *p_handle)
         portEND_SWITCHING_ISR(task_woken);
     }
     return (ret == pdTRUE);
-}
-
-/* ---- memory (single FreeRTOS heap; RAM_TYPE ignored) ---- */
-
-void *osif_mem_alloc(RAM_TYPE ram_type, size_t size)
-{
-    (void)ram_type;
-    return pvPortMalloc(size);
-}
-
-void osif_mem_free(void *p_block)
-{
-    if (p_block == NULL) {
-        return;
-    }
-    vPortFree(p_block);
-}
-
-size_t osif_mem_peek(RAM_TYPE ram_type)
-{
-    (void)ram_type;
-    return xPortGetFreeHeapSize();
 }
