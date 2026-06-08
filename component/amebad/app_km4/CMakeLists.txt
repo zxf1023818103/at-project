@@ -185,7 +185,7 @@ if(AMEBAD_ENABLE_TZ_DEMO)
     # Link the CMSE import library (absolute veneer addresses rdp_protection_entry
     # @0x1007b000 / BOOT_IMG3 @0x1007b008) so the NS app resolves the IMG3 veneers,
     # and make sure the secure image builds first.
-    add_dependencies(target_img2_km4 app_km4_secure)
+    add_dependencies(target_img2_km4 target_img3_km4_secure)
     target_link_options(target_img2_km4 PRIVATE
         "${CMAKE_BINARY_DIR}/component/amebad/app_km4_secure/cmse_implib.lib")
 endif()

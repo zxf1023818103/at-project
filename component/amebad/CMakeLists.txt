@@ -71,7 +71,7 @@ if(NOT AMEBAD_CHIP MATCHES "^amebad-km[04]$")
 endif()
 
 # Secure-world (IMG3 / RDP-style TrustZone-M) demo. OFF by default. When ON:
-#  - app_km4_secure/ builds the secure image (target app_km4_secure) + km4_image3_all.bin
+#  - app_km4_secure/ builds the secure image (target target_img3_km4_secure) + km4_image3_all.bin
 #  - the KM4 bootloader is built with CONFIG_TRUSTZONE_EN=1 so it loads IMG3
 #    (BOOT_FLASH_Image3Load) and BOOT_RAM_TZCfg programs the SAU/IDAU
 #  - app_km4 carves the top secure RAM (BD_RAM_S/NSC) out of the NS region and
