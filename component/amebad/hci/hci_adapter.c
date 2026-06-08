@@ -6,7 +6,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "os_mem.h"
+#include "FreeRTOS.h"
+#include "task.h"
 #include "hci_tp.h"
 #include "hci_process.h"
 #include "hci_types.h"
@@ -34,7 +35,7 @@ bool hci_rtk_tx_cb(void)
 {
     if (p_hci_rtk->tx_buf != NULL)
     {
-        os_mem_free(p_hci_rtk->tx_buf);
+        vPortFree(p_hci_rtk->tx_buf);
         p_hci_rtk->tx_buf = NULL;
     }
     return true;
@@ -43,7 +44,7 @@ bool hci_rtk_tx_cb(void)
 bool hci_adapter_send(uint8_t *p_buf, uint16_t len)
 {
     while (p_hci_rtk->tx_buf != NULL) {
-        os_delay(1);
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
     p_hci_rtk->tx_buf  = p_buf;
     return hci_tp_send(p_buf, len, hci_rtk_tx_cb);

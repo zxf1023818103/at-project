@@ -5,7 +5,8 @@
 
 #include <stdio.h>
 #include <string.h>
-#include "os_mem.h"
+#include "FreeRTOS.h"
+#include "task.h"
 
 #include "hci_tp.h"
 #include "hci_uart.h"
@@ -355,7 +356,7 @@ uint8_t *hci_rtk_combine_config(void)
 #define HCI_CONFIG_HEAD 6
     uint16_t config_length = rtlbt_config_len + sizeof(rtlbt_init_config) - HCI_CONFIG_HEAD;
 
-    uint8_t *full_config_buf = os_mem_zalloc(RAM_TYPE_DATA_ON, config_length);
+    uint8_t *full_config_buf = pvPortMalloc(config_length);
     uint8_t *p_len = full_config_buf+4;
 
     memcpy(full_config_buf,rtlbt_init_config, sizeof(rtlbt_init_config));
@@ -456,7 +457,7 @@ bool hci_rtk_find_patch(uint8_t bt_hci_chip_id)
             }
         }
 
-        fw_buf = os_mem_zalloc(RAM_TYPE_DATA_ON, fw_len);
+        fw_buf = pvPortMalloc(fw_len);
         if(fw_buf == NULL)
         {
             hci_board_debug("\n fw_buf ,malloc %d byte fail, \n", fw_len);
@@ -483,7 +484,7 @@ bool hci_rtk_find_patch(uint8_t bt_hci_chip_id)
         }
 
         fw_len = rtlbt_fw_len ;
-        fw_buf = os_mem_zalloc(RAM_TYPE_DATA_ON, fw_len);
+        fw_buf = pvPortMalloc(fw_len);
         memcpy(fw_buf,(const void *)rltk_bt_get_patch_code(), fw_len);
     }
 
@@ -522,7 +523,8 @@ void bt_read_efuse(void)
     uint8_t *p_buf;
 
     //read logic efuse
-    p_buf = os_mem_zalloc(RAM_TYPE_DATA_ON, 1024);
+    p_buf = pvPortMalloc(1024);
+    if (p_buf != NULL) memset(p_buf, 0, 1024);  /* was os_mem_zalloc; keep defined bytes if EFUSE_LMAP_READ fails */
 	device_mutex_lock(RT_DEV_LOCK_EFUSE);
     ret = EFUSE_LMAP_READ(p_buf);
 	device_mutex_unlock(RT_DEV_LOCK_EFUSE);
@@ -574,7 +576,7 @@ void bt_read_efuse(void)
             hci_board_debug("\n%x:", hci_tp_phy_efuse[Idx]);
         }
     }
-    os_mem_free(p_buf);
+    vPortFree(p_buf);
 }
 
 
@@ -626,22 +628,22 @@ void bt_reset(void)
     //bt power
     bt_power_on();
 
-    os_delay(5);
+    vTaskDelay(pdMS_TO_TICKS(5));
 
     //isolation
     set_reg_value(0x40000000,BIT16, 0);
-    os_delay(5);
+    vTaskDelay(pdMS_TO_TICKS(5));
 
     //BT function enable
     set_reg_value(0x40000204,BIT24, 0);
-    os_delay(5);
+    vTaskDelay(pdMS_TO_TICKS(5));
 
     set_reg_value(0x40000204,BIT24, 1);
-    os_delay(50);
+    vTaskDelay(pdMS_TO_TICKS(50));
 
     //BT clock enable
     set_reg_value(0x40000214, BIT24, 1);
-    os_delay(5);
+    vTaskDelay(pdMS_TO_TICKS(5));
 }
 
 bool hci_board_init()

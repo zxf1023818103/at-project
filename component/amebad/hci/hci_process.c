@@ -6,7 +6,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "os_mem.h"
+#include "FreeRTOS.h"
+#include "task.h"
 
 #include "hci_process.h"
 #include "hci_tp.h"
@@ -36,7 +37,7 @@ uint8_t hci_tp_read_local_ver(void)
     HCI_PRINT_TRACE0("hci_tp_read_local_ver");
 
     hci_normal_start();
-    p_cmd = os_mem_zalloc(RAM_TYPE_DATA_ON, 4);
+    p_cmd = pvPortMalloc(4);
     if (p_cmd != NULL)
     {
         p = p_cmd;
@@ -81,7 +82,7 @@ uint8_t hci_tp_read_rom_ver(void)
 
     HCI_PRINT_TRACE0("hci_tp_read_rom_ver");
 
-    p_cmd = os_mem_zalloc(RAM_TYPE_DATA_ON, 4);
+    p_cmd = pvPortMalloc(4);
     if (p_cmd != NULL)
     {
         p = p_cmd;
@@ -137,7 +138,7 @@ uint8_t hci_tp_read_thermal(void)
 
     if (rltk_wlan_is_mp())
     {
-        p_cmd = os_mem_zalloc(RAM_TYPE_DATA_ON, 4);
+        p_cmd = pvPortMalloc(4);
             if (p_cmd != NULL)
             {
                 p = p_cmd;
@@ -299,7 +300,7 @@ uint8_t hci_tp_download_patch(void)
     HCI_PRINT_TRACE2("hci_tp_download_patch: frag index %d, len %d",
                      patch_frag_index, p_hci_rtk->patch_frag_len);
 
-    p_cmd = os_mem_zalloc(RAM_TYPE_DATA_ON, HCI_CMD_HDR_LEN + 1 + p_hci_rtk->patch_frag_len);
+    p_cmd = pvPortMalloc(HCI_CMD_HDR_LEN + 1 + p_hci_rtk->patch_frag_len);
     if (p_cmd != NULL)
     {
         p = p_cmd;
@@ -350,8 +351,8 @@ uint8_t hci_download_patch_check(uint8_t len, uint8_t *p_buf)
     {
         HCI_PRINT_INFO0("Download patch completely\n");
         //hci_board_debug("Download patch completely\n");
-        os_mem_free(p_hci_rtk->fw_buf);
-        os_mem_free(p_hci_rtk->config_buf);
+        vPortFree(p_hci_rtk->fw_buf);
+        vPortFree(p_hci_rtk->config_buf);
         return HCI_TP_CHECK_OK;
     }
     else
@@ -369,7 +370,7 @@ uint8_t hci_tp_set_controller_baudrate(void)
     HCI_PRINT_TRACE1("hci_tp_set_controller_baudrate: baudrate 0x%08x", p_hci_rtk->baudrate);
     //hci_board_debug("hci_tp_set_controller_baudrate: baudrate 0x%08x\n", p_hci_rtk->baudrate);
 
-    p_cmd = os_mem_zalloc(RAM_TYPE_DATA_ON, HCI_CMD_HDR_LEN + 4);
+    p_cmd = pvPortMalloc(HCI_CMD_HDR_LEN + 4);
     if (p_cmd != NULL)
     {
         p = p_cmd;
@@ -418,7 +419,7 @@ uint8_t hci_set_baudrate_check(uint8_t len, uint8_t *p_buf)
     hci_rtk_convert_buadrate(p_hci_rtk->baudrate, &uart_baudrate);
     //hci_board_debug("hci_tp_set_controller_baudrate: baudrate %d\n", uart_baudrate);
     hci_uart_set_baudrate(uart_baudrate);
-    os_delay(50);
+    vTaskDelay(pdMS_TO_TICKS(50));
     return HCI_TP_CHECK_OK;
 }
 //==================================IQK=======LOK=======
@@ -430,7 +431,7 @@ uint8_t hci_tp_rf_radio_ver(uint8_t offset, uint16_t value)
     HCI_PRINT_TRACE0("hci_tp_rf_radio_ver");
     hci_board_debug("hci_tp_rf_radio_ver\n");
 
-    p_cmd = os_mem_zalloc(RAM_TYPE_DATA_ON, 8);
+    p_cmd = pvPortMalloc(8);
     if (p_cmd != NULL)
     {
         p = p_cmd;
@@ -523,7 +524,7 @@ uint8_t hci_tp_write_efuse_iqk(void)
 
     HCI_PRINT_TRACE0("hci_tp_write_efuse_iqk");
     
-    p_cmd = os_mem_zalloc(RAM_TYPE_DATA_ON, 23);
+    p_cmd = pvPortMalloc(23);
     if (p_cmd != NULL)
     {
         p = p_cmd;
@@ -549,7 +550,7 @@ uint8_t hci_tp_hci_reset(void)
     uint8_t *p;
     HCI_PRINT_TRACE0("hci_reset");
     //hci_board_debug("hci_reset\n");
-    p_cmd = os_mem_zalloc(RAM_TYPE_DATA_ON, 4);
+    p_cmd = pvPortMalloc(4);
     if (p_cmd != NULL)
     {
         p = p_cmd;
@@ -600,7 +601,7 @@ uint8_t hci_tp_tx_test_cmd(void)
 #define HCI_LE_TRANSMIT_TEST 0x201e
     hci_board_debug("hci_tp_tx_test_cmd 2402, 0xFF, 0x00\n");
 
-    p_cmd = os_mem_zalloc(RAM_TYPE_DATA_ON, 7);
+    p_cmd = pvPortMalloc(7);
     if (p_cmd != NULL)
     {
         p = p_cmd;
@@ -629,7 +630,7 @@ uint8_t hci_tp_rx_test_cmd(void)
     //
 #define HCI_LE_RECEIVE_TEST 0x201d
     hci_board_debug("hci_tp_rx_test_cmd 2402\n");
-    p_cmd = os_mem_zalloc(RAM_TYPE_DATA_ON, 6);
+    p_cmd = pvPortMalloc(6);
     if (p_cmd != NULL)
     {
         p = p_cmd;
@@ -655,7 +656,7 @@ uint8_t hci_tp_test_end_cmd(void)
 
 #define HCI_LE_TEST_END 0x201f
     hci_board_debug("hci_tp_rx_test_cmd 2402\n");
-    p_cmd = os_mem_zalloc(RAM_TYPE_DATA_ON, 6);
+    p_cmd = pvPortMalloc(6);
     if (p_cmd != NULL)
     {
         p = p_cmd;

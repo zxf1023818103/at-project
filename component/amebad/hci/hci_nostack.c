@@ -7,9 +7,10 @@
  * (hci_adapter.c / hci_process.c / hci_board.c / hci_uart.c). btgap.a's bte_init()
  * merely calls hci_tp_open() and then starts the host stack. Here we call
  * hci_tp_open() directly with our own open_cb + rx_ind, so NO btgap.a symbol is
- * needed — except 4 generic utility symbols that Realtek happened to compile into
- * btgap.a (os_delay / os_mem_free / os_mem_zalloc_intern / trace_log_buffer); we
- * re-provide them over osif/FreeRTOS below.
+ * needed — except trace_log_buffer, a generic utility symbol Realtek happened to
+ * compile into btgap.a (the HCI_PRINT_* trace macros funnel into it); we
+ * re-provide it as a no-op below. The old os_delay / os_mem_* utility symbols are
+ * gone — their callers use vTaskDelay / pvPortMalloc / vPortFree directly now.
  *
  * This is the only bring-up path now that btgap.a is removed. After it completes,
  * bt_dtm_enter_bridge() exposes raw HCI on COM29.
@@ -17,24 +18,10 @@
 #include <string.h>
 #include <stdarg.h>
 #include "platform_stdlib.h"   /* DiagPrintf */
-#include "FreeRTOS.h"          /* pvPortMalloc / vPortFree */
-#include "osif.h"              /* osif_delay */
-#include "os_mem.h"            /* os_mem_zalloc_intern / os_mem_free prototypes + RAM_TYPE */
+#include "osif.h"              /* osif_delay (transport poll wait below) */
 #include "hci_tp.h"            /* hci_tp_open, P_HCI_TP_OPEN_CB / RX_IND */
 #include "hci_uart.h"          /* hci_uart_recv */
 
-/* ---- the 4 utility symbols btgap.a used to provide (re-impl over FreeRTOS) ---- */
-void os_delay(uint32_t ms)            { osif_delay(ms); }
-void os_mem_free(void *p_block)       { vPortFree(p_block); }   /* heap_4 vPortFree is NULL-safe */
-void *os_mem_zalloc_intern(RAM_TYPE ram_type, size_t size,
-                           const char *p_func, uint32_t file_line)
-{
-    (void)ram_type; (void)p_func; (void)file_line;
-    void *p = pvPortMalloc(size);
-    if (p)
-        memset(p, 0, size);
-    return p;
-}
 /* trace macros (HCI_PRINT_*) funnel here; we route console output through
  * hci_board_debug/DiagPrintf instead, so this is a no-op. */
 void trace_log_buffer(uint32_t info, uint32_t log_str_index, uint8_t param_num, ...)

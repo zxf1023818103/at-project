@@ -13,10 +13,11 @@
 #
 # How bring-up works without btgap.a: bte_init() lived in btgap.a and merely called
 # hci_tp_open() (our code) + started the host. hci_nostack.c calls hci_tp_open()
-# directly and re-provides the 4 utility symbols btgap.a used to define
-# (os_delay / os_mem_free / os_mem_zalloc_intern / trace_log_buffer). In-tree glue:
-# hci_dtm.c (bring-up + polling HCI bridge), hci_nostack.c, hci_fw_stub.c,
-# hci_compat.c, hci_syscalls.c.
+# directly and re-provides the one utility symbol btgap.a used to define that is
+# still referenced (trace_log_buffer, a no-op sink). The old os_delay / os_mem_*
+# helpers are gone — callers use vTaskDelay / pvPortMalloc / vPortFree directly.
+# In-tree glue: hci_dtm.c (bring-up + polling HCI bridge), hci_nostack.c,
+# hci_fw_stub.c, hci_compat.c, hci_syscalls.c.
 #
 # KM4-only (the HCI transport + the LOGUART the bridge hijacks are KM4's at
 # runtime). EXCLUDE_FROM_ALL until app_km4 links it.
