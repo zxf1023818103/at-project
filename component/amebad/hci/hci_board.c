@@ -5,9 +5,6 @@
 
 #include <stdio.h>
 #include <string.h>
-#include "os_sched.h"
-#include "os_pool.h"
-#include "os_sync.h"
 #include "os_mem.h"
 
 #include "hci_tp.h"

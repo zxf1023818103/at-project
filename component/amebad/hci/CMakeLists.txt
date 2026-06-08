@@ -62,7 +62,7 @@ endif()
 
 # ---- HCI transport + osif + bridge + board + bring-up glue (no btgap.a) ----
 add_library(amebad_hci STATIC EXCLUDE_FROM_ALL
-    "${CMAKE_CURRENT_SOURCE_DIR}/osif_freertos.c"   # the 49 osif_*
+    "${CMAKE_CURRENT_SOURCE_DIR}/osif_freertos.c"   # the 12 osif_* used (thin FreeRTOS wrappers)
     "${CMAKE_CURRENT_SOURCE_DIR}/hci_adapter.c"     # hci_tp_open/close/send/recv (hci_tp_open = full bring-up)
     "${CMAKE_CURRENT_SOURCE_DIR}/hci_process.c"     # HCI_PROCESS_TABLE (patch dl + reset)
     "${CMAKE_CURRENT_SOURCE_DIR}/cycle_queue.c"

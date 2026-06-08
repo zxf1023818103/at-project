@@ -7,7 +7,6 @@
 #include <string.h>
 
 #include "os_mem.h"
-#include "os_sched.h"
 #include "hci_tp.h"
 #include "hci_process.h"
 #include "hci_types.h"
