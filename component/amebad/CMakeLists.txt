@@ -118,6 +118,7 @@ endif()
 add_subdirectory(wolfssl)            # KM4-gated: wolfCrypt (v5.9.1) bare-metal lib for on-target crypto benchmark (+TLS1.3/QUIC when AMEBAD_WOLFSSL_TLS)
 add_subdirectory(ngtcp2)             # KM4-gated: ngtcp2 QUIC + crypto/wolfssl (only built when AMEBAD_ENABLE_QUIC)
 add_subdirectory(hci)                # KM4-gated: BLE controller bring-up + HCI transport + bridge (no btgap.a)
+add_subdirectory(syscalls)           # KM4-gated: consolidated newlib syscall retarget (amebad_syscalls OBJECT lib)
 add_subdirectory(image_tool)         # defines amebad_make_{boot,image2}_all_bin*(...)
                                      #   + amebad_make_image_all_bin() (-> target
                                      #     amebad_image_all, wraps build_image_all.py)

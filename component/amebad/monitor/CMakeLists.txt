@@ -3,7 +3,7 @@
 # (app/monitor/) into this folder.
 #
 # Split into a shared lib + a per-core lib (the per-core lib links the shared one):
-#   amebad_monitor_common  {shell_ram,rtl_trace,low_level_io}.c  (both cores)
+#   amebad_monitor_common  {shell_ram,rtl_trace}.c  (both cores)
 #   amebad_monitor         per-core entry — KM0: monitor_lp.c;
 #                          KM4: monitor_hp.c + {shell_rom,monitor_rom}.c
 # KM0 and KM4 are separate builds, so the per-core lib uses one name (amebad_monitor,
@@ -37,10 +37,13 @@ set(_monitor_warnings
 # Shared across both cores. monitor sources pull freertos_pmu.h / FreeRTOS.h;
 # link the kernel (which PUBLIC-links amebad_sdk_includes for the monitor /
 # swlib / os_dep / fwlib headers).
+# NB: the newlib console retarget (_write/_read via Diag*) that used to live here
+# as low_level_io.c moved to component/amebad/syscalls (amebad_syscalls), the
+# single home for the KM4 image's syscall surface. KM0 is stdio-free, so it never
+# pulled low_level_io and needs no replacement.
 add_library(amebad_monitor_common STATIC
     shell_ram.c
     rtl_trace.c
-    low_level_io.c
 )
 target_link_libraries(amebad_monitor_common PUBLIC FreeRTOS)
 target_compile_options(amebad_monitor_common PRIVATE ${_monitor_warnings})

@@ -97,16 +97,17 @@ add_dependencies(target_img2_km4 amebad_km4_img2_ld)
 # BLE images on top of component/amebad/hci (no btgap.a):
 #   AMEBAD_ENABLE_HCI    — raw HCI / DTM bridge test image (auto-enter bridge).
 #   AMEBAD_ENABLE_NIMBLE — Apache NimBLE host (LE/GATT/Mesh/coex), via component/nimble.
-# Both ride the same controller bring-up (amebad_hci + firmware blob + newlib
-# syscalls); NimBLE additionally links the `nimble` lib. Pick one. OFF by default.
+# Both ride the same controller bring-up (amebad_hci + firmware blob; the newlib
+# syscalls come from amebad_syscalls, linked unconditionally below). NimBLE
+# additionally links the `nimble` lib. Pick one. OFF by default.
 option(AMEBAD_ENABLE_HCI    "Build the BLE controller HCI test image (bring-up + HCI bridge)" OFF)
 option(AMEBAD_ENABLE_NIMBLE "Build the NimBLE host image (LE/GATT/Mesh/coex on amebad_hci)" OFF)
 set(_hci_grp "")
 if(AMEBAD_ENABLE_HCI OR AMEBAD_ENABLE_NIMBLE)
     # Shared controller bits — bring-up via hci_tp_open() (component/amebad/hci/
-    # hci_nostack.c), firmware blob + newlib syscalls in the EXECUTABLE so their
-    # STRONG defs override the weak {0} stubs (a blob inside the archive wouldn't
-    # get pulled).
+    # hci_nostack.c) + the firmware blob in the EXECUTABLE so its STRONG defs
+    # override the weak {0} stubs (a blob inside the archive wouldn't get pulled).
+    # newlib syscalls now come from amebad_syscalls (linked below).
     set(_hci_grp ",amebad_hci")
     set(_hci_root "${CMAKE_SOURCE_DIR}/component/amebad/hci")
     if(AMEBAD_HCI_FW_MP)
@@ -117,7 +118,6 @@ if(AMEBAD_ENABLE_HCI OR AMEBAD_ENABLE_NIMBLE)
     set_source_files_properties("${_hci_fw_src}" PROPERTIES
         COMPILE_OPTIONS "-Wno-unused-variable;-Wno-unused-const-variable")
     target_sources(target_img2_km4 PRIVATE
-        "${_hci_root}/hci_syscalls.c"
         "${_hci_fw_src}")
 endif()
 if(AMEBAD_ENABLE_NIMBLE)
@@ -144,8 +144,7 @@ if(AMEBAD_ENABLE_QUIC)
     set(_diag_grp "")
     set(_quic_grp ",amebad_ngtcp2_crypto,amebad_ngtcp2")
     target_sources(target_img2_km4 PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/quic_test.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/quic_syscalls.c")   # newlib _write/_sbrk/_exit (ngtcp2 abort + TLS stdio)
+        "${CMAKE_CURRENT_SOURCE_DIR}/quic_test.c")   # newlib syscalls now from amebad_syscalls
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_QUIC)
 endif()
@@ -155,6 +154,7 @@ endif()
 # plus memcpy/memset — so KM4 doesn't need the ROM memcpy alias KM0 uses.
 target_link_libraries(target_img2_km4 PRIVATE
     amebad_sdk_includes
+    amebad_syscalls      # OBJECT lib: newlib retarget (_write/_read/_sbrk/...) force-included so its strong defs beat libc's ENOSYS stubs
     amebad_mbedtls_rom   # INTERFACE: ROM mbedTLS 2.4.0 headers + MBEDTLS_CONFIG_FILE (no archive)
     # amebad_wolfssl is INSIDE the group: NimBLE's SM crypto (nimble, in the group)
     # pulls wc_* (wc_ecc_*/wc_AesEncryptDirect) that the bench didn't, so wolfCrypt
