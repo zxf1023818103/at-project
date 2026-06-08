@@ -27,8 +27,6 @@ bool osif_task_create(void **pp_handle, const char *p_name, void (*p_routine)(vo
 bool osif_task_delete(void *p_handle);
 
 /* synchronization */
-uint32_t osif_lock(void);
-void osif_unlock(uint32_t flags);
 bool osif_sem_create(void **pp_handle, uint32_t init_count, uint32_t max_count);
 bool osif_sem_delete(void *p_handle);
 bool osif_sem_take(void *p_handle, uint32_t wait_ms);

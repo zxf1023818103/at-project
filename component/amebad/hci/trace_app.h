@@ -3,8 +3,8 @@
  *
  * The original trace stack (trace.h — a 125 KB macro header — plus trace_task.c
  * and trace_uart.c, a FreeRTOS task pumping a dedicated trace UART) was removed.
- * The controller bring-up (hci_adapter/process/board, cycle_queue) only ever used
- * the HCI_PRINT_* logging macros; they are no-ops here. Re-route to DiagPrintf if
+ * The controller bring-up (hci_adapter/process/board) only ever used the
+ * HCI_PRINT_* logging macros; they are no-ops here. Re-route to DiagPrintf if
  * BT controller bring-up logging is ever needed.
  */
 #ifndef _TRACE_APP_H_

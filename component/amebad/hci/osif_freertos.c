@@ -4,16 +4,15 @@
  *
  * The original SDK file exported 49 osif_* wrappers; this driver-only image uses
  * the BT controller transport only (no Realtek upper stack / btgap.a, host =
- * NimBLE which has its own porting layer), so just 12 are referenced — by
- * cycle_queue.c, hci_uart.c and hci_nostack.c. The rest (timers, mutexes, signals,
- * msg queues, scheduler control, aligned alloc, sys_time) had no caller and were
+ * NimBLE which has its own porting layer), so just 10 are referenced — by
+ * hci_uart.c and hci_nostack.c. The rest (timers, mutexes, signals, msg queues,
+ * scheduler control, lock/unlock, aligned alloc, sys_time) had no caller and were
  * dropped. Re-add a wrapper here if a future consumer needs it; the FreeRTOS call
  * it maps to is one line.
  *
- * Semantics preserved from the SDK: osif_lock/unlock gate taskENTER/EXIT_CRITICAL
- * on task context; sem_take/sem_give pick the FromISR variant in ISR context;
- * wait_ms == 0xFFFFFFFF means block forever (portMAX_DELAY); osif_mem_* ignore
- * RAM_TYPE and use the single FreeRTOS heap. KM4 only.
+ * Semantics preserved from the SDK: sem_take/sem_give pick the FromISR variant in
+ * ISR context; wait_ms == 0xFFFFFFFF means block forever (portMAX_DELAY);
+ * osif_mem_* ignore RAM_TYPE and use the single FreeRTOS heap. KM4 only.
  */
 #include <stdint.h>
 #include <FreeRTOS.h>
@@ -56,22 +55,6 @@ bool osif_task_delete(void *p_handle)
 }
 
 /* ---- synchronization ---- */
-
-uint32_t osif_lock(void)
-{
-    if (osif_task_context_check()) {
-        taskENTER_CRITICAL();
-    }
-    return 0U;
-}
-
-void osif_unlock(uint32_t flags)
-{
-    (void)flags;
-    if (osif_task_context_check()) {
-        taskEXIT_CRITICAL();
-    }
-}
 
 bool osif_sem_create(void **pp_handle, uint32_t init_count, uint32_t max_count)
 {
