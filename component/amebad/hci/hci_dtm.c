@@ -23,7 +23,6 @@
 #include "bt_intf.h"          /* rtlk_bt_set_gnt_bt_with_clk_source, PTA_BT */
 
 /* vendored transport. */
-extern bool bt_trace_init(void);
 extern int  bt_hci_bringup_nostack(void);   /* hci_nostack.c: hci_tp_open + util syms */
 
 /* HCI controller UART is UART1 on RTL8721D (hci_uart.c: HCI_UART_IDX==1 ->
@@ -43,12 +42,11 @@ extern int  bt_hci_bringup_nostack(void);   /* hci_nostack.c: hci_tp_open + util
 void bt_dtm_bringup(void)
 {
 #if defined(CONFIG_MP_INCLUDED) && CONFIG_MP_INCLUDED
-    DiagPrintf("\n\r[BT] bring-up (MP / RF-test fw): gnt_bt(BT) + bt_trace_init + hci_tp_open ...\n\r");
+    DiagPrintf("\n\r[BT] bring-up (MP / RF-test fw): gnt_bt(BT) + hci_tp_open ...\n\r");
 #else
-    DiagPrintf("\n\r[BT] bring-up (normal BLE fw): gnt_bt(BT) + bt_trace_init + hci_tp_open ...\n\r");
+    DiagPrintf("\n\r[BT] bring-up (normal BLE fw): gnt_bt(BT) + hci_tp_open ...\n\r");
 #endif
     rtlk_bt_set_gnt_bt_with_clk_source(PTA_BT);
-    bt_trace_init();
     bt_hci_bringup_nostack();
 }
 

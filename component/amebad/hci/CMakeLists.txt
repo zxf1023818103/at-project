@@ -65,13 +65,10 @@ add_library(amebad_hci STATIC EXCLUDE_FROM_ALL
     "${CMAKE_CURRENT_SOURCE_DIR}/osif_freertos.c"   # the 49 osif_*
     "${CMAKE_CURRENT_SOURCE_DIR}/hci_adapter.c"     # hci_tp_open/close/send/recv (hci_tp_open = full bring-up)
     "${CMAKE_CURRENT_SOURCE_DIR}/hci_process.c"     # HCI_PROCESS_TABLE (patch dl + reset)
-    "${CMAKE_CURRENT_SOURCE_DIR}/trace_task.c"      # bt_trace_init / trace_print
     "${CMAKE_CURRENT_SOURCE_DIR}/cycle_queue.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/hci_uart_bridge.c" # provides bt_uart_tx (referenced by hci_uart.c)
     "${CMAKE_CURRENT_SOURCE_DIR}/hci_board.c"       # bt_reset/bt_power_on, hci_board_init, patch select
     "${CMAKE_CURRENT_SOURCE_DIR}/hci_uart.c"        # UART1 HCI driver, set_hci_uart_out
-    "${CMAKE_CURRENT_SOURCE_DIR}/platform_utils.c"  # platform_random
-    "${CMAKE_CURRENT_SOURCE_DIR}/trace_uart.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/hci_fwconfig.c"    # rtlbt_config + rltk_bt_get_normal/mp_patch
     "${CMAKE_CURRENT_SOURCE_DIR}/hci_nostack.c"     # hci_tp_open bring-up + the 4 util syms btgap.a used to define
     # NB: the firmware blob (hci_normal_patch.c / hci_mp_patch.c) is in the app_km4
