@@ -58,7 +58,7 @@
 #define S_CODE_FLASH_PHYS       (0x08100000)
 
 /* ---- Non-secure code : NS app ----
- * Bring-up NSPE is a tiny RAM-resident NS stub (component/amebad/tfm/ns_stub),
+ * Bring-up NSPE is a tiny RAM-resident NS stub (component/amebad/app_km4_secure/ns_stub),
  * copied by the bootloader to NS SRAM. SPM reads its vector table here (MSP=[0],
  * entry=[1]) and BLXNS-es to it. 0x10010000 is inside the SAU Non-Secure SRAM
  * region (0x10000000..S_CODE_START-1) and is 0x400-aligned for VTOR_NS. */

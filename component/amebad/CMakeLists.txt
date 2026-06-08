@@ -85,8 +85,9 @@ option(AMEBAD_ENABLE_TZ_DEMO "Build the RDP-style secure-world (IMG3) demo" OFF)
 # TF-M-first boot: the KM4 bootloader copies the RAM-linked tfm_s SPE (built
 # out-of-tree, laid at flash 0x08100000) into secure SRAM and secure-jumps to it,
 # bypassing the image2/NS handoff + BOOT_RAM_TZCfg (TF-M owns TrustZone). For
-# bringing up TF-M on AmebaD HW. OFF by default. Requires component/amebad/tfm/
-# tfm_s.bin (copy from the TF-M build: /tmp/tfm_rtl/bin/tfm_s.bin).
+# bringing up TF-M on AmebaD HW. OFF by default. Requires
+# component/amebad/app_km4_secure/tfm_s.bin (copy from the TF-M build:
+# /tmp/tfm_rtl/bin/tfm_s.bin).
 option(AMEBAD_TFM_BOOT "KM4 bootloader boots tfm_s (TF-M SPE) instead of the NS app" OFF)
 
 add_subdirectory(fwlib)              # chip fwlib: headers (amebad_fwlib_headers) + ROM-symbol ld vars + RAM HAL libs (amebad_ram_common/_lp/_hp, chip-gated)

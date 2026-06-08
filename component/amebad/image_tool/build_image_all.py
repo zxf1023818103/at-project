@@ -139,11 +139,11 @@ def main():
     # KM4 image2 (above) so the ROM image chain is intact. NS stub at 0x108000 ->
     # bootloader copies it to NS_CODE_START (0x10010000); SPM BLXNS-es to it.
     if tfm_boot:
-        tfm = read(os.path.join(REPO, "component", "amebad", "tfm", "tfm_s.bin"))
+        tfm = read(os.path.join(REPO, "component", "amebad", "app_km4_secure", "tfm_s.bin"))
         if OFF_IMG3 < len(image):
             sys.exit("TF-M offset 0x%x overlaps image2 (ends 0x%x)" % (OFF_IMG3, len(image)))
         place(image, OFF_IMG3, tfm, "tfm_s.bin (TF-M SPE, XIP @0x08100000)")
-        nstub = read(os.path.join(REPO, "component", "amebad", "tfm", "ns_stub.bin"))
+        nstub = read(os.path.join(REPO, "component", "amebad", "app_km4_secure", "ns_stub.bin"))
         place(image, OFF_TFM_NS, nstub, "ns_stub.bin (TF-M NSPE)")
 
     outdir = os.path.dirname(args.out)
