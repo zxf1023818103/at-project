@@ -8,7 +8,9 @@
 #include "ameba_soc.h"
 #include "hci_uart.h"
 #include "hci_board_def.h"
-#include "osif.h"
+#include "FreeRTOS.h"
+#include "task.h"
+#include "semphr.h"
 
 #define HCI_UART_RX_BUF_SIZE         0x2000    /* RX buffer size 8K */
 #define HCI_UART_RX_ENABLE_COUNT     (HCI_UART_RX_BUF_SIZE - 2 * (1021 + 5))    /* Enable RX */
@@ -76,8 +78,8 @@ typedef struct
 T_HCI_UART *hci_uart_obj;
 extern uint8_t flag_for_hci_trx;
 
-void *uart_send_done_task = NULL;
-void *uart_send_done_sem = NULL;
+TaskHandle_t      uart_send_done_task = NULL;
+SemaphoreHandle_t uart_send_done_sem  = NULL;
 
 void set_hci_uart_out(bool flag)
 {
@@ -124,8 +126,12 @@ uint16_t hci_rx_space_len()
 
 static void uart_send_done(void)
 {
-    if (uart_send_done_sem != NULL)
-        osif_sem_give(uart_send_done_sem);
+    /* called from transmit_chars() in the UART IRQ -> ISR context. */
+    if (uart_send_done_sem != NULL) {
+        BaseType_t task_woken = pdFALSE;
+        xSemaphoreGiveFromISR(uart_send_done_sem, &task_woken);
+        portEND_SWITCHING_ISR(task_woken);
+    }
 }
 
 static void uart_send_done_handler(void *p_param)
@@ -133,8 +139,8 @@ static void uart_send_done_handler(void *p_param)
     (void) p_param;
 
     while (1) {
-        if (osif_sem_take(uart_send_done_sem, 0xFFFFFFFF) == false) {
-            hci_board_debug("uart_send_done_handle: osif_sem_take uart_send_done_sem fail\r\n");
+        if (xSemaphoreTake(uart_send_done_sem, portMAX_DELAY) != pdTRUE) {
+            hci_board_debug("uart_send_done_handle: xSemaphoreTake uart_send_done_sem fail\r\n");
         } else {
             T_HCI_UART *hci_rtk_obj = hci_uart_obj;
             if (hci_rtk_obj->tx_cb)
@@ -425,12 +431,16 @@ bool hci_uart_init(P_UART_RX_CB rx_ind)
         return false;
     }
 
-    if (osif_sem_create(&uart_send_done_sem, 0, 1) == false) {
-        hci_board_debug("hci_uart_init: osif_sem_create uart_send_done_sem fail\r\n");
+    uart_send_done_sem = xSemaphoreCreateCounting(1, 0);   /* max 1, init 0 */
+    if (uart_send_done_sem == NULL) {
+        hci_board_debug("hci_uart_init: xSemaphoreCreateCounting uart_send_done_sem fail\r\n");
         return false;
     }
-    if (osif_task_create(&uart_send_done_task, "uart_send_done_handler", uart_send_done_handler, 0, UART_SEND_DONE_TASK_STACK_SIZE, UART_SEND_DONE_TASK_PRIORITY) == false) {
-        hci_board_debug("hci_uart_init: osif_task_create uart_send_done_task fail\r\n");
+    /* stack size is in bytes; xTaskCreate wants it in StackType_t words. */
+    if (xTaskCreate(uart_send_done_handler, "uart_send_done_handler",
+                    UART_SEND_DONE_TASK_STACK_SIZE / sizeof(StackType_t), NULL,
+                    UART_SEND_DONE_TASK_PRIORITY, &uart_send_done_task) != pdPASS) {
+        hci_board_debug("hci_uart_init: xTaskCreate uart_send_done_task fail\r\n");
         return false;
     }
 
@@ -486,11 +496,11 @@ bool hci_uart_deinit(void)
     InterruptUnRegister(HCI_UART_IRQ);
 
     if (uart_send_done_task != NULL) {
-        osif_task_delete(uart_send_done_task);
+        vTaskDelete(uart_send_done_task);
         uart_send_done_task = NULL;
     }
     if (uart_send_done_sem != NULL) {
-        osif_sem_delete(uart_send_done_sem);
+        vSemaphoreDelete(uart_send_done_sem);
         uart_send_done_sem = NULL;
     }
 

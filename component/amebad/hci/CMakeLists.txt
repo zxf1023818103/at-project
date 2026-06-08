@@ -3,7 +3,7 @@
 # controller bring-up (firmware-patch download + HCI reset) and a raw HCI pipe,
 # intended to sit under a replacement host stack (e.g. NimBLE).
 #
-# Layout: flat (house style) — HCI transport + osif(FreeRTOS) + UART bridge + board
+# Layout: flat (house style) — HCI transport + UART bridge + board
 # glue + the controller firmware blobs + the referenced headers, all vendored
 # straight into this folder from
 # platform/ameba-rtos-d/component/common/bluetooth/realtek/sdk/ (no basename
@@ -61,9 +61,8 @@ else()
     set(_skip_patch_def)
 endif()
 
-# ---- HCI transport + osif + bridge + board + bring-up glue (no btgap.a) ----
+# ---- HCI transport + bridge + board + bring-up glue (no btgap.a) ----
 add_library(amebad_hci STATIC EXCLUDE_FROM_ALL
-    "${CMAKE_CURRENT_SOURCE_DIR}/osif_freertos.c"   # the 6 osif_* used (thin FreeRTOS wrappers)
     "${CMAKE_CURRENT_SOURCE_DIR}/hci_adapter.c"     # hci_tp_open/close/send/recv (hci_tp_open = full bring-up)
     "${CMAKE_CURRENT_SOURCE_DIR}/hci_process.c"     # HCI_PROCESS_TABLE (patch dl + reset)
     "${CMAKE_CURRENT_SOURCE_DIR}/hci_uart_bridge.c" # provides bt_uart_tx (referenced by hci_uart.c)
