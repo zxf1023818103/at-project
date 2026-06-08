@@ -51,6 +51,7 @@ target_link_libraries(amebad_wifi PUBLIC
     amebad_sdk_includes
     amebad_wlan              # wlan public + osdep/rom headers
     amebad_osdep
+    amebad_mbed              # flash_api.c: flash_stream_read (wifi_conf restore_wifi_info_to_flash)
     amebad_netif_shim        # vendored struct netif + NET_IF_NUM (lwip removed)
     amebad_wpa_supplicant    # supplicant config headers (connect path)
     FreeRTOS

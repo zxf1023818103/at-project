@@ -85,7 +85,7 @@ if(NOT AMEBAD_ENABLE_QUIC)
         "${CMAKE_CURRENT_SOURCE_DIR}/rom_hwcrypto_test.c"   # HW-vs-SW compare of rom_ssl_ram_map.h hw_crypto_* (IPSEC engine)
     )
 endif()
-# WIP: the image2 link still needs the app/WiFi/mbedTLS/lwIP/log/os_dep/ftl
+# WIP: the image2 link still needs the app/WiFi/mbedTLS/lwIP/log/os_dep
 # stack (~30 undefined symbols at bootstrap). EXCLUDE_FROM_ALL keeps the
 # default KM4 build (bootloader_km4 + the driver libs) green; build this
 # target explicitly to continue closing the link:
@@ -93,10 +93,6 @@ endif()
 set_target_properties(target_img2_km4 PROPERTIES EXCLUDE_FROM_ALL TRUE)
 set_property(TARGET target_img2_km4 APPEND PROPERTY LINK_DEPENDS "${_combined_ld}")
 add_dependencies(target_img2_km4 amebad_km4_img2_ld)
-
-# main.c #includes ftl_int.h (FTL) — vendored alongside ftl.c in ftl/.
-target_include_directories(target_img2_km4 SYSTEM PRIVATE
-    "${CMAKE_SOURCE_DIR}/component/amebad/ftl")
 
 # BLE images on top of component/amebad/hci (no btgap.a):
 #   AMEBAD_ENABLE_HCI    — raw HCI / DTM bridge test image (auto-enter bridge).
@@ -163,7 +159,7 @@ target_link_libraries(target_img2_km4 PRIVATE
     # amebad_wolfssl is INSIDE the group: NimBLE's SM crypto (nimble, in the group)
     # pulls wc_* (wc_ecc_*/wc_AesEncryptDirect) that the bench didn't, so wolfCrypt
     # must rescan alongside nimble — wolfCrypt<->FreeRTOS<->nimble are mutually refed.
-    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km4,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_ftl,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,amebad_wlan,amebad_wps,amebad_wolfssl${_diag_grp}${_hci_grp}${_quic_grp}>"
+    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km4,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,amebad_wlan,amebad_wps,amebad_wolfssl${_diag_grp}${_hci_grp}${_quic_grp}>"
     m
     stdc++
     c

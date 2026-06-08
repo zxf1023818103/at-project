@@ -2,9 +2,8 @@
 #define __PLATFORM_OPTS_BT_H__
 #include "platform_autoconf.h"
 
-#if defined CONFIG_BT && CONFIG_BT
-#define CONFIG_FTL_ENABLED
-#endif
+/* CONFIG_FTL_ENABLED removed — FTL is unused (nothing calls ftl_*); the ftl
+ * component and its usrcfg/platform config were dropped from this build. */
 
 #if defined CONFIG_BT_SCATTERNET && CONFIG_BT_SCATTERNET
 #undef CONFIG_BT_PERIPHERAL

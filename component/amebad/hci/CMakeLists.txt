@@ -94,7 +94,6 @@ target_link_libraries(amebad_hci PUBLIC
     amebad_sdk_includes      # basic_types / ameba_soc / fwlib / serial_api
     amebad_osdep             # osdep_service.h
     amebad_wifi_headers      # wifi_conf.h (wifi_is_up), bt_intf.h
-    amebad_ftl               # ftl_save/load_to/from_storage
     amebad_wlan              # rtlk_bt_set_gnt_bt*, rltk_bt_get_patch_code, rtw_create_secure_context
     FreeRTOS
 )

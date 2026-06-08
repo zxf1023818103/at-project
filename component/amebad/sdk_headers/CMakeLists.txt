@@ -7,7 +7,7 @@
 # WLAN driver (minus the one include/ that holds the global autoconf.h), lwip
 # v1.4.1, INIC, polarssl, the SDK's mbedtls-2.4.0 (replaced with the SHARED
 # component/thirdparty/mbedtls), test/example/utilities, api/wifi, api/network,
-# mbed HAL (moved onto the ftl target, its only consumer). lwip is fully removed
+# mbed HAL (moved onto the wifi target, its only consumer). lwip is fully removed
 # (IP stack = FreeRTOS-Plus-TCP); the residual driver/netif ABI shim is
 # component/amebad/netif_shim/netif_shim.h.
 #

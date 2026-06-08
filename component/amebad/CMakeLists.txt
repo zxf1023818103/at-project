@@ -99,8 +99,7 @@ add_subdirectory(freertos)           # upstream FreeRTOS kernel -> target `FreeR
 add_subdirectory(freertos_glue)      # SDK FreeRTOS extensions, chip-gated (after freertos)
 add_subdirectory(monitor)            # chip-gated (image2 shell/monitor)
 add_subdirectory(osdep)              # KM4-gated internally (osdep/os abstraction)
-add_subdirectory(mbed)               # KM4-gated: flattened mbed HAL (amebad_mbed: flash_api.c + headers), consumed by ftl/wifi
-add_subdirectory(ftl)                # KM4-gated internally (flash translation layer)
+add_subdirectory(mbed)               # KM4-gated: flattened mbed HAL (amebad_mbed: flash_api.c + headers), consumed by wifi
 add_subdirectory(at_cmd)             # KM4-gated internally (basic AT log/command service)
 add_subdirectory(mbedtls_rom)        # KM4-gated: headers to call ROM mbedTLS 2.4.0 as SW (no build)
 add_subdirectory(netif_shim)         # KM4-gated: residual driver<->netif ABI shim (lwip removed)
