@@ -45,6 +45,3 @@ target_compile_options(${_glue_tgt} PRIVATE
     -Wno-unused-function
     -Wno-sign-compare
 )
-if(AMEBAD_ENABLE_TZ_DEMO)   # temporary os_heap_init boot-progress markers (ZZ-HEAP-*)
-    target_compile_definitions(${_glue_tgt} PRIVATE AMEBAD_TZ_DEMO_DBG=1)
-endif()

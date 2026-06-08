@@ -1,131 +1,106 @@
-# component/amebad/app_km4_secure — AmebaD KM4 secure-world firmware image (IMG3).
+# component/amebad/app_km4_secure — AmebaD RTL8721D KM4 secure world = TF-M (SPE).
 #
-# The secure counterpart to app_km4 (KM4 HP non-secure image2). Two secure-world
-# variants live here, each behind its own option:
+# TF-M is a standalone CMake project (its own toolchain file, runs Python manifest
+# tooling at configure, assumes it is the top-level CMAKE_SOURCE_DIR) — it cannot
+# be add_subdirectory'd into the km4 tree. So we build it with ExternalProject,
+# exactly the model TF-M ships for downstream integration in cmake/spe-CMakeLists.
+# cmake (the template tf-m-tests/tests_reg/spe uses).
 #
-#   AMEBAD_ENABLE_TZ_DEMO  -> the in-tree RDP-style TrustZone-M demo (main.c),
-#                             target target_img3_km4_secure.
-#   AMEBAD_TFM_BOOT        -> the TF-M variant: the NSPE bring-up stub (ns_stub)
-#                             is built here; the SPE blob tfm_s.bin is produced
-#                             OUT-OF-TREE by the TF-M build (platform port under
-#                             platform/rtl8721d) and supplied into the build dir.
+# The build configures TF-M against our out-of-tree platform port
+# (platform/rtl8721d), builds the SPE, and `install`s the NS-facing export
+# (s_veneers.o + PSA client interface/headers + generated headers, and the
+# spe-CMakeLists template renamed to the export's CMakeLists.txt) into
+# tfm_spe_export/. The NS side (app_km4) consumes that export by path — see
+# component/amebad/app_km4/CMakeLists.txt (single km4 build tree => can't
+# add_subdirectory the export, which only exists after this build step).
 #
-# Build artifacts (ns_stub.bin / tfm_s.bin / the IMG3 blobs) are emitted into the
-# build tree (build/km4/...), never the source dir — source and generated files
-# are kept strictly apart. build_image_all.py reads them from the build dir.
+# Output: ${CMAKE_CURRENT_BINARY_DIR}/tfm_s.bin (copied from TF-M's bin/), which
+# build_image_all.py lays at flash 0x08100000. Build-dir only; nothing is written
+# to the source tree.
 #
-# Standalone secure blobs: no crt/startup, no ROM lib, no libc.
+# Opt-in: -DAMEBAD_TFM_BOOT=ON (make TFM=ON). KM4 only.
 
 if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     return()
 endif()
 
-if(NOT AMEBAD_ENABLE_TZ_DEMO AND NOT AMEBAD_TFM_BOOT)
+if(NOT AMEBAD_TFM_BOOT)
     return()
 endif()
 
-# =====================================================================
-# RDP-style secure-world demo (target target_img3_km4_secure)
-# =====================================================================
-# Builds target_img3_km4_secure (.axf) and splits it — mirroring
-# project_hp/asdk/Makefile linker_image3 — into:
-#   ram_3_s.bin    .ram_image3.text/.data  -> bootloader loads to BD_RAM_S  @0x10077000
-#   ram_3_nsc.bin  .gnu.sgstubs (SG stubs) -> bootloader loads to BD_RAM_NSC @0x1007B000
-#   cmse_implib.lib  the CMSE import library (the NS image2 links this to resolve
-#                    the veneer addresses for rdp_protection_entry/BOOT_IMG3).
-# It is entered only through its cmse_nonsecure_entry veneers (the bootloader sets MSP_S).
-if(AMEBAD_ENABLE_TZ_DEMO)
-    set(_img3_ld   "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_img3_s.ld")
-    set(_layout_ld "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_layout_tz.ld")
+include(ExternalProject)
 
-    add_executable(target_img3_km4_secure
-        "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
-    )
+# ---- Inputs (all absolute) ------------------------------------------------
+set(_tfm_src       "${CMAKE_SOURCE_DIR}/component/thirdparty/trusted-firmware-m")
+set(_tfm_platform  "${CMAKE_CURRENT_SOURCE_DIR}/platform/rtl8721d")
+set(_tfm_toolchain "${_tfm_src}/toolchain_GNUARM.cmake")
 
-    # Freestanding secure blob: stop GCC turning the .bss-zeroing loop into a call
-    # to libc memset (we link -nostdlib, there is no memset to resolve).
-    target_compile_options(target_img3_km4_secure PRIVATE -fno-tree-loop-distribute-patterns)
+# arm-none-eabi toolchain bin dir — TF-M's toolchain_GNUARM.cmake resolves the
+# compiler via find_program(${CROSS_COMPILE}-gcc), which searches PATH. The km4
+# build's compiler is not on PATH, so derive its dir from CMAKE_C_COMPILER (tracks
+# AMEBAD_TOOLCHAIN_ROOT) and inject it on PATH for the nested configure/build.
+get_filename_component(_tc_bin "${CMAKE_C_COMPILER}" DIRECTORY)
 
-    # -mcmse / -march=armv8-m.main+dsp come from the KM4 toolchain file globally.
-    target_link_options(target_img3_km4_secure PRIVATE
-        "-T${_img3_ld}"
-        "-L${CMAKE_CURRENT_SOURCE_DIR}"          # resolve INCLUDE "rlx8721d_layout_tz.ld"
-        "-nostartfiles"
-        "-nostdlib"
-        "-Wl,--cmse-implib"
-        "-Wl,--out-implib=${CMAKE_CURRENT_BINARY_DIR}/cmse_implib.lib"
-        "-Wl,-Map=$<TARGET_FILE_DIR:target_img3_km4_secure>/target_img3_km4_secure.map"
-    )
-    set_target_properties(target_img3_km4_secure PROPERTIES
-        LINK_DEPENDS "${_img3_ld};${_layout_ld}"
-        EXCLUDE_FROM_ALL TRUE)
-
-    # Split the secure axf into the two flashable blobs the bootloader expects.
-    set(_imgdir   "${CMAKE_CURRENT_BINARY_DIR}")
-    set(_axf      "$<TARGET_FILE:target_img3_km4_secure>")
-    set(_axf_pure "${_imgdir}/target_img3_km4_secure_pure.axf")
-    add_custom_command(TARGET target_img3_km4_secure POST_BUILD
-        COMMAND bash -c "'${CMAKE_NM}' '${_axf}' | sort > '${_imgdir}/target_img3_km4_secure.symbols'"
-        COMMAND bash -c "'${CMAKE_OBJDUMP}' -d '${_axf}' > '${_imgdir}/target_img3_km4_secure.asm'"
-        COMMAND "${CMAKE_COMMAND}" -E copy "${_axf}" "${_axf_pure}"
-        COMMAND "${CMAKE_STRIP}" "${_axf_pure}"
-        COMMAND "${CMAKE_OBJCOPY}"
-                -j .ram_image3.text -j .ram_image3.data
-                -O binary "${_axf_pure}" "${_imgdir}/ram_3_s.bin"
-        COMMAND "${CMAKE_OBJCOPY}"
-                -j .gnu.sgstubs
-                -O binary "${_axf_pure}" "${_imgdir}/ram_3_nsc.bin"
-        COMMAND "${CMAKE_SIZE}" -A --radix=16 "${_axf}"
-        BYPRODUCTS
-            "${_imgdir}/target_img3_km4_secure.symbols" "${_imgdir}/target_img3_km4_secure.asm"
-            "${_axf_pure}" "${_imgdir}/ram_3_s.bin" "${_imgdir}/ram_3_nsc.bin"
-        COMMENT "amebad: split target_img3_km4_secure -> ram_3_s.bin / ram_3_nsc.bin (+ cmse_implib.lib)"
-        VERBATIM
-    )
-
-    # --- Package: prepend 32-byte headers (Realtek IMG2SIGN + size + load addr from
-    # the nm symbol dump) to each blob, then cat -> km4_image3_all.bin. The
-    # bootloader's BOOT_FLASH_Image3Load walks: [hdr|ram_3_s]@0x10077000 then
-    # [hdr|ram_3_nsc]@0x1007B000. (Mirrors project_hp/asdk/Makefile linker_image3.)
-    add_custom_command(TARGET target_img3_km4_secure POST_BUILD
-        COMMAND bash "${AMEBAD_PREPEND_HEADER_SH}"
-                "${_imgdir}/ram_3_s.bin"   __ram_image3_text_start__ "${_imgdir}/target_img3_km4_secure.symbols"
-        COMMAND bash "${AMEBAD_PREPEND_HEADER_SH}"
-                "${_imgdir}/ram_3_nsc.bin" __ram_image3_nsc_start__  "${_imgdir}/target_img3_km4_secure.symbols"
-        COMMAND bash -c "cat '${_imgdir}/ram_3_s_prepend.bin' '${_imgdir}/ram_3_nsc_prepend.bin' > '${_imgdir}/km4_image3_all.bin'"
-        BYPRODUCTS
-            "${_imgdir}/ram_3_s_prepend.bin" "${_imgdir}/ram_3_nsc_prepend.bin"
-            "${_imgdir}/km4_image3_all.bin"
-        COMMENT "amebad: prepend headers + cat -> km4_image3_all.bin"
-        VERBATIM
-    )
+# Python with TF-M's manifest-tool deps (cbor2/jinja2/yaml/click/jsonschema).
+if(NOT DEFINED AMEBAD_TFM_PYTHON)
+    set(AMEBAD_TFM_PYTHON "${CMAKE_SOURCE_DIR}/.venv-tfm/bin/python3"
+        CACHE FILEPATH "Python interpreter for the TF-M manifest tooling")
 endif()
 
-# =====================================================================
-# TF-M NSPE bring-up stub (ns_stub.bin)
-# =====================================================================
-# A tiny RAM-resident Non-Secure stub: TF-M's SPM BLXNS-es to it after secure init
-# to prove the S->NS handoff on HW. Built freestanding from ns_stub/ and objcopy'd
-# to ns_stub.bin in the build dir (was previously a committed .bin — now generated).
-# The TF-M SPE blob tfm_s.bin is produced by the out-of-tree TF-M build and dropped
-# into this target's build dir; build_image_all.py reads both from there.
-if(AMEBAD_TFM_BOOT)
-    add_executable(ns_stub "${CMAKE_CURRENT_SOURCE_DIR}/ns_stub/ns_stub.c")
-    target_compile_options(ns_stub PRIVATE -fno-tree-loop-distribute-patterns)
-    target_link_options(ns_stub PRIVATE
-        "-T${CMAKE_CURRENT_SOURCE_DIR}/ns_stub/ns_stub.ld"
-        "-nostartfiles"
-        "-nostdlib"
-        "-Wl,-Map=$<TARGET_FILE_DIR:ns_stub>/ns_stub.map"
-    )
-    set_target_properties(ns_stub PROPERTIES
-        LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/ns_stub/ns_stub.ld"
-        EXCLUDE_FROM_ALL TRUE)
-    add_custom_command(TARGET ns_stub POST_BUILD
-        COMMAND "${CMAKE_OBJCOPY}" -O binary "$<TARGET_FILE:ns_stub>" "${CMAKE_CURRENT_BINARY_DIR}/ns_stub.bin"
-        COMMAND "${CMAKE_SIZE}" -A --radix=16 "$<TARGET_FILE:ns_stub>"
-        BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/ns_stub.bin"
-        COMMENT "amebad: objcopy ns_stub -> ns_stub.bin"
-        VERBATIM
-    )
+set(_tfm_bindir "${CMAKE_CURRENT_BINARY_DIR}/tfm_spe")
+set(_tfm_export "${CMAKE_CURRENT_BINARY_DIR}/tfm_spe_export")
+set(_tfm_s_bin  "${_tfm_bindir}/bin/tfm_s.bin")
+
+set(_tfm_build_type "${CMAKE_BUILD_TYPE}")
+if(NOT _tfm_build_type)
+    set(_tfm_build_type MinSizeRel)
 endif()
+
+set(_tfm_args
+    "-DTFM_PLATFORM=${_tfm_platform}"
+    "-DTFM_TOOLCHAIN_FILE=${_tfm_toolchain}"
+    "-DCROSS_COMPILE=arm-none-eabi"
+    "-DCMAKE_PROGRAM_PATH=${_tc_bin}"
+    "-DPython3_EXECUTABLE=${AMEBAD_TFM_PYTHON}"
+    "-DBL2=OFF"
+    "-DCMAKE_INSTALL_PREFIX=${_tfm_export}"
+    "-DCMAKE_BUILD_TYPE=${_tfm_build_type}"
+)
+
+# Wrap the nested CMake invocations so the toolchain bin dir is on PATH.
+set(_env "${CMAKE_COMMAND}" -E env "PATH=${_tc_bin}:$ENV{PATH}")
+
+ExternalProject_Add(tfm_spe
+    SOURCE_DIR  "${_tfm_src}"
+    BINARY_DIR  "${_tfm_bindir}"
+    CONFIGURE_COMMAND
+        ${_env} "${CMAKE_COMMAND}" -G "Unix Makefiles"
+                -S "${_tfm_src}" -B "${_tfm_bindir}" ${_tfm_args}
+    BUILD_COMMAND
+        ${_env} "${CMAKE_COMMAND}" --build "${_tfm_bindir}"
+    INSTALL_COMMAND
+        ${_env} "${CMAKE_COMMAND}" --build "${_tfm_bindir}" --target install
+    BUILD_ALWAYS  TRUE          # descend every build so port/SPE edits rebuild
+    BUILD_BYPRODUCTS
+        "${_tfm_s_bin}"
+        "${_tfm_export}/interface/lib/s_veneers.o"
+    USES_TERMINAL_CONFIGURE TRUE
+    USES_TERMINAL_BUILD     TRUE
+    USES_TERMINAL_INSTALL   TRUE
+)
+
+# Copy tfm_s.bin out of TF-M's bin/ to where build_image_all.py reads it
+# (build dir only — never the source tree).
+ExternalProject_Add_Step(tfm_spe copy_blob
+    DEPENDEES install
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${_tfm_s_bin}" "${CMAKE_CURRENT_BINARY_DIR}/tfm_s.bin"
+    BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/tfm_s.bin"
+    ALWAYS TRUE
+    COMMENT "amebad: copy TF-M SPE -> tfm_s.bin (build dir)"
+)
+
+# NB: the platform port (platform/rtl8721d) is built INSIDE the TF-M build above
+# (TFM_PLATFORM). It already does target_sources(platform_s/tfm_s ...) — that is
+# the injection point for sharing in-tree source into the SPE later (a shared
+# *_sources.cmake the port `include()`s), without a second add_subdirectory.

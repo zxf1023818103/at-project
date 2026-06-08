@@ -118,10 +118,6 @@ elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     )
     target_link_libraries(amebad_ram_hp PUBLIC amebad_sdk_includes)
     target_compile_options(amebad_ram_hp PRIVATE ${_ram_warnings})
-    if(AMEBAD_ENABLE_TZ_DEMO)   # temporary app_start boot-progress markers (ZZ-APP-*)
-        set_source_files_properties(rtl8721dhp_app_start.c PROPERTIES
-            COMPILE_DEFINITIONS "AMEBAD_TZ_DEMO_DBG=1")
-    endif()
 
     # Subset of the shared HAL the KM4 image2 needs but the HP ROM doesn't give.
     # Same target name as KM0's full set — they're never in the same build.

@@ -70,26 +70,13 @@ if(NOT AMEBAD_CHIP MATCHES "^amebad-km[04]$")
         "(AMEBAD_CHIP='${AMEBAD_CHIP}', expected 'amebad-km0' or 'amebad-km4')")
 endif()
 
-# Secure-world (IMG3 / RDP-style TrustZone-M) demo. OFF by default. When ON:
-#  - app_km4_secure/ builds the secure image (target target_img3_km4_secure) + km4_image3_all.bin
-#  - the KM4 bootloader is built with CONFIG_TRUSTZONE_EN=1 so it loads IMG3
-#    (BOOT_FLASH_Image3Load) and BOOT_RAM_TZCfg programs the SAU/IDAU
-#  - app_km4 carves the top secure RAM (BD_RAM_S/NSC) out of the NS region and
-#    links cmse_implib.lib to call the veneers
-#  - build_image_all.py lays km4_image3_all.bin at the fixed flash offset
-# It only affects the bootloader-side TUs (boot_flash_hp.c, trustzonecfg.c) — NOT
-# the app's FreeRTOS (configENABLE_TRUSTZONE would force the TZ kernel port we
-# don't have), so it is applied per-target/per-source, never globally.
-option(AMEBAD_ENABLE_TZ_DEMO "Build the RDP-style secure-world (IMG3) demo" OFF)
-
-# TF-M-first boot: the KM4 bootloader copies the RAM-linked tfm_s SPE (built
-# out-of-tree, laid at flash 0x08100000) into secure SRAM and secure-jumps to it,
-# bypassing the image2/NS handoff + BOOT_RAM_TZCfg (TF-M owns TrustZone). For
-# bringing up TF-M on AmebaD HW. OFF by default. tfm_s.bin is a build artifact
-# (not in VCS): build TF-M out of tree and drop bin/tfm_s.bin into the secure
-# image's build dir (build/km4/component/amebad/app_km4_secure/); the ns_stub
-# blob is generated there by the ns_stub target.
-option(AMEBAD_TFM_BOOT "KM4 bootloader boots tfm_s (TF-M SPE) instead of the NS app" OFF)
+# TF-M secure world (in-tree). When ON, app_km4_secure builds TF-M as the KM4
+# secure image (SPE) via ExternalProject (tfm_spe), and the KM4 bootloader copies
+# tfm_s from flash 0x08100000 into secure SRAM and secure-jumps to it, bypassing
+# the image2/NS handoff + BOOT_RAM_TZCfg (TF-M owns TrustZone). The NS side is the
+# normal KM4 image2 (app_km4), which links TF-M's exported NS interface
+# (s_veneers.o + PSA headers). OFF by default; build with `make TFM=ON`.
+option(AMEBAD_TFM_BOOT "Build + boot TF-M (KM4 secure-world SPE) instead of the plain NS app" OFF)
 
 add_subdirectory(fwlib)              # chip fwlib: headers (amebad_fwlib_headers) + ROM-symbol ld vars + RAM HAL libs (amebad_ram_common/_lp/_hp, chip-gated)
 add_subdirectory(xmodem)             # ROM xmodem headers (amebad_xmodem) + xmodem.ld symbols; linked by sdk_includes below
@@ -134,7 +121,7 @@ if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
 elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     add_subdirectory(bootloader_km4)
     add_subdirectory(app_km4)              # KM4 HP application image (image2)
-    add_subdirectory(app_km4_secure)       # KM4 secure-world image (IMG3), opt-in AMEBAD_ENABLE_TZ_DEMO
+    add_subdirectory(app_km4_secure)       # KM4 secure-world: TF-M SPE (ExternalProject), opt-in AMEBAD_TFM_BOOT
 endif()
 
 # Cross-core final image. `cmake --build <km0-or-km4-build-dir> -t amebad_image_all`

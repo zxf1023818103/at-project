@@ -8,6 +8,7 @@
 #   make NIMBLE=ON       # NimBLE host image (LE/GATT + wolfSSL SM crypto)
 #   make HCI=ON          # bare HCI / DTM test image (mutually exclusive with NIMBLE)
 #   make QUIC=ON         # ngtcp2 QUIC client self-test (full wolfSSL TLS1.3 + QUIC)
+#   make TFM=ON          # in-tree TF-M secure world (SPE via ExternalProject; app_km4 = NSPE)
 #   make clean           # ninja clean both cores
 #   make distclean       # delete build/km0 build/km4 build/amebad
 #
@@ -23,6 +24,7 @@ NIMBLE     ?= OFF          # ON -> NimBLE host
 HCI        ?= OFF          # ON -> bare HCI/DTM
 QUIC       ?= OFF          # ON -> ngtcp2 QUIC client self-test (pulls full wolfSSL TLS1.3)
 WOLFASM    ?= ON           # ON -> wolfCrypt Thumb2 symmetric/hash asm (faster; OFF = portable C)
+TFM        ?= OFF          # ON -> build + boot in-tree TF-M SPE (app_km4 becomes the NS side)
 IMAGE      := $(REPO)/build/amebad/Image_All.bin
 
 all: image
@@ -41,7 +43,8 @@ configure:
 	  -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) \
 	  -DAMEBAD_ENABLE_NIMBLE=$(NIMBLE) -DAMEBAD_ENABLE_HCI=$(HCI) \
 	  -DAMEBAD_ENABLE_QUIC=$(QUIC) \
-	  -DAMEBAD_WOLFSSL_ARMASM=$(WOLFASM)
+	  -DAMEBAD_WOLFSSL_ARMASM=$(WOLFASM) \
+	  -DAMEBAD_TFM_BOOT=$(TFM)
 
 # build_image_all.py builds both cores (cmake --build, generator-agnostic — reuses
 # the Ninja trees configured above) and assembles the flashable image.

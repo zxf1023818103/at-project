@@ -652,8 +652,14 @@ void BOOT_FLASH_Image1(void)
 	 * stays the KM4 image2 (boot chain intact); we map a spare MMU entry so the
 	 * cached XIP virtual window 0x0E100000 points at the physical flash slot
 	 * 0x08100000 where tfm_s.bin lives, then read tfm_s's reset vector at
-	 * 0x0E100000 and secure-jump. The tiny NS stub is copied to NS SRAM. TF-M owns
-	 * the TrustZone setup, so we bypass BOOT_RAM_TZCfg + the image2/NS handoff. */
+	 * 0x0E100000 and secure-jump. TF-M owns the TrustZone setup, so we bypass
+	 * BOOT_RAM_TZCfg + the image2/NS handoff.
+	 *
+	 * TODO(NSPE handoff): the NS side now is app_km4 (the KM4 image2); the old
+	 * 44-byte ns_stub at flash 0x08108000 was removed. The copy-to-0x10010000 +
+	 * NS landing below still target that stub and must be reworked to BLXNS into
+	 * app_km4 in a follow-on boot-handoff stage. Left as-is for the TF-M in-tree
+	 * build/link stage (not exercised on HW yet). */
 	{
 		volatile u32 *xip;
 		volatile u32 *nssrc = (volatile u32 *)(0x08108000);   /* ns_stub.bin in flash */

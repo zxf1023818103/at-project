@@ -174,20 +174,22 @@ target_link_options(target_img2_km4 PRIVATE
     "-Wl,-Map=$<TARGET_FILE_DIR:target_img2_km4>/target_img2.map"
 )
 
-# Secure-world (IMG3) demo: clamp the NS FreeRTOS heap below the secure RAM
-# (0x10077000) that the bootloader's BOOT_RAM_TZCfg marks Secure/NSC, so NS
-# allocations never fault into it. (img2_is.ld reads __tz_sram_top__.) The IMG3
-# secure image (app_km4_secure) is laid into flash by build_image_all.py and
-# loaded by the bootloader; the NS↔S veneer call is wired in a follow-on step.
-if(AMEBAD_ENABLE_TZ_DEMO)
-    target_link_options(target_img2_km4 PRIVATE
-        "-Wl,--defsym=__tz_sram_top__=0x10070000")
-    # Link the CMSE import library (absolute veneer addresses rdp_protection_entry
-    # @0x1007b000 / BOOT_IMG3 @0x1007b008) so the NS app resolves the IMG3 veneers,
-    # and make sure the secure image builds first.
-    add_dependencies(target_img2_km4 target_img3_km4_secure)
-    target_link_options(target_img2_km4 PRIVATE
-        "${CMAKE_BINARY_DIR}/component/amebad/app_km4_secure/cmse_implib.lib")
+# Secure-world (TF-M): when AMEBAD_TFM_BOOT is on, app_km4 IS TF-M's Non-Secure
+# side. It consumes TF-M's exported NS interface (built by app_km4_secure's
+# tfm_spe ExternalProject) BY PATH — a single km4 build tree cannot
+# add_subdirectory the export, which only exists after tfm_spe builds. So: put its
+# headers on the include path, link s_veneers.o, and depend on tfm_spe so it
+# builds + installs first. tfm_ns_check.c is a minimal compile/link probe; real
+# PSA calls + NS layout/boot handoff are a follow-on stage.
+if(AMEBAD_TFM_BOOT)
+    set(_tfm_export "${CMAKE_BINARY_DIR}/component/amebad/app_km4_secure/tfm_spe_export")
+    add_dependencies(target_img2_km4 tfm_spe)
+    target_sources(target_img2_km4 PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/tfm_ns_check.c")
+    target_include_directories(target_img2_km4 PRIVATE
+        "${_tfm_export}/interface/include")
+    target_link_libraries(target_img2_km4 PRIVATE
+        "${_tfm_export}/interface/lib/s_veneers.o")
 endif()
 
 # XIP boot-hang dodge: shift the whole .xip_image2.text block by AMEBAD_XIP_PAD
