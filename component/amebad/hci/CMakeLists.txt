@@ -93,6 +93,8 @@ target_link_libraries(amebad_hci PUBLIC
     amebad_wlan              # rtlk_bt_set_gnt_bt*, rltk_bt_get_patch_code, rtw_create_secure_context
     FreeRTOS
 )
+# UTS_VERSION banner -D for hci_board.c (was build_info.h). PRIVATE: internal only.
+target_link_libraries(amebad_hci PRIVATE build_info)
 
 # Vendor code — quiet the warnings + -fcommon (legacy Realtek tentative globals,
 # e.g. rtlbt_config declared without extern in multiple TUs).

@@ -16,7 +16,6 @@
 #include "hci_board_def.h"
 #include "hci_board.h"
 #include "hci_process.h"
-#include "build_info.h"
 #include "bt_intf.h"
 #include "wifi_conf.h" //for wifi_disable_powersave and wifi_resume_powersave
 #include "device_lock.h"
