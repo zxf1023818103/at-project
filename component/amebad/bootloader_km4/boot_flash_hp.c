@@ -197,6 +197,24 @@ void BOOT_FLASH_Image3Load(void)
 	u8 RdpStatus = 0;
 	u8 i;
 
+#ifdef AMEBAD_IMG3_SKIP_LOAD
+	/* bisect: skip the IMG3 flash read+copy, keep TZ config, to isolate a boot
+	 * hang between the flash-read path and BOOT_RAM_TZCfg. */
+	(void)Key; (void)CompKey; (void)RdpStatus; (void)i;
+	(void)AddrEnd; (void)AddrOffset; (void)IsMinus; (void)PhyAddr; (void)RSIP;
+	(void)Img3SecureHdr; (void)Img3NSCHdr;
+	return;
+#endif
+
+#ifdef AMEBAD_IMG3_FIXED_FLASH
+	/* at-project: IMG3 is laid at a FIXED flash offset by build_image_all.py and
+	 * read straight from the memory-mapped flash window (0x08000000 + offset).
+	 * We own both the bootloader and the image layout, so unlike the SDK stock
+	 * flow we do NOT rely on the ROM having programmed MMU entry[1] to locate
+	 * IMG3 — _memcpy below reads the headers/sections directly from flash. */
+	(void)AddrEnd; (void)AddrOffset; (void)IsMinus; (void)PhyAddr; (void)RSIP;
+	Img3SecureHdr = (IMAGE_HEADER *)(AMEBAD_IMG3_FIXED_FLASH);
+#else
 	/* Get IMG3 physical address, this image is not included in MMU entry */
 	AddrEnd = RSIP->FLASH_MMU[1].MMU_ENTRYx_ENDADDR;
 	AddrOffset = RSIP->FLASH_MMU[1].MMU_ENTRYx_OFFSET;
@@ -207,8 +225,9 @@ void BOOT_FLASH_Image3Load(void)
 		PhyAddr -= AddrOffset;
 	else
 		PhyAddr += AddrOffset;
-	
+
 	Img3SecureHdr = (IMAGE_HEADER *)PhyAddr;
+#endif
 
 	/* Read key from Efuse 0x170~0x17F */ 
 	for (i = 0; i < 16; i++) {
@@ -603,6 +622,10 @@ void BOOT_FLASH_Image1(void)
 
 	DBG_PRINTF(MODULE_BOOT, LEVEL_INFO,"IMG1 ENTER MSP:[%08x]\n", __get_MSP());
 	//DBG_PRINTF(MODULE_BOOT, LEVEL_INFO,"TT_CMSE:[%08x:%08x] \n", cmse_address_info.value, cmse_address_info.flags.secure);
+#ifdef AMEBAD_IMG3_FIXED_FLASH
+	LOG_MASK_MODULE(MODULE_BOOT, LEVEL_INFO, ENABLE);   /* TZ demo: show IMG3 load logs */
+	DBG_PRINTF(MODULE_BOOT, LEVEL_ERROR,"ZZ-KM4-START\n");
+#endif
 	
 	BOOT_RAM_SectionInit();
 
@@ -623,6 +646,32 @@ void BOOT_FLASH_Image1(void)
 	_memset((void *) __image1_bss_start__, 0, (__image1_bss_end__ - __image1_bss_start__));
 
 	BOOT_FLASH_FuncEnable();
+
+#ifdef AMEBAD_TFM_BOOT
+	/* TF-M-first boot: copy the RAM-linked tfm_s SPE (laid at flash 0x08100000
+	 * by build_image_all.py) into secure SRAM and secure-jump to its reset
+	 * vector. TF-M owns the TrustZone setup (tfm_hal_platform_init does SAU/IDAU),
+	 * so we deliberately bypass BOOT_RAM_TZCfg + the whole image2/NS handoff. The
+	 * bootloader is already in the Secure state, so this is a plain secure jump. */
+	{
+		volatile u32 *src = (volatile u32 *)(0x08100000);     /* tfm_s.bin in flash */
+		volatile u32 *dst = (volatile u32 *)(0x10050000);     /* S_CODE_START (RAM) */
+		volatile u32 *nssrc = (volatile u32 *)(0x08108000);   /* ns_stub.bin in flash */
+		volatile u32 *nsdst = (volatile u32 *)(0x10010000);   /* NS_CODE_START (RAM) */
+		u32 i, msp, reset;
+		for (i = 0; i < (0x4000 / 4); i++)                    /* copy <=16KB SPE blob */
+			dst[i] = src[i];
+		for (i = 0; i < (0x1000 / 4); i++)                    /* copy <=4KB NS stub */
+			nsdst[i] = nssrc[i];
+		msp   = dst[0];
+		reset = dst[1];
+		DBG_PRINTF(MODULE_BOOT, LEVEL_ERROR, "ZZ-TFM-JUMP msp=%x reset=%x\n", msp, reset);
+		__set_MSP(msp);
+		((void (*)(void))reset)();
+		while (1);                                            /* not reached */
+	}
+#endif
+
 	BOOT_FLASH_Image2SignatureCheck();
 
 	/* load image3 before image2, because it will use __image2_entry_func__ temp */
@@ -666,7 +715,13 @@ void BOOT_FLASH_Image1(void)
 	VectorTableOverride();
 
 	/* Config Non-Security World Registers */
+#ifdef AMEBAD_IMG3_FIXED_FLASH
+	DBG_PRINTF(MODULE_BOOT, LEVEL_ERROR,"ZZ-PRE-TZ\n");
+#endif
 	BOOT_RAM_TZCfg();
+#ifdef AMEBAD_IMG3_FIXED_FLASH
+	DBG_PRINTF(MODULE_BOOT, LEVEL_ERROR,"ZZ-POST-TZ\n");
+#endif
 
 	vector_table = (u32 *)Image2EntryFun->VectorNS;
 	vector_table[1] = (u32)Image2EntryFun->RamStartFun;

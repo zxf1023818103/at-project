@@ -166,4 +166,9 @@ SECTIONS
 	} > PSRAM_NS
 }
 
-__sram_end__ = ORIGIN(BD_RAM_NS) + LENGTH(BD_RAM_NS);
+/* __sram_end__ caps the NS FreeRTOS heap (heap5: __bss_end__ .. __sram_end__).
+ * Normally the full BD_RAM_NS top (0x1007C000). For the secure-world (IMG3) demo
+ * the bootloader's BOOT_RAM_TZCfg marks 0x10077000..0x1007BFFF Secure/NSC, so the
+ * NS heap must stop at 0x10077000 or it faults — app_km4/CMakeLists.txt passes
+ * --defsym=__tz_sram_top__=0x10077000 in that build to clamp it here. */
+__sram_end__ = DEFINED(__tz_sram_top__) ? __tz_sram_top__ : (ORIGIN(BD_RAM_NS) + LENGTH(BD_RAM_NS));

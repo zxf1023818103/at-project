@@ -25,3 +25,12 @@ __attribute__((weak)) int rtw_if_wifi_thread(char *name)
     (void)name;
     return 1;
 }
+
+/* The usrcfg IPC channel table (rtl8721d_ipccfg.c) wires channel 0 to the
+ * monitor's shell_switch_ipc_int (KM0<->KM4 shell forwarding). The QUIC image
+ * drops the monitor lib, so provide a weak no-op; the real monitor def overrides
+ * this when the shell is linked. The shell IPC channel is unused by the QUIC test. */
+__attribute__((weak)) void shell_switch_ipc_int(void *Data, u32 IrqStatus, u32 ChanNum)
+{
+    (void)Data; (void)IrqStatus; (void)ChanNum;
+}

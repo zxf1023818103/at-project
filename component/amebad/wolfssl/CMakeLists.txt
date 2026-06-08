@@ -16,6 +16,7 @@ endif()
 
 option(AMEBAD_WOLFSSL_ARMASM "wolfSSL: use Thumb2 asm for symmetric/hash" OFF)
 option(AMEBAD_WOLFSSL_SP_ASM "wolfSSL: SP Cortex-M asm for public-key (PK)" ON)
+option(AMEBAD_WOLFSSL_TLS    "wolfSSL: build full TLS 1.3 + QUIC layer (for ngtcp2)" OFF)
 
 set(_wolf "${CMAKE_SOURCE_DIR}/component/thirdparty/wolfssl")
 set(_wc   "${_wolf}/wolfcrypt/src")
@@ -71,7 +72,27 @@ else()
     list(APPEND _wolf_src "${_wc}/sp_c32.c")
 endif()
 
+# TLS 1.3 + QUIC layer (ngtcp2 backend). ssl.c is the umbrella TU: it #includes
+# evp.c, misc.c and the modular ssl_*.c / pk.c / x509.c units, so they are NOT
+# listed separately. kdf.c supplies the TLS 1.3 HKDF key schedule.
+if(AMEBAD_WOLFSSL_TLS)
+    list(APPEND _wolf_src
+        "${_wolf}/src/ssl.c"
+        "${_wolf}/src/internal.c"
+        "${_wolf}/src/keys.c"
+        "${_wolf}/src/tls.c"
+        "${_wolf}/src/tls13.c"
+        "${_wolf}/src/quic.c"
+        "${_wolf}/src/wolfio.c"   # SslBioSend/SslBioReceive (BIO I/O refs from internal.c); socket paths gated off by WOLFSSL_NO_SOCK
+        "${_wc}/kdf.c"
+    )
+endif()
+
 add_library(amebad_wolfssl STATIC EXCLUDE_FROM_ALL ${_wolf_src})
+
+if(AMEBAD_WOLFSSL_TLS)
+    target_compile_definitions(amebad_wolfssl PUBLIC AMEBAD_WOLFSSL_TLS)
+endif()
 
 if(NOT AMEBAD_WOLFSSL_SP_ASM)
     target_compile_definitions(amebad_wolfssl PUBLIC WOLFSSL_AMEBAD_NO_SP_ASM)

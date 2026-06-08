@@ -42,10 +42,14 @@ KM0_BOOT  = ("component/amebad/bootloader_km0/km0_boot_all.bin")
 KM0_IMG2  = ("component/amebad/app_km0/km0_image2_all.bin")
 KM4_BOOT  = ("component/amebad/bootloader_km4/km4_boot_all.bin")
 KM4_IMG2  = ("component/amebad/app_km4/km4_image2_all.bin")
+KM4_IMG3  = ("component/amebad/img3/km4_image3_all.bin")  # secure-world demo only
 
 OFF_KM0_BOOT  = 0x0000
 OFF_KM4_BOOT  = 0x4000
-OFF_IMAGE2    = 0x6000   # OTA1 (OTA_Region[0] = LS_IMG2_OTA1_ADDR = 0x08006000)
+OFF_IMAGE2    = 0x6000     # OTA1 (OTA_Region[0] = LS_IMG2_OTA1_ADDR = 0x08006000)
+OFF_IMG3      = 0x100000   # secure IMG3 / tfm_s @ flash 0x08100000 (past image2, read
+                           #   directly by BOOT_FLASH_Image3Load / AMEBAD_IMG3_FIXED_FLASH)
+OFF_TFM_NS    = 0x108000   # TF-M NS stub @ flash 0x08108000 (AMEBAD_TFM_BOOT)
 
 
 def run(cmd):
@@ -64,6 +68,18 @@ def read(path):
         sys.exit("missing build artifact: %s" % path)
     with open(path, "rb") as f:
         return f.read()
+
+
+def cache_bool(build_dir, key):
+    """True if a CMakeCache.txt bool variable is set ON/TRUE/1/YES."""
+    cache = os.path.join(build_dir, "CMakeCache.txt")
+    if not os.path.exists(cache):
+        return False
+    with open(cache) as f:
+        for line in f:
+            if line.startswith(key + ":") and "=" in line:
+                return line.split("=", 1)[1].strip().upper() in ("ON", "TRUE", "1", "YES")
+    return False
 
 
 def place(image, offset, blob, name):
@@ -85,9 +101,14 @@ def main():
                     help="skip cmake, assemble from existing build trees")
     args = ap.parse_args()
 
+    tz_demo = cache_bool(args.km4_build, "AMEBAD_ENABLE_TZ_DEMO")
+
     if not args.no_build:
         build("km0", args.km0_build, ["target_loader_km0", "target_img2_km0"])
-        build("km4", args.km4_build, ["target_loader_km4", "target_img2_km4"])
+        km4_targets = ["target_loader_km4", "target_img2_km4"]
+        if tz_demo:
+            km4_targets.append("target_img3_km4")   # secure-world (IMG3) demo
+        build("km4", args.km4_build, km4_targets)
 
     km0_boot = read(os.path.join(args.km0_build, KM0_BOOT))
     km0_img2 = read(os.path.join(args.km0_build, KM0_IMG2))
@@ -102,6 +123,27 @@ def main():
     place(image, OFF_KM0_BOOT, km0_boot,     "km0_boot_all.bin")
     place(image, OFF_KM4_BOOT, km4_boot,     "km4_boot_all.bin")
     place(image, OFF_IMAGE2,   km0_km4_img2, "km0_km4_image2.bin")
+
+    # Secure-world (IMG3) demo: lay km4_image3_all.bin at the fixed flash offset
+    # the bootloader reads (AMEBAD_IMG3_FIXED_FLASH = 0x08000000 + OFF_IMG3).
+    if tz_demo:
+        img3 = read(os.path.join(args.km4_build, KM4_IMG3))
+        if OFF_IMG3 < len(image):
+            sys.exit("IMG3 offset 0x%x overlaps image2 (ends 0x%x); raise OFF_IMG3"
+                     % (OFF_IMG3, len(image)))
+        place(image, OFF_IMG3, img3, "km4_image3_all.bin")
+
+    # TF-M-first boot: lay the RAM-linked tfm_s SPE at the same fixed flash offset
+    # (0x08100000) the bootloader's AMEBAD_TFM_BOOT path copies from.
+    if cache_bool(args.km4_build, "AMEBAD_TFM_BOOT"):
+        tfm = read(os.path.join(REPO, "component", "amebad", "tfm", "tfm_s.bin"))
+        if OFF_IMG3 < len(image):
+            sys.exit("TF-M offset 0x%x overlaps image2 (ends 0x%x)" % (OFF_IMG3, len(image)))
+        place(image, OFF_IMG3, tfm, "tfm_s.bin (TF-M SPE)")
+        # NS stub (NSPE bring-up) at flash 0x108000, copied by the bootloader to
+        # NS_CODE_START (0x10010000); SPM BLXNS-es to it.
+        nstub = read(os.path.join(REPO, "component", "amebad", "tfm", "ns_stub.bin"))
+        place(image, OFF_TFM_NS, nstub, "ns_stub.bin (TF-M NSPE)")
 
     outdir = os.path.dirname(args.out)
     os.makedirs(outdir, exist_ok=True)

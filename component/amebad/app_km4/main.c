@@ -63,6 +63,13 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
         DiagPrintf( "[KM4] gateway   %d.%d.%d.%d\n\r",
                     (int)( ulGW & 0xff ), (int)( ( ulGW >> 8 ) & 0xff ),
                     (int)( ( ulGW >> 16 ) & 0xff ), (int)( ( ulGW >> 24 ) & 0xff ) );
+#ifdef AT_PROJECT_QUIC
+        /* QUIC build: run the ngtcp2 + wolfSSL TLS1.3 handshake self-test against
+         * the WSL QUIC server instead of the iperf throughput probes (iperf TUs
+         * are not linked in this image). */
+        extern void quic_test_start( void );
+        quic_test_start();
+#else
         /* Default = TCP TX (device -> WSL `iperf -s`); also exercises the
          * rewritten FreeRTOS+TCP RX bridge via the ACK path. The UDP TX/RX and
          * TCP-sink probes are kept available for throughput diagnostics. */
@@ -70,6 +77,7 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
         ( void ) iperf_udp_client_start;
         ( void ) iperf_udp_server_start;
         ( void ) iperf_server_start;
+#endif
     }
     else
     {
@@ -369,7 +377,10 @@ static void wifi_bringup_thread( void *param )
 
     /* Crypto/SSL self-tests run AFTER WiFi is connected (boot goes straight into
      * WiFi bring-up first). The ROM mbedTLS KAT + wolfCrypt benchmark are pure
-     * software crypto, independent of the link. */
+     * software crypto, independent of the link. Skipped in the QUIC image (those
+     * diagnostic TUs aren't linked; the QUIC handshake test runs from the
+     * network-up hook instead). */
+#ifndef AT_PROJECT_QUIC
     {
         extern void rom_mbedtls_kat( void );
         rom_mbedtls_kat();
@@ -392,6 +403,7 @@ static void wifi_bringup_thread( void *param )
         extern void crypto_clock_bench( void );
         crypto_clock_bench();
     }
+#endif /* !AT_PROJECT_QUIC */
 
     vTaskDelete( NULL );
 }
@@ -402,9 +414,15 @@ int main(void)
     DiagPrintf("[KM4] FreeRTOS kernel %s\n\r", tskKERNEL_VERSION_NUMBER);
 
     /* AT log / shell console (ROM + RAM shell + LOGUART RX ISR). */
+#ifndef AT_PROJECT_QUIC
+    /* AT/monitor shell. Dropped from the QUIC image (the handshake self-test is
+     * autonomous, runs from the network-up hook) to remove the at_cmd/monitor
+     * code from KM4 image2 — this changes the XIP relative layout to dodge the
+     * boot-hang (doc/amebad_xip_layout_boot_hang.md) and shrinks the image. */
     shell_init_rom(0, 0);
     shell_init_ram();
     InterruptRegister((IRQ_FUN)shell_uart_irq_rom, UART_LOG_IRQ, (u32)NULL, 5);
+#endif
     InterruptEn(UART_LOG_IRQ, 5);
 
     /* WiFi+DHCP bring-up runs as its own task (wifi_connect blocks). */

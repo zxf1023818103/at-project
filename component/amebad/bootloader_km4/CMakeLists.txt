@@ -93,6 +93,30 @@ target_compile_options(target_loader_km4 PRIVATE
     -Wno-sign-compare
 )
 
+# Secure-world (IMG3) demo: build the bootloader with TrustZone on so
+# BOOT_FLASH_Image3Load() compiles in (#if configENABLE_TRUSTZONE) and BOOT_RAM_
+# TZCfg programs the SAU/IDAU from the TZ-on tz_config[]. AMEBAD_IMG3_FIXED_FLASH
+# tells Image3Load to read IMG3 from the fixed flash window (0x08000000+0x100000,
+# where build_image_all.py lays km4_image3_all.bin) instead of ROM MMU entry[1].
+# The bootloader links no FreeRTOS, so CONFIG_TRUSTZONE_EN here cannot disturb the
+# app's (NTZ) kernel port.
+if(AMEBAD_ENABLE_TZ_DEMO)
+    target_compile_definitions(target_loader_km4 PRIVATE
+        CONFIG_TRUSTZONE_EN=1
+        AMEBAD_IMG3_FIXED_FLASH=0x08100000)
+    # bisect toggle: -DAMEBAD_IMG3_SKIP_LOAD=ON makes BOOT_FLASH_Image3Load a
+    # no-op (keeps TZ config) to isolate flash-read vs TZ-config boot hangs.
+    if(AMEBAD_IMG3_SKIP_LOAD)
+        target_compile_definitions(target_loader_km4 PRIVATE AMEBAD_IMG3_SKIP_LOAD=1)
+    endif()
+endif()
+
+# TF-M-first boot: divert the KM4 bootloader to tfm_s (copied from flash
+# 0x08100000 to secure SRAM, secure-jump). See component/amebad/CMakeLists.txt.
+if(AMEBAD_TFM_BOOT)
+    target_compile_definitions(target_loader_km4 PRIVATE AMEBAD_TFM_BOOT=1)
+endif()
+
 add_custom_command(TARGET target_loader_km4 POST_BUILD
     COMMAND "${CMAKE_SIZE}" -A --radix=16 "$<TARGET_FILE:target_loader_km4>"
     COMMAND "${CMAKE_SIZE}" -t --radix=16 "$<TARGET_FILE:target_loader_km4>"

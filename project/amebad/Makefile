@@ -7,6 +7,7 @@
 #   make                 # plain driver-only image (WiFi / iperf)
 #   make NIMBLE=ON       # NimBLE host image (LE/GATT + wolfSSL SM crypto)
 #   make HCI=ON          # bare HCI / DTM test image (mutually exclusive with NIMBLE)
+#   make QUIC=ON         # ngtcp2 QUIC client self-test (full wolfSSL TLS1.3 + QUIC)
 #   make clean           # ninja clean both cores
 #   make distclean       # delete build/km0 build/km4 build/amebad
 #
@@ -20,6 +21,7 @@ GEN        := Ninja
 BUILD_TYPE := MinSizeRel
 NIMBLE     ?= OFF          # ON -> NimBLE host
 HCI        ?= OFF          # ON -> bare HCI/DTM
+QUIC       ?= OFF          # ON -> ngtcp2 QUIC client self-test (pulls full wolfSSL TLS1.3)
 WOLFASM    ?= ON           # ON -> wolfCrypt Thumb2 symmetric/hash asm (faster; OFF = portable C)
 IMAGE      := $(REPO)/build/amebad/Image_All.bin
 
@@ -38,6 +40,7 @@ configure:
 	  -DAMEBAD_CHIP=amebad-km4 -DCMAKE_TOOLCHAIN_FILE=cmake/amebad-km4.cmake \
 	  -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) \
 	  -DAMEBAD_ENABLE_NIMBLE=$(NIMBLE) -DAMEBAD_ENABLE_HCI=$(HCI) \
+	  -DAMEBAD_ENABLE_QUIC=$(QUIC) \
 	  -DAMEBAD_WOLFSSL_ARMASM=$(WOLFASM)
 
 # build_image_all.py builds both cores (cmake --build, generator-agnostic — reuses

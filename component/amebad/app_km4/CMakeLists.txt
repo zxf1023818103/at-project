@@ -64,15 +64,27 @@ add_executable(target_img2_km4
     "${CMAKE_CURRENT_SOURCE_DIR}/minimal_stubs.c"       # weak CRYPTO_Init / rtw_if_wifi_thread (no TLS/WiFi)
     "${CMAKE_CURRENT_SOURCE_DIR}/wifi_scan_compat.c"    # weak wifi_mode + connect/EAP/promisc stubs
     "${CMAKE_CURRENT_SOURCE_DIR}/freertos_tcp_compat.c" # weak lwip stubs (lwip IP not linked; FreeRTOS+TCP instead)
-    "${CMAKE_CURRENT_SOURCE_DIR}/iperf_client.c"        # iperf2 TCP client (TX throughput to WSL iperf -s)
-    "${CMAKE_CURRENT_SOURCE_DIR}/iperf_server.c"        # iperf2 TCP sink (RX throughput from WSL iperf -c)
-    "${CMAKE_CURRENT_SOURCE_DIR}/iperf_udp_client.c"    # iperf2 UDP blast (bottleneck discriminator: driver vs TCP pacing)
-    "${CMAKE_CURRENT_SOURCE_DIR}/iperf_udp_server.c"    # UDP RX sink (discriminator: is the RX/ACK delivery path tick-quantized?)
-    "${CMAKE_CURRENT_SOURCE_DIR}/rom_mbedtls_kat.c"     # known-answer test of the ROM mbedTLS 2.4.0 software crypto
-    "${CMAKE_SOURCE_DIR}/component/amebad/mbedtls_rom/rom_mbedtls.c"  # ROM mbedTLS ram-map glue (use_hw_crypto_func=0)
-    "${CMAKE_CURRENT_SOURCE_DIR}/wolfcrypt_bench.c"     # on-target wolfCrypt v5.9.1 microbenchmark (SP/Thumb2 asm)
-    "${CMAKE_CURRENT_SOURCE_DIR}/rom_hwcrypto_test.c"   # HW-vs-SW compare of rom_ssl_ram_map.h hw_crypto_* (IPSEC engine)
+    "${CMAKE_CURRENT_SOURCE_DIR}/wolfcrypt_glue.c"      # wolfSSL XMALLOC/RNG glue (always, when wolfSSL is linked)
 )
+
+# Diagnostics (iperf throughput + ROM-mbedTLS / wolfCrypt benchmarks). There is
+# no --gc-sections on this link, so unused TUs are only removed by excluding the
+# source. The QUIC image drops them all (smaller KM4 image2 .text -> shifts the
+# XIP boot path away from the layout-sensitive hang; see
+# doc/amebad_xip_layout_boot_hang.md). main.c gates the matching calls under
+# !AT_PROJECT_QUIC.
+if(NOT AMEBAD_ENABLE_QUIC)
+    target_sources(target_img2_km4 PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/iperf_client.c"        # iperf2 TCP client (TX throughput to WSL iperf -s)
+        "${CMAKE_CURRENT_SOURCE_DIR}/iperf_server.c"        # iperf2 TCP sink (RX throughput from WSL iperf -c)
+        "${CMAKE_CURRENT_SOURCE_DIR}/iperf_udp_client.c"    # iperf2 UDP blast (bottleneck discriminator: driver vs TCP pacing)
+        "${CMAKE_CURRENT_SOURCE_DIR}/iperf_udp_server.c"    # UDP RX sink (discriminator: is the RX/ACK delivery path tick-quantized?)
+        "${CMAKE_CURRENT_SOURCE_DIR}/rom_mbedtls_kat.c"     # known-answer test of the ROM mbedTLS 2.4.0 software crypto
+        "${CMAKE_SOURCE_DIR}/component/amebad/mbedtls_rom/rom_mbedtls.c"  # ROM mbedTLS ram-map glue (use_hw_crypto_func=0)
+        "${CMAKE_CURRENT_SOURCE_DIR}/wolfcrypt_bench.c"     # on-target wolfCrypt v5.9.1 microbenchmark (SP/Thumb2 asm)
+        "${CMAKE_CURRENT_SOURCE_DIR}/rom_hwcrypto_test.c"   # HW-vs-SW compare of rom_ssl_ram_map.h hw_crypto_* (IPSEC engine)
+    )
+endif()
 # WIP: the image2 link still needs the app/WiFi/mbedTLS/lwIP/log/os_dep/ftl
 # stack (~30 undefined symbols at bootstrap). EXCLUDE_FROM_ALL keeps the
 # default KM4 build (bootloader_km4 + the driver libs) green; build this
@@ -121,6 +133,27 @@ elseif(AMEBAD_ENABLE_HCI)
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_HCI)
 endif()
 
+# QUIC self-test (ngtcp2 + full wolfSSL TLS 1.3). The component/amebad/ngtcp2
+# targets are only defined when AMEBAD_ENABLE_QUIC is ON (see component/amebad/
+# CMakeLists.txt), which also forces AMEBAD_WOLFSSL_TLS so amebad_wolfssl (already
+# in the link group) carries the TLS/QUIC layer. ngtcp2 + crypto join the group:
+# crypto<->wolfssl<->ngtcp2 are mutually referenced.
+# AT-command / monitor shell libs: linked by default, dropped from the QUIC
+# image (shell init is gated off in main.c under AT_PROJECT_QUIC). Removing them
+# changes the KM4 image2 XIP relative layout (boot-hang dodge) and shrinks it.
+set(_diag_grp ",amebad_at_cmd,amebad_monitor,amebad_monitor_common")
+
+set(_quic_grp "")
+if(AMEBAD_ENABLE_QUIC)
+    set(_diag_grp "")
+    set(_quic_grp ",amebad_ngtcp2_crypto,amebad_ngtcp2")
+    target_sources(target_img2_km4 PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/quic_test.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/quic_syscalls.c")   # newlib _write/_sbrk/_exit (ngtcp2 abort + TLS stdio)
+    set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
+                 APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_QUIC)
+endif()
+
 # Archives wrapped in --start-group (cross_refs) for circular vendor refs.
 # libc (-lc) supplies __libc_init_array (KM4 has C++ global ctors; KM0 didn't)
 # plus memcpy/memset — so KM4 doesn't need the ROM memcpy alias KM0 uses.
@@ -130,7 +163,7 @@ target_link_libraries(target_img2_km4 PRIVATE
     # amebad_wolfssl is INSIDE the group: NimBLE's SM crypto (nimble, in the group)
     # pulls wc_* (wc_ecc_*/wc_AesEncryptDirect) that the bench didn't, so wolfCrypt
     # must rescan alongside nimble — wolfCrypt<->FreeRTOS<->nimble are mutually refed.
-    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km4,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_ftl,amebad_at_cmd,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_monitor,amebad_monitor_common,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,amebad_wlan,amebad_wps,amebad_wolfssl${_hci_grp}>"
+    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km4,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_ftl,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,amebad_wlan,amebad_wps,amebad_wolfssl${_diag_grp}${_hci_grp}${_quic_grp}>"
     m
     stdc++
     c
@@ -144,6 +177,32 @@ target_link_options(target_img2_km4 PRIVATE
     "-Wl,--warn-common"
     "-Wl,-Map=$<TARGET_FILE_DIR:target_img2_km4>/target_img2.map"
 )
+
+# Secure-world (IMG3) demo: clamp the NS FreeRTOS heap below the secure RAM
+# (0x10077000) that the bootloader's BOOT_RAM_TZCfg marks Secure/NSC, so NS
+# allocations never fault into it. (img2_is.ld reads __tz_sram_top__.) The IMG3
+# secure image (target_img3_km4) is laid into flash by build_image_all.py and
+# loaded by the bootloader; the NS↔S veneer call is wired in a follow-on step.
+if(AMEBAD_ENABLE_TZ_DEMO)
+    target_link_options(target_img2_km4 PRIVATE
+        "-Wl,--defsym=__tz_sram_top__=0x10070000")
+    # Link the CMSE import library (absolute veneer addresses rdp_protection_entry
+    # @0x1007b000 / BOOT_IMG3 @0x1007b008) so the NS app resolves the IMG3 veneers,
+    # and make sure the secure image builds first.
+    add_dependencies(target_img2_km4 target_img3_km4)
+    target_link_options(target_img2_km4 PRIVATE
+        "${CMAKE_BINARY_DIR}/component/amebad/img3/cmse_implib.lib")
+endif()
+
+# XIP boot-hang dodge: shift the whole .xip_image2.text block by AMEBAD_XIP_PAD
+# bytes (consumed by rlx8721d_img2_is.ld via __xip_pad__) to move app_start's
+# early fwlib callees off the layout-sensitive hanging address. Sweep this when
+# the KM4 image hangs at boot (console stuck after the KM0 "RRAM:" line).
+set(AMEBAD_XIP_PAD "0" CACHE STRING "XIP .text pad bytes (boot-hang layout dodge)")
+if(NOT AMEBAD_XIP_PAD STREQUAL "0")
+    target_link_options(target_img2_km4 PRIVATE
+        "-Wl,--defsym=__xip_pad__=${AMEBAD_XIP_PAD}")
+endif()
 
 target_compile_options(target_img2_km4 PRIVATE
     -Wno-unused-parameter

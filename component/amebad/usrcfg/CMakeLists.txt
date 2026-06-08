@@ -49,4 +49,12 @@ elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     )
     target_link_libraries(amebad_usrcfg_hp PUBLIC amebad_sdk_includes)
     target_compile_options(amebad_usrcfg_hp PRIVATE ${_usrcfg_warnings})
+    # Secure-world (IMG3) demo: select the TZ-on tz_config[] branch (image3 +
+    # NSC regions). Surgical per-source define on trustzonecfg.c only — it pulls
+    # __ram_image3_*/__psram_image3_* from the bootloader linker script and is
+    # referenced only by the bootloader's BOOT_RAM_TZCfg, never by the app.
+    if(AMEBAD_ENABLE_TZ_DEMO)
+        set_source_files_properties(rtl8721dhp_boot_trustzonecfg.c PROPERTIES
+            COMPILE_DEFINITIONS "CONFIG_TRUSTZONE_EN=1")
+    endif()
 endif()

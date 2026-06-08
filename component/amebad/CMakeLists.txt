@@ -70,6 +70,25 @@ if(NOT AMEBAD_CHIP MATCHES "^amebad-km[04]$")
         "(AMEBAD_CHIP='${AMEBAD_CHIP}', expected 'amebad-km0' or 'amebad-km4')")
 endif()
 
+# Secure-world (IMG3 / RDP-style TrustZone-M) demo. OFF by default. When ON:
+#  - img3/ builds the secure image (target_img3_km4) + km4_image3_all.bin
+#  - the KM4 bootloader is built with CONFIG_TRUSTZONE_EN=1 so it loads IMG3
+#    (BOOT_FLASH_Image3Load) and BOOT_RAM_TZCfg programs the SAU/IDAU
+#  - app_km4 carves the top secure RAM (BD_RAM_S/NSC) out of the NS region and
+#    links cmse_implib.lib to call the veneers
+#  - build_image_all.py lays km4_image3_all.bin at the fixed flash offset
+# It only affects the bootloader-side TUs (boot_flash_hp.c, trustzonecfg.c) — NOT
+# the app's FreeRTOS (configENABLE_TRUSTZONE would force the TZ kernel port we
+# don't have), so it is applied per-target/per-source, never globally.
+option(AMEBAD_ENABLE_TZ_DEMO "Build the RDP-style secure-world (IMG3) demo" OFF)
+
+# TF-M-first boot: the KM4 bootloader copies the RAM-linked tfm_s SPE (built
+# out-of-tree, laid at flash 0x08100000) into secure SRAM and secure-jumps to it,
+# bypassing the image2/NS handoff + BOOT_RAM_TZCfg (TF-M owns TrustZone). For
+# bringing up TF-M on AmebaD HW. OFF by default. Requires component/amebad/tfm/
+# tfm_s.bin (copy from the TF-M build: /tmp/tfm_rtl/bin/tfm_s.bin).
+option(AMEBAD_TFM_BOOT "KM4 bootloader boots tfm_s (TF-M SPE) instead of the NS app" OFF)
+
 add_subdirectory(fwlib)              # chip fwlib: headers (amebad_fwlib_headers) + ROM-symbol ld vars + RAM HAL libs (amebad_ram_common/_lp/_hp, chip-gated)
 add_subdirectory(xmodem)             # ROM xmodem headers (amebad_xmodem) + xmodem.ld symbols; linked by sdk_includes below
 add_subdirectory(string_rom)         # ROM swlib-string headers (amebad_string_rom) + string_rom_km{4,0}.ld; linked by sdk_includes below
@@ -90,7 +109,15 @@ add_subdirectory(pmu)                # chip-gated: prebuilt PMC lib (lib_pmc_lp/
 add_subdirectory(wlan)               # KM4-gated: host WiFi driver libs (lib_wlan*.a) + API headers
 add_subdirectory(wpa_supplicant)     # KM4-gated: supplicant cores (lib_wps.a + lib_eap.a) + config/glue source + headers
 add_subdirectory(wifi)               # KM4-gated: host WiFi API + bring-up (amebad_wifi, EXCLUDE)
-add_subdirectory(wolfssl)            # KM4-gated: wolfCrypt (v5.9.1) bare-metal lib for on-target crypto benchmark
+# QUIC test (ngtcp2 + full wolfSSL TLS 1.3). AMEBAD_ENABLE_QUIC forces the
+# wolfSSL TLS layer ON (AMEBAD_WOLFSSL_TLS) before the wolfssl subdir reads it.
+option(AMEBAD_ENABLE_QUIC "Build ngtcp2 QUIC client self-test (pulls full wolfSSL TLS 1.3)" OFF)
+if(AMEBAD_ENABLE_QUIC)
+    set(AMEBAD_WOLFSSL_TLS ON CACHE BOOL "wolfSSL TLS 1.3 + QUIC (forced by AMEBAD_ENABLE_QUIC)" FORCE)
+endif()
+
+add_subdirectory(wolfssl)            # KM4-gated: wolfCrypt (v5.9.1) bare-metal lib for on-target crypto benchmark (+TLS1.3/QUIC when AMEBAD_WOLFSSL_TLS)
+add_subdirectory(ngtcp2)             # KM4-gated: ngtcp2 QUIC + crypto/wolfssl (only built when AMEBAD_ENABLE_QUIC)
 add_subdirectory(hci)                # KM4-gated: BLE controller bring-up + HCI transport + bridge (no btgap.a)
 add_subdirectory(image_tool)         # defines amebad_make_{boot,image2}_all_bin*(...)
                                      #   + amebad_make_image_all_bin() (-> target
@@ -104,6 +131,7 @@ if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
 elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     add_subdirectory(bootloader_km4)
     add_subdirectory(app_km4)              # KM4 HP application image (image2)
+    add_subdirectory(img3)                 # KM4 secure-world image (IMG3) demo, opt-in AMEBAD_ENABLE_TZ_DEMO
 endif()
 
 # Cross-core final image. `cmake --build <km0-or-km4-build-dir> -t amebad_image_all`

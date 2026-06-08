@@ -242,7 +242,14 @@ void os_heap_init(void)
 
 #endif
 #endif
-		vPortDefineHeapRegions( xHeapRegions );	
+#ifdef AMEBAD_TZ_DEMO_DBG
+		DBG_8195A("ZZ-HEAP-pre-define r0=[%08x +%x]\n",
+			(unsigned)xHeapRegions[0].pucStartAddress, (unsigned)xHeapRegions[0].xSizeInBytes);
+#endif
+		vPortDefineHeapRegions( xHeapRegions );
+#ifdef AMEBAD_TZ_DEMO_DBG
+		DBG_8195A("ZZ-HEAP-post-define\n");
+#endif
 
 #if (defined(configAUDIO_USE_SRAM_FOR_HEAP_REGION) && ( configAUDIO_USE_SRAM_FOR_HEAP_REGION == 1 ))
 	{

@@ -41,14 +41,10 @@ extern void device_mutex_lock(int device);
 extern void device_mutex_unlock(int device);
 #define RT_DEV_LOCK_CRYPTO 2
 
-/* wolfSSL XMALLOC_USER hooks -> FreeRTOS heap (avoids newlib malloc/_sbrk on
- * this -nostdlib image). XREALLOC is never referenced in this wolfCrypt config. */
-void* XMALLOC(size_t n, void* heap, int type)
-{ (void)heap; (void)type; return pvPortMalloc(n); }
-void  XFREE(void* p, void* heap, int type)
-{ (void)heap; (void)type; if (p) vPortFree(p); }
-void* XREALLOC(void* p, size_t n, void* heap, int type)
-{ (void)p; (void)n; (void)heap; (void)type; DiagPrintf("[WCB] XREALLOC unexpected\n\r"); return NULL; }
+/* wolfSSL XMALLOC/XFREE/XREALLOC hooks + the wolfCrypt RNG block / reseed live
+ * in wolfcrypt_glue.c (always linked when wolfSSL is), so the QUIC image can drop
+ * this benchmark TU. amebad_bench_rng_block is declared by wolfSSL via
+ * CUSTOM_RAND_GENERATE_BLOCK in user_settings.h. */
 
 /* ---- High-res cycle timer via SysTick ----
  * The DWT cycle counter (0xE0001004) reads 0 from this driver-only NTZ image
@@ -72,19 +68,6 @@ static unsigned long long cyc_now(void)
         t2  = (unsigned int)xTaskGetTickCount();
     } while (t1 != t2);
     return (unsigned long long)t1 * (rvr + 1u) + (rvr - cvr);
-}
-
-/* ---- RNG for the benchmark (CUSTOM_RAND_GENERATE_BLOCK). Not crypto-grade;
- *      benchmark only — a fast xorshift so keygen/blinding have entropy. ---- */
-static unsigned int s_rng = 0xA5C3F19Du;
-int amebad_bench_rng_block(unsigned char* out, unsigned int sz)
-{
-    unsigned int i;
-    for (i = 0; i < sz; i++) {
-        s_rng ^= s_rng << 13; s_rng ^= s_rng >> 17; s_rng ^= s_rng << 5;
-        out[i] = (unsigned char)(s_rng >> 24);
-    }
-    return 0;
 }
 
 /* ---- reporting. DiagPrintf is a limited ROM printf: %s/%d/%c only, NO width

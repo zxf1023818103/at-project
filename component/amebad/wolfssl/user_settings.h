@@ -29,8 +29,10 @@ extern "C" {
 #define WOLFSSL_GENERAL_ALIGNMENT 4
 #define SIZEOF_LONG_LONG 8
 #define WOLFSSL_SMALL_STACK          /* >100 B locals from heap (M33 stack is tight) */
-#define WOLFSSL_USER_IO
-#define WOLFCRYPT_ONLY               /* benchmark wolfCrypt only, no TLS layer */
+#define WOLFSSL_USER_IO              /* no built-in socket I/O (QUIC feeds crypto via callbacks) */
+#ifndef AMEBAD_WOLFSSL_TLS
+    #define WOLFCRYPT_ONLY           /* default: wolfCrypt only, no TLS layer (bench / NimBLE SM) */
+#endif
 #define WOLFSSL_IGNORE_FILE_WARN     /* quiet "file built but not needed" */
 #define SINGLE_THREADED              /* benchmark runs in one task */
 
@@ -109,6 +111,45 @@ extern int amebad_bench_rng_block(unsigned char* output, unsigned int sz);
 #define USE_CERT_BUFFERS_2048
 #define USE_CERT_BUFFERS_256
 #define NO_ASN_TIME                  /* importing keys, not checking cert validity */
+
+/* ---- TLS 1.3 + QUIC (gated: -DAMEBAD_WOLFSSL_TLS) ----
+ * Enables the full TLS 1.3 record/handshake layer plus wolfSSL's QUIC API
+ * (src/quic.c) and the OpenSSL EVP compatibility layer that ngtcp2's
+ * crypto/wolfssl backend calls (wolfSSL_EVP_*, wolfSSL_quic_*). TLS 1.2 is
+ * compiled out — QUIC mandates TLS 1.3, so there is no 1.2 code path. */
+#ifdef AMEBAD_WOLFSSL_TLS
+    #define WOLFSSL_TLS13
+    #define WOLFSSL_NO_TLS12         /* QUIC is TLS1.3-only — drop the 1.2 record layer */
+    #define WOLFSSL_NO_SOCK          /* no OS sockets: ngtcp2 feeds crypto via callbacks */
+    #define WOLFSSL_QUIC             /* src/quic.c: wolfSSL_set_quic_method + secret cbs */
+    #define OPENSSL_EXTRA            /* EVP_* compat layer ngtcp2's backend links against */
+    #define HAVE_EX_DATA             /* wolfSSL_set_app_data: ngtcp2 attaches its conn ref */
+
+    #define HAVE_TLS_EXTENSIONS      /* required by TLS 1.3 */
+    #define HAVE_SUPPORTED_CURVES    /* key_share / supported_groups */
+    #define HAVE_HKDF                /* TLS 1.3 key schedule (kdf.c) */
+    #define HAVE_ALPN                /* QUIC requires ALPN */
+    /* NB: HAVE_SESSION_TICKET is force-disabled by settings.h because NO_ASN_TIME
+     * is set (tickets need timestamps). ngtcp2's configure_client_context calls
+     * wolfSSL_CTX_UseSessionTicket regardless; quic_test.c supplies a no-op stub.
+     * Resumption isn't needed for the handshake smoke test. */
+    #define HAVE_AEAD
+    #define HAVE_AES_ECB             /* header protection: wolfSSL_EVP_aes_128/256_ecb */
+    #define HAVE_EXTENDED_MASTER
+    #define WOLFSSL_DTLS_NO_HVR_ON_RESUME /* unused; quiets a feature combo */
+
+    /* With WOLFSSL_NO_SOCK the X509 host-IP-match path (MatchIpName in x509.c,
+     * only reached via peer verification — we use SSL_VERIFY_NONE) still
+     * references inet_pton/AF_INET. Stub them; the path is never taken. */
+    #define WOLFSSL_IP4 2
+    #define WOLFSSL_IP6 10
+    #define XINET_PTON(a, b, c) (0)
+    #define XINET_NTOP(a, b, c, d) (NULL)
+
+    /* No filesystem/time/peer-verify for the on-target handshake smoke test:
+     * the client runs with SSL_VERIFY_NONE, so cert chain time/CA checks are
+     * skipped (NO_ASN_TIME stays defined below). */
+#endif
 
 /* ---- Trim ---- */
 #define NO_FILESYSTEM

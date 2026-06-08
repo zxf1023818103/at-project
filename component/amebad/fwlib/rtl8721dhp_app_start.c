@@ -416,11 +416,36 @@ void app_start(void)
 	Cache_Enable(ENABLE);
 
 	DBG_PRINTF(MODULE_BOOT, LEVEL_INFO,"KM4 BOOT REASON: %x \n", BOOT_Reason());
-	
+#ifdef AMEBAD_TZ_DEMO_DBG
+	DBG_PRINTF(MODULE_BOOT, LEVEL_ERROR,"ZZ-APP-A(post-reason)\n");
+#endif
+
 	SystemSetCpuClk(CPU_CLOCK_SEL_VALUE);
-	
+#ifdef AMEBAD_TZ_DEMO_DBG
+	DBG_PRINTF(MODULE_BOOT, LEVEL_ERROR,"ZZ-APP-A1(post-clk)\n");
+#endif
+
 	SOCPS_InitSYSIRQ_HP();
-	
+#ifdef AMEBAD_TZ_DEMO_DBG
+	DBG_PRINTF(MODULE_BOOT, LEVEL_ERROR,"ZZ-APP-A2(post-sysirq)\n");
+	/* Secure-world (IMG3) demo: NS -> Secure veneer calls. Done here, before
+	 * os_heap_init, so the secret-read result is observable even though the full
+	 * driver app currently hangs later at os_heap_init under TrustZone. The
+	 * veneers live in BD_RAM_NSC (0x1007B000); cmse_implib.lib resolves them. */
+	{
+		extern u32 rdp_protection_entry(u32 idx);   /* NSC veneer @0x1007b000 */
+		u32 known0 = 0x10101010u;                   /* = rdp_data[0] (secret) */
+		u32 expect0 = (known0 / 5u + 3u) * 2u + 8u;
+		u32 got0, got1;
+		BOOT_IMG3();                                 /* zero secure .bss */
+		got0 = rdp_protection_entry(0);
+		got1 = rdp_protection_entry(1);
+		DBG_PRINTF(MODULE_BOOT, LEVEL_ERROR,
+			"ZZ-SEC: rdp_protection_entry(0)=0x%x expect=0x%x %s; (1)=0x%x\n",
+			got0, expect0, (got0 == expect0) ? "PASS" : "FAIL", got1);
+	}
+#endif
+
 	/* Init PSRAM */
 	if(TRUE == psram_dev_config.psram_dev_enable) {
 		app_init_psram();
@@ -431,7 +456,13 @@ void app_start(void)
 	/* psram should be enabled */
 	assert_param(TRUE == psram_dev_config.psram_dev_enable);
 #endif
+#ifdef AMEBAD_TZ_DEMO_DBG
+	DBG_PRINTF(MODULE_BOOT, LEVEL_ERROR,"ZZ-APP-A3(pre-heap)\n");
+#endif
 	os_heap_init();
+#ifdef AMEBAD_TZ_DEMO_DBG
+	DBG_PRINTF(MODULE_BOOT, LEVEL_ERROR,"ZZ-APP-B(post-heap)\n");
+#endif
 	__NVIC_SetVector(SVCall_IRQn, (u32)(VOID*)vPortSVCHandler);
 	__NVIC_SetVector(PendSV_IRQn, (u32)(VOID*)xPortPendSVHandler);
 	__NVIC_SetVector(SysTick_IRQn, (u32)(VOID*)xPortSysTickHandler);
@@ -467,6 +498,9 @@ extern void __libc_init_array(void);
 	app_driver_call_os_func_init();
 
 	app_init_debug();
+#ifdef AMEBAD_TZ_DEMO_DBG
+	DBG_PRINTF(MODULE_BOOT, LEVEL_ERROR,"ZZ-APP-C(pre-main)\n");
+#endif
 
 #if defined ( __GNUC__ )
 	cm_backtrace_init("target_img2", "HW v1.0", "SW v1.0");
