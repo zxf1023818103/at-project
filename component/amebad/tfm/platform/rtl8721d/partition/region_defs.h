@@ -36,20 +36,20 @@
 
 /* ---- Non-secure RAM (low) : driver-only app + QUIC ---- */
 #define NS_DATA_START           (0x10005000)
-#define NS_DATA_SIZE            (0x0004B000)   /* -> ends at S_CODE_START 0x10050000 */
+#define NS_DATA_SIZE            (0x0005B000)   /* -> ends at S_DATA_START 0x10060000 */
 #define NS_DATA_LIMIT           (NS_DATA_START + NS_DATA_SIZE - 1)
 
 #define TOTAL_RAM_SIZE          (S_DATA_SIZE + NS_DATA_SIZE)
 
-/* ---- Secure code : TF-M SPE ----
- * RAM-resident (NOT XIP): on Ameba-D the KM4 image2 XIP window (0x0E000000) is
- * reserved by a 32-byte image header + 0x20 code offset, which collides with the
- * 0x400-aligned VTOR the M33 vector table needs. So instead of fighting the XIP
- * image format, TF-M is linked to run from secure SRAM: the bootloader copies
- * tfm_s.bin to S_CODE_START and secure-jumps to its reset vector (which IS
- * 0x400-aligned here). 64 KB code window, just below S_DATA. */
-#define S_CODE_START            (0x10050000)
-#define S_CODE_SIZE             (0x00010000)   /* 64 KB -> ends at S_DATA_START */
+/* ---- Secure code : TF-M SPE (XIP from flash) ----
+ * tfm_s executes IN PLACE from the SPI-flash memory-mapped window at flash
+ * 0x08100000 (code stays in flash, not copied to RAM). The driver app remains
+ * the KM4 image2 so the ROM image chain + boot is intact; tfm_s sits at a
+ * separate flash slot the bootloader secure-jumps into. 0x08100000 is
+ * 0x400-aligned -> valid VTOR. Only data lives in RAM (S_DATA); startup copies
+ * .TFM_DATA from its flash LMA. The SAU marks this window Secure (target_cfg). */
+#define S_CODE_START            (0x08100000)
+#define S_CODE_SIZE             (0x00010000)   /* 64 KB flash window for tfm_s */
 #define S_CODE_LIMIT            (S_CODE_START + S_CODE_SIZE - 1)
 #define S_CODE_VECTOR_TABLE_SIZE (0x00000400)
 

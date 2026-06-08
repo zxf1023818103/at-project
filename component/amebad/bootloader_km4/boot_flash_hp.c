@@ -648,24 +648,21 @@ void BOOT_FLASH_Image1(void)
 	BOOT_FLASH_FuncEnable();
 
 #ifdef AMEBAD_TFM_BOOT
-	/* TF-M-first boot: copy the RAM-linked tfm_s SPE (laid at flash 0x08100000
-	 * by build_image_all.py) into secure SRAM and secure-jump to its reset
-	 * vector. TF-M owns the TrustZone setup (tfm_hal_platform_init does SAU/IDAU),
-	 * so we deliberately bypass BOOT_RAM_TZCfg + the whole image2/NS handoff. The
-	 * bootloader is already in the Secure state, so this is a plain secure jump. */
+	/* TF-M-first boot (XIP): tfm_s IS the KM4 image2, already mapped by the ROM to
+	 * the cached XIP window 0x0E000000, so we execute it in place — no RAM copy.
+	 * Only the tiny NS stub is copied to NS SRAM. We read tfm_s's reset vector at
+	 * 0x0E000000 and secure-jump; TF-M owns the TrustZone setup (tfm_hal_platform_
+	 * init does SAU/IDAU), so we bypass BOOT_RAM_TZCfg + the image2/NS handoff. */
 	{
-		volatile u32 *src = (volatile u32 *)(0x08100000);     /* tfm_s.bin in flash */
-		volatile u32 *dst = (volatile u32 *)(0x10050000);     /* S_CODE_START (RAM) */
+		volatile u32 *xip = (volatile u32 *)(0x08100000);     /* tfm_s vectors (flash XIP) */
 		volatile u32 *nssrc = (volatile u32 *)(0x08108000);   /* ns_stub.bin in flash */
 		volatile u32 *nsdst = (volatile u32 *)(0x10010000);   /* NS_CODE_START (RAM) */
 		u32 i, msp, reset;
-		for (i = 0; i < (0x4000 / 4); i++)                    /* copy <=16KB SPE blob */
-			dst[i] = src[i];
 		for (i = 0; i < (0x1000 / 4); i++)                    /* copy <=4KB NS stub */
 			nsdst[i] = nssrc[i];
-		msp   = dst[0];
-		reset = dst[1];
-		DBG_PRINTF(MODULE_BOOT, LEVEL_ERROR, "ZZ-TFM-JUMP msp=%x reset=%x\n", msp, reset);
+		msp   = xip[0];
+		reset = xip[1];
+		DBG_PRINTF(MODULE_BOOT, LEVEL_ERROR, "ZZ-TFM-XIP @08100000=[%x %x]\n", xip[0], xip[1]);
 		__set_MSP(msp);
 		((void (*)(void))reset)();
 		while (1);                                            /* not reached */

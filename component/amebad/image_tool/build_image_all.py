@@ -101,7 +101,8 @@ def main():
                     help="skip cmake, assemble from existing build trees")
     args = ap.parse_args()
 
-    tz_demo = cache_bool(args.km4_build, "AMEBAD_ENABLE_TZ_DEMO")
+    tz_demo  = cache_bool(args.km4_build, "AMEBAD_ENABLE_TZ_DEMO")
+    tfm_boot = cache_bool(args.km4_build, "AMEBAD_TFM_BOOT")
 
     if not args.no_build:
         build("km0", args.km0_build, ["target_loader_km0", "target_img2_km0"])
@@ -133,15 +134,15 @@ def main():
                      % (OFF_IMG3, len(image)))
         place(image, OFF_IMG3, img3, "km4_image3_all.bin")
 
-    # TF-M-first boot: lay the RAM-linked tfm_s SPE at the same fixed flash offset
-    # (0x08100000) the bootloader's AMEBAD_TFM_BOOT path copies from.
-    if cache_bool(args.km4_build, "AMEBAD_TFM_BOOT"):
+    # TF-M boot (XIP-from-flash): tfm_s executes in place from flash 0x08100000
+    # (S_CODE_START); the bootloader secure-jumps there. The driver app stays the
+    # KM4 image2 (above) so the ROM image chain is intact. NS stub at 0x108000 ->
+    # bootloader copies it to NS_CODE_START (0x10010000); SPM BLXNS-es to it.
+    if tfm_boot:
         tfm = read(os.path.join(REPO, "component", "amebad", "tfm", "tfm_s.bin"))
         if OFF_IMG3 < len(image):
             sys.exit("TF-M offset 0x%x overlaps image2 (ends 0x%x)" % (OFF_IMG3, len(image)))
-        place(image, OFF_IMG3, tfm, "tfm_s.bin (TF-M SPE)")
-        # NS stub (NSPE bring-up) at flash 0x108000, copied by the bootloader to
-        # NS_CODE_START (0x10010000); SPM BLXNS-es to it.
+        place(image, OFF_IMG3, tfm, "tfm_s.bin (TF-M SPE, XIP @0x08100000)")
         nstub = read(os.path.join(REPO, "component", "amebad", "tfm", "ns_stub.bin"))
         place(image, OFF_TFM_NS, nstub, "ns_stub.bin (TF-M NSPE)")
 
