@@ -41,17 +41,21 @@
 
 #define TOTAL_RAM_SIZE          (S_DATA_SIZE + NS_DATA_SIZE)
 
-/* ---- Secure code : TF-M SPE (XIP from flash) ----
- * tfm_s executes IN PLACE from the SPI-flash memory-mapped window at flash
- * 0x08100000 (code stays in flash, not copied to RAM). The driver app remains
- * the KM4 image2 so the ROM image chain + boot is intact; tfm_s sits at a
- * separate flash slot the bootloader secure-jumps into. 0x08100000 is
- * 0x400-aligned -> valid VTOR. Only data lives in RAM (S_DATA); startup copies
- * .TFM_DATA from its flash LMA. The SAU marks this window Secure (target_cfg). */
-#define S_CODE_START            (0x08100000)
-#define S_CODE_SIZE             (0x00010000)   /* 64 KB flash window for tfm_s */
+/* ---- Secure code : TF-M SPE (cached XIP via a dedicated RSIP MMU entry) ----
+ * tfm_s executes from the CACHED XIP virtual window 0x0E100000, which the
+ * bootloader maps (RSIP_MMU_Config, a spare MMU entry) to the physical flash
+ * slot 0x08100000 where tfm_s.bin lives. This keeps the driver app as the KM4
+ * image2 (entry0 / 0x0E000000) so the ROM image chain + boot stay intact, while
+ * tfm_s gets its own cached mapping — no Ameba image2 header needed (the MMU
+ * entry maps the raw blob directly). 0x0E100000 is 0x400-aligned -> valid VTOR.
+ * Only data lives in RAM (S_DATA); startup copies .TFM_DATA from its flash LMA. */
+#define S_CODE_START            (0x0E100000)
+#define S_CODE_SIZE             (0x00010000)   /* 64 KB cached XIP window for tfm_s */
 #define S_CODE_LIMIT            (S_CODE_START + S_CODE_SIZE - 1)
 #define S_CODE_VECTOR_TABLE_SIZE (0x00000400)
+/* Physical flash slot tfm_s.bin is laid at (build_image_all OFF_IMG3); the
+ * bootloader RSIP_MMU_Config maps S_CODE_START -> here. */
+#define S_CODE_FLASH_PHYS       (0x08100000)
 
 /* ---- Non-secure code : NS app ----
  * Bring-up NSPE is a tiny RAM-resident NS stub (component/amebad/tfm/ns_stub),

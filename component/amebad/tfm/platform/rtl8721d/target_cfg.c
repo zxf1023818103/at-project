@@ -45,9 +45,9 @@ typedef struct { idau_entry_t ENTRY[8]; volatile uint32_t CTRL; volatile uint32_
 typedef struct { uint32_t start; uint32_t end; uint32_t nsc; } tz_region_t;
 
 static const tz_region_t s_ns_regions[] = {
-    { 0x00000000u, (S_CODE_START - 1u), 0 },         /* low NS up to tfm_s flash window */
-    { (S_CODE_START + S_CODE_SIZE), 0x0DFFFFFFu, 0 },/* flash/etc NS above tfm_s window */
-    { 0x0E000000u, 0x0FFFFFFFu, 0 },                 /* KM4 image2 XIP (driver app) NS */
+    { 0x00000000u, 0x0DFFFFFFu, 0 },                 /* low: KM0/retention/PSRAM/flash */
+    { 0x0E000000u, (S_CODE_START - 1u), 0 },         /* XIP below tfm_s (driver app) NS */
+    { (S_CODE_START + S_CODE_SIZE), 0x0FFFFFFFu, 0 },/* XIP above tfm_s window NS      */
     { 0x10000000u, (S_DATA_START - 1u), 0 },         /* NS SRAM (incl. RAM NS app) below S_DATA */
     { 0x100E0000u, 0x100FFFFFu, 0 },                 /* BT/WiFi extension SRAM         */
     { 0x1010A000u, 0x101D3FFFu, 0 },                 /* IROM_NS / DROM_NS              */

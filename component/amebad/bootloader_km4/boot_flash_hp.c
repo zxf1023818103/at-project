@@ -648,21 +648,27 @@ void BOOT_FLASH_Image1(void)
 	BOOT_FLASH_FuncEnable();
 
 #ifdef AMEBAD_TFM_BOOT
-	/* TF-M-first boot (XIP): tfm_s IS the KM4 image2, already mapped by the ROM to
-	 * the cached XIP window 0x0E000000, so we execute it in place — no RAM copy.
-	 * Only the tiny NS stub is copied to NS SRAM. We read tfm_s's reset vector at
-	 * 0x0E000000 and secure-jump; TF-M owns the TrustZone setup (tfm_hal_platform_
-	 * init does SAU/IDAU), so we bypass BOOT_RAM_TZCfg + the image2/NS handoff. */
+	/* TF-M-first boot (cached XIP via a dedicated RSIP MMU entry): the driver app
+	 * stays the KM4 image2 (boot chain intact); we map a spare MMU entry so the
+	 * cached XIP virtual window 0x0E100000 points at the physical flash slot
+	 * 0x08100000 where tfm_s.bin lives, then read tfm_s's reset vector at
+	 * 0x0E100000 and secure-jump. The tiny NS stub is copied to NS SRAM. TF-M owns
+	 * the TrustZone setup, so we bypass BOOT_RAM_TZCfg + the image2/NS handoff. */
 	{
-		volatile u32 *xip = (volatile u32 *)(0x08100000);     /* tfm_s vectors (flash XIP) */
+		volatile u32 *xip;
 		volatile u32 *nssrc = (volatile u32 *)(0x08108000);   /* ns_stub.bin in flash */
 		volatile u32 *nsdst = (volatile u32 *)(0x10010000);   /* NS_CODE_START (RAM) */
 		u32 i, msp, reset;
+		/* map cached virtual 0x0E100000..+64KB -> physical flash 0x08100000
+		 * (phys = virt - 0x06000000, i.e. IsMinus=1). Use a spare MMU entry (4). */
+		RSIP_MMU_Config(4, 0x0E100000, 0x0E10FFFF, 1, 0x06000000);
+		RSIP_MMU_Cmd(4, ENABLE);
+		xip = (volatile u32 *)(0x0E100000);                   /* tfm_s vectors (cached XIP) */
 		for (i = 0; i < (0x1000 / 4); i++)                    /* copy <=4KB NS stub */
 			nsdst[i] = nssrc[i];
 		msp   = xip[0];
 		reset = xip[1];
-		DBG_PRINTF(MODULE_BOOT, LEVEL_ERROR, "ZZ-TFM-XIP @08100000=[%x %x]\n", xip[0], xip[1]);
+		DBG_PRINTF(MODULE_BOOT, LEVEL_ERROR, "ZZ-TFM-XIP @0E100000=[%x %x]\n", xip[0], xip[1]);
 		__set_MSP(msp);
 		((void (*)(void))reset)();
 		while (1);                                            /* not reached */
