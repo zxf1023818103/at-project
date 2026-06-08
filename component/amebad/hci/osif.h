@@ -1,12 +1,12 @@
 /**
  * Copyright (c) 2015, Realsil Semiconductor Corporation. All rights reserved.
  *
- * Trimmed to the 7 wrappers the driver-only HCI bring-up actually uses (see
- * osif_freertos.c): one delay, task create/delete, and the counting semaphore.
- * Everything else (timers, mutexes, signals, msg queues, scheduler control,
- * lock/unlock, memory — see below) was dropped. The SDK's os_mem_* used to route
- * through osif_mem_*, but those were pure FreeRTOS skins, so callers now use
- * pvPortMalloc / vPortFree / xPortGetFreeHeapSize directly.
+ * Trimmed to the 6 wrappers the driver-only HCI bring-up actually uses (see
+ * osif_freertos.c): task create/delete and the counting semaphore. Everything
+ * else (timers, mutexes, signals, msg queues, scheduler control, lock/unlock,
+ * delay, memory) was dropped — the delay/memory ones were pure FreeRTOS skins, so
+ * callers now use vTaskDelay / pvPortMalloc / vPortFree / xPortGetFreeHeapSize
+ * directly.
  */
 
 #ifndef _OSIF_H_
@@ -19,9 +19,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/* schedule */
-void osif_delay(uint32_t ms);
 
 /* task */
 bool osif_task_create(void **pp_handle, const char *p_name, void (*p_routine)(void *),

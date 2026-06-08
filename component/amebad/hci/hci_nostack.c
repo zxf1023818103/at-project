@@ -18,7 +18,8 @@
 #include <string.h>
 #include <stdarg.h>
 #include "platform_stdlib.h"   /* DiagPrintf */
-#include "osif.h"              /* osif_delay (transport poll wait below) */
+#include "FreeRTOS.h"          /* vTaskDelay / pdMS_TO_TICKS (transport poll wait below) */
+#include "task.h"
 #include "hci_tp.h"            /* hci_tp_open, P_HCI_TP_OPEN_CB / RX_IND */
 #include "hci_uart.h"          /* hci_uart_recv */
 
@@ -94,7 +95,7 @@ int bt_hci_bringup_nostack(void)
 
     while (s_bringup_done == 0 && spins < 10000) {
         nostack_drain();
-        osif_delay(1);
+        vTaskDelay(pdMS_TO_TICKS(1));
         spins++;
     }
 

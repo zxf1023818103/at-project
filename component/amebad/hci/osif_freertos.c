@@ -4,13 +4,12 @@
  *
  * The original SDK file exported 49 osif_* wrappers; this driver-only image uses
  * the BT controller transport only (no Realtek upper stack / btgap.a, host =
- * NimBLE which has its own porting layer), so just 7 are referenced — by
- * hci_uart.c and hci_nostack.c. The rest (timers, mutexes, signals, msg queues,
- * scheduler control, lock/unlock, sys_time) had no caller; the memory wrappers
- * (osif_mem_alloc/free/peek) were pure FreeRTOS skins, so their callers use
- * pvPortMalloc / vPortFree / xPortGetFreeHeapSize directly instead. Re-add a
- * wrapper here if a future consumer needs it; the FreeRTOS call it maps to is one
- * line.
+ * NimBLE which has its own porting layer), so just 6 are referenced — by
+ * hci_uart.c (task + counting semaphore). The rest (timers, mutexes, signals, msg
+ * queues, scheduler control, lock/unlock, sys_time) had no caller; the memory and
+ * delay wrappers were pure FreeRTOS skins, so their callers use pvPortMalloc /
+ * vPortFree / xPortGetFreeHeapSize / vTaskDelay directly instead. Re-add a wrapper
+ * here if a future consumer needs it; the FreeRTOS call it maps to is one line.
  *
  * Semantics preserved from the SDK: sem_take/sem_give pick the FromISR variant in
  * ISR context; wait_ms == 0xFFFFFFFF means block forever (portMAX_DELAY). KM4 only.
@@ -28,13 +27,6 @@
 static inline bool osif_task_context_check(void)
 {
     return (__get_IPSR() == 0);
-}
-
-/* ---- schedule ---- */
-
-void osif_delay(uint32_t ms)
-{
-    vTaskDelay((TickType_t)((ms + portTICK_PERIOD_MS - 1) / portTICK_PERIOD_MS));
 }
 
 /* ---- task ---- */
