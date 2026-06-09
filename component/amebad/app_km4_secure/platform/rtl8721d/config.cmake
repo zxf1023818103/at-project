@@ -42,11 +42,24 @@ set(TFM_ISOLATION_LEVEL           1           CACHE STRING "Isolation level (rai
 # No PSRAM in the QUIC target board flow — keep IMG3 in SRAM.
 set(CONFIG_IMG3_SRAM              ON          CACHE BOOL   "Place TF-M (IMG3) in SRAM, not PSRAM")
 
-# Enable the Crypto secure service (pulls mbedcrypto + ITS for key storage) —
-# validates the partition framework + a real PSA-RoT service builds for rtl8721d.
 # Crypto partition intentionally OFF: TF-M's PSA Crypto service is backed by
 # mbedcrypto (mbed-TLS), and this project must NOT introduce mbedtls (its crypto
 # stack is wolfSSL). A TF-M crypto service for this port would need a wolfSSL-
-# backed PSA crypto core — separate, large work. Keep the SPE to SPM + non-crypto
-# partitions for now.
+# backed PSA crypto core — separate, large work.
 # set(TFM_PARTITION_CRYPTO ON ...)   # would pull mbedcrypto — do not enable
+
+# Platform PSA-RoT service: the first real secure partition for this port. It is
+# crypto-free (system reset / IOCTL / NV-counter) — so it exercises the full PSA
+# round-trip (NS psa_call -> SG veneer -> SPM -> partition SFN -> reply) without
+# pulling mbedcrypto. SFN model, stateless service (handle 6) => the NS side calls
+# it with psa_call and no psa_connect. The HAL (tfm_platform_hal_system_reset /
+# _ioctl) is our port's services/src/tfm_platform_system.c.
+set(TFM_PARTITION_PLATFORM        ON          CACHE BOOL   "Enable the Platform PSA-RoT service")
+
+# NV-counter sub-module OFF: the default NV-counter backend
+# (ext/common/template/nv_counters.c + flash_otp_nv_counters_backend.c) needs a
+# real Driver_FLASH0 + TFM_OTP_NV_COUNTERS_AREA_* in flash_layout.h. Our flash
+# driver is still a stub, so disable the NV path entirely — the Platform service
+# keeps SYSTEM_RESET + IOCTL, which is all the PSA bring-up demo needs.
+set(PLATFORM_DEFAULT_NV_COUNTERS  OFF         CACHE BOOL   "No default NV-counter backend (flash driver is a stub)")
+add_definitions(-DPLATFORM_NV_COUNTER_MODULE_DISABLED=1)

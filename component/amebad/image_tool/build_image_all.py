@@ -49,8 +49,7 @@ KM4_TFM_S  = ("component/amebad/app_km4_secure/tfm_s.bin")
 OFF_KM0_BOOT  = 0x0000
 OFF_KM4_BOOT  = 0x4000
 OFF_IMAGE2    = 0x6000     # OTA1 (OTA_Region[0] = LS_IMG2_OTA1_ADDR = 0x08006000)
-OFF_IMG3      = 0x100000   # secure tfm_s @ flash 0x08100000 (past image2, read
-                           #   directly by BOOT_FLASH_Image3Load / AMEBAD_IMG3_FIXED_FLASH)
+OFF_IMG3      = 0x100000   # secure tfm_s @ flash 0x08100000 (cached XIP @0x0E100000)
 
 
 def run(cmd):
@@ -137,7 +136,7 @@ def main():
         tfm = read(tfm_path)
         if OFF_IMG3 < len(image):
             sys.exit("TF-M offset 0x%x overlaps image2 (ends 0x%x)" % (OFF_IMG3, len(image)))
-        place(image, OFF_IMG3, tfm, "tfm_s.bin (TF-M SPE, XIP @0x08100000)")
+        place(image, OFF_IMG3, tfm, "tfm_s.bin (TF-M SPE, cached XIP @0x0E100000)")
 
     outdir = os.path.dirname(args.out)
     os.makedirs(outdir, exist_ok=True)

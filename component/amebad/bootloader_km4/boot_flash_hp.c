@@ -647,40 +647,9 @@ void BOOT_FLASH_Image1(void)
 
 	BOOT_FLASH_FuncEnable();
 
-#ifdef AMEBAD_TFM_BOOT
-	/* TF-M-first boot (cached XIP via a dedicated RSIP MMU entry): the driver app
-	 * stays the KM4 image2 (boot chain intact); we map a spare MMU entry so the
-	 * cached XIP virtual window 0x0E100000 points at the physical flash slot
-	 * 0x08100000 where tfm_s.bin lives, then read tfm_s's reset vector at
-	 * 0x0E100000 and secure-jump. TF-M owns the TrustZone setup, so we bypass
-	 * BOOT_RAM_TZCfg + the image2/NS handoff.
-	 *
-	 * TODO(NSPE handoff): the NS side now is app_km4 (the KM4 image2); the old
-	 * 44-byte ns_stub at flash 0x08108000 was removed. The copy-to-0x10010000 +
-	 * NS landing below still target that stub and must be reworked to BLXNS into
-	 * app_km4 in a follow-on boot-handoff stage. Left as-is for the TF-M in-tree
-	 * build/link stage (not exercised on HW yet). */
-	{
-		volatile u32 *xip;
-		volatile u32 *nssrc = (volatile u32 *)(0x08108000);   /* ns_stub.bin in flash */
-		volatile u32 *nsdst = (volatile u32 *)(0x10010000);   /* NS_CODE_START (RAM) */
-		u32 i, msp, reset;
-		/* map cached virtual 0x0E100000..+64KB -> physical flash 0x08100000
-		 * (phys = virt - 0x06000000, i.e. IsMinus=1). Use a spare MMU entry (4). */
-		RSIP_MMU_Config(4, 0x0E100000, 0x0E10FFFF, 1, 0x06000000);
-		RSIP_MMU_Cmd(4, ENABLE);
-		xip = (volatile u32 *)(0x0E100000);                   /* tfm_s vectors (cached XIP) */
-		for (i = 0; i < (0x1000 / 4); i++)                    /* copy <=4KB NS stub */
-			nsdst[i] = nssrc[i];
-		msp   = xip[0];
-		reset = xip[1];
-		DBG_PRINTF(MODULE_BOOT, LEVEL_ERROR, "ZZ-TFM-XIP @0E100000=[%x %x]\n", xip[0], xip[1]);
-		__set_MSP(msp);
-		((void (*)(void))reset)();
-		while (1);                                            /* not reached */
-	}
-#endif
-
+	/* AMEBAD_TFM_BOOT: the TF-M secure-jump is AFTER the image2 load below, so
+	 * app_km4 (the NSPE) is fully loaded (.data copied, Image2EntryFun resolved)
+	 * before tfm_s's SPM hands off to it. See the secure-jump block further down. */
 	BOOT_FLASH_Image2SignatureCheck();
 
 	/* load image3 before image2, because it will use __image2_entry_func__ temp */
@@ -713,6 +682,34 @@ void BOOT_FLASH_Image1(void)
 		DBG_PRINTF(MODULE_BOOT, LEVEL_ERROR,"IMG2 SIGN Invalid\n");
 		goto INVALID_IMG2;
 	}
+
+#ifdef AMEBAD_TFM_BOOT
+	/* TF-M-first NS handoff: app_km4's image2 is now loaded (.data copied above,
+	 * Image2EntryFun resolved, signature OK). tfm_s runs CACHED-XIP in place from
+	 * S_CODE_START (0x0E100000): the image2 load already linear-maps all flash to
+	 * 0x0E000000, so 0x0E100000 -> flash 0x08100000 (tfm_s.bin) for free — we map
+	 * NOTHING (a 2nd RSIP MMU entry would overlap and fault). Stash the NS reset
+	 * info in a handoff block (NS_HANDOFF_BLOCK) and secure-jump to tfm_s's vector.
+	 * The SPM configures SAU/IDAU itself and BLXNS-es into app_km4 (entry/MSP/VTOR
+	 * read back from the handoff block via tfm_hal_get_ns_*), so we SKIP
+	 * BOOT_RAM_TZCfg + the normal NS handoff below. */
+	{
+		volatile u32 *hb  = (volatile u32 *)(0x10002000);   /* NS handoff block (RSVD_RAM_NS; region_defs NS_HANDOFF_BLOCK) */
+		u32 *vns = (u32 *)Image2EntryFun->VectorNS;
+		volatile u32 *xip = (volatile u32 *)(0x0E100000);   /* S_CODE_START: tfm_s vectors (cached XIP, mapped by image2) */
+		vns[1] = (u32)Image2EntryFun->RamStartFun;          /* app_km4 NS reset slot         */
+		hb[0]  = MSP_RAM_HP_NS;                             /* NS MSP   (tfm_hal_get_ns_MSP)   */
+		hb[1]  = (u32)Image2EntryFun->RamStartFun;          /* NS entry (tfm_hal_get_ns_entry) */
+		hb[2]  = (u32)Image2EntryFun->VectorNS;             /* NS VTOR  (tfm_hal_get_ns_VTOR)  */
+		/* let the NS world use the FPU (mirrors the normal handoff below) */
+		SCB->CPACR    |= 0x00f00000;
+		SCB_NS->CPACR |= 0x00f00000;
+		SCB->NSACR    |= BIT(10) | BIT(11);
+		__set_MSP(xip[0]);
+		((void (*)(void))xip[1])();                         /* secure-jump into tfm_s (cached XIP) */
+		while (1);                                          /* not reached */
+	}
+#endif
 
 	/* Enable SecureFault, UsageFault, MemManageFault, BusFault */
 	SCB->SHCSR |= SCB_SHCSR_SECUREFAULTENA_Msk | SCB_SHCSR_USGFAULTENA_Msk | \

@@ -76,17 +76,8 @@ const VECTOR_TABLE_Type __VECTOR_TABLE[] __VECTOR_TABLE_ATTRIBUTE = {
     IRQH(56), IRQH(57),
 };
 
-/* Bring-up trace: direct call to the AmebaD secure-ROM LOGUART_PutChar
- * (0x10102af5, already initialised by the bootloader). Lets us see how far tfm_s
- * gets before TF-M's own stdio comes up. Remove once boot is solid. */
-static inline void tfm_dbg_putc(char c)
-{
-    ((void (*)(unsigned char))0x10102af5u)((unsigned char)c);
-}
-
 void Reset_Handler(void)
 {
-    tfm_dbg_putc('T'); tfm_dbg_putc('1'); tfm_dbg_putc('\n');
 #if defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3U)
     __disable_irq();
 #endif
@@ -96,8 +87,6 @@ void Reset_Handler(void)
 #if defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3U)
     __TZ_set_STACKSEAL_S((uint32_t *)(&__STACK_SEAL));
 #endif
-    tfm_dbg_putc('T'); tfm_dbg_putc('2'); tfm_dbg_putc('\n');
     SystemInit();
-    tfm_dbg_putc('T'); tfm_dbg_putc('3'); tfm_dbg_putc('\n');
     __PROGRAM_START();
 }

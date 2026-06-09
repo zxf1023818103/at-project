@@ -413,6 +413,16 @@ int main(void)
     DiagPrintf("\n\r[KM4] at-project image2 — FreeRTOS+TCP DHCP bring-up\n\r");
     DiagPrintf("[KM4] FreeRTOS kernel %s\n\r", tskKERNEL_VERSION_NUMBER);
 
+#ifdef AMEBAD_TFM_BOOT
+    /* app_km4 is TF-M's Non-Secure world: exercise a real PSA service call.
+     * Done here (pre-scheduler, single-threaded) so the bare-metal NS dispatch
+     * is safe. See tfm_psa_selftest.c. */
+    {
+        extern void amebad_tfm_psa_selftest(void);
+        amebad_tfm_psa_selftest();
+    }
+#endif
+
     /* AT log / shell console (ROM + RAM shell + LOGUART RX ISR). */
 #ifndef AT_PROJECT_QUIC
     /* AT/monitor shell. Dropped from the QUIC image (the handshake self-test is

@@ -45,14 +45,14 @@ typedef struct { idau_entry_t ENTRY[8]; volatile uint32_t CTRL; volatile uint32_
 typedef struct { uint32_t start; uint32_t end; uint32_t nsc; } tz_region_t;
 
 static const tz_region_t s_ns_regions[] = {
-    { 0x00000000u, 0x0DFFFFFFu, 0 },                 /* low: KM0/retention/PSRAM/flash */
-    { 0x0E000000u, (S_CODE_START - 1u), 0 },         /* XIP below tfm_s (driver app) NS */
-    { (S_CODE_START + S_CODE_SIZE), 0x0FFFFFFFu, 0 },/* XIP above tfm_s window NS      */
-    { 0x10000000u, (S_DATA_START - 1u), 0 },         /* NS SRAM (incl. RAM NS app) below S_DATA */
-    { 0x100E0000u, 0x100FFFFFu, 0 },                 /* BT/WiFi extension SRAM         */
-    { 0x1010A000u, 0x101D3FFFu, 0 },                 /* IROM_NS / DROM_NS              */
-    { 0x40000000u, 0x4FFFFFFFu, 0 },                 /* NS peripheral alias            */
-    { CMSE_VENEER_REGION_START,                      /* NSC veneers (in S_CODE window) */
+    { 0x00000000u, 0x0DFFFFFFu, 0 },                  /* low NS: KM0/retention/PSRAM + flash (incl. tfm_s.bin @0x08100000, but it runs cached @S_CODE) */
+    { 0x0E000000u, (S_CODE_START - 1u), 0 },          /* XIP NS below tfm_s (image2/app_km4 cached XIP) */
+    { (S_CODE_START + S_CODE_SIZE), 0x0FFFFFFFu, 0 }, /* XIP NS above tfm_s window */
+    { 0x10000000u, (S_DATA_START - 1u), 0 },          /* NS SRAM below S_DATA (S_DATA = secure, omitted) */
+    { 0x100E0000u, 0x100FFFFFu, 0 },                  /* BT/WiFi extension SRAM         */
+    { 0x1010A000u, 0x101D3FFFu, 0 },                  /* IROM_NS / DROM_NS              */
+    { 0x40000000u, 0x4FFFFFFFu, 0 },                  /* NS peripheral alias            */
+    { CMSE_VENEER_REGION_START,                       /* NSC veneers (in S_CODE cached-XIP window) */
       (CMSE_VENEER_REGION_START + CMSE_VENEER_REGION_SIZE - 1u), 1 },
 };
 #define NUM_TZ_REGIONS  (sizeof(s_ns_regions) / sizeof(s_ns_regions[0]))

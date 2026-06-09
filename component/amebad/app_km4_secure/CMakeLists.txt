@@ -104,3 +104,6 @@ ExternalProject_Add_Step(tfm_spe copy_blob
 # (TFM_PLATFORM). It already does target_sources(platform_s/tfm_s ...) — that is
 # the injection point for sharing in-tree source into the SPE later (a shared
 # *_sources.cmake the port `include()`s), without a second add_subdirectory.
+#
+# The real NSPE that exercises PSA is app_km4 (the driver image) — see
+# component/amebad/app_km4/{tfm_psa_selftest.c,CMakeLists.txt}.

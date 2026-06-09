@@ -18,47 +18,38 @@ const struct memory_region_limits memory_regions = {
     .veneer_limit               = CMSE_VENEER_REGION_START + CMSE_VENEER_REGION_SIZE - 1,
 };
 
-/* Bring-up trace via the AmebaD secure-ROM LOGUART (same as startup). */
-static inline void tfm_dbg_puts(const char *s)
-{
-    void (*pc)(unsigned char) = (void (*)(unsigned char))0x10102af5u;
-    while (*s) pc((unsigned char)*s++);
-}
-
 enum tfm_hal_status_t tfm_hal_platform_init(void)
 {
-    tfm_dbg_puts("H1\n");
     __enable_irq();
 
     /* Secure attribution + banked fault/NVIC config (IDAU/SAU/ITNS/AIRCR). */
     enable_fault_handlers();
-    tfm_dbg_puts("H2\n");
     system_reset_cfg();
-    tfm_dbg_puts("H3\n");
     sau_and_idau_cfg();
-    tfm_dbg_puts("H4\n");
     nvic_interrupt_target_state_cfg();
     nvic_interrupt_enable();
-    tfm_dbg_puts("H5\n");
 
     /* TF-M log console (routes to the Ameba LOGUART via Driver_USART0). */
     stdio_init();
-    tfm_dbg_puts("H6\n");
 
     return TFM_HAL_SUCCESS;
 }
 
-uint32_t tfm_hal_get_ns_VTOR(void)
-{
-    return memory_regions.non_secure_code_start;
-}
-
+/* The bootloader writes a 3-word NS handoff block at NS_HANDOFF_BLOCK:
+ * [0]=MSP_NS, [1]=NS entry (app_km4 RamStartFun), [2]=NS VTOR (app_km4 VectorNS).
+ * The NS world is app_km4 (NSPE), a full AmebaD image2 whose reset vector is
+ * resolved at runtime — not a plain table at NS_CODE_START — hence this block. */
 uint32_t tfm_hal_get_ns_MSP(void)
 {
-    return *((uint32_t *)memory_regions.non_secure_code_start);
+    return ((volatile uint32_t *)NS_HANDOFF_BLOCK)[0];
 }
 
 uint32_t tfm_hal_get_ns_entry_point(void)
 {
-    return *((uint32_t *)(memory_regions.non_secure_code_start + 4));
+    return ((volatile uint32_t *)NS_HANDOFF_BLOCK)[1];
+}
+
+uint32_t tfm_hal_get_ns_VTOR(void)
+{
+    return ((volatile uint32_t *)NS_HANDOFF_BLOCK)[2];
 }

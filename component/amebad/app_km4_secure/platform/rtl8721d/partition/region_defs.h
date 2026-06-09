@@ -41,20 +41,25 @@
 
 #define TOTAL_RAM_SIZE          (S_DATA_SIZE + NS_DATA_SIZE)
 
-/* ---- Secure code : TF-M SPE (cached XIP via a dedicated RSIP MMU entry) ----
- * tfm_s executes from the CACHED XIP virtual window 0x0E100000, which the
- * bootloader maps (RSIP_MMU_Config, a spare MMU entry) to the physical flash
- * slot 0x08100000 where tfm_s.bin lives. This keeps the driver app as the KM4
- * image2 (entry0 / 0x0E000000) so the ROM image chain + boot stay intact, while
- * tfm_s gets its own cached mapping — no Ameba image2 header needed (the MMU
- * entry maps the raw blob directly). 0x0E100000 is 0x400-aligned -> valid VTOR.
- * Only data lives in RAM (S_DATA); startup copies .TFM_DATA from its flash LMA. */
+/* ---- Secure code : TF-M SPE (cached XIP, executes in place from flash) ----
+ * tfm_s executes from the CACHED XIP window 0x0E100000 — and we do NOTHING to
+ * map it: the driver image2 (app_km4) already programs the KM4 cached-XIP RSIP
+ * MMU to linearly map ALL of flash to 0x0E000000 (offset 0x06000000), so
+ * 0x0E100000 -> flash 0x08100000 (where tfm_s.bin is laid) for free. tfm_s just
+ * rides that mapping; the bootloader secure-jumps straight to 0x0E100000.
+ * (Verified by reading 0x0E100000 == tfm_s.bin[0] with NO extra MMU entry.)
+ * IMPORTANT: do NOT call RSIP_MMU_Config for tfm_s — a second MMU entry over
+ * 0x0E100000 overlaps image2's mapping and faults (that was the old bug). The
+ * flash slot is not RSIP-mask encrypted (rtl8721d_bootcfg RSIP_Mask only covers
+ * system data), so XIP fetches see plaintext. 0x0E100000 is 0x400-aligned (valid
+ * VTOR). Only data lives in RAM (S_DATA); startup copies .TFM_DATA from its flash
+ * LMA (which is itself in the cached XIP window). */
 #define S_CODE_START            (0x0E100000)
 #define S_CODE_SIZE             (0x00010000)   /* 64 KB cached XIP window for tfm_s */
 #define S_CODE_LIMIT            (S_CODE_START + S_CODE_SIZE - 1)
 #define S_CODE_VECTOR_TABLE_SIZE (0x00000400)
-/* Physical flash slot tfm_s.bin is laid at (build_image_all OFF_IMG3); the
- * bootloader RSIP_MMU_Config maps S_CODE_START -> here. */
+/* Physical flash slot tfm_s.bin is laid at (build_image_all OFF_IMG3) =
+ * S_CODE_START - 0x06000000 (the image2 cached-XIP linear offset). */
 #define S_CODE_FLASH_PHYS       (0x08100000)
 
 /* ---- Non-secure code : NS app ----
@@ -69,6 +74,18 @@
 /* NS partition (image) start/size, as seen by the bootloader / TF-M. */
 #define NS_PARTITION_START      (NS_CODE_START)
 #define NS_PARTITION_SIZE       (NS_CODE_SIZE)
+
+/* ---- NS handoff block (app_km4 NSPE) ----
+ * When the NS world is the full driver app_km4 (a real AmebaD image2, not the
+ * flat stub), its reset vector is not a plain table at a fixed address — the
+ * bootloader resolves it at runtime (Image2EntryFun) and stashes 3 words here
+ * for the SPM to read back via tfm_hal_get_ns_{MSP,entry_point,VTOR}:
+ *   [0]=MSP_NS  [1]=NS entry (RamStartFun)  [2]=NS VTOR (app_km4 VectorNS)
+ * Placed in RSVD_RAM_NS (0x10002000..0x10003FFF, reserved) — app_km4's own RAM
+ * sections all live at >=0x10005000 (BD_RAM_NS), so this never clashes with its
+ * .data/.bss/heap. In the SAU NS SRAM region (<S_DATA_START), so the (secure)
+ * SPM can read it before BLXNS. */
+#define NS_HANDOFF_BLOCK        (0x10002000)
 
 /* ---- Non-secure-callable (veneer) region ----
  * The TF-M common SPE linker places .gnu.sgstubs right AFTER the secure vector

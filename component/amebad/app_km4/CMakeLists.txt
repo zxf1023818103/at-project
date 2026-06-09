@@ -183,13 +183,34 @@ target_link_options(target_img2_km4 PRIVATE
 # PSA calls + NS layout/boot handoff are a follow-on stage.
 if(AMEBAD_TFM_BOOT)
     set(_tfm_export "${CMAKE_BINARY_DIR}/component/amebad/app_km4_secure/tfm_spe_export")
+    set(_tfm_src    "${CMAKE_SOURCE_DIR}/component/thirdparty/trusted-firmware-m")
     add_dependencies(target_img2_km4 tfm_spe)
+    # app_km4 IS the NSPE: issue a real PSA call into TF-M. Link the PSA client
+    # interface (tfm_platform_ioctl -> psa_call -> dispatch -> SG veneer) + the
+    # bare-metal single-threaded dispatch (PSA is called once from main() before
+    # the scheduler starts). The PSA-client .c are plain TF-M source (referenced
+    # directly, not via the install's curated set); s_veneers.o + generated
+    # psa_manifest/sid.h come from the SPE export.
     target_sources(target_img2_km4 PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/tfm_ns_check.c")
+        "${CMAKE_CURRENT_SOURCE_DIR}/tfm_psa_selftest.c"
+        "${_tfm_src}/interface/src/tfm_platform_api.c"
+        "${_tfm_src}/interface/src/tfm_tz_psa_ns_api.c"
+        "${_tfm_src}/interface/src/os_wrapper/tfm_ns_interface_bare_metal.c")
     target_include_directories(target_img2_km4 PRIVATE
-        "${_tfm_export}/interface/include")
+        "${_tfm_export}/interface/include"
+        "${_tfm_src}/interface/include")
+    target_compile_definitions(target_img2_km4 PRIVATE AMEBAD_TFM_BOOT=1)
     target_link_libraries(target_img2_km4 PRIVATE
         "${_tfm_export}/interface/lib/s_veneers.o")
+    # Clamp the NS FreeRTOS heap top below TF-M's secure RAM. tfm_s runs cached-XIP
+    # (code in flash, not RAM), so the only secure SRAM is S_DATA
+    # (0x10060000..0x1007FFFF); app_km4 as the NSPE must keep its heap (and
+    # everything else) under that or os_heap_init faults the moment heap5 touches
+    # the secure region. __tz_sram_top__ feeds rlx8721d_img2_is.ld's __sram_end__
+    # (= region_defs.h S_DATA_START). This is the os_heap_init-hang fix: previously
+    # the NS heap ran up to BD_RAM_NS top 0x1007C000, overlapping the secure window.
+    target_link_options(target_img2_km4 PRIVATE
+        "-Wl,--defsym=__tz_sram_top__=0x10060000")
 endif()
 
 # XIP boot-hang dodge: shift the whole .xip_image2.text block by AMEBAD_XIP_PAD

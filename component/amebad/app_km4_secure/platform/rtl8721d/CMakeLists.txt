@@ -51,7 +51,7 @@ target_sources(platform_s
         tfm_hal_platform.c
         tfm_hal_isolation.c
         cmsis_core/system_core_init.c
-        $<$<BOOL:${TFM_PARTITION_PLATFORM}>:services/src/tfm_platform_system.c>
+        $<$<BOOL:${TFM_PARTITION_PLATFORM}>:${CMAKE_CURRENT_LIST_DIR}/services/src/tfm_platform_system.c>
         cmsis_drivers/Driver_USART.c
         cmsis_drivers/Driver_Flash.c
 )
