@@ -485,8 +485,17 @@ int main(void)
     shell_init_rom(0, 0);
     shell_init_ram();
     InterruptRegister((IRQ_FUN)shell_uart_irq_rom, UART_LOG_IRQ, (u32)NULL, 5);
-#endif
+    /* Enable the LOGUART RX IRQ ONLY when a handler is registered. In the QUIC
+     * image the shell is gated out (above), so NOTHING registers IRQ 3 — yet we
+     * used to enable it here unconditionally. With the line enabled but no
+     * handler, any byte sent to the LOG UART makes ROM's INT_Entry fire forever
+     * ("Irq 3 Fun Not Assign" storm): ROM never clears the UART RX interrupt, so
+     * it re-pends at priority 5 and starves the WiFi/IP tasks — so typing to the
+     * console within the first seconds both spammed that message AND blocked DHCP
+     * (no IP). The QUIC console is output-only (DiagPrintf TX is unaffected), so
+     * just leave RX disabled there. */
     InterruptEn(UART_LOG_IRQ, 5);
+#endif
 
     /* WiFi+DHCP bring-up runs as its own task (wifi_connect blocks). */
     if (xTaskCreate(wifi_bringup_thread, "wifi_bringup", 4096, NULL,
