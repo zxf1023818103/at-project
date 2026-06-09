@@ -12,7 +12,9 @@
 #     swaps (target is little-endian) and ngtcp2_unreachable.c collapses to a
 #     bare abort() (no stdio/malloc/write — HAVE_UNISTD_H stays undefined).
 #   - version.h is hand-supplied under generated/ (no configure step).
-#   - default ngtcp2_mem -> malloc/free/calloc/realloc, provided by ngtcp2_port.c
+#   - default ngtcp2_mem -> malloc/free/calloc/realloc, and the bare htonl/htons
+#     ngtcp2_net.h needs, both provided by amebad_syscalls (syscalls/libc_compat.c)
+#     and resolved at the final KM4 image link.
 #     over the FreeRTOS heap (this image has no newlib _sbrk).
 #
 # KM4-only, EXCLUDE_FROM_ALL until app_km4 links it. Gated by the caller:
@@ -72,8 +74,6 @@ add_library(amebad_ngtcp2 STATIC EXCLUDE_FROM_ALL
     "${_ng}/lib/ngtcp2_vec.c"
     "${_ng}/lib/ngtcp2_version.c"
     "${_ng}/lib/ngtcp2_window_filter.c"
-    # malloc-family shim over the FreeRTOS heap (default ngtcp2_mem backend)
-    "${CMAKE_CURRENT_SOURCE_DIR}/ngtcp2_port.c"
 )
 
 target_include_directories(amebad_ngtcp2 PUBLIC
@@ -91,8 +91,8 @@ target_compile_definitions(amebad_ngtcp2 PUBLIC
     NGTCP2_AF_INET6=10            # (Linux convention; only stored/compared internally)
 )
 
-# FreeRTOS for pvPortMalloc/vPortFree (ngtcp2_port.c). Vendor: silence warnings.
-target_link_libraries(amebad_ngtcp2 PRIVATE FreeRTOS)
+# Vendor sources: silence warnings. (malloc/htonl now come from amebad_syscalls,
+# resolved at the final image link — ngtcp2 no longer needs a FreeRTOS dep here.)
 target_compile_options(amebad_ngtcp2 PRIVATE -w)
 
 # ---- crypto helper bound to wolfSSL (crypto/shared.c + crypto/wolfssl) ----

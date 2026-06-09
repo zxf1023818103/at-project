@@ -15,7 +15,13 @@ if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     return()
 endif()
 
-add_library(amebad_syscalls OBJECT newlib_syscalls.c)
+# newlib_syscalls.c = the syscall stubs; libc_compat.c = the FreeRTOS-heap malloc
+# family + BSD byte-order helpers (htonl/...), moved here from ngtcp2 so every KM4
+# program shares one copy (see libc_compat.c).
+add_library(amebad_syscalls OBJECT newlib_syscalls.c libc_compat.c)
 
-# ameba_soc.h -> DiagPutChar / DiagGetChar (ROM console).
-target_link_libraries(amebad_syscalls PRIVATE amebad_sdk_includes)
+# ameba_soc.h -> DiagPutChar / DiagGetChar (ROM console); amebad_freertos_tcp
+# carries FreeRTOS.h (pvPortMalloc) + FreeRTOS_IP.h (FreeRTOS_htonl) on its PUBLIC
+# include path. It is an OBJECT lib, so this only borrows those include dirs at
+# compile time — no archive is pulled in (FreeRTOS_htonl is a header-only macro).
+target_link_libraries(amebad_syscalls PRIVATE amebad_sdk_includes amebad_freertos_tcp)
