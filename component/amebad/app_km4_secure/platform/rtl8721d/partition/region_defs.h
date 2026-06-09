@@ -41,26 +41,26 @@
 
 #define TOTAL_RAM_SIZE          (S_DATA_SIZE + NS_DATA_SIZE)
 
-/* ---- Secure code : TF-M SPE (cached XIP, executes in place from flash) ----
- * tfm_s executes from the CACHED XIP window 0x0E100000 — and we do NOTHING to
- * map it: the driver image2 (app_km4) already programs the KM4 cached-XIP RSIP
- * MMU to linearly map ALL of flash to 0x0E000000 (offset 0x06000000), so
- * 0x0E100000 -> flash 0x08100000 (where tfm_s.bin is laid) for free. tfm_s just
- * rides that mapping; the bootloader secure-jumps straight to 0x0E100000.
- * (Verified by reading 0x0E100000 == tfm_s.bin[0] with NO extra MMU entry.)
- * IMPORTANT: do NOT call RSIP_MMU_Config for tfm_s — a second MMU entry over
- * 0x0E100000 overlaps image2's mapping and faults (that was the old bug). The
- * flash slot is not RSIP-mask encrypted (rtl8721d_bootcfg RSIP_Mask only covers
- * system data), so XIP fetches see plaintext. 0x0E100000 is 0x400-aligned (valid
- * VTOR). Only data lives in RAM (S_DATA); startup copies .TFM_DATA from its flash
- * LMA (which is itself in the cached XIP window). */
-#define S_CODE_START            (0x0E100000)
+/* ---- Secure code : TF-M SPE (cached XIP via a dedicated RSIP MMU entry) ----
+ * tfm_s executes from the CACHED XIP window 0x0E400000. The driver image2
+ * (app_km4) linear-maps the whole 4 MB flash to 0x0E000000..0x0E3FFFFF (offset
+ * 0x06000000); tfm_s deliberately sits ABOVE that window at 0x0E400000, which
+ * image2 does NOT cover — so the bootloader programs ONE dedicated, non-
+ * overlapping RSIP MMU entry (entry 4) mapping 0x0E400000 -> tfm_s's flash slot.
+ * That slot is NOT fixed: build_image_all.py lays tfm_s right after the merged
+ * image2 (4 KB aligned, dynamic), and the bootloader resolves the same offset at
+ * runtime from the image2 segment chain. Keeping S_CODE_START FIXED here means
+ * the SG veneer addresses are fixed, so app_km4 (NSPE) never needs relinking even
+ * as image2 grows. (Earlier bug: mapping a 2nd entry over 0x0E100000 overlapped
+ * image2's mapping and faulted — 0x0E400000 is outside it, verified on HW.)
+ * 0x0E400000 is 0x400-aligned (valid VTOR). Only data lives in RAM (S_DATA);
+ * startup copies .TFM_DATA from its flash LMA (in the cached XIP window). */
+#define S_CODE_START            (0x0E400000)
 #define S_CODE_SIZE             (0x00010000)   /* 64 KB cached XIP window for tfm_s */
 #define S_CODE_LIMIT            (S_CODE_START + S_CODE_SIZE - 1)
 #define S_CODE_VECTOR_TABLE_SIZE (0x00000400)
-/* Physical flash slot tfm_s.bin is laid at (build_image_all OFF_IMG3) =
- * S_CODE_START - 0x06000000 (the image2 cached-XIP linear offset). */
-#define S_CODE_FLASH_PHYS       (0x08100000)
+/* tfm_s's flash slot is dynamic (right after the merged image2); the bootloader
+ * computes it at runtime and programs the RSIP entry, so no S_CODE_FLASH_PHYS. */
 
 /* ---- Non-secure code : NS app ----
  * Bring-up NSPE is a tiny RAM-resident NS stub (component/amebad/app_km4_secure/ns_stub),

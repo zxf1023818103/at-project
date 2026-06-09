@@ -696,7 +696,20 @@ void BOOT_FLASH_Image1(void)
 	{
 		volatile u32 *hb  = (volatile u32 *)(0x10002000);   /* NS handoff block (RSVD_RAM_NS; region_defs NS_HANDOFF_BLOCK) */
 		u32 *vns = (u32 *)Image2EntryFun->VectorNS;
-		volatile u32 *xip = (volatile u32 *)(0x0E100000);   /* S_CODE_START: tfm_s vectors (cached XIP, mapped by image2) */
+		volatile u32 *xip = (volatile u32 *)(0x0E400000);   /* S_CODE_START: tfm_s vectors (cached XIP via dedicated RSIP entry) */
+		/* tfm_s flash slot = right after the km4 image2, located the SDK way (same
+		 * as the stock IMG3 locator earlier in this file): RSIP MMU entry 1 is the
+		 * km4 image2 cached-XIP entry programmed by ROM; its virtual end aligned up
+		 * to 4 KB, converted to physical via the entry's OWN offset, is exactly
+		 * where build_image_all laid tfm_s.bin (4 KB after the merged image2). NB:
+		 * the km4 entry's offset is NOT the 0x06000000 of the tfm_s entry. */
+		u32 _mmu_end = RSIP_BASE->FLASH_MMU[1].MMU_ENTRYx_ENDADDR;
+		u32 _mmu_off = RSIP_BASE->FLASH_MMU[1].MMU_ENTRYx_OFFSET;
+		u32 tfm_flash_phys = ((((_mmu_end - 1) >> 12) + 1) << 12);
+		if (RSIP_BASE->FLASH_MMU[1].MMU_ENTRYx_CTRL & MMU_BIT_ENTRY_OFFSET_MINUS)
+		    tfm_flash_phys -= _mmu_off;
+		else
+		    tfm_flash_phys += _mmu_off;
 		vns[1] = (u32)Image2EntryFun->RamStartFun;          /* app_km4 NS reset slot         */
 		hb[0]  = MSP_RAM_HP_NS;                             /* NS MSP   (tfm_hal_get_ns_MSP)   */
 		hb[1]  = (u32)Image2EntryFun->RamStartFun;          /* NS entry (tfm_hal_get_ns_entry) */
@@ -705,8 +718,14 @@ void BOOT_FLASH_Image1(void)
 		SCB->CPACR    |= 0x00f00000;
 		SCB_NS->CPACR |= 0x00f00000;
 		SCB->NSACR    |= BIT(10) | BIT(11);
+		/* Dedicated RSIP entry maps S_CODE_START (0x0E400000, above image2's
+		 * 0x0E000000-0x0E3FFFFF window) -> tfm_s's dynamic flash slot, then
+		 * secure-jump. Offset is now runtime-computed (tracks image2 size). */
+		RSIP_MMU_Config(4, 0x0E400000, 0x0E40FFFF, 1, 0x0E400000 - tfm_flash_phys);
+		RSIP_MMU_Cmd(4, ENABLE);
+		__DSB(); __ISB();
 		__set_MSP(xip[0]);
-		((void (*)(void))xip[1])();                         /* secure-jump into tfm_s (cached XIP) */
+		((void (*)(void))xip[1])();                         /* secure-jump into tfm_s (cached XIP @0x0E400000) */
 		while (1);                                          /* not reached */
 	}
 #endif

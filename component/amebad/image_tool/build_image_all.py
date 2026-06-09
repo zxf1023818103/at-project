@@ -49,7 +49,11 @@ KM4_TFM_S  = ("component/amebad/app_km4_secure/tfm_s.bin")
 OFF_KM0_BOOT  = 0x0000
 OFF_KM4_BOOT  = 0x4000
 OFF_IMAGE2    = 0x6000     # OTA1 (OTA_Region[0] = LS_IMG2_OTA1_ADDR = 0x08006000)
-OFF_IMG3      = 0x100000   # secure tfm_s @ flash 0x08100000 (cached XIP @0x0E100000)
+# tfm_s (the old OFF_IMG3) is now DYNAMIC: laid 4 KB-aligned right after the
+# merged image2 (see below), so it never blocks image2 growth. The bootloader
+# resolves the same offset at runtime from the image2 segment chain. Upper bound
+# = OTA2 start (LS_IMG2_OTA2_ADDR 0x08183000): tfm_s must end before it.
+OFF_OTA2      = 0x183000
 
 
 def run(cmd):
@@ -124,9 +128,11 @@ def main():
     place(image, OFF_KM4_BOOT, km4_boot,     "km4_boot_all.bin")
     place(image, OFF_IMAGE2,   km0_km4_img2, "km0_km4_image2.bin")
 
-    # TF-M boot (XIP-from-flash): tfm_s executes in place from flash 0x08100000
-    # (S_CODE_START); the bootloader secure-jumps there. The driver app stays the
-    # KM4 image2 (above) so the ROM image chain is intact, and is TF-M's NS side.
+    # TF-M boot: tfm_s executes cached-XIP from S_CODE_START 0x0E400000, which a
+    # dedicated RSIP MMU entry (programmed by the bootloader) maps to tfm_s's
+    # flash slot. That slot is DYNAMIC — 4 KB-aligned right after the merged
+    # image2 — so growing image2 never collides with tfm_s. The bootloader
+    # computes the identical offset at runtime from the image2 segment chain.
     if tfm_boot:
         tfm_path = os.path.join(args.km4_build, KM4_TFM_S)
         if not os.path.exists(tfm_path):
@@ -134,9 +140,13 @@ def main():
                      "  Expected the in-tree TF-M build (CMake target 'tfm_spe') to produce it.\n"
                      "  Run: cmake --build %s -t tfm_spe" % (tfm_path, args.km4_build))
         tfm = read(tfm_path)
-        if OFF_IMG3 < len(image):
-            sys.exit("TF-M offset 0x%x overlaps image2 (ends 0x%x)" % (OFF_IMG3, len(image)))
-        place(image, OFF_IMG3, tfm, "tfm_s.bin (TF-M SPE, cached XIP @0x0E100000)")
+        off_img3 = (len(image) + 0xFFF) & ~0xFFF        # 4 KB-aligned, right after image2
+        if off_img3 + len(tfm) > OFF_OTA2:
+            sys.exit("tfm_s (@0x%06x + %d B) overruns OTA2 @0x%06x — image2 too big"
+                     % (off_img3, len(tfm), OFF_OTA2))
+        place(image, off_img3, tfm,
+              "tfm_s.bin (TF-M SPE, cached XIP @0x0E400000, dynamic @flash 0x%08x)"
+              % (0x08000000 + off_img3))
 
     outdir = os.path.dirname(args.out)
     os.makedirs(outdir, exist_ok=True)
