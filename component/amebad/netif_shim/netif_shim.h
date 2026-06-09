@@ -15,7 +15,7 @@
  extern "C" {
 #endif
 
-#include <platform/platform_stdlib.h>
+#include "platform_stdlib_rtl8721d.h"
 #include "platform_opts.h"
 #include "autoconf.h"
 #include "basic_types.h"        /* u32 / u8 (was pulled via lwip before) */

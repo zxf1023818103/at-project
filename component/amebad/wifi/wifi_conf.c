@@ -8,7 +8,7 @@
  * <dhcp/dhcps.h> (AP DHCP server) and "tcpip.h" are gone. The few symbols
  * wifi_conf.c still references are declared in netif_shim.h. */
 #endif
-#include <platform/platform_stdlib.h>
+#include "platform_stdlib_rtl8721d.h"
 #include <wifi/wifi_conf.h>
 #include <wifi/wifi_util.h>
 #include <wifi/wifi_ind.h>

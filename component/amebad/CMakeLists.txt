@@ -82,7 +82,8 @@ add_subdirectory(fwlib)              # chip fwlib: headers (amebad_fwlib_headers
 add_subdirectory(xmodem)             # ROM xmodem headers (amebad_xmodem) + xmodem.ld symbols; linked by sdk_includes below
 add_subdirectory(string_rom)         # ROM swlib-string headers (amebad_string_rom) + string_rom_km{4,0}.ld; linked by sdk_includes below
 add_subdirectory(cmsis_rom)          # CMSIS core/DSP/mpu headers (amebad_cmsis_rom) + cmsis_rom_km{4,0}.ld; linked by sdk_includes below
-add_subdirectory(sdk_headers)        # flat platform/ headers + defines amebad_sdk_includes (aggregates fwlib_headers/xmodem/string_rom/cmsis_rom + SDK include paths); consumed by the ram HAL libs (forward ref) and app/boot
+add_subdirectory(dlist)              # header-only doubly-linked-list (amebad_dlist); linked by sdk_includes below (must precede sdk_headers)
+add_subdirectory(sdk_headers)        # defines amebad_sdk_includes (aggregates fwlib_headers/xmodem/string_rom/cmsis_rom/dlist + SDK include paths); consumed by the ram HAL libs (forward ref) and app/boot
 add_subdirectory(usrcfg)             # chip-gated: usrcfg_common (+ _lp on KM0 / _hp on KM4)
 add_subdirectory(freertos)           # upstream FreeRTOS kernel -> target `FreeRTOS`
 add_subdirectory(freertos_glue)      # SDK FreeRTOS extensions, chip-gated (after freertos)

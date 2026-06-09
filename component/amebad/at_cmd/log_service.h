@@ -8,7 +8,7 @@
  */
 #if defined(CONFIG_PLATFORM_8195A) || defined(CONFIG_PLATFORM_8711B) || defined(CONFIG_PLATFORM_8721D)|| defined(CONFIG_PLATFORM_8710C)
 #include "platform_opts.h"
-#include "platform_stdlib.h"
+#include "platform_stdlib_rtl8721d.h"
 #endif
 
 /*

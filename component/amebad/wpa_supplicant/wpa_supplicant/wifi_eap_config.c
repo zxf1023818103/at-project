@@ -9,7 +9,7 @@
 #include <osdep_service.h>
 #include "utils/os.h"
 #include "wifi/wifi_conf.h"
-#include <platform/platform_stdlib.h>
+#include "platform_stdlib_rtl8721d.h"
 
 #define WLAN0_NAME "wlan0"
 #ifndef ENABLE

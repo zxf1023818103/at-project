@@ -36,7 +36,7 @@
 #include "wifi_structures.h"
 #include "wifi_util.h"
 #include "wifi_ind.h"
-#include <platform/platform_stdlib.h>
+#include "platform_stdlib_rtl8721d.h"
 
 #ifdef __cplusplus
   extern "C" {

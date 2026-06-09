@@ -1,4 +1,4 @@
-#include <platform_stdlib.h>
+#include "platform_stdlib_rtl8721d.h"
 #include "FreeRTOS.h"
 #include "task.h"
 #include "serial_api.h"

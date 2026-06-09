@@ -1,7 +1,7 @@
 #ifndef __WIFI_PERFORMANCE_MONITOR_H__
 #define __WIFI_PERFORMANCE_MONITOR_H__
 
-#include <platform_stdlib.h>
+#include "platform_stdlib_rtl8721d.h"
 
 #ifdef CONFIG_PLATFORM_8721D
 #include "rtl8721d.h"

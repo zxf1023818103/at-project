@@ -17,7 +17,7 @@
  * Prereq: WiFi must be ON (hci_board_init() checks wifi_is_up) — call after
  * wifi_on(STA). DTM needs WiFi on, not connected.
  */
-#include <platform_stdlib.h>  /* DiagPrintf, uint*_t */
+#include "platform_stdlib_rtl8721d.h"  /* DiagPrintf, uint*_t */
 #include <gpio_api.h>         /* PinName, _PA_7 / _PA_8 */
 #include "ameba_soc.h"        /* UART2_DEV, UART_Readable/CharGet/ClearRxFifo, UART_LOG_IRQ, InterruptDis */
 #include "bt_intf.h"          /* rtlk_bt_set_gnt_bt_with_clk_source, PTA_BT */

@@ -17,9 +17,9 @@
  * No consumer in the minimal driver-only image yet (the conn-priority example
  * is not built); this is the declaration home for when it is wired.
  *
- * WLAN_BSSID_EX comes from the sibling wlan_bssdef.h; bool from platform_stdlib.h.
+ * WLAN_BSSID_EX comes from the sibling wlan_bssdef.h; bool from platform_stdlib_rtl8721d.h.
  */
-#include <platform_stdlib.h>
+#include "platform_stdlib_rtl8721d.h"
 #include "wlan_bssdef.h"
 
 typedef bool (*rtw_conn_pri_cond_cb_t)(WLAN_BSSID_EX *old_ap, WLAN_BSSID_EX *new_ap);

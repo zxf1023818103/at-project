@@ -11,10 +11,12 @@
 # (IP stack = FreeRTOS-Plus-TCP); the residual driver/netif ABI shim is
 # component/amebad/netif_shim/netif_shim.h.
 #
-# In-tree members (NOT out-of-tree): the 4 SDK platform headers vendored flat in
-# THIS component's platform/ (platform_stdlib*.h / dlist.h / time64.h),
-# amebad_fwlib_headers (69 chip/HAL headers), our freertos/config override, the
-# upstream freertos-kernel headers, shared mbedtls/include.
+# In-tree members (NOT out-of-tree): amebad_fwlib_headers (69 chip/HAL headers),
+# our freertos/config override, the upstream freertos-kernel headers, shared
+# mbedtls/include. (The old platform/ header bundle that lived here is gone:
+# platform_stdlib_rtl8721d.h + time64.h moved to the syscalls component, dlist.h
+# became the amebad_dlist component, and the platform_stdlib.h dispatcher was
+# deleted — only 8721d was ever selected.)
 #
 # What remains out-of-tree (the irreducible SDK header surface — would need
 # vendoring those headers in-tree to remove): os + os/freertos + os_dep, soc
@@ -44,7 +46,7 @@ else()
 endif()
 
 add_library(amebad_sdk_includes INTERFACE)
-target_link_libraries(amebad_sdk_includes INTERFACE amebad_fwlib_headers amebad_xmodem amebad_string_rom amebad_cmsis_rom)
+target_link_libraries(amebad_sdk_includes INTERFACE amebad_fwlib_headers amebad_xmodem amebad_string_rom amebad_cmsis_rom amebad_dlist)
 
 # OTA region — base addresses for the two image2 partitions. Default
 # values match SDK upstream (rtl8721d_ota.h #define defaults). Override
@@ -100,13 +102,6 @@ target_compile_definitions(amebad_sdk_includes INTERFACE
     "AMEBAD_RSIP_MASK_ENTRY0_PAGES=${AMEBAD_RSIP_MASK_ENTRY0_PAGES}"
 )
 
-# The last vendored SDK headers left in-tree are the 4 platform headers
-# (platform_stdlib.h / platform_stdlib_rtl8721d.h / dlist.h / time64.h), now flat
-# under platform/ in THIS component (was the deep component/common/api/platform/
-# SDK-mirror nesting). Exposed on the include path below as both
-# <platform/platform_stdlib.h> (this dir) and <platform_stdlib.h> (the platform/
-# subdir) — both forms are in use (9 in-tree TUs take the platform/-prefixed one).
-
 # FreeRTOS headers come from the upstream V10.6.2 kernel
 # (component/thirdparty/freertos-kernel), NOT the SDK's bundled v10.2.0 tree.
 # These paths are on amebad_sdk_includes (not only the freertos_kernel target)
@@ -143,12 +138,14 @@ target_include_directories(amebad_sdk_includes SYSTEM INTERFACE
     "${CMAKE_SOURCE_DIR}/component/amebad/monitor"
     # PMU: rtl8721d_freertos_pmu.h moved to the pmu component (with lib_pmc_*.a).
     "${CMAKE_SOURCE_DIR}/component/amebad/pmu"
-    # common platform headers — platform_stdlib.h / dlist.h / time64.h, now flat
-    # in THIS component (see note above). This dir -> <platform/platform_stdlib.h>;
-    # platform/ -> <platform_stdlib.h>. at_cmd headers (log_service.h / atcmd_*.h)
-    # moved onto the at_cmd component; lwip_netconf.h moved to lwip/config.
-    "${CMAKE_CURRENT_SOURCE_DIR}"
-    "${CMAKE_CURRENT_SOURCE_DIR}/platform"
+    # libc-retarget headers — platform_stdlib_rtl8721d.h (printf/mem*/str* -> ROM,
+    # malloc -> pvPortMalloc, ...) and time64.h now live WITH their implementation
+    # in the syscalls component (newlib_syscalls.c); included bare as
+    # "platform_stdlib_rtl8721d.h" / "time64.h". The old platform_stdlib.h dispatcher
+    # (multi-chip #if chain, only 8721d ever taken) is gone, and dlist.h is its own
+    # component (amebad_dlist, linked above). at_cmd headers (log_service.h /
+    # atcmd_*.h) live on the at_cmd component; lwip_netconf.h on lwip/config.
+    "${CMAKE_SOURCE_DIR}/component/amebad/syscalls"
     "${CMAKE_SOURCE_DIR}/component/amebad/at_cmd"
     # autoconf.h (the global Kconfig autoconf) lives in the WLAN driver's include/
     # — a Realtek quirk. Needed by the app config main.h + sys_arch.c even with WiFi off;

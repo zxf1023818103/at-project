@@ -2,7 +2,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "platform_opts.h"
-#include "platform_stdlib.h"
+#include "platform_stdlib_rtl8721d.h"
 
 /* Realtek test code start */
 

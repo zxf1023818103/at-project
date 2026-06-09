@@ -9,7 +9,7 @@
 #ifndef UUID_H
 #define UUID_H
 
-#include <platform/platform_stdlib.h>
+#include "platform_stdlib_rtl8721d.h"
 #define UUID_LEN 16
 
 int uuid_str2bin(const char *str, u8 *bin);

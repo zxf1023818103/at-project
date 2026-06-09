@@ -17,7 +17,7 @@
  */
 #include <string.h>
 #include <stdarg.h>
-#include "platform_stdlib.h"   /* DiagPrintf */
+#include "platform_stdlib_rtl8721d.h"   /* DiagPrintf */
 #include "FreeRTOS.h"          /* vTaskDelay / pdMS_TO_TICKS (transport poll wait below) */
 #include "task.h"
 #include "hci_tp.h"            /* hci_tp_open, P_HCI_TP_OPEN_CB / RX_IND */

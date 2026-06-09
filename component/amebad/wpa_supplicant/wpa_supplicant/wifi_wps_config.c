@@ -10,7 +10,7 @@
 #include <lwip/netif.h>
 #include "wifi/wifi_conf.h"
 #include "wps/wps_defs.h"
-#include <platform/platform_stdlib.h>
+#include "platform_stdlib_rtl8721d.h"
 #include "wifi_wps_config.h"
 
 // The maximum number of WPS credentials. The value should be in range of 1~10.

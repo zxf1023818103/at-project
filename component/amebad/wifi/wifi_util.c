@@ -1,6 +1,6 @@
 #include <wireless.h>
 #include <wlan_intf.h>
-#include <platform/platform_stdlib.h>
+#include "platform_stdlib_rtl8721d.h"
 #include <wifi/wifi_conf.h>
 #include <wifi/wifi_ind.h>
 #include <osdep_service.h>

@@ -2,7 +2,7 @@
 #define MAIN_H
 
 #include <autoconf.h>
-#include "platform_stdlib.h"
+#include "platform_stdlib_rtl8721d.h"
 
 #ifndef CONFIG_WLAN
 #define CONFIG_WLAN	1

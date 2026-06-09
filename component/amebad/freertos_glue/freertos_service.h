@@ -16,23 +16,23 @@
 //	Platform dependent include file
 // --------------------------------------------
 #if defined(CONFIG_PLATFORM_8195A) || defined(CONFIG_PLATFORM_8195BHP) || defined(CONFIG_PLATFORM_8710C)
-#include "platform/platform_stdlib.h"
+#include "platform_stdlib_rtl8721d.h"
 extern VOID RtlUdelayOS(u32 us);
 #elif defined(CONFIG_PLATFORM_8711B)
-#include "platform/platform_stdlib.h"
+#include "platform_stdlib_rtl8721d.h"
 #elif defined(CONFIG_PLATFORM_8721D)
-#include "platform/platform_stdlib.h"
+#include "platform_stdlib_rtl8721d.h"
 #elif defined(CONFIG_HARDWARE_8821C)
 #include "basic_types.h"
 #include "wlan_basic_types.h"
 #elif defined(CONFIG_HARDWARE_8188F)
-#include "platform/platform_stdlib.h"
+#include "platform_stdlib_rtl8721d.h"
 #elif defined(CONFIG_HARDWARE_8192E)
-#include "platform/platform_stdlib.h"
+#include "platform_stdlib_rtl8721d.h"
 #elif defined(CONFIG_HARDWARE_8723D)
-#include "platform/platform_stdlib.h"
+#include "platform_stdlib_rtl8721d.h"
 #elif defined(CONFIG_HARDWARE_8188E)
-#include "platform/platform_stdlib.h"
+#include "platform_stdlib_rtl8721d.h"
 #else
 // other MCU may use standard library 
 #include <string.h>

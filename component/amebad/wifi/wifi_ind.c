@@ -2,7 +2,7 @@
 #include "wifi/wifi_ind.h"
 #include "wifi/wifi_conf.h"
 #include "osdep_service.h"
-#include "platform_stdlib.h"
+#include "platform_stdlib_rtl8721d.h"
 
 /******************************************************
  *                    Constants

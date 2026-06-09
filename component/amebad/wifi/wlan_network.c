@@ -19,7 +19,7 @@
 #include "wifi_constants.h"
 #endif
 #include "netif_shim.h"
-#include <platform/platform_stdlib.h>
+#include "platform_stdlib_rtl8721d.h"
 #include "osdep_service.h"
 
 #ifndef CONFIG_INIT_NET
