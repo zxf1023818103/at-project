@@ -209,6 +209,18 @@ static int scan_print_handler( char *buf, int buflen, char *target_ssid, void *u
         if( ssid_len == (int) strlen( target_ssid )
             && memcmp( buf + plen + 14, target_ssid, ssid_len ) == 0 )
         {
+            /* A dual-band AP shows up as two BSSIDs (2.4 GHz + 5 GHz). Blindly
+             * taking the LAST entry lands us on the 5 GHz BSSID, which this
+             * router band-steers us off with assoc status 30. Prefer 2.4 GHz
+             * (ch<=14); within the same band prefer the strongest (rssi is
+             * negative dBm -> larger == stronger). RSSI alone is not enough:
+             * it fluctuates and could re-pick 5 GHz on the next boot. */
+            int new_24 = ( ch <= 14 );
+            int cur_24 = ( fa->channel <= 14 );
+            int better = !fa->found
+                         || ( new_24 && !cur_24 )                 /* 2.4 beats 5 */
+                         || ( new_24 == cur_24 && rssi > fa->rssi ); /* else RSSI */
+            if( !better ) { plen += len; continue; }
             fa->found   = 1;
             fa->channel = ch;
             fa->rssi    = rssi;
@@ -343,7 +355,19 @@ static void wifi_bringup_thread( void *param )
     {
         const char *kSsid = "Zeng";
         found_ap_t  fa = { 0, 0, RTW_SECURITY_OPEN, 0 };
-        u8 ch, pscan = PSCAN_ENABLE;
+        u8 ch;
+
+        /* PMF / 802.11w: keep it OFF (0 = no MFP support). We tried advertising
+         * MFP-capable (1) and MFP-required (2) via rltk_set_pmf so the AP could keep
+         * management-protection=required, but the RTL8721D closed driver's PMF *data
+         * path* is unreliable: auth + 4-way handshake + key install all succeed, yet
+         * unicast data (the DHCP DISCOVER) intermittently never gets through, so DHCP
+         * stays 0.0.0.0. Measured on a PMF=required AP: MFP=1 ~1/3 boots got an IP,
+         * MFP=2 0/2; vs MFP=0 + AP management-protection=allowed which is 2/2 stable.
+         * So we disable PMF on the chip and run the AP as 'allowed' (its wpa3 clients
+         * still use PMF). CONFIG_IEEE80211W is enabled in the driver (wlan/autoconf.h);
+         * the value enum is comment-only in wifi_conf.h, hence the literal. */
+        wifi_set_mfp_support( 0 );
 
         DiagPrintf( "[KM4] scan for '%s' (all channels)...\n\r", kSsid );
         wifi_scan_networks_with_ssid( scan_print_handler, &fa, 1000,
@@ -357,13 +381,42 @@ static void wifi_bringup_thread( void *param )
         DiagPrintf( "[KM4] found '%s' ch=%d rssi=%d sec=0x%x; pscan + connect...\n\r",
                     kSsid, fa.channel, fa.rssi, (unsigned) fa.security );
         ch = fa.channel;
-        wifi_set_pscan_chan( &ch, &pscan, 1 );
-        if( wifi_connect( (char *) kSsid, fa.security, "123456789",
-                          (int) strlen( kSsid ), 9, 0, NULL ) != RTW_SUCCESS )
+        /* This AP (MikroTik) intermittently answers the first assoc with status
+         * 30 = "rejected temporarily; try again later". It's transient, so retry
+         * a handful of times (re-arming pscan each attempt — the driver consumes
+         * the pscan channel list on each connect) before giving up. */
         {
-            DiagPrintf( "[KM4] wifi_connect FAILED\n\r" );
-            vTaskDelete( NULL );
-            return;
+            int attempt, ok = 0;
+            /* The AP rejects the first assoc with status 30 because it still holds
+             * this MAC's stale station entry (the driver-only chip never sent a
+             * deauth on reset, so the AP keeps the old session across our reboot).
+             * Sending a broadcast deauth before each attempt flushes that entry, so
+             * the assoc is accepted on the first try — verified 3/3 (no status 30,
+             * no retry needed). b_broadcast=1, key_type=0. The 8-try loop below now
+             * just covers the rare genuinely-transient reject. */
+            extern void rltk_wlan_tx_deauth( unsigned char b_broadcast, unsigned char key_type );
+            for( attempt = 1; attempt <= 8; attempt++ )
+            {
+                u8 c = ch, ps = PSCAN_ENABLE;
+                DiagPrintf( "[KM4] tx_deauth(broadcast) before attempt %d\n\r", attempt );
+                rltk_wlan_tx_deauth( 1, 0 );
+                vTaskDelay( pdMS_TO_TICKS( 80 ) );
+                wifi_set_pscan_chan( &c, &ps, 1 );
+                if( wifi_connect( (char *) kSsid, fa.security, "123456789",
+                                  (int) strlen( kSsid ), 9, 0, NULL ) == RTW_SUCCESS )
+                {
+                    ok = 1;
+                    break;
+                }
+                DiagPrintf( "[KM4] wifi_connect attempt %d FAILED, retrying...\n\r", attempt );
+                vTaskDelay( pdMS_TO_TICKS( 800 ) );
+            }
+            if( !ok )
+            {
+                DiagPrintf( "[KM4] wifi_connect FAILED (gave up)\n\r" );
+                vTaskDelete( NULL );
+                return;
+            }
         }
     }
     /* Throughput: fully disable power-save (IPS + LPS off). */
