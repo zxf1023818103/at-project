@@ -12,20 +12,16 @@ raw offset      size       region                          flash 保护
 0x006000        0x17D000   OTA1 image2          (1524 KB)  🔒 protected
 0x183000        0x17D000   OTA2 image2          (1524 KB)  🔒 protected
 ─── 0x300000: flash 写保护边界（CMP=1, TB=0, BP=1MB → 上 1 MB unprotected）───
-0x300000        0x0FA000   LittleFS             (1000 KB)  ✏️ writable
-0x3FA000        0x001000   UART_SETTING_SECTOR  (   4 KB)  ✏️ writable
-0x3FB000        0x001000   AP_SETTING_SECTOR    (   4 KB)  ✏️ writable
-0x3FC000        0x003000   FTL_PHY_PAGE         (  12 KB)  ✏️ writable
-0x3FF000        0x001000   FAST_RECONNECT_DATA  (   4 KB)  ✏️ writable
+0x300000        0x100000   LittleFS             (1024 KB)  ✏️ writable
 0x400000                   flash end
 ```
 
-总计：24 KB boot + 2×1524 KB OTA + 1000 KB LFS + 24 KB settings = 4096 KB（4 MB 整）。
+总计：24 KB boot + 2×1524 KB OTA + 1024 KB LFS = 4096 KB（4 MB 整）。
 
 **设计取舍**
 - OTA slot 各 `0x17D000` = 1524 KB（不是整 1.5 MB），让 firmware 段正好停在 `0x300000` (3 MB) 边界 —— 这个对齐让 flash status register 的 `CMP+TB+BP` 组合能以一次写入精确锁定下方 3 MB。
-- LittleFS 紧贴 `0x300000`（保护边界），从这里到 `0x3FA000` 全部分给 LFS（1000 KB），剩余 24 KB 让给 settings cluster 放 flash 末尾。
-- Settings cluster (UART/AP/FTL/Fast-reconnect) 沿用 SDK "Duer/Mesh" 分支同样的相对排布，仅基地址从 SDK 默认的 `0x1FA000` 平移到 `0x3FA000`（flash 末尾 24 KB）。FTL 占 3 个 4 KB sector（`ftl_phy_page_num = 3`），给蓝牙栈做 BLE static random address 等 KV。
+- LittleFS 紧贴 `0x300000`（保护边界），一直占满到 flash 末尾 `0x400000`（1024 KB）。
+- 原先 flash 末尾有 24 KB settings cluster（UART/AP/FTL/Fast-reconnect）。蓝牙栈换成 NimBLE 后 **FTL 不再需要**（NimBLE 是 RAM-only、不持久化、不用 FTL；旧 RTK BT 栈才用 FTL 存 bond/BLE 地址），WiFi **fast-reconnect 已禁用**（`CONFIG_EXAMPLE_WLAN_FAST_CONNECT=0` + src/main.cpp 不再挂 `p_wlan_init_done_callback`/`p_write_reconnect_ptr`），UART/AP setting sector 本就无代码读写 —— 整个 cluster 删除，那 24 KB 并入 LFS。
 
 ### Flash 写保护
 
@@ -47,7 +43,8 @@ raw offset      size       region                          flash 保护
 | [rtl8721d_ota.h](../platform/ameba-rtos-d/component/soc/realtek/amebad/fwlib/include/rtl8721d_ota.h) | `LS_IMG2_OTA2_ADDR = 0x08183000`（应用层 OTA API 用） |
 | [platform_opts.h](../platform/ameba-rtos-d/project/realtek_amebaD_va0_example/inc/inc_hp/platform_opts.h) | UART/AP/FTL/Fast-reconnect 整体迁到 `0x3FA000-0x3FFFFF` |
 | [platform_opts_auto_release.h](../platform/ameba-rtos-d/project/realtek_amebaD_va0_example/inc/inc_hp/platform_opts_auto_release.h) | 同上 |
-| [littlefs_adapter.h](../platform/ameba-rtos-d/component/common/file_system/littlefs/littlefs_adapter.h) | `LFS_FLASH_BASE_ADDR = 0x300000, LFS_DEVICE_SIZE = 0x0FA000` |
+| [littlefs_adapter.h](../platform/ameba-rtos-d/component/common/file_system/littlefs/littlefs_adapter.h) | `LFS_FLASH_BASE_ADDR = 0x300000, LFS_DEVICE_SIZE = 0x100000`（1024 KB；原 0x0FA000）|
+| [platform_opts.h](../component/amebad/app_km4/platform_opts.h) + [src/main.cpp](../src/main.cpp) | settings cluster 移除：`CONFIG_EXAMPLE_WLAN_FAST_CONNECT=0`、`app_pre_example()` 不再挂 fast-reconnect 回调；UART/AP/FTL/Fast-reconnect 地址不再使用 |
 
 `OTA_Region[1]` 和 `LS_IMG2_OTA2_ADDR` 两个值**必须严格同步**：前者是 boot ROM 启动时找 image2 用的，后者是应用层 OTA 升级写新 image 时找位置用的。任何一边没跟上，OTA 升级到 OTA2 后下次启动直接挂。
 
@@ -65,15 +62,14 @@ raw offset      size       region                          flash 保护
 0x180000        0x010000   IMG_BOOT_OTA2     (   64 KB)    🔒 protected
 0x190000        0x170000   IMG_APP_OTA2      ( 1472 KB)    🔒 protected
 ─── 0x300000: 写保护边界（CMP=1, TB=0, BP=1MB → 上 1 MB unprotected）───
-0x300000        0x0FA000   VFS1 / LittleFS   ( 1000 KB)    ✏️ writable
-0x3FA000        0x006000   (reserved)        (   24 KB)    ✏️ writable
+0x300000        0x100000   VFS1 / LittleFS   ( 1024 KB)    ✏️ writable
 0x400000                   flash end
 ```
 
-总：64 + 1472 + 64 + 1472 + 1000 + 24 = 4096 KB ✓
+总：64 + 1472 + 64 + 1472 + 1024 = 4096 KB ✓
 
-LFS 大小固定 1000 KB 与 Ameba D 对齐（让同一份 lfs 镜像可在三方共用，见
-[lfs.md](lfs.md)）。末尾 24 KB 暂不分配，留给将来可能的 settings sector。
+LFS 大小 1024 KB，占满到 flash 末尾，与 Ameba D 一致（同一份 lfs 镜像三方共用，见
+[lfs.md](lfs.md)）。Ameba D 原来末尾的 24 KB settings cluster 换 NimBLE 后已删，三家也不再留空。
 
 **设计取舍**
 
@@ -112,15 +108,14 @@ raw offset      size       region                          flash 保护
 0x010000        0x178000   FW slot 0      ( 1504 KB)       🔒 protected
 0x188000        0x178000   FW slot 1      ( 1504 KB)       🔒 protected
 ─── 0x300000: 写保护边界（CMP=1, TB=0, BP=1MB → 上 1 MB unprotected）───
-0x300000        0x0FA000   PSM (LittleFS) ( 1000 KB)       ✏️ writable
-0x3FA000        0x006000   (reserved)     (   24 KB)       ✏️ writable
+0x300000        0x100000   PSM (LittleFS) ( 1024 KB)       ✏️ writable
 0x400000                   flash end
 ```
 
-总：56 + 4 + 4 + 2×1504 + 1000 + 24 = 4096 KB ✓
+总：56 + 4 + 4 + 2×1504 + 1024 = 4096 KB ✓
 
-PSM 大小固定 1000 KB 与 Ameba D 对齐（让同一份 lfs 镜像可在三方共用，见
-[lfs.md](lfs.md)）。末尾 24 KB 暂不分配。
+PSM 大小 1024 KB，占满到 flash 末尾，与 Ameba D 一致（同一份 lfs 镜像三方共用，见
+[lfs.md](lfs.md)）。Ameba D 原来末尾的 24 KB settings cluster 换 NimBLE 后已删，三家也不再留空。
 
 **设计取舍**
 - 砍掉 SDK 默认的 mfg / media / DATA / factory / KEY 五个分区。前两个对我们的 AT 命令固件没用（mfg 是定频测试 fw，media 是 ROMFS 资源），后三个整个 SDK grep `"KEY" / "DATA" / "factory"` 都没人引用，是历史占位

@@ -32,7 +32,8 @@
 #   PAGE_SIZE  = 256    (mklittlefs hardcodes its own cache_size etc. to
 #                        64 internally; disk format depends only on
 #                        block_size, so runtime mount works regardless)
-#   IMAGE_SIZE = 1024000
+#   IMAGE_SIZE = 1048576  (1024 KB — fills LFS to flash end now that the
+#                          Ameba D FTL/settings cluster is gone)
 #   TARGET     = lfs_image
 
 # ---------------------------------------------------------------------
@@ -148,7 +149,7 @@ function(lfs_image_add target_path)
         set(LFS_PAGE_SIZE 256)
     endif()
     if(NOT LFS_IMAGE_SIZE)
-        set(LFS_IMAGE_SIZE 1024000)
+        set(LFS_IMAGE_SIZE 1048576)
     endif()
     if(NOT LFS_TARGET)
         set(LFS_TARGET lfs_image)

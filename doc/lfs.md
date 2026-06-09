@@ -60,14 +60,16 @@ adapter 走自己的"FNF 自动 format"逻辑。
 | 字段 | 值 | 备注 |
 |---|---|---|
 | 起始 raw offset | `0x300000` | 3 MB 处 —— 跨平台一致，也是 flash 写保护边界 |
-| 大小 | **1000 KB** (`0xFA000`) | 跟 Ameba D 的 layout 强制对齐（D 的 LFS 后面挤了 24 KB settings sector，没法扩到 1024 KB）|
+| 大小 | **1024 KB** (`0x100000`) | 占满到 flash 末尾（整 1 MB）。原先受 Ameba D 末尾 24 KB settings cluster 限制只能 1000 KB；蓝牙换 NimBLE 后 FTL/settings 不再需要，全平台一起扩满 |
 | block_size | 4096 | NOR sector |
-| block_count | 250 | = 1000 KB / 4 KB |
+| block_count | 256 | = 1024 KB / 4 KB |
 | disk version | 2.1 | littlefs v2.8.0 默认 `LFS_DISK_VERSION = 0x00020001` |
 
-具体每个平台的全 flash layout 见 [flash_layout.md](flash_layout.md)。Dplus / Green2 /
-Bouffalo 三家在 LFS 区末尾各留 24 KB 不分配，给"将来某天可能要加 settings
-sector"做缓冲；不留也不影响功能。
+具体每个平台的全 flash layout 见 [flash_layout.md](flash_layout.md)。四家 LFS 区现在都
+占满到 flash 末尾（`0x300000`–`0x3FFFFF`，整 1 MB）。Ameba D 原来在末尾放的 24 KB
+settings cluster（UART/AP/FTL/Fast-reconnect）在蓝牙栈换成 NimBLE 后不再需要 —— NimBLE
+不用 FTL（RAM-only，不持久化），WiFi fast-reconnect 也已禁用（其 4 KB sector 并入 LFS）——
+所以删掉；其余三家原本只是为对齐 D 才留空，也一起扩满。
 
 ## 运行时 lfs config（lfs_config 结构体）
 
@@ -105,10 +107,10 @@ prebuilt mklfs-ubuntu 跨平台更彻底）。我们维护一个分支
 命令模板（跨平台统一，cmake 帮你拼好）：
 
 ```
-mklittlefs -c <input_dir> -b 4096 -p 256 -s 1024000 <output.bin>
+mklittlefs -c <input_dir> -b 4096 -p 256 -s 1048576 <output.bin>
 ```
 
-- `-s 1024000` 字节 = 1000 KB
+- `-s 1048576` 字节 = 1024 KB
 - mklittlefs 内部把 `cache_size = read_size = prog_size = lookahead_size = 64` 写死。
   这四个都是 RAM-only 不写盘，跟运行时 512 / 256 / ... 的差异不影响 mount
 - 注意 mklittlefs 不接 `-r read_size` 参数（mklfs 那条 `-r 256` 改用 `-p` 顶替）
@@ -148,7 +150,7 @@ CI 用的 Windows runner 一般已经满足。
 
 - **Bouffalo**：[component/bouffalo_sdk/bflb_image_tool/bflb_elf_to_bin.py](../component/bouffalo_sdk/bflb_image_tool/bflb_elf_to_bin.py)
   把 PSM 当作普通 partition 段交给 `BLFlashCommand --build`
-- **Ameba D**：[project/amebad/Makefile](../project/amebad/Makefile) 用 `dd` 把 `../lfs.bin` 拼到 `seek=0x300000`
+- **Ameba D**：[project/Makefile](../project/Makefile) 的 `amebad` target 把 `build/amebad/firmware.bin`（boot+image2+TF-M，amebad/Makefile 产）和 `lfs.bin` 用 `dd` 合并成 4 MB `build/amebad/Image_All.bin`（全 `0xFF` base，firmware @ 0、LFS @ `0x300000`）
 - **Ameba Dplus / Green2**：[project/ameba/Makefile](../project/ameba/Makefile) 同上
 
 验证 lfs 段真的被嵌进去了（CI 自动跑，本地也可手动）：

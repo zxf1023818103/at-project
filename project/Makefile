@@ -52,6 +52,12 @@ bl616cl: lfs.bin
 
 amebad: lfs.bin
 	$(MAKE) -C amebad
+	@echo "[amebad] merge firmware.bin + lfs.bin -> build/amebad/Image_All.bin (4 MB, LFS @ 0x300000)"
+	@dd if=/dev/zero bs=4096 count=1024 status=none | tr '\000' '\377' > ../build/amebad/Image_All.bin.tmp
+	@dd if=../build/amebad/firmware.bin of=../build/amebad/Image_All.bin.tmp bs=4096 conv=notrunc status=none
+	@dd if=lfs.bin of=../build/amebad/Image_All.bin.tmp bs=4096 seek=768 conv=notrunc status=none
+	@mv -f ../build/amebad/Image_All.bin.tmp ../build/amebad/Image_All.bin
+	@md5sum ../build/amebad/Image_All.bin
 
 amebadplus: lfs.bin
 	$(MAKE) -C ameba amebadplus

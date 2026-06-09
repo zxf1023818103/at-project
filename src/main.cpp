@@ -13,7 +13,9 @@ int wifi_do_fast_connect(void) {
     return 0;
 }
 
-#if defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C
+#if 0  /* WiFi fast-reconnect disabled: FAST_RECONNECT_DATA (flash 0x3FF000) was
+        * folded into LittleFS (LFS grown to 1024 KB after the FTL/settings cluster
+        * was dropped). Kept for reference; not compiled. */
 static int wlan_write_reconnect_data_to_flash(uint8_t *data, uint32_t len) {
     printf("%s() called with data length: %u\n", __func__, len);
 
@@ -208,11 +210,14 @@ void app_pre_example(void) {
     // p_roaming_start_callback = wifi_roaming_start;
 
 #if defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C
-    // Call back from wlan driver after wlan init done
-    p_wlan_init_done_callback = wifi_do_fast_connect;
-
-    // Call back from application layer after wifi_connection success
-    p_write_reconnect_ptr = wlan_write_reconnect_data_to_flash;
+    // WiFi fast-reconnect is disabled on Ameba D: its FAST_RECONNECT_DATA sector
+    // (flash 0x3FF000) was folded into LittleFS when LFS grew to 1024 KB (the
+    // FTL/settings cluster was removed after the BLE stack moved to NimBLE).
+    // Leaving these callbacks unset stops wifi_do_fast_connect / the reconnect
+    // writer from reading/writing that address (now LFS data); the SDK side is
+    // also compiled out via CONFIG_EXAMPLE_WLAN_FAST_CONNECT=0 (platform_opts.h).
+    // p_wlan_init_done_callback = wifi_do_fast_connect;
+    // p_write_reconnect_ptr = wlan_write_reconnect_data_to_flash;
 #endif // defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C
 }
 #endif // defined CONFIG_PLATFORM_AMEBALITE || defined CONFIG_PLATFORM_AMEBASMART || defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2 || defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C

@@ -769,4 +769,21 @@ in lwip_opt.h for support uart adapter*/
 #include "platform_opts_matter.h"
 #endif /* CONFIG_MATTER */
 
+/* WiFi fast-reconnect disabled: its FAST_RECONNECT_DATA sector (flash 0x3FF000)
+ * was folded into LittleFS when LFS grew to 1024 KB (the FTL/settings cluster was
+ * removed after the BLE stack moved to NimBLE). Force the SDK's fast-connect
+ * read/write path off so nothing touches that address (now LFS data). The
+ * matching p_wlan_init_done_callback / p_write_reconnect_ptr hooks are also left
+ * unset in src/main.cpp app_pre_example(). */
+#undef CONFIG_EXAMPLE_WLAN_FAST_CONNECT
+#define CONFIG_EXAMPLE_WLAN_FAST_CONNECT 0
+
+/* The 24 KB settings cluster (UART/AP/FTL/Fast-reconnect) that used to sit at
+ * flash 0x3FA000-0x3FFFFF was folded into LittleFS (LFS now fills the top 1 MB):
+ * NimBLE has no FTL and fast-reconnect is off. Undef the stale sector macros so a
+ * stray reference can't point into the LFS region. See doc/flash_layout.md. */
+#undef UART_SETTING_SECTOR
+#undef AP_SETTING_SECTOR
+#undef FAST_RECONNECT_DATA
+
 #endif

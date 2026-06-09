@@ -2,7 +2,10 @@
 #
 # Replaces the old GCC-RELEASE SDK-Makefile build. Drives the two-core CMake
 # trees (build/km0, build/km4) + component/amebad/image_tool/build_image_all.py
-# and produces the flashable build/amebad/Image_All.bin.
+# and produces build/amebad/firmware.bin (KM0/KM4 boot + image2 + TF-M, no data
+# partition). The final 4 MB build/amebad/Image_All.bin — with the 1024 KB
+# LittleFS merged in at 0x300000 — is assembled by the `amebad` target in
+# ../Makefile (project/Makefile), which runs this build then dd's lfs.bin in.
 #
 #   make                 # plain driver-only image (WiFi / iperf)
 #   make NIMBLE=ON       # NimBLE host image (LE/GATT + wolfSSL SM crypto)
@@ -12,7 +15,9 @@
 #   make clean           # ninja clean both cores
 #   make distclean       # delete build/km0 build/km4 build/amebad
 #
-# Output: build/amebad/Image_All.bin  (flash @ 0x08000000; see project/amebad/flash.ps1)
+# Output: build/amebad/firmware.bin  (intermediate, no LittleFS). `make -C project
+#         amebad` merges lfs.bin into the final build/amebad/Image_All.bin
+#         (flash @ 0x08000000; see project/amebad/flash.ps1).
 # Prereqs: `git submodule update --init --recursive` + ASDK toolchain at toolchain/.
 
 .PHONY: all image configure clean distclean
@@ -25,7 +30,7 @@ HCI        ?= OFF          # ON -> bare HCI/DTM
 QUIC       ?= OFF          # ON -> ngtcp2 QUIC client self-test (pulls full wolfSSL TLS1.3)
 WOLFASM    ?= ON           # ON -> wolfCrypt Thumb2 symmetric/hash asm (faster; OFF = portable C)
 TFM        ?= OFF          # ON -> build + boot in-tree TF-M SPE (app_km4 becomes the NS side)
-IMAGE      := $(REPO)/build/amebad/Image_All.bin
+IMAGE      := $(REPO)/build/amebad/firmware.bin
 
 all: image
 
