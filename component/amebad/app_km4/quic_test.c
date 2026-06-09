@@ -1,15 +1,19 @@
 /*
- * AmebaD KM4 QUIC client self-test — ngtcp2 (v1.23.0) + in-tree wolfSSL TLS 1.3.
+ * AmebaD KM4 QUIC LAN speed test — ngtcp2 (v1.23.0) + in-tree wolfSSL TLS 1.3.
  *
- * Proves the ngtcp2 transport + wolfSSL QUIC crypto stack completes a real QUIC
- * v1 handshake over the FreeRTOS-Plus-TCP UDP socket layer that the bring-up
- * already stood up (DHCP IP). It connects to an ngtcp2 example server running on
- * the WSL host and reports whether the TLS 1.3 handshake completed.
+ * Connects to the host quic_perf server (project/amebad/quic_perf) over the LAN
+ * and measures QUIC throughput in both directions using the quic-interop "perf"
+ * protocol (ALPN "perf"):
+ *   - DOWNLOAD phase: open a bidi stream, send an 8-byte big-endian uint64 =
+ *     bytes to receive, then sink the response and time it  -> RX Mbps.
+ *   - UPLOAD phase: a fresh connection whose request asks for 0 download bytes;
+ *     the chip then streams the upload payload and FINs -> TX Mbps.
+ * The two phases run as separate connections so each yields a clean peak
+ * unidirectional number (the host server handles one stream per connection).
  *
- *   Host side (in component/thirdparty/ngtcp2 after a host build):
- *     examples/server <host-ip> 4433 server.key server.crt
- *   (ALPN "hq-interop"; a self-signed cert is fine — the client runs
- *    SSL_VERIFY_NONE for this smoke test.)
+ *   Host side (see doc/amebad_quic_test.md):
+ *     project/amebad/quic_perf/quic_perf server <host-ip> 4433 cert.pem key.pem
+ *   (a self-signed cert is fine — the chip runs SSL_VERIFY_NONE.)
  *
  * Structure mirrors ngtcp2's examples/simpleclient.c, with three substitutions:
  *   - crypto backend: quictls  -> wolfSSL  (ngtcp2_crypto_wolfssl_*)
@@ -53,9 +57,23 @@ extern void amebad_bench_rng_reseed(unsigned int seed);
 #define QUIC_SERVER_A1      168
 #define QUIC_SERVER_A2      4
 #define QUIC_SERVER_A3      250
-#define QUIC_SERVER_PORT    4433
-#define QUIC_ALPN           "hq-interop"
+#define QUIC_SERVER_PORT    4567
+#define QUIC_ALPN           "perf"
 #define QUIC_HANDSHAKE_TIMEOUT_MS  10000U   /* give up after 10 s */
+
+/* perf transfer sizes per direction. 4 MB ~ a few seconds over WiFi. */
+#define QUIC_PERF_XFER_BYTES   (4u * 1024u * 1024u)
+#define QUIC_PERF_TIMEOUT_MS   60000U       /* whole-transfer cap           */
+/* QUIC flow-control windows. These MUST stay small: ngtcp2 buffers received
+ * (and sent-but-unacked) data up to these limits in the FreeRTOS heap, which is
+ * only 250 KB on KM4. A 512 KB window exhausted the heap mid-download and the
+ * task span forever in vApplicationMallocFailedHook. The LAN BDP is only a few
+ * KB (sub-ms RTT), so a 48 KB window costs no throughput. */
+#define QUIC_FLOW_WINDOW       (48u * 1024u)
+#define QUIC_PERF_SEND_CHUNK   (8u * 1024u)
+/* Cap upload bytes written-but-unacked so ngtcp2's retransmit buffer (heap) can
+ * not grow past what KM4 RAM allows when the LAN congestion window opens up. */
+#define QUIC_UPLOAD_INFLIGHT_CAP (32u * 1024u)
 
 struct quic_client {
     ngtcp2_crypto_conn_ref conn_ref;
@@ -67,6 +85,17 @@ struct quic_client {
     ngtcp2_sockaddr_in local_addr;
     ngtcp2_sockaddr_in remote_addr;
     struct freertos_sockaddr fr_remote;
+
+    /* ---- perf protocol / measurement state ---- */
+    int64_t  stream_id;        /* the perf bidi stream (-1 until opened)     */
+    uint64_t want_download;    /* bytes to ask the server to send (RX)       */
+    uint64_t want_upload;      /* bytes to stream to the server (TX)         */
+    uint64_t send_remaining;   /* upload bytes still to push                 */
+    uint64_t acked_total;      /* upload bytes acknowledged by the server    */
+    uint64_t recv_total;       /* download bytes received                    */
+    int      hdr_sent;         /* 8-byte request header written              */
+    int      send_fin_done;    /* our FIN queued                            */
+    int      peer_fin;         /* server FIN'd its side                      */
 };
 
 static struct quic_client s_client;
@@ -103,11 +132,13 @@ static int get_new_connection_id_cb(ngtcp2_conn *conn, ngtcp2_cid *cid,
     (void)user_data;
 
     if (wc_RNG_GenerateBlock(&s_rng_ctx, cid->data, (word32)cidlen) != 0) {
+        DiagPrintf("[QUIC] gncid: RNG fail (cid)\n\r");
         return NGTCP2_ERR_CALLBACK_FAILURE;
     }
     cid->datalen = cidlen;
 
     if (wc_RNG_GenerateBlock(&s_rng_ctx, token->data, sizeof(token->data)) != 0) {
+        DiagPrintf("[QUIC] gncid: RNG fail (token)\n\r");
         return NGTCP2_ERR_CALLBACK_FAILURE;
     }
     return 0;
@@ -117,6 +148,36 @@ static ngtcp2_conn *get_conn(ngtcp2_crypto_conn_ref *conn_ref)
 {
     struct quic_client *c = conn_ref->user_data;
     return c->conn;
+}
+
+/* ---- perf stream callbacks ---- */
+
+/* Server -> chip download bytes land here; we only count them and keep the
+ * receive flow-control window open so the transfer doesn't stall. */
+static int recv_stream_data_cb(ngtcp2_conn *conn, uint32_t flags, int64_t stream_id,
+                               uint64_t offset, const uint8_t *data, size_t datalen,
+                               void *user_data, void *stream_user_data)
+{
+    struct quic_client *c = user_data;
+    (void)offset; (void)data; (void)stream_user_data;
+
+    c->recv_total += datalen;
+    ngtcp2_conn_extend_max_stream_offset(conn, stream_id, datalen);
+    ngtcp2_conn_extend_max_offset(conn, datalen);
+
+    if (flags & NGTCP2_STREAM_DATA_FLAG_FIN) {
+        c->peer_fin = 1;
+    }
+    return 0;
+}
+
+static int acked_stream_data_cb(ngtcp2_conn *conn, int64_t stream_id, uint64_t offset,
+                                uint64_t datalen, void *user_data, void *stream_user_data)
+{
+    struct quic_client *c = user_data;
+    (void)conn; (void)stream_id; (void)offset; (void)stream_user_data;
+    c->acked_total += datalen;   /* upload delivery confirmed (incl. the 8B hdr) */
+    return 0;
 }
 
 /* ---- wolfSSL client TLS context ---- */
@@ -145,6 +206,18 @@ static int client_ssl_init(struct quic_client *c)
         return -1;
     }
 
+    /* This wolfSSL build compiles only P-256 + X25519 (ECC_USER_CURVES). Its
+     * default preferred key-share group is P-521, which isn't compiled, so the
+     * ClientHello key_share generation fails with BAD_FUNC_ARG. Pin the offered
+     * groups to curves we actually have. */
+    {
+        int groups[] = { WOLFSSL_ECC_X25519, WOLFSSL_ECC_SECP256R1 };
+        if (wolfSSL_CTX_set_groups(c->ssl_ctx, groups, 2) != WOLFSSL_SUCCESS) {
+            DiagPrintf("[QUIC] set_groups failed\n\r");
+            return -1;
+        }
+    }
+
     /* Smoke test: no CA store / no clock -> accept the server cert unverified. */
     wolfSSL_CTX_set_verify(c->ssl_ctx, WOLFSSL_VERIFY_NONE, NULL);
 
@@ -157,8 +230,10 @@ static int client_ssl_init(struct quic_client *c)
     wolfSSL_set_app_data(c->ssl, &c->conn_ref);
     wolfSSL_set_connect_state(c->ssl);
 
+    /* wolfSSL_UseALPN rejects MATCH(=1) alone with BAD_FUNC_ARG; QUIC mandates
+     * ALPN so fail the handshake on mismatch. */
     if (wolfSSL_UseALPN(c->ssl, (char *)QUIC_ALPN, (unsigned int)strlen(QUIC_ALPN),
-                        WOLFSSL_ALPN_MATCH) != WOLFSSL_SUCCESS) {
+                        WOLFSSL_ALPN_FAILED_ON_MISMATCH) != WOLFSSL_SUCCESS) {
         DiagPrintf("[QUIC] UseALPN failed\n\r");
         return -1;
     }
@@ -182,6 +257,8 @@ static int client_quic_init(struct quic_client *c)
         .encrypt                  = ngtcp2_crypto_encrypt_cb,
         .decrypt                  = ngtcp2_crypto_decrypt_cb,
         .hp_mask                  = ngtcp2_crypto_hp_mask_cb,
+        .recv_stream_data         = recv_stream_data_cb,
+        .acked_stream_data_offset = acked_stream_data_cb,
         .recv_retry               = ngtcp2_crypto_recv_retry_cb,
         .rand                     = rand_cb,
         .get_new_connection_id2   = get_new_connection_id_cb,
@@ -207,13 +284,19 @@ static int client_quic_init(struct quic_client *c)
 
     ngtcp2_settings_default(&settings);
     settings.initial_ts = quic_timestamp();
+    settings.max_tx_udp_payload_size = 1252;   /* keep packets < client_flush buf */
     /* log_printf left NULL: the ROM DiagPrintf can't handle ngtcp2's width/flag
      * format specifiers safely. */
 
     ngtcp2_transport_params_default(&params);
-    params.initial_max_streams_uni            = 3;
-    params.initial_max_stream_data_bidi_local = 128 * 1024;
-    params.initial_max_data                   = 1024 * 1024;
+    params.initial_max_streams_bidi            = 8;
+    params.initial_max_streams_uni             = 3;
+    /* bidi_local gates the DOWNLOAD window (server -> chip); the rest are set
+     * for completeness. Keep them bounded to limit on-target RAM. */
+    params.initial_max_stream_data_bidi_local  = QUIC_FLOW_WINDOW;
+    params.initial_max_stream_data_bidi_remote = QUIC_FLOW_WINDOW;
+    params.initial_max_stream_data_uni         = QUIC_FLOW_WINDOW;
+    params.initial_max_data                    = QUIC_FLOW_WINDOW * 2;
 
     rv = ngtcp2_conn_client_new(&c->conn, &dcid, &scid, &path, NGTCP2_PROTO_VER_V1,
                                 &callbacks, &settings, &params, NULL, c);
@@ -233,38 +316,105 @@ static int client_send_packet(struct quic_client *c, const uint8_t *data, size_t
     int32_t sent = FreeRTOS_sendto(c->sock, data, datalen, 0,
                                    &c->fr_remote, sizeof(c->fr_remote));
     if (sent != (int32_t)datalen) {
-        DiagPrintf("[QUIC] sendto short/err (%d/%d)\n\r", (int)sent, (int)datalen);
-        return -1;
+        /* A transiently-full TX path (no network buffer) returns 0 / EWOULDBLOCK.
+         * Dropping this datagram is safe — QUIC will retransmit — so don't tear
+         * the connection down; just report it didn't go out this time. */
+        return 0;
     }
     return 0;
 }
 
-/* Drain all locally queued packets ngtcp2 wants to send (no stream data — the
- * handshake test sends only crypto/ACK frames). */
-static int client_write(struct quic_client *c)
+static uint8_t s_sendbuf[QUIC_PERF_SEND_CHUNK];   /* zero filler for upload   */
+
+/* Drain everything ngtcp2 wants to send: handshake/ACK frames plus, once the
+ * perf stream is open, the 8-byte request header and the upload payload. */
+static int client_flush(struct quic_client *c)
 {
-    uint8_t buf[1280];
+    uint8_t buf[1400];
     ngtcp2_path_storage ps;
     ngtcp2_pkt_info pi;
-    ngtcp2_ssize nwrite;
 
     ngtcp2_path_storage_zero(&ps);
 
+    /* Send the 8-byte download-length request header first (no FIN). */
+    if (c->stream_id >= 0 && !c->hdr_sent) {
+        uint8_t hdr[8];
+        ngtcp2_vec v;
+        ngtcp2_ssize pd = 0, n;
+        int i;
+        for (i = 0; i < 8; i++) {
+            hdr[i] = (uint8_t)(c->want_download >> (8 * (7 - i)));
+        }
+        v.base = hdr; v.len = sizeof(hdr);
+        n = ngtcp2_conn_writev_stream(c->conn, &ps.path, &pi, buf, sizeof(buf),
+                                      &pd, NGTCP2_WRITE_STREAM_FLAG_NONE,
+                                      c->stream_id, &v, 1, quic_timestamp());
+        if (n < 0) {
+            if (n != NGTCP2_ERR_STREAM_DATA_BLOCKED) {
+                DiagPrintf("[QUIC] hdr writev: %s\n\r", ngtcp2_strerror((int)n));
+                ngtcp2_ccerr_set_liberr(&c->last_error, (int)n, NULL, 0);
+                return -1;
+            }
+        } else if (pd == (ngtcp2_ssize)sizeof(hdr)) {
+            c->hdr_sent = 1;
+            c->send_remaining = c->want_upload;
+            if (n > 0 && client_send_packet(c, buf, (size_t)n) != 0) return -1;
+        } else {
+            if (n > 0 && client_send_packet(c, buf, (size_t)n) != 0) return -1;
+            return 0;   /* header didn't fit yet; retry next loop */
+        }
+    }
+
     for (;;) {
+        int64_t sid = -1;
+        ngtcp2_vec vec;
+        size_t veccnt = 0;
+        uint32_t flags = NGTCP2_WRITE_STREAM_FLAG_NONE;
+        ngtcp2_ssize pdatalen = 0, nwrite;
+
+        if (c->stream_id >= 0 && c->hdr_sent && !c->send_fin_done) {
+            /* Pace: only offer more payload while in-flight (written-but-unacked)
+             * stays under the cap, so ngtcp2's retransmit buffer stays bounded.
+             * acked_total includes the 8-byte request header. */
+            uint64_t written  = c->want_upload - c->send_remaining;
+            uint64_t acked    = (c->acked_total > 8) ? (c->acked_total - 8) : 0;
+            uint64_t inflight = written - acked;
+            if (inflight < QUIC_UPLOAD_INFLIGHT_CAP) {
+                size_t chunk = c->send_remaining > sizeof(s_sendbuf) ? sizeof(s_sendbuf)
+                                                                     : (size_t)c->send_remaining;
+                sid = c->stream_id;
+                vec.base = s_sendbuf;
+                vec.len  = chunk;
+                veccnt   = chunk ? 1 : 0;
+                if (c->send_remaining <= chunk) flags = NGTCP2_WRITE_STREAM_FLAG_FIN;
+            }
+        }
+
         nwrite = ngtcp2_conn_writev_stream(c->conn, &ps.path, &pi, buf, sizeof(buf),
-                                           NULL, NGTCP2_WRITE_STREAM_FLAG_NONE,
-                                           -1, NULL, 0, quic_timestamp());
+                                           &pdatalen, flags, sid,
+                                           veccnt ? &vec : NULL, veccnt, quic_timestamp());
         if (nwrite < 0) {
-            DiagPrintf("[QUIC] writev_stream: %s\n\r", ngtcp2_strerror((int)nwrite));
+            if (nwrite == NGTCP2_ERR_STREAM_DATA_BLOCKED || nwrite == NGTCP2_ERR_STREAM_SHUT_WR) {
+                /* stream is flow-control blocked; flush only non-stream frames */
+                ngtcp2_ssize m = ngtcp2_conn_writev_stream(c->conn, &ps.path, &pi, buf, sizeof(buf),
+                                                           NULL, NGTCP2_WRITE_STREAM_FLAG_NONE,
+                                                           -1, NULL, 0, quic_timestamp());
+                if (m > 0 && client_send_packet(c, buf, (size_t)m) != 0) return -1;
+                return 0;
+            }
+            DiagPrintf("[QUIC] writev_stream: %s (wolfSSL err=%d, tls_alert=%d)\n\r",
+                       ngtcp2_strerror((int)nwrite),
+                       (int)wolfSSL_get_error(c->ssl, 0),
+                       (int)ngtcp2_conn_get_tls_alert2(c->conn));
             ngtcp2_ccerr_set_liberr(&c->last_error, (int)nwrite, NULL, 0);
             return -1;
         }
-        if (nwrite == 0) {
-            return 0;   /* nothing more to send right now */
+        if (pdatalen > 0) c->send_remaining -= (uint64_t)pdatalen;
+        if (sid >= 0 && (flags & NGTCP2_WRITE_STREAM_FLAG_FIN) && c->send_remaining == 0) {
+            c->send_fin_done = 1;
         }
-        if (client_send_packet(c, buf, (size_t)nwrite) != 0) {
-            return -1;
-        }
+        if (nwrite == 0) return 0;
+        if (client_send_packet(c, buf, (size_t)nwrite) != 0) return -1;
     }
 }
 
@@ -340,51 +490,35 @@ static int client_socket_init(struct quic_client *c)
     return 0;
 }
 
-static void quic_client_task(void *arg)
+/* Run one perf connection. Exactly one of dl/ul is non-zero; on success
+ * *kbps_out is the measured throughput for that direction in kbit/s. */
+static int perf_connection(uint64_t dl, uint64_t ul, uint32_t *kbps_out)
 {
     struct quic_client *c = &s_client;
-    TickType_t deadline;
-    int done = 0;
-    int failed = 0;
-    (void)arg;
+    TickType_t hs_deadline, xfer_deadline, t_xfer_start = 0, hb_next = 0;
+    int done = 0, failed = 0, stream_open = 0;
 
-    /* Wait until DHCP has handed us an IP. */
-    while (FreeRTOS_GetIPAddress() == 0) {
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
-    vTaskDelay(pdMS_TO_TICKS(200));
-
-    DiagPrintf("[QUIC] ngtcp2 %s + wolfSSL TLS1.3 client -> %d.%d.%d.%d:%d (ALPN %s)\n\r",
-               ngtcp2_version(0)->version_str,
-               QUIC_SERVER_A0, QUIC_SERVER_A1, QUIC_SERVER_A2, QUIC_SERVER_A3,
-               QUIC_SERVER_PORT, QUIC_ALPN);
-
-    amebad_bench_rng_reseed((unsigned int)xTaskGetTickCount() ^ (unsigned int)(uintptr_t)&c);
-
-    if (wc_InitRng(&s_rng_ctx) != 0) {
-        DiagPrintf("[QUIC] wc_InitRng failed\n\r");
-        vTaskDelete(NULL);
-        return;
-    }
+    *kbps_out = 0;
 
     (void)memset(c, 0, sizeof(*c));
     ngtcp2_ccerr_default(&c->last_error);
-    c->conn_ref.get_conn = get_conn;
+    c->conn_ref.get_conn  = get_conn;
     c->conn_ref.user_data = c;
+    c->stream_id     = -1;
+    c->want_download = dl;
+    c->want_upload   = ul;
 
     if (client_socket_init(c) != 0 || client_ssl_init(c) != 0 ||
         client_quic_init(c) != 0) {
         DiagPrintf("[QUIC] init failed\n\r");
+        failed = 1;
         goto cleanup;
     }
 
-    /* Kick off the handshake (sends the Initial packet). */
-    if (client_write(c) != 0) {
-        failed = 1;
-        goto report;
-    }
+    if (client_flush(c) != 0) { failed = 1; goto cleanup; }  /* send Initial */
 
-    deadline = xTaskGetTickCount() + pdMS_TO_TICKS(QUIC_HANDSHAKE_TIMEOUT_MS);
+    hs_deadline   = xTaskGetTickCount() + pdMS_TO_TICKS(QUIC_HANDSHAKE_TIMEOUT_MS);
+    xfer_deadline = xTaskGetTickCount() + pdMS_TO_TICKS(QUIC_PERF_TIMEOUT_MS);
 
     while (!done && !failed) {
         TickType_t now = xTaskGetTickCount();
@@ -394,20 +528,30 @@ static void quic_client_task(void *arg)
         struct freertos_sockaddr from;
         socklen_t fromlen = sizeof(from);
 
-        if ((int32_t)(now - deadline) >= 0) {
-            DiagPrintf("[QUIC] handshake TIMEOUT after %d ms\n\r", (int)QUIC_HANDSHAKE_TIMEOUT_MS);
-            failed = 1;
-            break;
+        if ((int32_t)(now - hb_next) >= 0) {
+            DiagPrintf("[QUIC] .hb so=%d rx=%d ack=%d sr=%d fin=%d\n\r",
+                       stream_open, (int)c->recv_total, (int)c->acked_total,
+                       (int)c->send_remaining, c->send_fin_done);
+            hb_next = now + pdMS_TO_TICKS(1000);
         }
 
-        /* recvfrom timeout = time until ngtcp2's next timer (capped at 200 ms). */
+        if (!stream_open && (int32_t)(now - hs_deadline) >= 0) {
+            DiagPrintf("[QUIC] handshake TIMEOUT\n\r");
+            failed = 1; break;
+        }
+        if ((int32_t)(now - xfer_deadline) >= 0) {
+            DiagPrintf("[QUIC] transfer TIMEOUT (rx=%d tx-acked=%d)\n\r",
+                       (unsigned)c->recv_total, (unsigned)c->acked_total);
+            failed = 1; break;
+        }
+
         expiry = ngtcp2_conn_get_expiry2(c->conn);
         ts_now = quic_timestamp();
         if (expiry <= ts_now) {
             wait_ticks = 0;
         } else {
             uint64_t ms = (expiry - ts_now) / 1000000ULL;
-            if (ms > 200) ms = 200;
+            if (ms > 50) ms = 50;        /* poll often during bulk transfer */
             wait_ticks = pdMS_TO_TICKS((uint32_t)ms);
         }
         (void)FreeRTOS_setsockopt(c->sock, 0, FREERTOS_SO_RCVTIMEO,
@@ -415,62 +559,138 @@ static void quic_client_task(void *arg)
 
         nread = FreeRTOS_recvfrom(c->sock, s_rxbuf, sizeof(s_rxbuf), 0, &from, &fromlen);
         if (nread > 0) {
-            if (client_read(c, s_rxbuf, (size_t)nread) != 0) {
-                failed = 1;
-                break;
-            }
+            /* Drain EVERY datagram already queued before flushing, so a download
+             * flood can't outrun us and exhaust the RX network-buffer pool (which
+             * would then wedge sendto on buffer allocation). After the first
+             * (blocking) read, switch to non-blocking and keep pulling. */
+            TickType_t zero = 0;
+            (void)FreeRTOS_setsockopt(c->sock, 0, FREERTOS_SO_RCVTIMEO, &zero, sizeof(zero));
+            do {
+                if (client_read(c, s_rxbuf, (size_t)nread) != 0) { failed = 1; break; }
+                nread = FreeRTOS_recvfrom(c->sock, s_rxbuf, sizeof(s_rxbuf), 0, &from, &fromlen);
+            } while (nread > 0);
+            if (failed) break;
         } else {
-            /* timeout (0) or error (<0): drive ngtcp2's expiry/retransmit. */
             int rv = ngtcp2_conn_handle_expiry(c->conn, quic_timestamp());
             if (rv != 0) {
                 DiagPrintf("[QUIC] handle_expiry: %s\n\r", ngtcp2_strerror(rv));
-                failed = 1;
-                break;
+                failed = 1; break;
             }
         }
 
-        if (client_write(c) != 0) {
-            failed = 1;
-            break;
+        /* Open the perf stream as soon as the handshake is up. */
+        if (!stream_open && ngtcp2_conn_get_handshake_completed(c->conn)) {
+            int64_t sid;
+            if (ngtcp2_conn_open_bidi_stream(c->conn, &sid, c) == 0) {
+                c->stream_id  = sid;
+                stream_open   = 1;
+                t_xfer_start  = xTaskGetTickCount();
+            }
         }
 
-        if (ngtcp2_conn_get_handshake_completed(c->conn)) {
+        if (client_flush(c) != 0) { failed = 1; break; }
+
+        if (stream_open) {
+            int dl_done = (c->want_download == 0) ||
+                          (c->recv_total >= c->want_download) || c->peer_fin;
+            int ul_done = (c->want_upload == 0) ||
+                          (c->send_fin_done && c->acked_total >= c->want_upload);
+            if (dl_done && ul_done) done = 1;
+        }
+        /* Server tore the connection down (e.g. after sinking our upload). */
+        if (ngtcp2_conn_in_closing_period2(c->conn) ||
+            ngtcp2_conn_in_draining_period2(c->conn)) {
             done = 1;
         }
     }
 
-report:
-    if (done) {
-        DiagPrintf("[QUIC] ===> HANDSHAKE COMPLETE: QUIC v1 + TLS1.3 over wolfSSL OK\n\r");
+    if (done && stream_open) {
+        TickType_t ms = xTaskGetTickCount() - t_xfer_start;
+        uint64_t bytes = (dl > 0) ? c->recv_total : c->acked_total;
+        if (ms == 0) ms = 1;
+        *kbps_out = (uint32_t)((bytes * 8ULL) / (uint64_t)ms);
         /* Tidy close so the server logs a clean teardown. */
-        {
+        if (!ngtcp2_conn_in_closing_period2(c->conn) &&
+            !ngtcp2_conn_in_draining_period2(c->conn)) {
             uint8_t buf[1280];
             ngtcp2_path_storage ps;
             ngtcp2_pkt_info pi;
             ngtcp2_ssize n;
             ngtcp2_path_storage_zero(&ps);
-            if (!ngtcp2_conn_in_closing_period2(c->conn) &&
-                !ngtcp2_conn_in_draining_period2(c->conn)) {
-                n = ngtcp2_conn_write_connection_close(c->conn, &ps.path, &pi, buf,
-                                                       sizeof(buf), &c->last_error,
-                                                       quic_timestamp());
-                if (n > 0) {
-                    (void)client_send_packet(c, buf, (size_t)n);
-                }
-            }
+            n = ngtcp2_conn_write_connection_close(c->conn, &ps.path, &pi, buf,
+                                                   sizeof(buf), &c->last_error,
+                                                   quic_timestamp());
+            if (n > 0) (void)client_send_packet(c, buf, (size_t)n);
         }
-    } else {
-        DiagPrintf("[QUIC] ===> HANDSHAKE FAILED (err_code=%d)\n\r",
-                   (int)c->last_error.error_code);
     }
 
 cleanup:
-    if (c->conn) ngtcp2_conn_del(c->conn);
-    if (c->ssl) wolfSSL_free(c->ssl);
+    if (c->conn)    ngtcp2_conn_del(c->conn);
+    if (c->ssl)     wolfSSL_free(c->ssl);
     if (c->ssl_ctx) wolfSSL_CTX_free(c->ssl_ctx);
     if (c->sock && c->sock != FREERTOS_INVALID_SOCKET) FreeRTOS_closesocket(c->sock);
-    wc_FreeRng(&s_rng_ctx);
-    vTaskDelete(NULL);
+    return failed ? -1 : 0;
+}
+
+static void quic_client_task(void *arg)
+{
+    uint32_t rx_kbps = 0, tx_kbps = 0;
+    int rx_ok, tx_ok;
+    (void)arg;
+
+    /* Wait until DHCP has handed us an IP. */
+    while (FreeRTOS_GetIPAddress() == 0) {
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+    vTaskDelay(pdMS_TO_TICKS(200));
+
+    DiagPrintf("[QUIC] ngtcp2 %s + wolfSSL TLS1.3 perf -> %d.%d.%d.%d:%d (ALPN %s)\n\r",
+               ngtcp2_version(0)->version_str,
+               QUIC_SERVER_A0, QUIC_SERVER_A1, QUIC_SERVER_A2, QUIC_SERVER_A3,
+               QUIC_SERVER_PORT, QUIC_ALPN);
+
+    amebad_bench_rng_reseed((unsigned int)xTaskGetTickCount());
+
+    if (wc_InitRng(&s_rng_ctx) != 0) {
+        DiagPrintf("[QUIC] wc_InitRng failed\n\r");
+        vTaskDelete(NULL);
+        return;
+    }
+
+    /* Loop the test so the host server can be started at any time and a fresh
+     * round will pick it up; also lets the console be read on demand. */
+    for (int round = 1; ; round++) {
+        DiagPrintf("[QUIC] ---- round %d ----\n\r", round);
+
+        /* Phase 1: DOWNLOAD (chip RX). */
+        DiagPrintf("[QUIC] download phase: requesting %d bytes...\n\r",
+                   (int)QUIC_PERF_XFER_BYTES);
+        rx_ok = (perf_connection(QUIC_PERF_XFER_BYTES, 0, &rx_kbps) == 0);
+
+        vTaskDelay(pdMS_TO_TICKS(300));
+
+        /* Phase 2: UPLOAD (chip TX). */
+        DiagPrintf("[QUIC] upload phase: sending %d bytes...\n\r",
+                   (int)QUIC_PERF_XFER_BYTES);
+        tx_ok = (perf_connection(0, QUIC_PERF_XFER_BYTES, &tx_kbps) == 0);
+
+        DiagPrintf("[QUIC] ============ LAN speed test (round %d) ============\n\r", round);
+        if (rx_ok) {
+            DiagPrintf("[QUIC]   DOWNLOAD (RX): %d kbps  (~%d Mbps)\n\r",
+                       (int)rx_kbps, (int)(rx_kbps / 1000));
+        } else {
+            DiagPrintf("[QUIC]   DOWNLOAD (RX): FAILED\n\r");
+        }
+        if (tx_ok) {
+            DiagPrintf("[QUIC]   UPLOAD   (TX): %d kbps  (~%d Mbps)\n\r",
+                       (int)tx_kbps, (int)(tx_kbps / 1000));
+        } else {
+            DiagPrintf("[QUIC]   UPLOAD   (TX): FAILED\n\r");
+        }
+        DiagPrintf("[QUIC] =================================================\n\r");
+
+        vTaskDelay(pdMS_TO_TICKS(8000));   /* pause between rounds */
+    }
 }
 
 void quic_test_start(void)

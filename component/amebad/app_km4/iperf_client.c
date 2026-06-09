@@ -16,7 +16,7 @@
 
 extern void DiagPrintf( const char *, ... );
 
-#define IPERF_SERVER_IP   FreeRTOS_inet_addr_quick( 192, 168, 2, 73 )   /* WSL host */
+#define IPERF_SERVER_IP   FreeRTOS_inet_addr_quick( 192, 168, 4, 250 )   /* WSL host */
 #define IPERF_PORT        5001
 #define IPERF_SECONDS     15
 #define IPERF_TXBUF       8192   /* big chunks per send -> fewer calls, fuller window */

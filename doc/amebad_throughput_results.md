@@ -76,12 +76,41 @@ AES-GCM 6× / X25519 2×。flash 代价 ~+100 KB text(image2 487→590 KB)。
 
 ---
 
+## 3. QUIC 应用层吞吐(ngtcp2 + wolfSSL TLS1.3,"perf" 协议)
+
+- **栈**:KM4 上 ngtcp2 1.23 + 全 TLS1.3/QUIC wolfSSL,跑在 FreeRTOS+TCP UDP socket。镜像
+  `make QUIC=ON TFM=ON`(QUIC 当 TF-M NSPE 才 boot)。host 端 **Windows 原生 C# System.Net.Quic**
+  perf server(绑 192.168.4.250:4567;WSL mirrored 不投递入站 UDP,故不能用 WSL)。详见 [[amebad_quic_test]]。
+- **链路**:WiFi 'Zeng'(DHCP .244)↔ 有线 host .250,同 /24(MikroTik hAP ac²);4 MB/方向,perf 协议。
+
+| 方向 | 吞吐 | 备注 |
+|---|---|---|
+| 下载 (server→chip RX) | **~4.53 Mbps** | 4 MB / 7.40 s,多轮稳定 `[ok]` |
+| 上传 (chip TX→server) | **~2.42 Mbps** | 4 MB / 13.88 s |
+
+**结论:QUIC 比同链路裸 TCP(第 1 节 iperf)慢约一半,瓶颈是单线程软件 crypto + 协议栈串联,不是 WiFi、
+不是流控窗口。**
+- 三层开销全在一个 `quic_cli` 任务里**顺序**做(无 DMA/多核流水线):每字节 AES-128-GCM(Thumb2 asm 上限
+  ~16.6 Mbps,见第 2 节)+ header protection(每包额外 1 次 AES-ECB)+ ngtcp2 用户态封包/ACK/丢包检测 +
+  UDP 每包 syscall。理想 1/(1/9_WiFi + 1/16.6_crypto) ≈ 5.8,扣单线程协议开销 → 4.5,吻合。
+- **上传 < 下载**:发送方更重(加密满包 + 重传缓冲 + 解密入站 ACK + 拥塞/pacing + WiFi TX 提交)。实测把
+  上传 in-flight cap 32K→96K **无提速** → 坐实 CPU/协议受限,非窗口受限(LAN RTT<10ms 时 32K 窗口上限就
+  几十 Mbps)。
+- **提速空间**:换 ChaCha20-Poly1305(第 2 节 6 MB/s,比 AES-GCM asm 快 ~2.5×)理论可观,但 Windows
+  Schannel 的 TLS1.3 只有 AES-GCM 套件(无 `TLS_CHACHA20_POLY1305_SHA256`),端到端测不了——要一个
+  ChaCha-capable 的原生 server。
+- **关键 bug(已修)**:QUIC 流控窗口曾设 512K 撑爆 250K 堆(下载到 192K 卡死在 `vApplicationMallocFailedHook`)
+  → 降到 48K + 上传 in-flight cap 32K;详见 [[amebad_quic_test]]。
+
+---
+
 ## 速览
 
 | 维度 | 数 | 限制因素 |
 |---|---|---|
 | TCP TX/RX | ~11–12 Mbps | 单 IP-task + copy 桥 per-packet(闭源驱动 ~100k cyc/包) |
 | UDP TX | 22.7 Mbps | 驱动 skb 池(无 ACK clock) |
+| QUIC 下载 / 上传 | 4.5 / 2.4 Mbps | 单线程软件 crypto(AES-GCM asm)+ ngtcp2 协议栈串联 |
 | TLS 握手(ECDHE+RSA-verify) | ~17.5 ms | SP Cortex-M 汇编后受 RSA/ECC 标量乘 |
 | AES-128-GCM | 2.0 MB/s | Thumb2 汇编(M33 无 AES 指令) |
 | ChaCha20-Poly1305 | 6.0 MB/s | 纯 C 已最快,M33 上的首选 AEAD |
