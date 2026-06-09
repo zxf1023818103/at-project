@@ -41,10 +41,12 @@ configure:
 	@for c in km0 km4; do d=$(REPO)/build/$$c; \
 	  [ -f $$d/build.ninja ] || rm -rf $$d; done
 	cd $(REPO) && cmake -S . -B build/km0 -G $(GEN) \
-	  -DAMEBAD_CHIP=amebad-km0 -DCMAKE_TOOLCHAIN_FILE=cmake/amebad-km0.cmake \
+	  -DAMEBAD_CHIP=amebad-km0 \
+	  $$([ -f build/km0/CMakeCache.txt ] || echo -DCMAKE_TOOLCHAIN_FILE=cmake/amebad-km0.cmake) \
 	  -DCMAKE_BUILD_TYPE=$(BUILD_TYPE)
 	cd $(REPO) && cmake -S . -B build/km4 -G $(GEN) \
-	  -DAMEBAD_CHIP=amebad-km4 -DCMAKE_TOOLCHAIN_FILE=cmake/amebad-km4.cmake \
+	  -DAMEBAD_CHIP=amebad-km4 \
+	  $$([ -f build/km4/CMakeCache.txt ] || echo -DCMAKE_TOOLCHAIN_FILE=cmake/amebad-km4.cmake) \
 	  -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) \
 	  -DAMEBAD_ENABLE_NIMBLE=$(NIMBLE) -DAMEBAD_ENABLE_HCI=$(HCI) \
 	  -DAMEBAD_ENABLE_QUIC=$(QUIC) \

@@ -61,9 +61,14 @@ def run(cmd):
     subprocess.check_call(cmd, cwd=REPO)
 
 
-def build(chip, build_dir, targets):
-    run(["cmake", "-S", REPO, "-B", build_dir,
-         "-DCMAKE_TOOLCHAIN_FILE=cmake/amebad-%s.cmake" % chip])
+def build(build_dir, targets):
+    # Configuration is the Makefile's job — project/amebad/Makefile's `configure`
+    # target owns the toolchain file / generator / feature flags and runs before
+    # this script (the `image:` target depends on `configure`). Here we only build
+    # the requested targets against the already-configured tree; `cmake --build`
+    # re-runs CMake itself if a CMakeLists changed. (Configuring here too would
+    # re-pass CMAKE_TOOLCHAIN_FILE on the warm tree and warn "Manually-specified
+    # variables were not used by the project".)
     run(["cmake", "--build", build_dir, "-t"] + targets)
 
 
@@ -108,11 +113,11 @@ def main():
     tfm_boot = cache_bool(args.km4_build, "AMEBAD_TFM_BOOT")
 
     if not args.no_build:
-        build("km0", args.km0_build, ["target_loader_km0", "target_img2_km0"])
+        build(args.km0_build, ["target_loader_km0", "target_img2_km0"])
         km4_targets = ["target_loader_km4", "target_img2_km4"]
         if tfm_boot:
             km4_targets.append("tfm_spe")                  # in-tree TF-M SPE -> tfm_s.bin
-        build("km4", args.km4_build, km4_targets)
+        build(args.km4_build, km4_targets)
 
     km0_boot = read(os.path.join(args.km0_build, KM0_BOOT))
     km0_img2 = read(os.path.join(args.km0_build, KM0_IMG2))

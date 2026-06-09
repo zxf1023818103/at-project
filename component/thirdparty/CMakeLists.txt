@@ -48,9 +48,24 @@ set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 # Make the compile checks fall back to STATIC_LIBRARY.
 set(CMAKE_TRY_COMPILE_TARGET_TYPE "STATIC_LIBRARY")
 
+# madler/zlib's CMakeLists hard-codes `add_library(zlib SHARED ...)` (no option
+# to skip it). Our cross targets have no shared-lib loader, so every configure
+# CMake prints a dev warning ("ADD_LIBRARY called with SHARED option but the
+# target platform does not support dynamic linking. Building a STATIC library
+# instead."). That SHARED target is dead code here (EXCLUDE_FROM_ALL — only
+# zlibstatic is ever linked), so the warning is pure noise. It is gated on the
+# global TARGET_SUPPORTS_SHARED_LIBS property; flip it TRUE just across this
+# add_subdirectory so the SHARED target is accepted silently instead of warning
+# + falling back, then restore the real value so nothing else is affected (the
+# dead target is never built, so declaring it SHARED has no effect).
+get_property(_at_tsl_save GLOBAL PROPERTY TARGET_SUPPORTS_SHARED_LIBS)
+set_property(GLOBAL PROPERTY TARGET_SUPPORTS_SHARED_LIBS TRUE)
+
 add_subdirectory(zlib
                  ${CMAKE_BINARY_DIR}/at_zlib_build
                  EXCLUDE_FROM_ALL)
+
+set_property(GLOBAL PROPERTY TARGET_SUPPORTS_SHARED_LIBS "${_at_tsl_save}")
 
 # zlib's source uses constructs that trip the Ameba SDK's strict
 # -Wundef -Wall -Wextra -Werror flag stack (`#if BIG_ENDIAN`, signedness
