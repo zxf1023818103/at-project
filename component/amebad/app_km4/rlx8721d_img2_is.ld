@@ -95,10 +95,17 @@ SECTIONS
 		 * AND intermittently stalls/faults the WiFi 4-way handshake. Excluding the
 		 * LFS archives here keeps every pre-existing object at its known-good
 		 * pre-LFS address; only LFS code lands at the (new) tail. */
-		*(EXCLUDE_FILE(*liblittlefs.a *liblfs_config.a *libamebad_lfs_port.a) .text*)
+		/* libstdc++ / libsupc++ are pinned to the tail alongside LittleFS for the
+		 * same reason: the C++ self-test (AMEBAD_CPP_SELFTEST) pulls a large amount
+		 * of iostream/filesystem .text, and letting it land mid-image would shift
+		 * the boot/WiFi code to new XIP addresses (the layout boot-hang). When the
+		 * test is off nothing references them, so these patterns match nothing. */
+		*(EXCLUDE_FILE(*liblittlefs.a *liblfs_config.a *libamebad_lfs_port.a *libstdc++.a *libsupc++.a) .text*)
 		*liblittlefs.a:(.text*)
 		*liblfs_config.a:(.text*)
 		*libamebad_lfs_port.a:(.text*)
+		*libstdc++.a:(.text*)
+		*libsupc++.a:(.text*)
 	/*	*(.image2.net.ram.text*) */
 		*(.rodata*)
 		*(.image2.ram.rodata*)

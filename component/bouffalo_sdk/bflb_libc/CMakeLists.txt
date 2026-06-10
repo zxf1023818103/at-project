@@ -177,11 +177,14 @@ target_compile_options(bflb_libc PRIVATE -fno-builtin)
 
 # Deps: FreeRTOS for the reentrancy hooks, bflb_lhal for uart so
 # syscalls_simple_io can use it for stdout, bflb_mm for the allocator
-# (port_memory.c → mm_malloc / mm_free).
+# (port_memory.c → mm_malloc / mm_free), at_console for the shared fd 0/1/2
+# dispatcher (console.h + at_console_read/write; syscalls_simple_io provides the
+# bflb_uart backend via at_console_default_backend).
 target_link_libraries(bflb_libc PUBLIC
     freertos_kernel
     bflb_lhal
     bflb_mm
+    at_console
 )
 
 # Upstream nuttx-derived sources trip our -Wall -Wundef wall on details

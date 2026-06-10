@@ -9,7 +9,7 @@ endif()
 # archive — the ld script (rlx8721d_img2_is.ld) pins libamebad_lfs_port.a /
 # liblfs_config.a / liblittlefs.a to the tail of .xip_image2.text to keep the
 # boot + WiFi code at its known-good XIP addresses (see that file's comment).
-add_library(amebad_lfs_port STATIC EXCLUDE_FROM_ALL lfs_port.c lfs_selftest.c)
+add_library(amebad_lfs_port STATIC EXCLUDE_FROM_ALL lfs_port.c lfs_selftest.c cpp_selftest.cpp)
 target_include_directories(amebad_lfs_port PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 
 # PUBLIC: lfs.h (littlefs) + the geometry/param fill (lfs_config) are part of the
@@ -25,4 +25,12 @@ target_link_libraries(amebad_lfs_port PRIVATE amebad_sdk_includes amebad_mbed)
 if(AMEBAD_VFS_SELFTEST)
     target_compile_definitions(amebad_lfs_port PRIVATE AMEBAD_VFS_SELFTEST)
     target_link_libraries(amebad_lfs_port PRIVATE amebad_freertos_tcp)
+endif()
+
+# Optional C++ std::filesystem / iostream self-test (cpp_selftest.cpp, gated in
+# that file). It is in THIS archive so its .text — and, via the ld pin, the
+# libstdc++ .text it pulls — lands at the XIP tail and does not shift boot/WiFi.
+# C++17 / -lstdc++ are already configured for the KM4 image.
+if(AMEBAD_CPP_SELFTEST)
+    target_compile_definitions(amebad_lfs_port PRIVATE AMEBAD_CPP_SELFTEST)
 endif()

@@ -44,6 +44,7 @@
 #include "FreeRTOS_IP.h"     /* FreeRTOS_htonl / FreeRTOS_htons (network byte order) */
 #include "FreeRTOS_Sockets.h"/* Socket_t / FreeRTOS_recv / FreeRTOS_send / closesocket */
 #include "lfs_port.h"        /* amebad_lfs_mount + lfs.h (lfs_file_* / LFS_O_* / lfs_stat) */
+#include "console.h"         /* at_console_read/write — shared fd 0/1/2 dispatcher */
 
 /* platform_stdlib (pulled in by ameba_soc.h) macro-redirects the malloc family to
  * the SDK primitives: `#define malloc pvPortMalloc` / free vPortFree / calloc
@@ -354,6 +355,11 @@ static const vfs_ops_t *slot_ops(const vfs_slot_t *s)
 
 /* ===== 2. newlib syscall entry points ==================================== */
 
+/* Console fds 0/1/2 dispatch to the cross-platform console component
+ * (component/console). The byte I/O backend (LOGUART by default, LPUART when
+ * console_lpuart.c registers it) lives there; this file only routes the fds.
+ * See console_loguart.c (default backend) / console_lpuart.c (override). */
+
 int _open(const char *path, int flags, int mode)
 {
     lfs_t *lfs;
@@ -415,15 +421,8 @@ int _read(int fd, char *buf, int len)
     vfs_slot_t *s;
     const vfs_ops_t *ops;
 
-    if (fd <= 2) {                       /* console (line-oriented, echoes) */
-        int n = 0;
-        for (; len > 0; --len) {
-            int c = DiagGetChar(_TRUE);
-            if (c < 0 || c == '\r') { *buf = '\0'; break; }
-            *buf++ = (char)c;
-            ++n;
-        }
-        return n;
+    if (fd <= 2) {                       /* console -> shared dispatcher */
+        return at_console_read(buf, len);
     }
     s = fd_get(fd);
     if (s == NULL) {
@@ -437,13 +436,9 @@ int _write(int fd, char *buf, int len)
 {
     vfs_slot_t *s;
     const vfs_ops_t *ops;
-    int i;
 
-    if (fd <= 2) {                       /* console — write regardless of fd */
-        for (i = 0; i < len; i++) {
-            DiagPutChar((char)buf[i]);
-        }
-        return len;
+    if (fd <= 2) {                       /* console -> shared dispatcher */
+        return at_console_write(fd, buf, len);
     }
     s = fd_get(fd);
     if (s == NULL) {
@@ -624,6 +619,18 @@ void *realloc(void *ptr, size_t size)
     free(ptr);
     return np;
 }
+
+/* newlib's stdio (fopen/__sfp/stream buffers) and libstdc++ allocate through the
+ * REENTRANT allocator _malloc_r — NOT the plain malloc above. Left to newlib's
+ * default, _malloc_r grows the tiny _sbrk arena (4 KB) and runs out (ENOMEM) the
+ * moment a C++ ofstream/filebuf buffer is needed. Route the whole _*_r family to
+ * the same heap_5-backed malloc so newlib internals share the real heap. The
+ * reent arg is unused (our allocator is task-safe via the FreeRTOS heap lock). */
+struct _reent;
+void *_malloc_r (struct _reent *r, size_t n)            { (void)r; return malloc(n); }
+void  _free_r   (struct _reent *r, void *p)             { (void)r; free(p); }
+void *_calloc_r (struct _reent *r, size_t a, size_t b)  { (void)r; return calloc(a, b); }
+void *_realloc_r(struct _reent *r, void *p, size_t n)   { (void)r; return realloc(p, n); }
 
 /* ===== 4. BSD byte-order helpers (delegate to FreeRTOS+TCP) =============== *
  * ngtcp2_net.h's non-WIN32 path expands ngtcp2_htonl(N) -> htonl(N) etc., and it

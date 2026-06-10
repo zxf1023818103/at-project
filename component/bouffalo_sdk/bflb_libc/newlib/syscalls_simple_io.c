@@ -8,6 +8,8 @@
 #include "bflb_uart.h"
 #endif
 
+#include "console.h"   /* cross-platform fd 0/1/2 dispatcher (component/console) */
+
 struct bflb_device_s *console = NULL;
 
 #ifdef CONFIG_CONSOLE_WO
@@ -25,17 +27,45 @@ void bflb_uart_set_console(struct bflb_device_s *dev)
     #define CONSOLE_PUTCHAR(console, x) bflb_uart_putchar(console, x)
 #endif
 
+/* Bouffalo console backend for the shared dispatcher: bytes go to the global
+ * `console` UART device. putc keeps the SDK's '\n' -> "\r\n" expansion so log
+ * output formatting is unchanged. */
+static void bflb_console_putc(char c)
+{
+    if (c == '\n') {
+        CONSOLE_PUTCHAR(console, '\r');
+    }
+    CONSOLE_PUTCHAR(console, c);
+}
+
+#ifndef CONFIG_CONSOLE_WO
+static int bflb_console_getc(void)
+{
+    return bflb_uart_getchar(console);   /* blocks; <0 if no input */
+}
+#endif
+
+static const at_console_backend_t BFLB_CONSOLE = {
+    bflb_console_putc,                   /* putc    */
+#ifndef CONFIG_CONSOLE_WO
+    bflb_console_getc,                   /* getc    */
+#else
+    0,                                   /* write-only console (WO) */
+#endif
+    bflb_console_putc,                   /* errputc -> same console */
+};
+
+/* Strong override of the dispatcher's weak default: zero-config console. */
+const at_console_backend_t *at_console_default_backend(void)
+{
+    return &BFLB_CONSOLE;
+}
+
 ssize_t _console_write_r(struct _reent *reent, int fd, const void *ptr, size_t size)
 {
-    const char* cptr = (const char*) ptr;
+    (void)reent;
     if (fd == STDOUT_FILENO || fd == STDERR_FILENO) {
-        for (size_t i = 0; i < size; ++i) {
-            if (cptr[i] == '\n') {
-                CONSOLE_PUTCHAR(console, '\r');
-            }
-            CONSOLE_PUTCHAR(console, cptr[i]);
-        }
-        return size;
+        return at_console_write(fd, (const char *)ptr, (int)size);
     }
     return -1;
 }
@@ -43,17 +73,9 @@ ssize_t _console_write_r(struct _reent *reent, int fd, const void *ptr, size_t s
 #ifndef CONFIG_CONSOLE_WO
 ssize_t _console_read_r(struct _reent *reent, int fd, void *ptr, size_t size)
 {
-    char* cptr = (char*) ptr;
+    (void)reent;
     if (fd == STDIN_FILENO) {
-        size_t recv_num;
-        for (recv_num = 0; recv_num < size; ++recv_num) {
-            int ch = bflb_uart_getchar(console);
-	    cptr[recv_num] = ch;
-            if (cptr[recv_num] == '\r') {
-                cptr[recv_num] = '\n';
-            }
-        }
-        return recv_num;
+        return at_console_read((char *)ptr, (int)size);
     }
     return -1;
 }

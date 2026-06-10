@@ -272,6 +272,18 @@ static void wifi_bringup_thread( void *param )
         lfs_selftest();
     }
 
+#ifdef AMEBAD_CPP_SELFTEST
+    /* C++ std::filesystem / iostream self-test over the POSIX VFS. Brings up the
+     * LPUART console first (stdin/stdout -> UART3 PB1/PB2 / COM7; stderr stays on
+     * LOGUART), then runs the libstdc++ self-test. Pre-WiFi: no network needed. */
+    {
+        extern void amebad_console_init_lpuart( void );
+        extern void cpp_selftest( void );
+        amebad_console_init_lpuart();
+        cpp_selftest();
+    }
+#endif
+
     /* Create the WiFi-indication worker thread before bringing WiFi up. With
      * CONFIG_WIFI_IND_USE_THREAD=1 (platform_opts.h), driver events (CONNECT,
      * FOURWAY_HANDSHAKE_DONE, DISCONNECT) are dispatched to the registered

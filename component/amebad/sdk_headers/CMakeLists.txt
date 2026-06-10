@@ -46,7 +46,7 @@ else()
 endif()
 
 add_library(amebad_sdk_includes INTERFACE)
-target_link_libraries(amebad_sdk_includes INTERFACE amebad_fwlib_headers amebad_xmodem amebad_string_rom amebad_cmsis_rom amebad_dlist)
+target_link_libraries(amebad_sdk_includes INTERFACE amebad_fwlib_headers amebad_xmodem amebad_string_rom amebad_cmsis_rom amebad_dlist amebad_platform_stdlib)
 
 # OTA region — base addresses for the two image2 partitions. Default
 # values match SDK upstream (rtl8721d_ota.h #define defaults). Override
@@ -138,13 +138,13 @@ target_include_directories(amebad_sdk_includes SYSTEM INTERFACE
     "${CMAKE_SOURCE_DIR}/component/amebad/monitor"
     # PMU: rtl8721d_freertos_pmu.h moved to the pmu component (with lib_pmc_*.a).
     "${CMAKE_SOURCE_DIR}/component/amebad/pmu"
-    # libc-retarget headers — platform_stdlib_rtl8721d.h (printf/mem*/str* -> ROM,
-    # malloc -> pvPortMalloc, ...) and time64.h now live WITH their implementation
-    # in the syscalls component (newlib_syscalls.c); included bare as
-    # "platform_stdlib_rtl8721d.h" / "time64.h". The old platform_stdlib.h dispatcher
-    # (multi-chip #if chain, only 8721d ever taken) is gone, and dlist.h is its own
-    # component (amebad_dlist, linked above). at_cmd headers (log_service.h /
-    # atcmd_*.h) live on the at_cmd component; lwip_netconf.h on lwip/config.
+    # libc-retarget header — platform_stdlib_rtl8721d.h (printf/mem*/str* -> ROM,
+    # malloc -> pvPortMalloc, ...) is its own header-only component now
+    # (amebad_platform_stdlib, linked above), matching dlist. The old
+    # platform_stdlib.h dispatcher (multi-chip #if chain, only 8721d ever taken) is
+    # gone. time64.h still lives with the syscalls component (newlib_syscalls.c),
+    # included bare as "time64.h". at_cmd headers (log_service.h / atcmd_*.h) live on
+    # the at_cmd component; lwip_netconf.h on lwip/config.
     "${CMAKE_SOURCE_DIR}/component/amebad/syscalls"
     "${CMAKE_SOURCE_DIR}/component/amebad/at_cmd"
     # autoconf.h (the global Kconfig autoconf) lives in the WLAN driver's include/

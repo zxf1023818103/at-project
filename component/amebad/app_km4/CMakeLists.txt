@@ -144,7 +144,11 @@ set(_diag_grp ",amebad_at_cmd,amebad_monitor,amebad_monitor_common")
 set(_quic_grp "")
 if(AMEBAD_ENABLE_QUIC)
     set(_diag_grp "")
-    set(_quic_grp ",amebad_ngtcp2_crypto,amebad_ngtcp2")
+    # The hand-tuned flat --start-group needs real archive names (CMake won't
+    # expand an INTERFACE aggregate like `ngtcp2-config` inside a LINK_GROUP).
+    # Normal consumers can link `ngtcp2-config` directly; this image lists the
+    # members so they share the one cross_refs group with amebad_wolfssl.
+    set(_quic_grp ",amebad_ngtcp2_crypto,ngtcp2_static")
     target_sources(target_img2_km4 PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/quic_test.c")   # newlib syscalls now from amebad_syscalls
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
@@ -156,6 +160,13 @@ endif()
 if(AMEBAD_VFS_SELFTEST)
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
                  APPEND PROPERTY COMPILE_DEFINITIONS AMEBAD_VFS_SELFTEST)
+endif()
+
+# C++ self-test (cpp_selftest.cpp + LPUART console port). main.c calls
+# amebad_console_init_lpuart() + cpp_selftest() under the same define.
+if(AMEBAD_CPP_SELFTEST)
+    set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
+                 APPEND PROPERTY COMPILE_DEFINITIONS AMEBAD_CPP_SELFTEST)
 endif()
 
 # Archives wrapped in --start-group (cross_refs) for circular vendor refs.

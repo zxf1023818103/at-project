@@ -24,6 +24,10 @@ add_subdirectory(component/thirdparty)
 # shared by every platform's lfs port. After thirdparty so `littlefs` exists.
 add_subdirectory(component/lfs-config)
 
+# Cross-platform stdio (fd 0/1/2) console dispatcher — the shared line discipline
+# + backend hook that every platform's newlib retarget routes the console fds to.
+add_subdirectory(component/console)
+
 # Shared user sources (src/main.cpp + ragel-generated AT parser).
 add_subdirectory(src)
 
