@@ -362,6 +362,15 @@ static void wifi_bringup_thread( void *param )
     FreeRTOS_IPInit_Multi();
     amebad_freertos_tcp_set_ready();
 
+#ifdef AMEBAD_VFS_SELFTEST
+    /* POSIX-fd VFS self-test (syscalls retarget): runs here so the socket part has
+     * the FreeRTOS+TCP IP task up (the LFS file part works anytime). */
+    {
+        extern void vfs_selftest( void );
+        vfs_selftest();
+    }
+#endif
+
     /* Connect to "AIoT" the explicit way (wifi_connect_simple leaves security
      * UNKNOWN and pscan-restricts its own scan): FIRST do a directed FULL
      * all-channel scan (no pscan set yet) so we reliably find the AP + its real

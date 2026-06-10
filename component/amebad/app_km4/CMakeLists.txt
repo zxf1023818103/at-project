@@ -151,6 +151,13 @@ if(AMEBAD_ENABLE_QUIC)
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_QUIC)
 endif()
 
+# POSIX-fd VFS self-test (vfs_selftest in amebad_lfs_port, gated by the option in
+# component/amebad/CMakeLists.txt). main.c calls it under the same define.
+if(AMEBAD_VFS_SELFTEST)
+    set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
+                 APPEND PROPERTY COMPILE_DEFINITIONS AMEBAD_VFS_SELFTEST)
+endif()
+
 # Archives wrapped in --start-group (cross_refs) for circular vendor refs.
 # libc (-lc) supplies __libc_init_array (KM4 has C++ global ctors; KM0 didn't)
 # plus memcpy/memset — so KM4 doesn't need the ROM memcpy alias KM0 uses.

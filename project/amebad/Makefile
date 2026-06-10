@@ -30,6 +30,7 @@ HCI        ?= OFF          # ON -> bare HCI/DTM
 QUIC       ?= OFF          # ON -> ngtcp2 QUIC client self-test (pulls full wolfSSL TLS1.3)
 WOLFASM    ?= ON           # ON -> wolfCrypt Thumb2 symmetric/hash asm (faster; OFF = portable C)
 TFM        ?= OFF          # ON -> build + boot in-tree TF-M SPE (app_km4 becomes the NS side)
+VFSTEST    ?= OFF          # ON -> POSIX-fd VFS self-test (fopen/open/socket over LFS+sockets)
 IMAGE      := $(REPO)/build/amebad/firmware.bin
 
 all: image
@@ -51,7 +52,8 @@ configure:
 	  -DAMEBAD_ENABLE_NIMBLE=$(NIMBLE) -DAMEBAD_ENABLE_HCI=$(HCI) \
 	  -DAMEBAD_ENABLE_QUIC=$(QUIC) \
 	  -DAMEBAD_WOLFSSL_ARMASM=$(WOLFASM) \
-	  -DAMEBAD_TFM_BOOT=$(TFM)
+	  -DAMEBAD_TFM_BOOT=$(TFM) \
+	  -DAMEBAD_VFS_SELFTEST=$(VFSTEST)
 
 # build_image_all.py builds both cores (cmake --build, generator-agnostic — reuses
 # the Ninja trees configured above) and assembles the flashable image.

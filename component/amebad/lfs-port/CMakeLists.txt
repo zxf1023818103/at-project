@@ -18,3 +18,11 @@ target_include_directories(amebad_lfs_port PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 # amebad_sdk_includes) are implementation detail.
 target_link_libraries(amebad_lfs_port PUBLIC  littlefs lfs_config)
 target_link_libraries(amebad_lfs_port PRIVATE amebad_sdk_includes amebad_mbed)
+
+# Optional POSIX-fd VFS self-test (vfs_selftest, gated in lfs_selftest.c). Needs
+# FreeRTOS_Sockets.h (amebad_freertos_tcp's PUBLIC includes) + the define; both are
+# compile-time only here (the archive is already in app_km4's link group).
+if(AMEBAD_VFS_SELFTEST)
+    target_compile_definitions(amebad_lfs_port PRIVATE AMEBAD_VFS_SELFTEST)
+    target_link_libraries(amebad_lfs_port PRIVATE amebad_freertos_tcp)
+endif()

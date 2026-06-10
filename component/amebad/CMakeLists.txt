@@ -105,6 +105,12 @@ if(AMEBAD_ENABLE_QUIC)
     set(AMEBAD_WOLFSSL_TLS ON CACHE BOOL "wolfSSL TLS 1.3 + QUIC (forced by AMEBAD_ENABLE_QUIC)" FORCE)
 endif()
 
+# POSIX-fd VFS self-test (syscalls/newlib_syscalls.c): fopen/open + socket-fd over
+# LittleFS + FreeRTOS+TCP. OFF by default (the VFS is otherwise gc-stripped when no
+# consumer references it). Consumed by lfs-port (the vfs_selftest fn) + app_km4 (the
+# call). Declared here so both subdirs see it.
+option(AMEBAD_VFS_SELFTEST "Build + run the POSIX-fd VFS self-test (fopen/open/socket over LFS+sockets)" OFF)
+
 add_subdirectory(wolfssl)            # KM4-gated: wolfCrypt (v5.9.1) bare-metal lib for on-target crypto benchmark (+TLS1.3/QUIC when AMEBAD_WOLFSSL_TLS)
 add_subdirectory(ngtcp2)             # KM4-gated: ngtcp2 QUIC + crypto/wolfssl (only built when AMEBAD_ENABLE_QUIC)
 add_subdirectory(build_info)         # INTERFACE: UTS_VERSION banner -D (replaces the vendored build_info.h shim)

@@ -1,29 +1,33 @@
 /*
  * newlib_syscalls.c — the AmebaD KM4 image's libc/newlib retarget, all in one place.
  *
- * Three groups, all force-linked into the KM4 image (strong defs that beat libc's
+ * Groups, all force-linked into the KM4 image (strong defs that beat libc's
  * defaults) — see CMakeLists.txt:
  *
- *   1. newlib syscall stubs — consolidated from the former three copies
- *      (hci/hci_syscalls.c, app_km4/quic_syscalls.c, monitor/low_level_io.c):
- *        _write -> LOGUART console (DiagPutChar), so any newlib-routed print still
- *                  lands on COM3; fd is ignored on purpose (BT/TLS use various fds).
- *        _read  -> line input from the console (DiagGetChar), for the monitor shell.
- *        _sbrk  -> a small static heap for newlib's stdio buffering (NOT the app heap).
- *        rest   -> inert POSIX stubs newlib expects to exist.
+ *   1. POSIX fd VFS — a small file-descriptor layer so the newlib syscalls route
+ *      by fd: 0/1/2 stay = LOGUART console; an _open()'d path -> a LittleFS file
+ *      (amebad_lfs_mount + lfs_file_*); a socket registered via
+ *      amebad_fd_open_socket() -> a FreeRTOS+TCP socket (FreeRTOS_recv/send/
+ *      closesocket). fd -> slot is a hashtable index over a fixed slot pool.
  *
- *   2. malloc family over the FreeRTOS heap (heap_5) — a STRONG malloc/free/calloc/
+ *   2. newlib syscall entry points — _open/_close/_read/_write/_lseek/_fstat/
+ *      _isatty/_stat/_unlink dispatch through (1); _sbrk + the inert POSIX stubs.
+ *
+ *   3. malloc family over the FreeRTOS heap (heap_5) — a STRONG malloc/free/calloc/
  *      realloc. The image is built -nostdlib; code that wants C malloc (ngtcp2's
- *      default ngtcp2_mem, newlib snprintf, ...) must resolve it, and a strong
- *      malloc here also pre-empts newlib's own (which would grow through _sbrk).
- *      heap_5 has no realloc, so each block is prefixed with its size for
- *      copy-on-realloc. (Moved here from the old ngtcp2/ngtcp2_port.c so every KM4
- *      program shares one copy, not just QUIC.)
+ *      default ngtcp2_mem, littlefs's per-file cache, newlib snprintf, ...) must
+ *      resolve it, and a strong malloc here also pre-empts newlib's own (which
+ *      would grow through _sbrk). heap_5 has no realloc, so each block is prefixed
+ *      with its size for copy-on-realloc.
  *
- *   3. BSD byte-order helpers — bare htonl/htons/ntohl/ntohs that socket code
- *      (ngtcp2_net.h, anything expecting <arpa/inet.h>) calls. They do NOT
- *      re-implement the swap: they delegate to FreeRTOS+TCP's FreeRTOS_htonl/htons
- *      so there is a single source of truth for the project's network byte order.
+ *   4. BSD byte-order helpers — bare htonl/htons/ntohl/ntohs that socket code
+ *      (ngtcp2_net.h, anything expecting <arpa/inet.h>) calls; they delegate to
+ *      FreeRTOS+TCP's FreeRTOS_htonl/htons.
+ *
+ * The VFS + socket fd machinery is always compiled but per-function (the toolchain
+ * builds with -ffunction-sections/-fdata-sections and the image links with
+ * -Wl,--gc-sections — see cmake/arm-none-eabi.cmake), so when no consumer calls
+ * fopen/open/amebad_fd_open_socket it is dead-stripped and costs nothing.
  *
  * GCC/newlib only (this project has no IAR/__ICCARM__ build).
  */
@@ -31,45 +35,490 @@
 #include <string.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 
-#include "FreeRTOS.h"        /* pvPortMalloc / vPortFree (heap) */
+#include "FreeRTOS.h"        /* pvPortMalloc / vPortFree (heap) + the mutex */
+#include "semphr.h"
 #include "FreeRTOS_IP.h"     /* FreeRTOS_htonl / FreeRTOS_htons (network byte order) */
+#include "FreeRTOS_Sockets.h"/* Socket_t / FreeRTOS_recv / FreeRTOS_send / closesocket */
+#include "lfs_port.h"        /* amebad_lfs_mount + lfs.h (lfs_file_* / LFS_O_* / lfs_stat) */
 
 /* platform_stdlib (pulled in by ameba_soc.h) macro-redirects the malloc family to
  * the SDK primitives: `#define malloc pvPortMalloc` / free vPortFree / calloc
  * rtw_calloc / realloc pvPortReAlloc. Undo them here so the STRONG symbols defined
  * below are the real malloc/free/calloc/realloc that third-party code (ngtcp2,
- * newlib) links against — not redefinitions of the pvPort / rtw primitives. */
+ * littlefs, newlib) links against — not redefinitions of the pvPort / rtw primitives. */
 #undef malloc
 #undef free
 #undef calloc
 #undef realloc
 
-/* ===== 1. newlib syscall stubs =========================================== */
+/* ===== 1. POSIX fd VFS — slot pool + hashtable index ====================== *
+ * fds 0/1/2 are the console and never enter the table. fds >= VFS_FD_BASE are
+ * handed out by a monotonic allocator (so fd numbers are sparse/growing, not just
+ * slot indices) and mapped fd -> slot through an open-addressing hashtable. The
+ * slot pool holds the handle; a slot is a file XOR a socket, hence the union. The
+ * per-file 512B lfs cache is NOT here — lfs_file_open mallocs it (heap_5) and
+ * lfs_file_close frees it — so each slot is only ~sizeof(lfs_file_t). */
+#define VFS_FD_BASE     3
+#define VFS_MAX_FD      16          /* max concurrently-open file+socket fds */
+#define VFS_HASH_SIZE   31          /* open-addressing buckets, prime > VFS_MAX_FD */
 
-int _write(int fd, char *buf, int len)
+typedef enum { VFS_FREE = 0, VFS_FILE, VFS_SOCKET } vfs_type_t;
+
+typedef struct {
+    vfs_type_t type;                /* VFS_FREE => unused pool slot */
+    union {
+        lfs_file_t f;               /* VFS_FILE */
+        Socket_t   s;               /* VFS_SOCKET */
+    } u;
+} vfs_slot_t;
+
+typedef struct { int fd; int slot; } vfs_hentry_t;  /* fd == 0 => empty bucket */
+
+static vfs_slot_t        s_slots[VFS_MAX_FD];
+static vfs_hentry_t      s_htab[VFS_HASH_SIZE];
+static int               s_next_fd = VFS_FD_BASE;   /* monotonic fd source */
+static SemaphoreHandle_t s_fd_mutex;                /* lazily created */
+
+static void fd_lock(void)
 {
-    int i;
-    (void)fd;   /* write regardless of fd so newlib-routed prints reach the console */
-    for (i = 0; i < len; i++)
-        DiagPutChar((char)buf[i]);
-    return len;
+    if (s_fd_mutex == NULL) {
+        s_fd_mutex = xSemaphoreCreateMutex();
+    }
+    if (s_fd_mutex != NULL) {
+        xSemaphoreTake(s_fd_mutex, portMAX_DELAY);
+    }
+}
+
+static void fd_unlock(void)
+{
+    if (s_fd_mutex != NULL) {
+        xSemaphoreGive(s_fd_mutex);
+    }
+}
+
+/* hashtable (caller holds fd_lock). h(fd) = fd % size, linear probing. */
+static int htab_find(int fd)        /* -> bucket index, or -1 if absent */
+{
+    unsigned i = (unsigned)fd % VFS_HASH_SIZE;
+    unsigned n;
+    for (n = 0; n < VFS_HASH_SIZE; n++) {
+        if (s_htab[i].fd == 0) {
+            return -1;
+        }
+        if (s_htab[i].fd == fd) {
+            return (int)i;
+        }
+        i = (i + 1) % VFS_HASH_SIZE;
+    }
+    return -1;
+}
+
+static int htab_insert(int fd, int slot)  /* 0 ok, -1 full */
+{
+    unsigned i = (unsigned)fd % VFS_HASH_SIZE;
+    unsigned n;
+    for (n = 0; n < VFS_HASH_SIZE; n++) {
+        if (s_htab[i].fd == 0) {
+            s_htab[i].fd = fd;
+            s_htab[i].slot = slot;
+            return 0;
+        }
+        i = (i + 1) % VFS_HASH_SIZE;
+    }
+    return -1;
+}
+
+/* Open-addressing backward-shift deletion from bucket b — keeps probe chains
+ * intact without tombstones (the table is long-lived; tombstones would accrue). */
+static void htab_remove_at(int b)
+{
+    unsigned i = (unsigned)b;
+    unsigned j = i;
+    s_htab[i].fd = 0;
+    for (;;) {
+        unsigned k;
+        int move;
+        j = (j + 1) % VFS_HASH_SIZE;
+        if (s_htab[j].fd == 0) {
+            break;
+        }
+        k = (unsigned)s_htab[j].fd % VFS_HASH_SIZE;
+        /* move s_htab[j] into the hole at i iff its home k is NOT in (i, j] */
+        move = (i <= j) ? (k <= i || k > j) : (k <= i && k > j);
+        if (move) {
+            s_htab[i] = s_htab[j];
+            s_htab[j].fd = 0;
+            i = j;
+        }
+    }
+}
+
+/* Allocate a free pool slot + a fresh fd. Returns fd (>=VFS_FD_BASE) and *out, or
+ * -1 (errno=EMFILE). */
+static int fd_alloc(vfs_type_t type, vfs_slot_t **out)
+{
+    int slot = -1, fd, i;
+
+    fd_lock();
+    for (i = 0; i < VFS_MAX_FD; i++) {
+        if (s_slots[i].type == VFS_FREE) { slot = i; break; }
+    }
+    if (slot < 0) {
+        fd_unlock();
+        errno = EMFILE;
+        return -1;
+    }
+    for (;;) {
+        fd = s_next_fd++;
+        if (s_next_fd > 0x7FFFFFF0) {
+            s_next_fd = VFS_FD_BASE;
+        }
+        if (fd >= VFS_FD_BASE && htab_find(fd) < 0) {
+            break;
+        }
+    }
+    if (htab_insert(fd, slot) < 0) {
+        fd_unlock();
+        errno = EMFILE;
+        return -1;
+    }
+    s_slots[slot].type = type;
+    if (out != NULL) {
+        *out = &s_slots[slot];
+    }
+    fd_unlock();
+    return fd;
+}
+
+/* fd -> slot (NULL + errno=EBADF if not an open VFS fd). Caller must not be inside
+ * fd_lock. The returned slot stays valid until its fd is closed. */
+static vfs_slot_t *fd_get(int fd)
+{
+    vfs_slot_t *s = NULL;
+    int b;
+
+    fd_lock();
+    b = htab_find(fd);
+    if (b >= 0) {
+        s = &s_slots[s_htab[b].slot];
+    }
+    fd_unlock();
+    if (s == NULL) {
+        errno = EBADF;
+    }
+    return s;
+}
+
+static void fd_free(int fd)
+{
+    int b;
+    fd_lock();
+    b = htab_find(fd);
+    if (b >= 0) {
+        s_slots[s_htab[b].slot].type = VFS_FREE;
+        htab_remove_at(b);
+    }
+    fd_unlock();
+}
+
+/* Backend op tables. The console syscalls (_read/_write/_close/_lseek/_fstat) are
+ * kept by libc (stdio pulls them), and a direct reference to the lfs_file_ and
+ * FreeRTOS_ backends from them would drag littlefs + the ~45KB FreeRTOS+TCP sockets
+ * module into EVERY image even when nothing opens a file or registers a socket. So
+ * the file/socket backends are reached only through these NULL-until-wired pointers;
+ * they are wired by _open()/amebad_fd_open_socket(), which are themselves
+ * dead-strippable. When no consumer calls those, the op-table impls (and their lfs /
+ * FreeRTOS refs) are unreferenced and --gc-sections drops them — zero cost unused. */
+typedef struct {
+    int  (*read )(vfs_slot_t *s, char *buf, int len);
+    int  (*write)(vfs_slot_t *s, const char *buf, int len);
+    int  (*close)(vfs_slot_t *s);
+    int  (*lseek)(vfs_slot_t *s, int off, int whence);
+    long (*size )(vfs_slot_t *s);          /* for _fstat; <0 on error */
+} vfs_ops_t;
+static const vfs_ops_t *s_file_ops;        /* set by _open */
+static const vfs_ops_t *s_sock_ops;        /* set by amebad_fd_open_socket */
+
+/* errno mappers */
+static int lfs_to_errno(int e)
+{
+    switch (e) {
+    case LFS_ERR_OK:          return 0;
+    case LFS_ERR_NOENT:       return ENOENT;
+    case LFS_ERR_EXIST:       return EEXIST;
+    case LFS_ERR_NOTDIR:      return ENOTDIR;
+    case LFS_ERR_ISDIR:       return EISDIR;
+    case LFS_ERR_NOTEMPTY:    return ENOTEMPTY;
+    case LFS_ERR_BADF:        return EBADF;
+    case LFS_ERR_FBIG:        return EFBIG;
+    case LFS_ERR_INVAL:       return EINVAL;
+    case LFS_ERR_NOSPC:       return ENOSPC;
+    case LFS_ERR_NOMEM:       return ENOMEM;
+    case LFS_ERR_NAMETOOLONG: return ENAMETOOLONG;
+    case LFS_ERR_IO:
+    case LFS_ERR_CORRUPT:
+    default:                  return EIO;
+    }
+}
+
+/* FreeRTOS+TCP returns negative -pdFREERTOS_ERRNO_* whose magnitudes match POSIX
+ * (see FreeRTOS_errno_TCP.h); a bare FREERTOS_SOCKET_ERROR(-1) falls back to EIO. */
+static int frtos_to_errno(BaseType_t r)
+{
+    int e = (int)(-r);
+    return (e > 1) ? e : EIO;
+}
+
+/* ---- LittleFS file backend (wired by _open) ---- */
+static int file_read(vfs_slot_t *s, char *b, int n)
+{
+    lfs_ssize_t r = lfs_file_read(amebad_lfs_mount(), &s->u.f, b, (lfs_size_t)n);
+    return (r < 0) ? (errno = lfs_to_errno((int)r), -1) : (int)r;
+}
+static int file_write(vfs_slot_t *s, const char *b, int n)
+{
+    lfs_ssize_t r = lfs_file_write(amebad_lfs_mount(), &s->u.f, b, (lfs_size_t)n);
+    return (r < 0) ? (errno = lfs_to_errno((int)r), -1) : (int)r;
+}
+static int file_close(vfs_slot_t *s)
+{
+    int r = lfs_file_close(amebad_lfs_mount(), &s->u.f);
+    return (r < 0) ? (errno = lfs_to_errno(r), -1) : 0;
+}
+static int file_lseek(vfs_slot_t *s, int off, int whence)
+{
+    /* SEEK_SET/CUR/END (0/1/2) == LFS_SEEK_SET/CUR/END */
+    lfs_soff_t p = lfs_file_seek(amebad_lfs_mount(), &s->u.f, off, whence);
+    return (p < 0) ? (errno = lfs_to_errno((int)p), -1) : (int)p;
+}
+static long file_size(vfs_slot_t *s)
+{
+    return (long)lfs_file_size(amebad_lfs_mount(), &s->u.f);
+}
+static const vfs_ops_t FILE_OPS = { file_read, file_write, file_close, file_lseek, file_size };
+
+/* ---- FreeRTOS+TCP socket backend (wired by amebad_fd_open_socket) ---- */
+static int sock_read(vfs_slot_t *s, char *b, int n)
+{
+    BaseType_t r = FreeRTOS_recv(s->u.s, b, (size_t)n, 0);
+    return (r < 0) ? (errno = frtos_to_errno(r), -1) : (int)r;
+}
+static int sock_write(vfs_slot_t *s, const char *b, int n)
+{
+    BaseType_t r = FreeRTOS_send(s->u.s, b, (size_t)n, 0);
+    return (r < 0) ? (errno = frtos_to_errno(r), -1) : (int)r;
+}
+static int sock_close(vfs_slot_t *s)
+{
+    BaseType_t r = FreeRTOS_closesocket(s->u.s);
+    return (r < 0) ? (errno = frtos_to_errno(r), -1) : 0;
+}
+static int sock_lseek(vfs_slot_t *s, int off, int whence)
+{
+    (void)s; (void)off; (void)whence; errno = ESPIPE; return -1;
+}
+static long sock_size(vfs_slot_t *s) { (void)s; return -1; }
+static const vfs_ops_t SOCK_OPS = { sock_read, sock_write, sock_close, sock_lseek, sock_size };
+
+/* Register an already-created FreeRTOS socket as a POSIX fd, so read()/write()/
+ * close() on the returned fd dispatch to FreeRTOS_recv/send/closesocket. Socket
+ * creation/options stay on the native FreeRTOS_* API (as quic_test.c/iperf do). */
+int amebad_fd_open_socket(Socket_t s)
+{
+    vfs_slot_t *slot;
+    int fd;
+
+    if (s == NULL || s == FREERTOS_INVALID_SOCKET) {
+        errno = EINVAL;
+        return -1;
+    }
+    fd = fd_alloc(VFS_SOCKET, &slot);
+    if (fd < 0) {
+        return -1;   /* errno set */
+    }
+    slot->u.s = s;
+    s_sock_ops = &SOCK_OPS;   /* wires the socket backend (-> FreeRTOS_recv/send/...) */
+    return fd;
+}
+
+/* fd -> its backend op table (NULL only if the fd's backend was never wired, which
+ * for a valid open fd cannot happen — _open/amebad_fd_open_socket set it). */
+static const vfs_ops_t *slot_ops(const vfs_slot_t *s)
+{
+    return (s->type == VFS_FILE) ? s_file_ops : s_sock_ops;
+}
+
+/* ===== 2. newlib syscall entry points ==================================== */
+
+int _open(const char *path, int flags, int mode)
+{
+    lfs_t *lfs;
+    vfs_slot_t *slot;
+    int lflags = 0, fd, rc;
+
+    (void)mode;
+    lfs = amebad_lfs_mount();
+    if (lfs == NULL) {
+        errno = ENODEV;
+        return -1;
+    }
+    switch (flags & O_ACCMODE) {
+    case O_RDONLY: lflags = LFS_O_RDONLY; break;
+    case O_WRONLY: lflags = LFS_O_WRONLY; break;
+    case O_RDWR:   lflags = LFS_O_RDWR;   break;
+    default:       errno = EINVAL; return -1;
+    }
+    if (flags & O_CREAT)  lflags |= LFS_O_CREAT;
+    if (flags & O_EXCL)   lflags |= LFS_O_EXCL;
+    if (flags & O_TRUNC)  lflags |= LFS_O_TRUNC;
+    if (flags & O_APPEND) lflags |= LFS_O_APPEND;
+
+    fd = fd_alloc(VFS_FILE, &slot);
+    if (fd < 0) {
+        return -1;   /* errno=EMFILE */
+    }
+    rc = lfs_file_open(lfs, &slot->u.f, path, lflags);
+    if (rc < 0) {
+        fd_free(fd);
+        errno = lfs_to_errno(rc);
+        return -1;
+    }
+    s_file_ops = &FILE_OPS;   /* wires the file backend (-> lfs_file_*) */
+    return fd;
+}
+
+int _close(int fd)
+{
+    vfs_slot_t *s;
+    const vfs_ops_t *ops;
+    int rc;
+
+    if (fd <= 2) {
+        return 0;
+    }
+    s = fd_get(fd);
+    if (s == NULL) {
+        return -1;
+    }
+    ops = slot_ops(s);
+    rc = ops ? ops->close(s) : (errno = EBADF, -1);
+    fd_free(fd);
+    return rc;
 }
 
 int _read(int fd, char *buf, int len)
 {
-    int n = 0;
-    (void)fd;
-    for (; len > 0; --len) {
-        int c = DiagGetChar(_TRUE);      /* blocking, echoes */
-        if (c < 0 || c == '\r') {        /* line-oriented: terminate on CR */
-            *buf = '\0';
-            break;
+    vfs_slot_t *s;
+    const vfs_ops_t *ops;
+
+    if (fd <= 2) {                       /* console (line-oriented, echoes) */
+        int n = 0;
+        for (; len > 0; --len) {
+            int c = DiagGetChar(_TRUE);
+            if (c < 0 || c == '\r') { *buf = '\0'; break; }
+            *buf++ = (char)c;
+            ++n;
         }
-        *buf++ = (char)c;
-        ++n;
+        return n;
     }
-    return n;
+    s = fd_get(fd);
+    if (s == NULL) {
+        return -1;
+    }
+    ops = slot_ops(s);
+    return ops ? ops->read(s, buf, len) : (errno = EBADF, -1);
+}
+
+int _write(int fd, char *buf, int len)
+{
+    vfs_slot_t *s;
+    const vfs_ops_t *ops;
+    int i;
+
+    if (fd <= 2) {                       /* console — write regardless of fd */
+        for (i = 0; i < len; i++) {
+            DiagPutChar((char)buf[i]);
+        }
+        return len;
+    }
+    s = fd_get(fd);
+    if (s == NULL) {
+        return -1;
+    }
+    ops = slot_ops(s);
+    return ops ? ops->write(s, buf, len) : (errno = EBADF, -1);
+}
+
+int _lseek(int fd, int off, int whence)
+{
+    vfs_slot_t *s;
+    const vfs_ops_t *ops;
+
+    if (fd <= 2) {
+        return 0;                        /* console: unseekable, benign */
+    }
+    s = fd_get(fd);
+    if (s == NULL) {
+        return -1;
+    }
+    ops = slot_ops(s);
+    return ops ? ops->lseek(s, off, whence) : (errno = EBADF, -1);
+}
+
+int _fstat(int fd, struct stat *st)
+{
+    vfs_slot_t *s;
+    const vfs_ops_t *ops;
+
+    memset(st, 0, sizeof(*st));
+    if (fd <= 2) {
+        st->st_mode = S_IFCHR;
+        return 0;
+    }
+    s = fd_get(fd);
+    if (s == NULL) {
+        return -1;
+    }
+    if (s->type == VFS_FILE) {
+        long sz;
+        st->st_mode = S_IFREG;
+        ops = slot_ops(s);
+        sz = ops ? ops->size(s) : -1;
+        st->st_size = (sz < 0) ? 0 : sz;
+    } else {
+        st->st_mode = S_IFSOCK;
+    }
+    return 0;
+}
+
+int _isatty(int fd)
+{
+    return (fd <= 2) ? 1 : 0;
+}
+
+int _stat(const char *path, struct stat *st)
+{
+    struct lfs_info info;
+    int rc = lfs_stat(amebad_lfs_mount(), path, &info);
+
+    if (rc < 0) {
+        errno = lfs_to_errno(rc);
+        return -1;
+    }
+    memset(st, 0, sizeof(*st));
+    st->st_mode = (info.type == LFS_TYPE_DIR) ? S_IFDIR : S_IFREG;
+    st->st_size = info.size;
+    return 0;
+}
+
+int _unlink(const char *path)
+{
+    int rc = lfs_remove(amebad_lfs_mount(), path);
+    return (rc < 0) ? (errno = lfs_to_errno(rc), -1) : 0;
 }
 
 /* newlib's malloc grows the heap through _sbrk. Keep it OFF the FreeRTOS heap
@@ -85,27 +534,17 @@ void *_sbrk(int incr)
     return prev;
 }
 
-int  _close(int fd)                  { (void)fd; return -1; }
-int  _lseek(int fd, int off, int w)  { (void)fd; (void)off; (void)w; return 0; }
-int  _fstat(int fd, void *st)        { (void)fd; (void)st; return 0; }
-int  _isatty(int fd)                 { (void)fd; return 1; }
 int  _kill(int pid, int sig)         { (void)pid; (void)sig; return -1; }
 int  _getpid(void)                   { return 1; }
 void _exit(int code)                 { (void)code; for (;;) { } }
 
 /* ---------------------------------------------------------------------------
- * TODO (插眼): the rest of newlib's syscall surface. None of the current images
- * reference these — adding strong defs now would just be dead weight (no
- * --gc-sections on the KM4 image2 link). They are listed here so the full
- * retarget is visible in one place; un-#if-0 the ones a future consumer pulls
- * (e.g. a real FS would make _open/_stat/_unlink meaningful; SNTP would make
+ * Remaining newlib syscall surface — inert. No current image references these;
+ * un-#if-0 + implement when a consumer pulls one (e.g. SNTP would make
  * _gettimeofday return real time instead of -1).
  * ------------------------------------------------------------------------- */
 #if 0
-int    _open(const char *path, int flags, int mode) { (void)path; (void)flags; (void)mode; return -1; }
-int    _stat(const char *path, void *st)            { (void)path; (void)st; return -1; }
 int    _link(const char *a, const char *b)          { (void)a; (void)b; return -1; }
-int    _unlink(const char *path)                    { (void)path; return -1; }
 int    _times(void *buf)                            { (void)buf; return -1; }
 int    _gettimeofday(void *tv, void *tz)            { (void)tv; (void)tz; return -1; }
 int    _fork(void)                                  { return -1; }
@@ -115,7 +554,7 @@ char  *__env[1] = { 0 };
 char **environ  = __env;
 #endif
 
-/* ===== 2. malloc family over the FreeRTOS heap =========================== *
+/* ===== 3. malloc family over the FreeRTOS heap =========================== *
  * 8-byte header keeps the returned payload 8-byte aligned (FreeRTOS heap returns
  * 8-byte-aligned blocks; portBYTE_ALIGNMENT is 8 on Cortex-M). */
 typedef struct {
@@ -186,7 +625,7 @@ void *realloc(void *ptr, size_t size)
     return np;
 }
 
-/* ===== 3. BSD byte-order helpers (delegate to FreeRTOS+TCP) =============== *
+/* ===== 4. BSD byte-order helpers (delegate to FreeRTOS+TCP) =============== *
  * ngtcp2_net.h's non-WIN32 path expands ngtcp2_htonl(N) -> htonl(N) etc., and it
  * does not include <arpa/inet.h> (HAVE_ARPA_INET_H is unset), so it needs these
  * as real symbols. Bodies reuse FreeRTOS+TCP's FreeRTOS_htonl/htons macros rather
