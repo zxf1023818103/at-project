@@ -209,17 +209,23 @@ static int scan_print_handler( char *buf, int buflen, char *target_ssid, void *u
         if( ssid_len == (int) strlen( target_ssid )
             && memcmp( buf + plen + 14, target_ssid, ssid_len ) == 0 )
         {
-            /* A dual-band AP shows up as two BSSIDs (2.4 GHz + 5 GHz). Blindly
-             * taking the LAST entry lands us on the 5 GHz BSSID, which this
-             * router band-steers us off with assoc status 30. Prefer 2.4 GHz
-             * (ch<=14); within the same band prefer the strongest (rssi is
-             * negative dBm -> larger == stronger). RSSI alone is not enough:
-             * it fluctuates and could re-pick 5 GHz on the next boot. */
-            int new_24 = ( ch <= 14 );
-            int cur_24 = ( fa->channel <= 14 );
+            /* A dual-band AP shows up as two BSSIDs (2.4 GHz + 5 GHz). Prefer the
+             * 5 GHz BSSID (ch>14); within the same band prefer the strongest
+             * (rssi is negative dBm -> larger == stronger; RSSI alone fluctuates
+             * and could re-pick the other band next boot, so band is the primary
+             * key). 5 GHz is the deliberate choice: on a congested 2.4 GHz band
+             * the RTL8721D intermittently loses the 4-way EAPOL frames (M3/M4) so
+             * the handshake stalls after the pairwise key (the AP completes + even
+             * assigns DHCP, but the chip never signals FOURWAY_HANDSHAKE_DONE so
+             * wifi_connect blocks) — measured ~1/5 connects on 2.4 GHz vs 5/5 on a
+             * clean 5 GHz channel. (The old 2.4-GHz preference was a workaround for
+             * a band-steering status-30 reject; the AP no longer steers, so 5 GHz
+             * associates fine.) */
+            int new_5 = ( ch > 14 );
+            int cur_5 = ( fa->channel > 14 );
             int better = !fa->found
-                         || ( new_24 && !cur_24 )                 /* 2.4 beats 5 */
-                         || ( new_24 == cur_24 && rssi > fa->rssi ); /* else RSSI */
+                         || ( new_5 && !cur_5 )                  /* 5 GHz beats 2.4 */
+                         || ( new_5 == cur_5 && rssi > fa->rssi ); /* else RSSI */
             if( !better ) { plen += len; continue; }
             fa->found   = 1;
             fa->channel = ch;
@@ -378,9 +384,24 @@ static void wifi_bringup_thread( void *param )
          * the value enum is comment-only in wifi_conf.h, hence the literal. */
         wifi_set_mfp_support( 0 );
 
-        DiagPrintf( "[KM4] scan for '%s' (all channels)...\n\r", kSsid );
-        wifi_scan_networks_with_ssid( scan_print_handler, &fa, 1000,
-                                      (char *) kSsid, strlen( kSsid ) );
+        /* The directed all-channel scan intermittently captures only the 2.4 GHz
+         * BSSID and misses the dual-band AP's 5 GHz one (probe-response timing).
+         * 2.4 GHz is congested here and unreliable for the 4-way handshake (see
+         * scan_print_handler), so re-scan a few times until the 5 GHz BSSID shows
+         * up; settle for 2.4 GHz only if 5 GHz never appears. fa accumulates
+         * across passes (the 5 GHz-preferring handler keeps the best seen so far). */
+        {
+            int scan_try;
+            for( scan_try = 0; scan_try < 6; scan_try++ )
+            {
+                DiagPrintf( "[KM4] scan for '%s' (prefer 5 GHz, try %d)...\n\r",
+                            kSsid, scan_try + 1 );
+                wifi_scan_networks_with_ssid( scan_print_handler, &fa, 1000,
+                                              (char *) kSsid, strlen( kSsid ) );
+                if( fa.found && fa.channel > 14 ) break;   /* got a 5 GHz BSSID */
+                vTaskDelay( pdMS_TO_TICKS( 200 ) );
+            }
+        }
         if( !fa.found )
         {
             DiagPrintf( "[KM4] '%s' not found in scan — abort\n\r", kSsid );
