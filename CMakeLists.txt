@@ -20,6 +20,10 @@ project(at_project C CXX ASM)
 # stitches the same targets into its bouffalo_sdk umbrella below.
 add_subdirectory(component/thirdparty)
 
+# Cross-platform LittleFS parameter set (doc/lfs.md) — geometry + runtime config
+# shared by every platform's lfs port. After thirdparty so `littlefs` exists.
+add_subdirectory(component/lfs-config)
+
 # Shared user sources (src/main.cpp + ragel-generated AT parser).
 add_subdirectory(src)
 

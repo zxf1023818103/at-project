@@ -257,6 +257,15 @@ static void wifi_bringup_thread( void *param )
     InterruptEn( IPC_IRQ, 5 );
     ipc_table_init();
 
+    /* LittleFS bring-up + self-test: mount the on-flash FS (auto-formats if the
+     * region is blank) and exercise read of the prefilled lfs.bin + a write/
+     * read-back round trip. Runs here (scheduler up — the flash device lock and
+     * the LFS mutex need FreeRTOS) before WiFi, independent of the link. */
+    {
+        extern void lfs_selftest( void );
+        lfs_selftest();
+    }
+
     /* Create the WiFi-indication worker thread before bringing WiFi up. With
      * CONFIG_WIFI_IND_USE_THREAD=1 (platform_opts.h), driver events (CONNECT,
      * FOURWAY_HANDSHAKE_DONE, DISCONNECT) are dispatched to the registered

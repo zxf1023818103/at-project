@@ -65,6 +65,7 @@ add_executable(target_img2_km4
     "${CMAKE_CURRENT_SOURCE_DIR}/wifi_scan_compat.c"    # weak wifi_mode + connect/EAP/promisc stubs
     "${CMAKE_CURRENT_SOURCE_DIR}/freertos_tcp_compat.c" # weak lwip stubs (lwip IP not linked; FreeRTOS+TCP instead)
     "${CMAKE_CURRENT_SOURCE_DIR}/wolfcrypt_glue.c"      # wolfSSL XMALLOC/RNG glue (always, when wolfSSL is linked)
+    "${CMAKE_CURRENT_SOURCE_DIR}/lfs_test.c"            # LittleFS mount + lfs.bin read/write self-test (lfs_selftest)
 )
 
 # Diagnostics (iperf throughput + ROM-mbedTLS / wolfCrypt benchmarks). There is
@@ -159,7 +160,12 @@ target_link_libraries(target_img2_km4 PRIVATE
     # amebad_wolfssl is INSIDE the group: NimBLE's SM crypto (nimble, in the group)
     # pulls wc_* (wc_ecc_*/wc_AesEncryptDirect) that the bench didn't, so wolfCrypt
     # must rescan alongside nimble — wolfCrypt<->FreeRTOS<->nimble are mutually refed.
-    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km4,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,amebad_wlan,amebad_wps,amebad_wolfssl${_diag_grp}${_hci_grp}${_quic_grp}>"
+    # LittleFS (amebad_lfs_port + lfs_config + littlefs) and its flash backend
+    # (amebad_mbed) join the group: littlefs is a leaf needing libc (printf/strspn)
+    # + libgcc (__popcountsi2), which follow the group, and as a transitive
+    # EXCLUDE_FROM_ALL lib CMake would otherwise sink it past -lc/-lgcc and leave
+    # those undefined. amebad_mbed (flash_api) is lfs_port's backend.
+    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km4,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,amebad_wlan,amebad_wps,amebad_wolfssl,amebad_lfs_port,amebad_mbed,lfs_config,littlefs${_diag_grp}${_hci_grp}${_quic_grp}>"
     m
     stdc++
     c
@@ -217,7 +223,18 @@ endif()
 # bytes (consumed by rlx8721d_img2_is.ld via __xip_pad__) to move app_start's
 # early fwlib callees off the layout-sensitive hanging address. Sweep this when
 # the KM4 image hangs at boot (console stuck after the KM0 "RRAM:" line).
-set(AMEBAD_XIP_PAD "0" CACHE STRING "XIP .text pad bytes (boot-hang layout dodge)")
+# Default pad per variant: the plain WiFi image (LittleFS now linked in) needs
+# 4096 to keep app_start's early fwlib callees out of the XIP fetch-desync window
+# — verified on HW (without it the KM4 hangs before main(); with it the LFS
+# self-test + WiFi run). QUIC/HCI/NimBLE images have a different .text size; they
+# default to 0 and are swept separately (project/amebad/quic_server/bootsweep.sh)
+# if one hangs. Override on the cmake line to re-sweep.
+if(AMEBAD_ENABLE_QUIC OR AMEBAD_ENABLE_HCI OR AMEBAD_ENABLE_NIMBLE)
+    set(_xip_pad_default "0")
+else()
+    set(_xip_pad_default "4096")
+endif()
+set(AMEBAD_XIP_PAD "${_xip_pad_default}" CACHE STRING "XIP .text pad bytes (boot-hang layout dodge)")
 if(NOT AMEBAD_XIP_PAD STREQUAL "0")
     target_link_options(target_img2_km4 PRIVATE
         "-Wl,--defsym=__xip_pad__=${AMEBAD_XIP_PAD}")

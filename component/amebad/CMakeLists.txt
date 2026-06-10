@@ -110,6 +110,7 @@ add_subdirectory(ngtcp2)             # KM4-gated: ngtcp2 QUIC + crypto/wolfssl (
 add_subdirectory(build_info)         # INTERFACE: UTS_VERSION banner -D (replaces the vendored build_info.h shim)
 add_subdirectory(hci)                # KM4-gated: BLE controller bring-up + HCI transport + bridge (no btgap.a)
 add_subdirectory(syscalls)           # KM4-gated: consolidated newlib syscall retarget (amebad_syscalls OBJECT lib)
+add_subdirectory(lfs-port)           # KM4-gated: AmebaD flash adapter for LittleFS (amebad_lfs_port; diskio over flash_api + mount)
 add_subdirectory(image_tool)         # defines amebad_make_{boot,image2}_all_bin*(...)
                                      #   + amebad_make_image_all_bin() (-> target
                                      #     amebad_image_all, wraps build_image_all.py)
