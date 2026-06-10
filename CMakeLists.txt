@@ -22,7 +22,7 @@ add_subdirectory(component/thirdparty)
 
 # Cross-platform LittleFS parameter set (doc/lfs.md) — geometry + runtime config
 # shared by every platform's lfs port. After thirdparty so `littlefs` exists.
-add_subdirectory(component/lfs-config)
+add_subdirectory(component/lfs_config)
 
 # Cross-platform stdio (fd 0/1/2) console dispatcher — the shared line discipline
 # + backend hook that every platform's newlib retarget routes the console fds to.
@@ -36,7 +36,7 @@ add_subdirectory(component/bflb_mm)
 
 # Cross-platform FreeRTOS config base — the settings common to AmebaD KM0/KM4 and
 # Bouffalo; each platform's FreeRTOSConfig.h includes it (freertos_config_common.h).
-add_subdirectory(component/freertos-config)
+add_subdirectory(component/freertos_config)
 
 # Shared user sources (src/main.cpp + ragel-generated AT parser).
 add_subdirectory(src)

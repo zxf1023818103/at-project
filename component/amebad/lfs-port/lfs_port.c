@@ -102,7 +102,7 @@ static int            s_mounted;
 
 static void build_config(void)
 {
-    /* geometry + RAM params from the cross-platform lfs-config */
+    /* geometry + RAM params from the cross-platform lfs_config */
     lfs_config_fill(&s_cfg);
     /* platform diskio + threadsafe locks */
     s_cfg.read  = amebad_lfs_read;

@@ -114,13 +114,12 @@ target_compile_definitions(amebad_sdk_includes INTERFACE
 set(_kernel "${CMAKE_SOURCE_DIR}/component/thirdparty/freertos-kernel")
 
 target_include_directories(amebad_sdk_includes SYSTEM INTERFACE
-    # FreeRTOSConfig.h: our driver-only override FIRST, so its #include_next
-    # chains down to the per-core app config (app_km{4,0}) below. Putting the
-    # override here (not only on freertos_config) keeps every consumer's config
-    # consistent (e.g. tickless-idle off), not just the kernel/glue/app.
-    "${CMAKE_SOURCE_DIR}/component/amebad/freertos/config"
-    # project-local chip configs (Kconfig autoconf + board opts + base
-    # FreeRTOSConfig.h) — now owned by the per-core app component (app_km{4,0}).
+    # FreeRTOSConfig.h is now the single cross-platform header in
+    # component/freertos_config (carried in via the freertos_config_common link
+    # above; macro-selected KM0/KM4 branch, tickless-idle off folded in). The old
+    # per-core copies + the #include_next override are gone.
+    # project-local chip configs (Kconfig autoconf + board opts + main.h) — owned
+    # by the per-core app component (app_km{4,0}); no longer carries FreeRTOSConfig.h.
     "${_proj_cfg_inc}"
     # upstream FreeRTOS-Kernel V10.6.2 headers + the per-core port (portmacro.h)
     "${_kernel}/include"

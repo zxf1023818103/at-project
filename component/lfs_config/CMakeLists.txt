@@ -1,4 +1,4 @@
-# component/lfs-config — cross-platform LittleFS parameter set (doc/lfs.md).
+# component/lfs_config — cross-platform LittleFS parameter set (doc/lfs.md).
 # Owns the geometry + runtime config so one lfs.bin mounts on every platform;
 # the diskio callbacks come from each platform's lfs port. Links littlefs only
 # for the struct lfs_config / lfs.h definitions. EXCLUDE_FROM_ALL: built only

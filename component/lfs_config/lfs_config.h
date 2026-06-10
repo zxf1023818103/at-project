@@ -1,5 +1,5 @@
 /*
- * lfs-config — the cross-platform LittleFS parameter set from doc/lfs.md, in one
+ * lfs_config — the cross-platform LittleFS parameter set from doc/lfs.md, in one
  * place so a single lfs.bin mounts on every platform (Bouffalo / Ameba D / Dplus
  * / Green2). It owns the geometry + runtime config ONLY; the flash diskio
  * callbacks (read/prog/erase/sync, and lock/unlock under LFS_THREADSAFE) plus the

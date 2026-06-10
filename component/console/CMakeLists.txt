@@ -7,7 +7,7 @@
 # (CR/LF -> '\n' + echo) and the stdout/stderr split once, shared by all.
 #
 # Header-only API + one TU. STATIC + EXCLUDE_FROM_ALL: built only when a
-# platform's retarget links it (like component/lfs-config). Pure C, no platform
+# platform's retarget links it (like component/lfs_config). Pure C, no platform
 # deps -> usable by every platform build.
 add_library(at_console STATIC EXCLUDE_FROM_ALL console.c)
 target_include_directories(at_console PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")

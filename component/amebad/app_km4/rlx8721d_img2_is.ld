@@ -86,7 +86,7 @@ SECTIONS
 
 		*(.img2_custom_signature*)
 
-		/* LittleFS (littlefs + lfs-config + amebad lfs-port) .text is pinned
+		/* LittleFS (littlefs + lfs_config + amebad lfs-port) .text is pinned
 		 * LAST in .xip_image2.text so linking it does NOT shift the boot path
 		 * (app_start + its early fwlib callees) or the WiFi driver code to new
 		 * XIP addresses. The RTL8721D mis-fetches instructions by one cache-line
