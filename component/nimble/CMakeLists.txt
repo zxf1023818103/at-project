@@ -116,7 +116,7 @@ target_include_directories(nimble SYSTEM PRIVATE
 target_link_libraries(nimble PUBLIC
     FreeRTOS              # npl_os_freertos.c: FreeRTOS.h / task / queue / semphr / timers
     amebad_hci           # transport TX -> hci_tp_send; bt_hci_bringup_nostack (P2)
-    amebad_sdk_includes  # platform_stdlib.h / DiagPrintf (our glue)
+    amebad_sdk_includes  # platform_stdlib_rtl8721d.h / DiagPrintf (our glue)
     amebad_wlan          # rltk_coex_* (coex, P5)
 )
 

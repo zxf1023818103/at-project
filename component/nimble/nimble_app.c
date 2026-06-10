@@ -19,7 +19,7 @@
 #include "host/util/util.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
-#include "platform_stdlib.h"   /* DiagPrintf */
+#include "platform_stdlib_rtl8721d.h"   /* DiagPrintf */
 
 extern void amebad_nimble_coex_init(void);
 extern void amebad_nimble_coex_set_conn(int connected); /* coex_amebad.c: BLE-active hint -> WiFi */
