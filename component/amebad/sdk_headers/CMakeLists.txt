@@ -46,7 +46,7 @@ else()
 endif()
 
 add_library(amebad_sdk_includes INTERFACE)
-target_link_libraries(amebad_sdk_includes INTERFACE amebad_fwlib_headers amebad_xmodem amebad_string_rom amebad_cmsis_rom amebad_dlist amebad_platform_stdlib)
+target_link_libraries(amebad_sdk_includes INTERFACE amebad_fwlib_headers amebad_xmodem amebad_string_rom amebad_cmsis_rom amebad_dlist amebad_platform_stdlib freertos_config_common)
 
 # OTA region — base addresses for the two image2 partitions. Default
 # values match SDK upstream (rtl8721d_ota.h #define defaults). Override

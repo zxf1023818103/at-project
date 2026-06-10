@@ -26,6 +26,9 @@ if(NOT TARGET freertos_config)
     target_include_directories(freertos_config SYSTEM INTERFACE
         "${CMAKE_CURRENT_SOURCE_DIR}/bflb_freertos_port/include"
     )
+    # Shared cross-platform FreeRTOS config base (freertos_config_common.h),
+    # #included by bflb_freertos_port/include/FreeRTOSConfig.h. Co-travels with it.
+    target_link_libraries(freertos_config INTERFACE freertos_config_common)
     target_compile_definitions(freertos_config INTERFACE
         "configMTIME_BASE_ADDRESS=${_mtime_base}"
         "configMTIMECMP_BASE_ADDRESS=${_mtimecmp_base}"

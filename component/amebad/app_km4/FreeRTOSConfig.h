@@ -53,6 +53,11 @@ extern uint32_t SystemCoreClock;
 #endif
 #include "platform_autoconf.h"
 
+/* Shared cross-platform RTOS feature set (common to KM0/KM4/Bouffalo). Included
+ * early; every define is #ifndef-guarded, so the platform-specific values below
+ * still win. The settings it provides are removed from this file. */
+#include "freertos_config_common.h"
+
 
 /* Cortex M33 port configuration. */
 #define configENABLE_MPU								0
@@ -70,11 +75,9 @@ extern uint32_t SystemCoreClock;
 
 /* Constants related to the behaviour or the scheduler. */
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION			0
-#define configUSE_PREEMPTION							1
-#define configUSE_TIME_SLICING							1
 #define configMAX_PRIORITIES							( 11 )
-#define configIDLE_SHOULD_YIELD							0
-#define configUSE_16_BIT_TICKS							0 /* Only for 8 and 16-bit hardware. */
+/* configUSE_PREEMPTION / configUSE_TIME_SLICING / configIDLE_SHOULD_YIELD /
+ * configUSE_16_BIT_TICKS -> freertos_config_common.h */
 
 /* Constants that describe the hardware and memory usage. */
 #define configCPU_CLOCK_HZ								SystemCoreClock
@@ -102,29 +105,24 @@ extern uint32_t SystemCoreClock;
 #define secureconfigTOTAL_PSRAM_HEAP_SIZE			( ( ( size_t ) ( 128 * 1024 ) ) )
 
 /* Constants that build features in or out. */
-#define configUSE_MUTEXES								1
 #define configUSE_APPLICATION_TASK_TAG					1
 #define configUSE_NEWLIB_REENTRANT						0
 #define configUSE_CO_ROUTINES							1 ///
-#define configMAX_CO_ROUTINE_PRIORITIES 				( 2 )
-#define configUSE_COUNTING_SEMAPHORES					1
-#define configUSE_RECURSIVE_MUTEXES						1
 #define configUSE_QUEUE_SETS							1
 #define configUSE_TASK_NOTIFICATIONS					1
-#define configUSE_TRACE_FACILITY						1
+/* configUSE_MUTEXES / configUSE_RECURSIVE_MUTEXES / configUSE_COUNTING_SEMAPHORES /
+ * configMAX_CO_ROUTINE_PRIORITIES / configUSE_TRACE_FACILITY -> freertos_config_common.h */
 
 /* Constants that define which hook (callback) functions should be used. */
 #define configUSE_IDLE_HOOK								0
-#define configUSE_TICK_HOOK								0
 #define configUSE_MALLOC_FAILED_HOOK					1
 
 /* Constants provided for debugging and optimisation assistance. */
-#define configCHECK_FOR_STACK_OVERFLOW					2
 #define configQUEUE_REGISTRY_SIZE						0
 #define configRECORD_STACK_HIGH_ADDRESS					1
 
-/* Software timer definitions. */
-#define configUSE_TIMERS								1
+/* Software timer definitions. (configUSE_TICK_HOOK / configCHECK_FOR_STACK_OVERFLOW
+ * / configUSE_TIMERS -> freertos_config_common.h) */
 #define configTIMER_TASK_PRIORITY						1
 #define configTIMER_QUEUE_LENGTH						( 10 + 64 )
 #define configTIMER_TASK_STACK_DEPTH					( 512  )
@@ -133,30 +131,25 @@ extern uint32_t SystemCoreClock;
  * to exclude the API function.  NOTE:  Setting an INCLUDE_ parameter to 0 is
  * only necessary if the linker does not automatically remove functions that are
  * not referenced anyway. */
-#define INCLUDE_vTaskPrioritySet						1
-#define INCLUDE_uxTaskPriorityGet						1
-#define INCLUDE_vTaskDelete								1
+/* Common INCLUDE_* (vTaskPrioritySet/uxTaskPriorityGet/vTaskDelete/vTaskSuspend/
+ * vTaskDelayUntil/vTaskDelay/eTaskGetState/xTimerPendFunctionCall) ->
+ * freertos_config_common.h. Platform-specific ones kept here: */
 #define INCLUDE_vTaskCleanUpResources					0
-#define INCLUDE_vTaskSuspend							1
-#define INCLUDE_vTaskDelayUntil							1
-#define INCLUDE_vTaskDelay								1
 #define INCLUDE_pcTaskGetTaskName       				1
 #define INCLUDE_uxTaskGetStackSize						1
 #define INCLUDE_uxTaskGetFreeStackSize					1
 #define INCLUDE_uxTaskGetStackHighWaterMark				0
 #define INCLUDE_xTaskGetIdleTaskHandle					0
-#define INCLUDE_eTaskGetState							1
 #define INCLUDE_xTaskResumeFromISR						0
 #define INCLUDE_xTaskGetCurrentTaskHandle				1
 #define INCLUDE_xTaskGetSchedulerState					0
 #define INCLUDE_xSemaphoreGetMutexHolder				1
-#define INCLUDE_xTimerPendFunctionCall					1
 
 /* This demo makes use of one or more example stats formatting functions.  These
  * format the raw data provided by the uxTaskGetSystemState() function in to
  * human readable ASCII form.  See the notes in the implementation of vTaskList()
  * within FreeRTOS/Source/tasks.c for limitations. */
-#define configUSE_STATS_FORMATTING_FUNCTIONS			1
+/* configUSE_STATS_FORMATTING_FUNCTIONS -> freertos_config_common.h */
 
 /* Dimensions a buffer that can be used by the FreeRTOS+CLI command interpreter.
  * See the FreeRTOS+CLI documentation for more information:
@@ -201,8 +194,8 @@ standard names - or at least those used in the unmodified vector table. */
 /* The #ifdef guards against the file being included from IAR assembly files. */
 #if (__IASMARM__ != 1)
 
-/* Constants related to the generation of run time stats. */
-#define configGENERATE_RUN_TIME_STATS					0
+/* Constants related to the generation of run time stats.
+ * (configGENERATE_RUN_TIME_STATS -> freertos_config_common.h) */
 #if configGENERATE_RUN_TIME_STATS
 #define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS() 		//( ulHighFrequencyTimerTicks = 0UL )
 #define portGET_RUN_TIME_COUNTER_VALUE() 				RTIM_GetCount(0x48002000/*TIMM00*/) //ulHighFrequencyTimerTicks
@@ -214,7 +207,7 @@ standard names - or at least those used in the unmodified vector table. */
 #define portGET_RUN_TIME_COUNTER_VALUE()				xTickCount
 #endif
 
-#define configTICK_RATE_HZ								( ( TickType_t ) 1000 )
+/* configTICK_RATE_HZ -> freertos_config_common.h */
 
 /* defined by Realtek, for offseting wlan task priority */
 #define PRIORITIE_OFFSET								( 4 )
