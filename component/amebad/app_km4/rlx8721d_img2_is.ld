@@ -86,8 +86,20 @@ SECTIONS
 
 		*(.img2_custom_signature*)
 
-		*(.text*)
-	/*	*(.image2.net.ram.text*) */		
+		/* LittleFS (littlefs + lfs-config + amebad lfs-port) .text is pinned
+		 * LAST in .xip_image2.text so linking it does NOT shift the boot path
+		 * (app_start + its early fwlib callees) or the WiFi driver code to new
+		 * XIP addresses. The RTL8721D mis-fetches instructions by one cache-line
+		 * at certain physical flash addresses (doc/amebad_xip_layout_boot_hang.md):
+		 * any address shift is layout roulette — it deterministically hangs boot
+		 * AND intermittently stalls/faults the WiFi 4-way handshake. Excluding the
+		 * LFS archives here keeps every pre-existing object at its known-good
+		 * pre-LFS address; only LFS code lands at the (new) tail. */
+		*(EXCLUDE_FILE(*liblittlefs.a *liblfs_config.a *libamebad_lfs_port.a) .text*)
+		*liblittlefs.a:(.text*)
+		*liblfs_config.a:(.text*)
+		*libamebad_lfs_port.a:(.text*)
+	/*	*(.image2.net.ram.text*) */
 		*(.rodata*)
 		*(.image2.ram.rodata*)
 		*(.image2.net.ram.rodata*)

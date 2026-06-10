@@ -65,8 +65,9 @@ add_executable(target_img2_km4
     "${CMAKE_CURRENT_SOURCE_DIR}/wifi_scan_compat.c"    # weak wifi_mode + connect/EAP/promisc stubs
     "${CMAKE_CURRENT_SOURCE_DIR}/freertos_tcp_compat.c" # weak lwip stubs (lwip IP not linked; FreeRTOS+TCP instead)
     "${CMAKE_CURRENT_SOURCE_DIR}/wolfcrypt_glue.c"      # wolfSSL XMALLOC/RNG glue (always, when wolfSSL is linked)
-    "${CMAKE_CURRENT_SOURCE_DIR}/lfs_test.c"            # LittleFS mount + lfs.bin read/write self-test (lfs_selftest)
 )
+# (lfs_selftest moved into the amebad_lfs_port archive so ALL LittleFS .text is
+# pinned to the XIP tail by the ld script — keeps boot/WiFi code addresses stable.)
 
 # Diagnostics (iperf throughput + ROM-mbedTLS / wolfCrypt benchmarks). There is
 # no --gc-sections on this link, so unused TUs are only removed by excluding the
@@ -223,18 +224,11 @@ endif()
 # bytes (consumed by rlx8721d_img2_is.ld via __xip_pad__) to move app_start's
 # early fwlib callees off the layout-sensitive hanging address. Sweep this when
 # the KM4 image hangs at boot (console stuck after the KM0 "RRAM:" line).
-# Default pad per variant: the plain WiFi image (LittleFS now linked in) needs
-# 4096 to keep app_start's early fwlib callees out of the XIP fetch-desync window
-# — verified on HW (without it the KM4 hangs before main(); with it the LFS
-# self-test + WiFi run). QUIC/HCI/NimBLE images have a different .text size; they
-# default to 0 and are swept separately (project/amebad/quic_server/bootsweep.sh)
-# if one hangs. Override on the cmake line to re-sweep.
-if(AMEBAD_ENABLE_QUIC OR AMEBAD_ENABLE_HCI OR AMEBAD_ENABLE_NIMBLE)
-    set(_xip_pad_default "0")
-else()
-    set(_xip_pad_default "4096")
-endif()
-set(AMEBAD_XIP_PAD "${_xip_pad_default}" CACHE STRING "XIP .text pad bytes (boot-hang layout dodge)")
+# Default 0: LittleFS .text is pinned to the tail of .xip_image2.text by the ld
+# script (rlx8721d_img2_is.ld) so it doesn't shift the boot/WiFi code, so no pad
+# is needed for the LFS image. Kept as a manual escape hatch for any future
+# layout-sensitive boot hang.
+set(AMEBAD_XIP_PAD "0" CACHE STRING "XIP .text pad bytes (boot-hang layout dodge)")
 if(NOT AMEBAD_XIP_PAD STREQUAL "0")
     target_link_options(target_img2_km4 PRIVATE
         "-Wl,--defsym=__xip_pad__=${AMEBAD_XIP_PAD}")
