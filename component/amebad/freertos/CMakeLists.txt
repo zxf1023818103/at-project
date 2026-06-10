@@ -64,7 +64,20 @@ endif()
 # win over the kernel's own default (set(FREERTOS_HEAP "4" CACHE ...)). km0/km4
 # configure into separate build dirs, so the per-core port value never clashes.
 set(FREERTOS_PORT "${_frt_port}" CACHE STRING "FreeRTOS port name" FORCE)
-set(FREERTOS_HEAP "5"            CACHE STRING "FreeRTOS heap model" FORCE)
+# Heap, per core:
+#  - KM4 (HP): the shared bflb_mm (TLSF). Point FREERTOS_HEAP at an EMPTY source so
+#    the kernel compiles no heap_N.c; the heap surface (pvPortMalloc/vPortFree/
+#    vPortDefineHeapRegions/...) comes from amebad_freertos_glue's
+#    freertos_heap_bflb_mm.c over bflb_mm. (The kernel CMake accepts an absolute
+#    path as a custom heap source.)
+#  - KM0 (LP): keep FreeRTOS heap_5. The LP core deliberately links no libc/libgcc;
+#    TLSF would drag in strncpy/printf/__clzsi2 — not worth it on the tiny coproc.
+if("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
+    set(FREERTOS_HEAP "${CMAKE_SOURCE_DIR}/component/amebad/freertos_glue/freertos_heap_none.c"
+        CACHE STRING "FreeRTOS heap model" FORCE)
+else()
+    set(FREERTOS_HEAP "5" CACHE STRING "FreeRTOS heap model" FORCE)
+endif()
 
 if(NOT TARGET freertos_kernel)
     add_subdirectory("${_kernel_src}"

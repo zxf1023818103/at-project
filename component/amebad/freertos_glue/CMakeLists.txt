@@ -31,13 +31,22 @@ endforeach()
 
 add_library(${_glue_tgt} STATIC
     "${_glue}/freertos_backtrace_ext.c"
-    "${_glue}/freertos_heap5_config.c"
+    "${_glue}/freertos_heap5_config.c"      # unchanged: per-core region table + os_heap_init -> vPortDefineHeapRegions
     "${_glue}/freertos_hooks.c"
 )
 
 # Needs FreeRTOS headers (and, transitively, amebad_sdk_includes). PUBLIC so a
 # consumer linking the glue also gets the FreeRTOS API.
 target_link_libraries(${_glue_tgt} PUBLIC FreeRTOS)
+
+# KM4 only: route the FreeRTOS heap onto the shared bflb_mm (TLSF). The kernel's
+# heap_N.c is disabled there (FREERTOS_HEAP -> empty stub), so this file supplies
+# pvPortMalloc/vPortFree/vPortDefineHeapRegions/... over kmalloc/kfree. KM0 keeps
+# heap_5 (its FREERTOS_HEAP stays "5") to avoid pulling libc/libgcc onto the LP core.
+if("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
+    target_sources(${_glue_tgt} PRIVATE "${_glue}/freertos_heap_bflb_mm.c")
+    target_link_libraries(${_glue_tgt} PUBLIC bflb_mm)
+endif()
 
 target_compile_options(${_glue_tgt} PRIVATE
     -Wno-unused-parameter

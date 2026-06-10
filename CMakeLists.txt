@@ -28,6 +28,12 @@ add_subdirectory(component/lfs-config)
 # + backend hook that every platform's newlib retarget routes the console fds to.
 add_subdirectory(component/console)
 
+# Cross-platform memory manager (TLSF), shared allocator across families. Bouffalo
+# links the real bflb_lhal/bflb_log; other platforms use port_generic shims. After
+# the chip vars are known (BOUFFALO_CHIP gates the SDK deps) but it's header/dep
+# choice only, resolved at generate — safe to add here with the other shared libs.
+add_subdirectory(component/bflb_mm)
+
 # Shared user sources (src/main.cpp + ragel-generated AT parser).
 add_subdirectory(src)
 

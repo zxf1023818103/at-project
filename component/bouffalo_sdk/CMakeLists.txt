@@ -51,7 +51,8 @@ add_subdirectory(bflb_sysinit)
 add_subdirectory(${BOUFFALO_CHIP}_std)
 add_subdirectory(bflb_lhal)
 add_subdirectory(bflb_log)
-add_subdirectory(bflb_mm)
+# bflb_mm moved to the shared top-level component (component/bflb_mm), added by the
+# repo-root CMakeLists before this subtree; the `bflb_mm` target already exists.
 add_subdirectory(bflb_block_pool)
 add_subdirectory(bflb_timestamp)
 add_subdirectory(bflb_partition)
