@@ -1,35 +1,24 @@
-# coremqtt_config — FreeRTOS coreMQTT (component/coremqtt_config/coremqtt, v5.0.2) built as
-# a cross-platform static lib, with the project's core_mqtt_config.h (this dir) on the
-# include path. Mirrors the wolfssl_config / ngtcp2_config arrangement: the third-party
-# source stays untouched under thirdparty/, the build glue + config live here.
+# coremqtt_config — FreeRTOS coreMQTT (submodule component/coremqtt_config/coremqtt,
+# v5.0.2). Built via the submodule's OWN upstream CMake (add_subdirectory -> the
+# `core_mqtt` target), the way ngtcp2_config delegates to ngtcp2_static — not a
+# hand-maintained file list. The project's core_mqtt_config.h (this dir) is put on
+# core_mqtt's include path; `coremqtt_config` is the INTERFACE umbrella consumers link.
 #
-# Cross-platform: no chip gate. coreMQTT is transport-agnostic — the consumer supplies
-# the TransportInterface_t (send/recv fn ptrs) and the MQTTGetCurrentTimeFunc_t — so the
-# library itself has no platform dependency. EXCLUDE_FROM_ALL until a consumer links it.
-set(_mqtt "${CMAKE_SOURCE_DIR}/component/coremqtt_config/coremqtt/source")
+# Cross-platform: no chip gate. coreMQTT is transport-agnostic (the consumer supplies the
+# TransportInterface_t + MQTTGetCurrentTimeFunc_t), so it has no platform dependency.
 
-add_library(coremqtt STATIC EXCLUDE_FROM_ALL
-    "${_mqtt}/core_mqtt.c"
-    "${_mqtt}/core_mqtt_state.c"
-    "${_mqtt}/core_mqtt_serializer.c"
-    "${_mqtt}/core_mqtt_prop_serializer.c"
-    "${_mqtt}/core_mqtt_prop_deserializer.c"
-    "${_mqtt}/core_mqtt_serializer_private.c"
-)
+# Upstream add_library(core_mqtt) has no explicit type -> follows BUILD_SHARED_LIBS;
+# pin it static BEFORE add_subdirectory. EXCLUDE_FROM_ALL: built only when linked.
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+add_subdirectory(coremqtt "${CMAKE_CURRENT_BINARY_DIR}/upstream" EXCLUDE_FROM_ALL)
 
-# PUBLIC: core_mqtt.h pulls core_mqtt_config_defaults.h -> core_mqtt_config.h, so every
-# consumer of <core_mqtt.h> needs this dir on its path too (same as wolfssl_config's
-# user_settings.h). SYSTEM to keep upstream's headers out of -Werror.
-target_include_directories(coremqtt SYSTEM PUBLIC
-    "${_mqtt}/include"               # -> <core_mqtt.h>, <core_mqtt_serializer.h>, *_defaults.h
-    "${_mqtt}/interface"             # -> <transport_interface.h>
-    "${CMAKE_CURRENT_SOURCE_DIR}"    # -> "core_mqtt_config.h"
-)
+# core_mqtt.c pulls core_mqtt_config_defaults.h -> core_mqtt_config.h: put our config
+# header on the target's path (PUBLIC so consumers of <core_mqtt.h> see it too). SYSTEM
+# keeps the header dir out of -Werror; silence the vendor warnings. Touching the upstream
+# target here is the same pattern ngtcp2_config uses on ngtcp2_static.
+target_include_directories(core_mqtt SYSTEM PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_options(core_mqtt PRIVATE -w)
 
-# Vendor source: silence its warnings under the SDK's strict -Wall/-Wextra/-Werror
-# stack — same treatment as zlib / cjson / littlefs / wolfssl_config.
-target_compile_options(coremqtt PRIVATE -w)
-
-# Umbrella INTERFACE (伞形): consumers link `coremqtt_config` to get the coreMQTT lib.
+# Umbrella INTERFACE (伞形): consumers link `coremqtt_config` to get core_mqtt.
 add_library(coremqtt_config INTERFACE)
-target_link_libraries(coremqtt_config INTERFACE coremqtt)
+target_link_libraries(coremqtt_config INTERFACE core_mqtt)
