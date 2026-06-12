@@ -4,15 +4,23 @@
  *
  * The console defaults to the LOGUART (console_loguart.c). Calling
  * amebad_console_init_lpuart() once at startup brings up UART3 via the fwlib UART
- * HAL (all ROM _LONG_CALL_ entries) and registers an LPUART backend with the
- * shared console dispatcher (component/console, at_console_set_backend), so after:
+ * HAL (all ROM _LONG_CALL_ entries — no extra driver TU) and registers an LPUART
+ * backend with the shared console dispatcher (component/console,
+ * at_console_set_backend), so after:
  *
  *   stdin/stdout (fd 0/1)  -> LPUART  (host COM7)        -> std::cin / std::cout
  *   stderr       (fd 2)    -> LOGUART (the log console)  -> std::cerr / DiagPrintf
  *
- * Gated into the build (AMEBAD_CPP_SELFTEST). Uses the fwlib HAL + UART3_DEV
- * directly (UART_Init/CharPut/CharGet are ROM-provided — see fwlib_rom_km4.ld),
- * so no extra driver TU is linked. KM4-only.
+ * Line control: UART_Init's LCR encoding for UART3 does NOT match the mbed
+ * serial_api/serial_format encoding that the proven AT-UART path (src/UartAmebaGlue.c)
+ * and the BW16 combo HAL use on this exact pin pair. We therefore write LCR by hand,
+ * byte-identically to serial_format(8, ParityNone, 1):
+ *     LCR = WordLen | (StopBit<<2) | (ParityEn<<3) | (ParityType<<4) | (Stick<<5)
+ * For 8N1 that is RUART_WLS_8BITS = 0x01. (UART_StructInit's defaults yielded LCR
+ * 0x0b = parity-enabled + an extra word-length bit, which an 8N1 host silently
+ * dropped — "nothing on the wire" despite the transmitter shifting fine.)
+ *
+ * Gated into the build (AMEBAD_CPP_SELFTEST). KM4-only.
  */
 #include "ameba_soc.h"       /* fwlib UART HAL + Pinmux_Config + UART3_DEV + _PB_1/_PB_2 */
 #include "console.h"         /* at_console_set_backend + at_console_backend_t */
@@ -23,7 +31,13 @@
 #define LPUART_RX_PIN   _PB_2
 #define LPUART_BAUD     115200
 
-/* DiagPrintf is declared by ameba_soc.h */
+/* 8N1 line control, encoded exactly like mbed serial_format() (the proven path):
+ * word-length is a single bit (RUART_WLS_8BITS=1), parity disabled, 1 stop. */
+#define LPUART_LCR_8N1  (RUART_WLS_8BITS \
+                         | (RUART_STOP_BIT_1   << 2) \
+                         | (RUART_PARITY_DISABLE << 3) \
+                         | (RUART_ODD_PARITY   << 4) \
+                         | (RUART_STICK_PARITY_DISABLE << 5))
 
 #define LP_SPIN_MAX 2000000u   /* bounded so a dead UART can't hang the image */
 
@@ -75,30 +89,26 @@ void amebad_console_init_lpuart(void)
     PAD_PullCtrl(LPUART_TX_PIN, GPIO_PuPd_UP);
     PAD_PullCtrl(LPUART_RX_PIN, GPIO_PuPd_UP);
 
-    UART_StructInit(&u);                          /* defaults: 8 data bits, 1 stop, no parity */
+    UART_StructInit(&u);
     UART_Init(LPUART_DEV, &u);
     /* Select the 40 MHz XTAL as the UART clock source before computing the baud
      * divisor — without this UART_SetBaud divides against the wrong (LP osc)
      * clock and nothing usable comes out. Mirrors the SDK's serial_baud(). */
     RCC_PeriphClockSource_UART(LPUART_DEV, UART_RX_CLK_XTAL_40M);
     UART_SetBaud(LPUART_DEV, LPUART_BAUD);
+    /* Override the line control to serial_format's exact 8N1 encoding (UART_Init's
+     * default LCR encoding for UART3 differs and the host rejects those frames). */
+    ((UART_TypeDef *)LPUART_DEV)->LCR = LPUART_LCR_8N1;
     UART_RxCmd(LPUART_DEV, ENABLE);
 
-    /* DIAG: is UART3 actually clocked? If the LP-domain LUART clock is off, the
-     * TX FIFO status never goes writable (status reads as 0). */
-    DiagPrintf("[LPUART] init done: writable=%d LSR=0x%x\n\r",
+    /* DIAG: confirm clock + the resulting line control (want LCR=0x1). */
+    DiagPrintf("[LPUART] init done: writable=%d LCR=0x%x LSR=0x%x\n\r",
                (int)UART_Writable(LPUART_DEV),
+               (unsigned)((UART_TypeDef *)LPUART_DEV)->LCR,
                (unsigned)UART_LineStatusGet(LPUART_DEV));
-    /* DIAG: LP-domain clock/function-enable regs (0x48000000 base):
-     * SYS_CLK_CTRL1 @0x214 (UARTx CKE bits), SYS_FUNC_EN1 @0x20C (UARTx FEN). */
-    DiagPrintf("[LPUART] LP CLK_CTRL1=0x%x FUNC_EN1=0x%x PADCTR[B1]=0x%x PADCTR[B2]=0x%x\n\r",
-               (unsigned)HAL_READ32(0x48000000, 0x214),
-               (unsigned)HAL_READ32(0x48000000, 0x20C),
-               (unsigned)PINMUX->PADCTR[LPUART_TX_PIN & 0x3F],
-               (unsigned)PINMUX->PADCTR[LPUART_RX_PIN & 0x3F]);
 
     /* DIAG: blast a known string straight out UART3 TX so we can tell on COM7
-     * whether the pin/baud are right, independent of the C++ iostream path. */
+     * whether the pin/baud/format are right, independent of the iostream path. */
     {
         const char *m = "LPUART-DIRECT-HELLO\r\n";
         const char *p;
