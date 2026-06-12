@@ -82,8 +82,13 @@ add_library(amebad_hci STATIC EXCLUDE_FROM_ALL
 
 # The BT trace/debug source uses bare printf() — satisfied by our printf wrapper
 # in hci_compat.c (-> ROM _rtl_vsnprintf + DiagPrintf), so no newlib stdio pull.
+# STD_PRINTF: don't shadow libc's printf with the ROM _rtl_vsnprintf one (hci_compat.c
+# gates its printf def on this; platform_stdlib also skips its `#define printf
+# _rtl_printf`). The ROM formatter lacks %lx/%u and faults on them, which crashed the
+# HCI/NimBLE image when littlefs logged a %lx error. The image carries the newlib
+# retarget (component/syscall_config _write), so newlib's printf is the right one.
 target_compile_definitions(amebad_hci PRIVATE
-    CONFIG_BT=1 CONFIG_BT_EN=1 CONFIG_PLATFORM_8721D=1 ${_fw_def} ${_skip_patch_def})
+    CONFIG_BT=1 CONFIG_BT_EN=1 CONFIG_PLATFORM_8721D=1 STD_PRINTF ${_fw_def} ${_skip_patch_def})
 
 target_link_libraries(amebad_hci PUBLIC
     amebad_hci_headers
