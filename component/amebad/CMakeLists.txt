@@ -110,7 +110,7 @@ endif()
 
 # POSIX-fd VFS self-test (syscalls/newlib_syscalls.c): fopen/open + socket-fd over
 # LittleFS + FreeRTOS+TCP. OFF by default (the VFS is otherwise gc-stripped when no
-# consumer references it). Consumed by lfs-port (the vfs_selftest fn) + app_km4 (the
+# consumer references it). Consumed by lfs_port (the vfs_selftest fn) + app_km4 (the
 # call). Declared here so both subdirs see it.
 option(AMEBAD_VFS_SELFTEST "Build + run the POSIX-fd VFS self-test (fopen/open/socket over LFS+sockets)" OFF)
 
@@ -126,8 +126,29 @@ add_subdirectory(hci)                # KM4-gated: BLE controller bring-up + HCI 
 # add) then the AmebaD port (in-tree, KM4-gated; links nimble_config + amebad_hci).
 add_subdirectory("${CMAKE_SOURCE_DIR}/component/nimble_config" "${CMAKE_CURRENT_BINARY_DIR}/nimble_config")   # INTERFACE: syscfg + upstream NimBLE include surface
 add_subdirectory(nimble_port)        # KM4-gated: NimBLE host stack (`nimble` lib) on amebad_hci; SM crypto on wolfCrypt
-add_subdirectory(syscalls)           # KM4-gated: consolidated newlib syscall retarget (amebad_syscalls OBJECT lib)
-add_subdirectory(lfs-port)           # KM4-gated: AmebaD flash adapter for LittleFS (amebad_lfs_port; diskio over flash_api + mount)
+# newlib retarget: the cross-platform core (top-level component/syscall_config,
+# out-of-tree add — `syscall_config` OBJECT lib: VFS + malloc + byte-order, needs
+# freertos_plus_tcp added above) then the AmebaD console backend (in-tree). Both
+# OBJECT libs, linked into the image by app_km4.
+add_subdirectory("${CMAKE_SOURCE_DIR}/component/syscall_config" "${CMAKE_CURRENT_BINARY_DIR}/syscall_config")  # KM4-gated consumer: cross-platform newlib retarget (`syscall_config` OBJECT lib)
+add_subdirectory(syscall_port)       # KM4-gated: AmebaD console backend (amebad_syscall_port OBJECT lib: console_loguart/lpuart) + vfs_lfs_mount via lfs_port
+add_subdirectory(lfs_port)           # KM4-gated: AmebaD flash adapter for LittleFS (amebad_lfs_port; diskio over flash_api + mount)
+
+# LittleFS self-tests live in the shared component/lfs_config (lfs_selftest.c is always
+# compiled there; lfs_port links lfs_config above). Attach the AmebaD-specific gates to
+# that target: the POSIX-fd VFS self-test needs FreeRTOS+TCP sockets + the syscall_config
+# header; the C++ std::filesystem self-test adds cpp_selftest.cpp (CXX, XIP-tail-pinned
+# via liblfs_config.a). Both compile-time only — the archive is in app_km4's link group.
+if(AMEBAD_VFS_SELFTEST)
+    target_compile_definitions(lfs_config PRIVATE AMEBAD_VFS_SELFTEST)
+    target_link_libraries(lfs_config PRIVATE amebad_freertos_tcp)
+    target_include_directories(lfs_config PRIVATE "${CMAKE_SOURCE_DIR}/component/syscall_config")
+endif()
+if(AMEBAD_CPP_SELFTEST)
+    target_compile_definitions(lfs_config PRIVATE AMEBAD_CPP_SELFTEST)
+    target_sources(lfs_config PRIVATE "${CMAKE_SOURCE_DIR}/component/lfs_config/cpp_selftest.cpp")
+endif()
+
 add_subdirectory(image_tool)         # defines amebad_make_{boot,image2}_all_bin*(...)
                                      #   + amebad_make_image_all_bin() (-> target
                                      #     amebad_image_all, wraps build_image_all.py)

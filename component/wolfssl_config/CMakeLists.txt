@@ -1,4 +1,4 @@
-# amebad_wolfssl — wolfCrypt (from component/thirdparty/wolfssl, v5.9.1-stable)
+# wolfssl_config — wolfCrypt (from component/thirdparty/wolfssl, v5.9.1-stable)
 # built for KM4 (Cortex-M33) as a bare-metal static lib for on-target crypto
 # benchmarking. Config lives in user_settings.h (this dir); selected via
 # -DWOLFSSL_USER_SETTINGS. See doc/amebad_wolfssl_hwaccel_eval.md.
@@ -8,7 +8,7 @@
 #   ON  (Build B): + Thumb2 hand-asm for AES/SHA/ChaCha/Poly1305/Curve25519.
 # SP asm (sp_int.c + sp_cortexm.c) is ALWAYS on — it's the handshake headline.
 #
-# Cross-platform: no chip gate — any platform that links amebad_wolfssl builds it
+# Cross-platform: no chip gate — any platform that links wolfssl_config builds it
 # (EXCLUDE_FROM_ALL until then). The SP Cortex-M asm + Thumb2 options below are
 # guarded by their own cache vars, so a non-Cortex-M consumer can turn them off.
 
@@ -86,27 +86,27 @@ if(AMEBAD_WOLFSSL_TLS)
     )
 endif()
 
-add_library(amebad_wolfssl STATIC EXCLUDE_FROM_ALL ${_wolf_src})
+add_library(wolfssl_config STATIC EXCLUDE_FROM_ALL ${_wolf_src})
 
 if(AMEBAD_WOLFSSL_TLS)
-    target_compile_definitions(amebad_wolfssl PUBLIC AMEBAD_WOLFSSL_TLS)
+    target_compile_definitions(wolfssl_config PUBLIC AMEBAD_WOLFSSL_TLS)
 endif()
 
 if(NOT AMEBAD_WOLFSSL_SP_ASM)
-    target_compile_definitions(amebad_wolfssl PUBLIC WOLFSSL_AMEBAD_NO_SP_ASM)
+    target_compile_definitions(wolfssl_config PUBLIC WOLFSSL_AMEBAD_NO_SP_ASM)
 endif()
 
-target_include_directories(amebad_wolfssl SYSTEM PUBLIC
+target_include_directories(wolfssl_config SYSTEM PUBLIC
     "${_wolf}"                       # -> <wolfssl/wolfcrypt/...>, <wolfssl/certs_test.h>
     "${CMAKE_CURRENT_SOURCE_DIR}"    # -> "user_settings.h"
 )
 
-target_compile_definitions(amebad_wolfssl PUBLIC WOLFSSL_USER_SETTINGS)
+target_compile_definitions(wolfssl_config PUBLIC WOLFSSL_USER_SETTINGS)
 if(AMEBAD_WOLFSSL_ARMASM)
-    target_compile_definitions(amebad_wolfssl PUBLIC WOLFSSL_AMEBAD_ARMASM)
+    target_compile_definitions(wolfssl_config PUBLIC WOLFSSL_AMEBAD_ARMASM)
 endif()
 
 # FreeRTOS for FreeRTOS.h + pvPortMalloc/vPortFree + mutex (FREERTOS in
 # user_settings.h). Vendor lib: silence its warnings (we don't own them).
-target_link_libraries(amebad_wolfssl PUBLIC FreeRTOS)
-target_compile_options(amebad_wolfssl PRIVATE -w)
+target_link_libraries(wolfssl_config PUBLIC FreeRTOS)
+target_compile_options(wolfssl_config PRIVATE -w)

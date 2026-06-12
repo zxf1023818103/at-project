@@ -1,6 +1,6 @@
 # component/console — cross-platform stdio (fd 0/1/2) console dispatcher.
 #
-# The newlib retarget on each platform (AmebaD component/amebad/syscalls,
+# The newlib retarget on each platform (AmebaD component/amebad/syscall_port,
 # Bouffalo component/bouffalo_sdk/bflb_libc, ...) routes the three console fds
 # here; per-platform code supplies the byte I/O via at_console_set_backend() or a
 # strong at_console_default_backend() override. Owns the canonical line read

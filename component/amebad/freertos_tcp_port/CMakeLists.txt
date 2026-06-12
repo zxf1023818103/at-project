@@ -2,7 +2,7 @@
 #
 # The AmebaD-specific half of the FreeRTOS+TCP integration: the Realtek WiFi driver
 # <-> stack bridge, compiled into the `amebad_freertos_tcp` lib (name kept so the
-# consumers — lfs-port, syscalls, app_km4's link group — don't churn). The core
+# consumers — lfs_port, syscalls, app_km4's link group — don't churn). The core
 # stack + config (FreeRTOSIPConfig.h) come from component/freertos_tcp_config,
 # linked PUBLIC below so header-only consumers reach FreeRTOS_IP.h/FreeRTOS_Sockets.h
 # transitively.

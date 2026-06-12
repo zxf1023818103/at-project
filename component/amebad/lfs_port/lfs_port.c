@@ -4,9 +4,6 @@
 #include "flash_api.h"      /* flash_t, flash_stream_read/write, flash_erase_sector */
 #include "device_lock.h"    /* device_mutex_lock/unlock(RT_DEV_LOCK_FLASH) */
 
-#include "FreeRTOS.h"
-#include "semphr.h"
-
 /* Absolute SPI-NOR offset of the LFS region (raw, 0-based — the flash HAL takes
  * raw offsets, not the 0x08000000 XIP alias). */
 #define LFS_BASE   LFS_CFG_REGION_OFFSET
@@ -68,84 +65,31 @@ int amebad_lfs_sync(const struct lfs_config *c)
     return LFS_ERR_OK;   /* writes are synchronous through the flash HAL */
 }
 
-/* ===== LFS_THREADSAFE lock/unlock ========================================= *
- * littlefs wraps each top-level op in lock/unlock (no nesting), so a plain
- * (non-recursive) FreeRTOS mutex is enough. Created lazily on first use. */
-static SemaphoreHandle_t s_lfs_mutex;
-
-static int amebad_lfs_lock(const struct lfs_config *c)
-{
-    (void)c;
-    if (s_lfs_mutex == NULL) {
-        s_lfs_mutex = xSemaphoreCreateMutex();
-    }
-    if (s_lfs_mutex != NULL) {
-        xSemaphoreTake(s_lfs_mutex, portMAX_DELAY);
-    }
-    return LFS_ERR_OK;
-}
-
-static int amebad_lfs_unlock(const struct lfs_config *c)
-{
-    (void)c;
-    if (s_lfs_mutex != NULL) {
-        xSemaphoreGive(s_lfs_mutex);
-    }
-    return LFS_ERR_OK;
-}
-
-/* ===== config + mount ===================================================== */
-
-static lfs_t          s_lfs;
-static struct lfs_config s_cfg;
-static int            s_mounted;
-
-static void build_config(void)
-{
-    /* geometry + RAM params from the cross-platform lfs_config */
-    lfs_config_fill(&s_cfg);
-    /* platform diskio + threadsafe locks */
-    s_cfg.read  = amebad_lfs_read;
-    s_cfg.prog  = amebad_lfs_prog;
-    s_cfg.erase = amebad_lfs_erase;
-    s_cfg.sync  = amebad_lfs_sync;
-#ifdef LFS_THREADSAFE
-    s_cfg.lock   = amebad_lfs_lock;
-    s_cfg.unlock = amebad_lfs_unlock;
-#endif
-}
+/* ===== mount: delegate to the cross-platform lfs_config service =========== *
+ * The mount lifecycle (singleton + format-on-blank) and the LFS_THREADSAFE
+ * lock/unlock live in component/lfs_config; this port supplies only the four flash
+ * diskio callbacks above. */
+static const struct lfs_diskio amebad_lfs_diskio = {
+    amebad_lfs_read, amebad_lfs_prog, amebad_lfs_erase, amebad_lfs_sync,
+};
 
 lfs_t *amebad_lfs_mount(void)
 {
-    int err;
-
-    if (s_mounted) {
-        return &s_lfs;
-    }
-    build_config();
-
-    err = lfs_mount(&s_lfs, &s_cfg);
-    if (err != LFS_ERR_OK) {
-        /* Blank or corrupt medium (firmware-only image, no lfs.bin) — format
-         * once and retry. A valid pre-flashed lfs.bin mounts on the first try
-         * and never reaches here. */
-        err = lfs_format(&s_lfs, &s_cfg);
-        if (err != LFS_ERR_OK) {
-            return NULL;
-        }
-        err = lfs_mount(&s_lfs, &s_cfg);
-        if (err != LFS_ERR_OK) {
-            return NULL;
-        }
-    }
-    s_mounted = 1;
-    return &s_lfs;
+    return lfs_config_mount(&amebad_lfs_diskio);
 }
 
 void amebad_lfs_unmount(lfs_t *lfs)
 {
-    if (lfs != NULL && s_mounted) {
-        lfs_unmount(lfs);
-        s_mounted = 0;
-    }
+    (void)lfs;                 /* singleton is owned by lfs_config */
+    lfs_config_unmount();
+}
+
+/* Cross-platform fd VFS hook (component/syscalls/syscalls.h): the newlib retarget's
+ * file backend routes _open'd paths to this LittleFS instance. Strong override of the
+ * shared core's contract; rides into the image with amebad_lfs_mount (same TU). The
+ * prototype is local (syscalls.h is not on this port's include path). */
+lfs_t *vfs_lfs_mount(void);
+lfs_t *vfs_lfs_mount(void)
+{
+    return amebad_lfs_mount();
 }

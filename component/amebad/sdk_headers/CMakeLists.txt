@@ -141,10 +141,11 @@ target_include_directories(amebad_sdk_includes SYSTEM INTERFACE
     # malloc -> pvPortMalloc, ...) is its own header-only component now
     # (amebad_platform_stdlib, linked above), matching dlist. The old
     # platform_stdlib.h dispatcher (multi-chip #if chain, only 8721d ever taken) is
-    # gone. time64.h still lives with the syscalls component (newlib_syscalls.c),
-    # included bare as "time64.h". at_cmd headers (log_service.h / atcmd_*.h) live on
+    # gone. time64.h stays in the AmebaD syscall_port dir (the newlib retarget core
+    # newlib_syscalls.c is component/syscall_config), included bare as "time64.h".
+    # at_cmd headers (log_service.h / atcmd_*.h) live on
     # the at_cmd component; lwip_netconf.h on lwip/config.
-    "${CMAKE_SOURCE_DIR}/component/amebad/syscalls"
+    "${CMAKE_SOURCE_DIR}/component/amebad/syscall_port"
     "${CMAKE_SOURCE_DIR}/component/amebad/at_cmd"
     # autoconf.h (the global Kconfig autoconf) lives in the WLAN driver's include/
     # — a Realtek quirk. Needed by the app config main.h + sys_arch.c even with WiFi off;

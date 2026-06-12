@@ -35,9 +35,33 @@ extern "C" {
 /*
  * Fill the geometry + RAM fields of *cfg from the constants above. Leaves the
  * diskio callbacks, the lock/unlock callbacks, and cfg->context untouched — the
- * caller (platform port) sets those before lfs_mount().
+ * mount lifecycle below sets those before lfs_mount().
  */
 void lfs_config_fill(struct lfs_config *cfg);
+
+/*
+ * The flash diskio a platform port supplies (addresses relative to the LFS region
+ * base). The geometry/RAM params (lfs_config_fill) AND the mount lifecycle +
+ * LFS_THREADSAFE lock/unlock are owned here; a port provides only these four.
+ */
+struct lfs_diskio {
+    int (*read )(const struct lfs_config *c, lfs_block_t block, lfs_off_t off, void *buffer, lfs_size_t size);
+    int (*prog )(const struct lfs_config *c, lfs_block_t block, lfs_off_t off, const void *buffer, lfs_size_t size);
+    int (*erase)(const struct lfs_config *c, lfs_block_t block);
+    int (*sync )(const struct lfs_config *c);
+};
+
+/*
+ * Mount the shared singleton over `io` at the unified LFS region. A blank or
+ * corrupt medium (e.g. a firmware-only image flashed without lfs.bin) is formatted
+ * once and re-mounted, so the caller always gets a usable filesystem. Idempotent:
+ * a second call without unmount returns the same instance. Returns a pointer to the
+ * mounted instance (a single static lfs_t), or NULL on a hard flash/format error.
+ */
+lfs_t *lfs_config_mount(const struct lfs_diskio *io);
+
+/* Unmount the shared singleton (a no-op if it was never mounted). */
+void lfs_config_unmount(void);
 
 #ifdef __cplusplus
 }

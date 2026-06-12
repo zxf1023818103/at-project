@@ -8,6 +8,6 @@
 #
 # Note: the actual libc retarget *implementation* (newlib syscalls + the strong
 # malloc family this header's macros map onto) lives in the syscalls component
-# (amebad_syscalls); this is just the header those TUs include.
+# (amebad_syscall_port); this is just the header those TUs include.
 add_library(amebad_platform_stdlib INTERFACE)
 target_include_directories(amebad_platform_stdlib INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")

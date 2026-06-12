@@ -1,8 +1,8 @@
 # component/freertos_tcp_config — FreeRTOS-Plus-TCP V4.0.0 config + core stack.
 #
 # The platform-independent half of the FreeRTOS+TCP integration: our
-# FreeRTOSIPConfig.h (config/, features gated to DHCP-only IPv4 — no TCP/IPv6/DNS)
-# plus the whole upstream core stack and a buffer manager, compiled into the
+# FreeRTOSIPConfig.h (flat at the component root, features gated to DHCP-only IPv4 —
+# no TCP/IPv6/DNS) plus the whole upstream core stack and a buffer manager, into the
 # `freertos_tcp_config` lib. The platform NetworkInterface (the Realtek WiFi
 # driver <-> stack bridge) lives in the port (component/amebad/freertos_tcp_port),
 # which links this.
@@ -34,16 +34,20 @@ add_library(freertos_tcp_config STATIC EXCLUDE_FROM_ALL
 )
 
 # Config + header surface. PUBLIC so both this lib's own sources and the port (and
-# header-only consumers: lfs-port, syscalls) see FreeRTOSIPConfig.h + the stack API.
+# header-only consumers: lfs_port, syscalls) see FreeRTOSIPConfig.h + the stack API.
 target_include_directories(freertos_tcp_config PUBLIC
-    "${CMAKE_CURRENT_SOURCE_DIR}/config"          # FreeRTOSIPConfig.h
+    "${CMAKE_CURRENT_SOURCE_DIR}"                  # FreeRTOSIPConfig.h (flat)
     "${FT}/source/include"
     "${FT}/source/portable/Compiler/GCC"          # pack_struct_start/end.h
 )
 
+# Just the kernel: FreeRTOS carries FreeRTOSConfig.h (configMAX_PRIORITIES etc.) and,
+# transitively, whatever the platform's FreeRTOSConfig.h needs — on AmebaD that's
+# platform_autoconf.h, which reaches here via FreeRTOS -> freertos_config ->
+# amebad_sdk_includes (wired on the AmebaD side). Naming no platform target keeps
+# this stack reusable as-is by any FreeRTOS platform (Dplus / Green2 / Bouffalo).
 target_link_libraries(freertos_tcp_config PUBLIC
-    FreeRTOS               # kernel + FreeRTOSConfig (configMAX_PRIORITIES etc.)
-    amebad_sdk_includes
+    FreeRTOS
 )
 
 target_compile_options(freertos_tcp_config PRIVATE

@@ -18,7 +18,7 @@
 # Upstream is the submodule component/thirdparty/nimble (pinned nimble_1_9_0_tag).
 # Cross-platform: no chip gate — built wherever nimble_config is linked
 # (EXCLUDE_FROM_ALL-style: only the consuming port pulls it). It needs FreeRTOS +
-# the wolfCrypt build (amebad_wolfssl) on whatever platform builds it.
+# the wolfCrypt build (wolfssl_config) on whatever platform builds it.
 
 set(_nb "${CMAKE_SOURCE_DIR}/component/thirdparty/nimble")
 
@@ -59,12 +59,12 @@ target_link_libraries(nimble_config PUBLIC FreeRTOS)
 
 # wolfCrypt headers + WOLFSSL_USER_SETTINGS for wolfcrypt_sm_glue.c — COMPILE
 # requirements only, NOT a link edge (the wc_* symbols resolve via app_km4's
-# cross_refs LINK_GROUP, which lists nimble_config). amebad_wolfssl is the wolfCrypt
+# cross_refs LINK_GROUP, which lists nimble_config). wolfssl_config is the wolfCrypt
 # provider today; the gen-exprs resolve at generate time regardless of subdir order.
 target_include_directories(nimble_config SYSTEM PRIVATE
-    $<TARGET_PROPERTY:amebad_wolfssl,INTERFACE_INCLUDE_DIRECTORIES>)
+    $<TARGET_PROPERTY:wolfssl_config,INTERFACE_INCLUDE_DIRECTORIES>)
 target_compile_definitions(nimble_config PRIVATE
-    $<TARGET_PROPERTY:amebad_wolfssl,INTERFACE_COMPILE_DEFINITIONS>)
+    $<TARGET_PROPERTY:wolfssl_config,INTERFACE_COMPILE_DEFINITIONS>)
 
 # Our glue rides on the vendored tinycrypt/NimBLE headers — silence their warnings
 # (the AmebaD flag stack is -Wall -Wextra -Werror). -w (last) overrides -Werror.

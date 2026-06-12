@@ -38,7 +38,7 @@ set(_monitor_warnings
 # link the kernel (which PUBLIC-links amebad_sdk_includes for the monitor /
 # swlib / os_dep / fwlib headers).
 # NB: the newlib console retarget (_write/_read via Diag*) that used to live here
-# as low_level_io.c moved to component/amebad/syscalls (amebad_syscalls), the
+# as low_level_io.c moved to component/amebad/syscall_port (amebad_syscall_port), the
 # single home for the KM4 image's syscall surface. KM0 is stdio-free, so it never
 # pulled low_level_io and needs no replacement.
 add_library(amebad_monitor_common STATIC

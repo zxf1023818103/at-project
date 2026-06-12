@@ -1,13 +1,18 @@
 /*
- * newlib_syscalls.c — the AmebaD KM4 image's libc/newlib retarget, all in one place.
+ * newlib_syscalls.c — cross-platform libc/newlib retarget, all in one place.
  *
- * Groups, all force-linked into the KM4 image (strong defs that beat libc's
+ * Platform-neutral (component/syscalls): the LittleFS instance comes from the
+ * vfs_lfs_mount() platform hook and the console fds route through the shared
+ * dispatcher (component/console); no SoC headers here. Currently the AmebaD KM4
+ * image is the only consumer.
+ *
+ * Groups, all force-linked into the image (strong defs that beat libc's
  * defaults) — see CMakeLists.txt:
  *
  *   1. POSIX fd VFS — a small file-descriptor layer so the newlib syscalls route
- *      by fd: 0/1/2 stay = LOGUART console; an _open()'d path -> a LittleFS file
- *      (amebad_lfs_mount + lfs_file_*); a socket registered via
- *      amebad_fd_open_socket() -> a FreeRTOS+TCP socket (FreeRTOS_recv/send/
+ *      by fd: 0/1/2 stay = console dispatcher; an _open()'d path -> a LittleFS file
+ *      (vfs_lfs_mount + lfs_file_*); a socket registered via
+ *      fd_open_socket() -> a FreeRTOS+TCP socket (FreeRTOS_recv/send/
  *      closesocket). fd -> slot is a hashtable index over a fixed slot pool.
  *
  *   2. newlib syscall entry points — _open/_close/_read/_write/_lseek/_fstat/
@@ -27,11 +32,10 @@
  * The VFS + socket fd machinery is always compiled but per-function (the toolchain
  * builds with -ffunction-sections/-fdata-sections and the image links with
  * -Wl,--gc-sections — see cmake/arm-none-eabi.cmake), so when no consumer calls
- * fopen/open/amebad_fd_open_socket it is dead-stripped and costs nothing.
+ * fopen/open/fd_open_socket it is dead-stripped and costs nothing.
  *
  * GCC/newlib only (this project has no IAR/__ICCARM__ build).
  */
-#include "ameba_soc.h"       /* DiagPutChar / DiagGetChar (ROM console) */
 #include <string.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -43,14 +47,15 @@
 #include "semphr.h"
 #include "FreeRTOS_IP.h"     /* FreeRTOS_htonl / FreeRTOS_htons (network byte order) */
 #include "FreeRTOS_Sockets.h"/* Socket_t / FreeRTOS_recv / FreeRTOS_send / closesocket */
-#include "lfs_port.h"        /* amebad_lfs_mount + lfs.h (lfs_file_* / LFS_O_* / lfs_stat) */
+#include "lfs.h"             /* lfs_t / lfs_file_* / LFS_O_* / lfs_stat */
 #include "console.h"         /* at_console_read/write — shared fd 0/1/2 dispatcher */
+#include "syscalls.h"        /* vfs_lfs_mount() platform hook + fd_open_socket() */
 
-/* platform_stdlib (pulled in by ameba_soc.h) macro-redirects the malloc family to
- * the SDK primitives: `#define malloc pvPortMalloc` / free vPortFree / calloc
- * rtw_calloc / realloc pvPortReAlloc. Undo them here so the STRONG symbols defined
- * below are the real malloc/free/calloc/realloc that third-party code (ngtcp2,
- * littlefs, newlib) links against — not redefinitions of the pvPort / rtw primitives. */
+/* Some platforms' SDK headers macro-redirect the malloc family to their heap
+ * primitives (e.g. AmebaD platform_stdlib: `#define malloc pvPortMalloc` / free
+ * vPortFree / ...). This TU includes no such header, but keep the #undefs as a
+ * defensive guard so the STRONG symbols defined below are the real malloc/free/
+ * calloc/realloc that third-party code (ngtcp2, littlefs, newlib) links against. */
 #undef malloc
 #undef free
 #undef calloc
@@ -231,7 +236,7 @@ static void fd_free(int fd)
  * FreeRTOS_ backends from them would drag littlefs + the ~45KB FreeRTOS+TCP sockets
  * module into EVERY image even when nothing opens a file or registers a socket. So
  * the file/socket backends are reached only through these NULL-until-wired pointers;
- * they are wired by _open()/amebad_fd_open_socket(), which are themselves
+ * they are wired by _open()/fd_open_socket(), which are themselves
  * dead-strippable. When no consumer calls those, the op-table impls (and their lfs /
  * FreeRTOS refs) are unreferenced and --gc-sections drops them — zero cost unused. */
 typedef struct {
@@ -242,7 +247,7 @@ typedef struct {
     long (*size )(vfs_slot_t *s);          /* for _fstat; <0 on error */
 } vfs_ops_t;
 static const vfs_ops_t *s_file_ops;        /* set by _open */
-static const vfs_ops_t *s_sock_ops;        /* set by amebad_fd_open_socket */
+static const vfs_ops_t *s_sock_ops;        /* set by fd_open_socket */
 
 /* errno mappers */
 static int lfs_to_errno(int e)
@@ -277,32 +282,32 @@ static int frtos_to_errno(BaseType_t r)
 /* ---- LittleFS file backend (wired by _open) ---- */
 static int file_read(vfs_slot_t *s, char *b, int n)
 {
-    lfs_ssize_t r = lfs_file_read(amebad_lfs_mount(), &s->u.f, b, (lfs_size_t)n);
+    lfs_ssize_t r = lfs_file_read(vfs_lfs_mount(), &s->u.f, b, (lfs_size_t)n);
     return (r < 0) ? (errno = lfs_to_errno((int)r), -1) : (int)r;
 }
 static int file_write(vfs_slot_t *s, const char *b, int n)
 {
-    lfs_ssize_t r = lfs_file_write(amebad_lfs_mount(), &s->u.f, b, (lfs_size_t)n);
+    lfs_ssize_t r = lfs_file_write(vfs_lfs_mount(), &s->u.f, b, (lfs_size_t)n);
     return (r < 0) ? (errno = lfs_to_errno((int)r), -1) : (int)r;
 }
 static int file_close(vfs_slot_t *s)
 {
-    int r = lfs_file_close(amebad_lfs_mount(), &s->u.f);
+    int r = lfs_file_close(vfs_lfs_mount(), &s->u.f);
     return (r < 0) ? (errno = lfs_to_errno(r), -1) : 0;
 }
 static int file_lseek(vfs_slot_t *s, int off, int whence)
 {
     /* SEEK_SET/CUR/END (0/1/2) == LFS_SEEK_SET/CUR/END */
-    lfs_soff_t p = lfs_file_seek(amebad_lfs_mount(), &s->u.f, off, whence);
+    lfs_soff_t p = lfs_file_seek(vfs_lfs_mount(), &s->u.f, off, whence);
     return (p < 0) ? (errno = lfs_to_errno((int)p), -1) : (int)p;
 }
 static long file_size(vfs_slot_t *s)
 {
-    return (long)lfs_file_size(amebad_lfs_mount(), &s->u.f);
+    return (long)lfs_file_size(vfs_lfs_mount(), &s->u.f);
 }
 static const vfs_ops_t FILE_OPS = { file_read, file_write, file_close, file_lseek, file_size };
 
-/* ---- FreeRTOS+TCP socket backend (wired by amebad_fd_open_socket) ---- */
+/* ---- FreeRTOS+TCP socket backend (wired by fd_open_socket) ---- */
 static int sock_read(vfs_slot_t *s, char *b, int n)
 {
     BaseType_t r = FreeRTOS_recv(s->u.s, b, (size_t)n, 0);
@@ -327,9 +332,12 @@ static const vfs_ops_t SOCK_OPS = { sock_read, sock_write, sock_close, sock_lsee
 
 /* Register an already-created FreeRTOS socket as a POSIX fd, so read()/write()/
  * close() on the returned fd dispatch to FreeRTOS_recv/send/closesocket. Socket
- * creation/options stay on the native FreeRTOS_* API (as quic_test.c/iperf do). */
-int amebad_fd_open_socket(Socket_t s)
+ * creation/options stay on the native FreeRTOS_* API (as quic_test.c/iperf do).
+ * The handle is opaque (void *) at the public boundary (syscalls.h) so callers that
+ * only register a socket need not match this TU's FreeRTOS+TCP headers. */
+int fd_open_socket(void *socket)
 {
+    Socket_t s = (Socket_t)socket;
     vfs_slot_t *slot;
     int fd;
 
@@ -347,7 +355,7 @@ int amebad_fd_open_socket(Socket_t s)
 }
 
 /* fd -> its backend op table (NULL only if the fd's backend was never wired, which
- * for a valid open fd cannot happen — _open/amebad_fd_open_socket set it). */
+ * for a valid open fd cannot happen — _open/fd_open_socket set it). */
 static const vfs_ops_t *slot_ops(const vfs_slot_t *s)
 {
     return (s->type == VFS_FILE) ? s_file_ops : s_sock_ops;
@@ -367,7 +375,7 @@ int _open(const char *path, int flags, int mode)
     int lflags = 0, fd, rc;
 
     (void)mode;
-    lfs = amebad_lfs_mount();
+    lfs = vfs_lfs_mount();
     if (lfs == NULL) {
         errno = ENODEV;
         return -1;
@@ -498,7 +506,7 @@ int _isatty(int fd)
 int _stat(const char *path, struct stat *st)
 {
     struct lfs_info info;
-    int rc = lfs_stat(amebad_lfs_mount(), path, &info);
+    int rc = lfs_stat(vfs_lfs_mount(), path, &info);
 
     if (rc < 0) {
         errno = lfs_to_errno(rc);
@@ -512,7 +520,7 @@ int _stat(const char *path, struct stat *st)
 
 int _unlink(const char *path)
 {
-    int rc = lfs_remove(amebad_lfs_mount(), path);
+    int rc = lfs_remove(vfs_lfs_mount(), path);
     return (rc < 0) ? (errno = lfs_to_errno(rc), -1) : 0;
 }
 

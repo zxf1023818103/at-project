@@ -1,5 +1,5 @@
 /*
- * lfs-port (AmebaD) — the low-level flash adapter that backs LittleFS on the
+ * lfs_port (AmebaD) — the low-level flash adapter that backs LittleFS on the
  * RTL8721D. Implements the four lfs_config diskio callbacks (read / prog / erase
  * / sync) over the SDK flash HAL (flash_api.h) at the unified 0x300000 LFS region
  * (see component/lfs_config / doc/lfs.md), plus the lock/unlock callbacks

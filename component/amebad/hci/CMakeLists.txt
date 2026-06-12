@@ -17,7 +17,7 @@
 # still referenced (trace_log_buffer, a no-op sink). The old os_delay / os_mem_*
 # helpers are gone — callers use vTaskDelay / pvPortMalloc / vPortFree directly.
 # In-tree glue: hci_dtm.c (bring-up + polling HCI bridge), hci_nostack.c,
-# hci_fw_stub.c, hci_compat.c. (newlib syscalls: component/amebad/syscalls.)
+# hci_fw_stub.c, hci_compat.c. (newlib syscalls: component/amebad/syscall_port.)
 #
 # KM4-only (the HCI transport + the LOGUART the bridge hijacks are KM4's at
 # runtime). EXCLUDE_FROM_ALL until app_km4 links it.
@@ -76,7 +76,7 @@ add_library(amebad_hci STATIC EXCLUDE_FROM_ALL
     "${CMAKE_CURRENT_SOURCE_DIR}/hci_compat.c"      # UART_RxMonitorSatusGet + printf->ROM (no newlib stdio)
     "${CMAKE_CURRENT_SOURCE_DIR}/hci_dtm.c"         # in-tree bring-up + polling HCI bridge
     # NB: the newlib syscall retarget (_write/_sbrk/... that the vendored BT source's
-    # _rtl_printf + abort pull) is now component/amebad/syscalls (amebad_syscalls),
+    # _rtl_printf + abort pull) is now component/amebad/syscall_port (amebad_syscall_port),
     # linked into the app_km4 executable.
 )
 

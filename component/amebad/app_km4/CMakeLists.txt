@@ -100,7 +100,8 @@ add_dependencies(target_img2_km4 amebad_km4_img2_ld)
 #   AMEBAD_ENABLE_HCI    — raw HCI / DTM bridge test image (auto-enter bridge).
 #   AMEBAD_ENABLE_NIMBLE — Apache NimBLE host (LE/GATT/Mesh/coex), via component/amebad/nimble_port.
 # Both ride the same controller bring-up (amebad_hci + firmware blob; the newlib
-# syscalls come from amebad_syscalls, linked unconditionally below). NimBLE
+# syscalls come from the syscalls core + amebad_syscall_port console backend, linked
+# unconditionally below). NimBLE
 # additionally links the `nimble` lib. Pick one. OFF by default.
 option(AMEBAD_ENABLE_HCI    "Build the BLE controller HCI test image (bring-up + HCI bridge)" OFF)
 option(AMEBAD_ENABLE_NIMBLE "Build the NimBLE host image (LE/GATT/Mesh/coex on amebad_hci)" OFF)
@@ -109,7 +110,7 @@ if(AMEBAD_ENABLE_HCI OR AMEBAD_ENABLE_NIMBLE)
     # Shared controller bits — bring-up via hci_tp_open() (component/amebad/hci/
     # hci_nostack.c) + the firmware blob in the EXECUTABLE so its STRONG defs
     # override the weak {0} stubs (a blob inside the archive wouldn't get pulled).
-    # newlib syscalls now come from amebad_syscalls (linked below).
+    # newlib syscalls now come from the syscalls core (linked below).
     set(_hci_grp ",amebad_hci")
     set(_hci_root "${CMAKE_SOURCE_DIR}/component/amebad/hci")
     if(AMEBAD_HCI_FW_MP)
@@ -133,7 +134,7 @@ endif()
 
 # QUIC self-test (ngtcp2 + full wolfSSL TLS 1.3). The component/ngtcp2_config
 # targets are only defined when AMEBAD_ENABLE_QUIC is ON (see component/amebad/
-# CMakeLists.txt), which also forces AMEBAD_WOLFSSL_TLS so amebad_wolfssl (already
+# CMakeLists.txt), which also forces AMEBAD_WOLFSSL_TLS so wolfssl_config (already
 # in the link group) carries the TLS/QUIC layer. ngtcp2 + crypto join the group:
 # crypto<->wolfssl<->ngtcp2 are mutually referenced.
 # AT-command / monitor shell libs: linked by default, dropped from the QUIC
@@ -147,10 +148,10 @@ if(AMEBAD_ENABLE_QUIC)
     # The hand-tuned flat --start-group needs real archive names (CMake won't
     # expand an INTERFACE aggregate like `ngtcp2_config` inside a LINK_GROUP).
     # Normal consumers can link `ngtcp2_config` directly; this image lists the
-    # members so they share the one cross_refs group with amebad_wolfssl.
-    set(_quic_grp ",amebad_ngtcp2_crypto,ngtcp2_static")
+    # members so they share the one cross_refs group with wolfssl_config.
+    set(_quic_grp ",ngtcp2_crypto,ngtcp2_static")
     target_sources(target_img2_km4 PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/quic_test.c")   # newlib syscalls now from amebad_syscalls
+        "${CMAKE_CURRENT_SOURCE_DIR}/quic_test.c")   # newlib syscalls now from the syscalls core
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_QUIC)
 endif()
@@ -174,9 +175,10 @@ endif()
 # plus memcpy/memset — so KM4 doesn't need the ROM memcpy alias KM0 uses.
 target_link_libraries(target_img2_km4 PRIVATE
     amebad_sdk_includes
-    amebad_syscalls      # OBJECT lib: newlib retarget (_write/_read/_sbrk/...) force-included so its strong defs beat libc's ENOSYS stubs
+    syscall_config       # OBJECT lib: cross-platform newlib retarget (VFS + malloc + byte-order), force-included so its strong defs beat libc's ENOSYS stubs
+    amebad_syscall_port  # OBJECT lib: AmebaD console backend (strong at_console_default_backend -> LOGUART), also force-included
     amebad_mbedtls_rom   # INTERFACE: ROM mbedTLS 2.4.0 headers + MBEDTLS_CONFIG_FILE (no archive)
-    # amebad_wolfssl is INSIDE the group: NimBLE's SM crypto (nimble_config, in the
+    # wolfssl_config is INSIDE the group: NimBLE's SM crypto (nimble_config, in the
     # group) pulls wc_* (wc_ecc_*/wc_AesEncryptDirect) that the bench didn't, so
     # wolfCrypt must rescan alongside it — wolfCrypt<->FreeRTOS<->nimble are mutually refed.
     # LittleFS (amebad_lfs_port + lfs_config + littlefs) and its flash backend
@@ -184,7 +186,7 @@ target_link_libraries(target_img2_km4 PRIVATE
     # + libgcc (__popcountsi2), which follow the group, and as a transitive
     # EXCLUDE_FROM_ALL lib CMake would otherwise sink it past -lc/-lgcc and leave
     # those undefined. amebad_mbed (flash_api) is lfs_port's backend.
-    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km4,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,freertos_tcp_config,amebad_wlan,amebad_wps,amebad_wolfssl,amebad_lfs_port,amebad_mbed,lfs_config,littlefs${_diag_grp}${_hci_grp}${_quic_grp}>"
+    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km4,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,freertos_tcp_config,amebad_wlan,amebad_wps,wolfssl_config,amebad_lfs_port,amebad_mbed,lfs_config,littlefs${_diag_grp}${_hci_grp}${_quic_grp}>"
     m
     stdc++
     c
