@@ -120,6 +120,11 @@ option(AMEBAD_VFS_SELFTEST "Build + run the POSIX-fd VFS self-test (fopen/open/s
 # add_subdirectory needs an explicit binary dir.
 add_subdirectory("${CMAKE_SOURCE_DIR}/component/wolfssl_config" "${CMAKE_CURRENT_BINARY_DIR}/wolfssl_config")   # KM4-gated: wolfCrypt (v5.9.1) bare-metal lib for on-target crypto benchmark (+TLS1.3/QUIC when AMEBAD_WOLFSSL_TLS)
 add_subdirectory("${CMAKE_SOURCE_DIR}/component/ngtcp2_config" "${CMAKE_CURRENT_BINARY_DIR}/ngtcp2_config")     # KM4-gated: ngtcp2 QUIC + crypto/wolfssl (only built when AMEBAD_ENABLE_QUIC); exposes the `ngtcp2_config` aggregate link target
+# coreMQTT / coreHTTP: top-level config components (component/{coremqtt,corehttp}_config),
+# transport-agnostic, EXCLUDE_FROM_ALL until a consumer links the coremqtt_config /
+# corehttp_config target. Out-of-tree add needs an explicit binary dir.
+add_subdirectory("${CMAKE_SOURCE_DIR}/component/coremqtt_config" "${CMAKE_CURRENT_BINARY_DIR}/coremqtt_config")   # coreMQTT (v5.0.2) static lib + core_mqtt_config.h
+add_subdirectory("${CMAKE_SOURCE_DIR}/component/corehttp_config" "${CMAKE_CURRENT_BINARY_DIR}/corehttp_config")   # coreHTTP (v3.1.3) static lib + core_http_config.h
 add_subdirectory(build_info)         # INTERFACE: UTS_VERSION banner -D (replaces the vendored build_info.h shim)
 add_subdirectory(hci)                # KM4-gated: BLE controller bring-up + HCI transport + bridge (no btgap.a)
 # NimBLE: config + header surface (top-level component/nimble_config, out-of-tree
