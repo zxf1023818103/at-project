@@ -26,7 +26,7 @@
 # gate so it exists KM0+KM4; linked by amebad_sdk_includes instead of a raw path.
 add_library(amebad_mbedtls_headers INTERFACE)
 target_include_directories(amebad_mbedtls_headers SYSTEM INTERFACE
-    "${CMAKE_SOURCE_DIR}/component/thirdparty/mbedtls/include")
+    "${CMAKE_SOURCE_DIR}/component/mbedtls_config/mbedtls/include")
 
 if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     return()

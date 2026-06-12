@@ -6,7 +6,7 @@
 # the project config genuinely drag in. The dead/replaceable ones were dropped —
 # WLAN driver (minus the one include/ that holds the global autoconf.h), lwip
 # v1.4.1, INIC, polarssl, the SDK's mbedtls-2.4.0 (replaced with the SHARED
-# component/thirdparty/mbedtls), test/example/utilities, api/wifi, api/network,
+# component/mbedtls_config/mbedtls), test/example/utilities, api/wifi, api/network,
 # mbed HAL (moved onto the wifi target, its only consumer). lwip is fully removed
 # (IP stack = FreeRTOS-Plus-TCP); the residual driver/netif ABI shim is
 # component/amebad/freertos_tcp_port/netif_shim.h (target amebad_netif_shim).

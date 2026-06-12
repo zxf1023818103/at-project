@@ -1,7 +1,14 @@
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../src
                  ${CMAKE_BINARY_DIR}/src)
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../component/thirdparty
-                 ${CMAKE_BINARY_DIR}/component/thirdparty)
+# Cross-platform third-party libs, each in its own component/<name>_config
+# (submodule + wrapper). This build doesn't go through the repo-root CMakeLists,
+# so the universal ones are added here (out-of-tree adds need explicit binary dirs).
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../component/zlib_config
+                 ${CMAKE_BINARY_DIR}/component/zlib_config)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../component/cjson_config
+                 ${CMAKE_BINARY_DIR}/component/cjson_config)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../component/littlefs_config
+                 ${CMAKE_BINARY_DIR}/component/littlefs_config)
 # Shared cross-platform stdio console dispatcher (component/console). The ameba
 # build doesn't go through the repo-root CMakeLists, so add it here.
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../component/console

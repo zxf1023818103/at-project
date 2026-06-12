@@ -6,14 +6,14 @@
 # lib, sitting on top of the controller bring-up + HCI transport in
 # component/amebad/hci (no btgap.a). The config/headers AND the portable app +
 # SM-crypto layer (nimble_app.c, wolfcrypt_sm_glue.c) come from
-# component/nimble_config (linked below). Upstream is component/thirdparty/nimble.
+# component/nimble_config (linked below). Upstream is component/nimble_config/nimble.
 #
 # Build: the BLE controller is external silicon over our HCI UART, so
 #   BLE_TRANSPORT_HS = native (host on KM4), BLE_TRANSPORT_LL = custom
 # (transport_amebad.c provides ble_transport_to_ll_*).
 #
 # Source set mirrors upstream's non-Mynewt recipe
-# (component/thirdparty/nimble/porting/nimble/Makefile.{defs,mesh,tinycrypt} +
+# (component/nimble_config/nimble/porting/nimble/Makefile.{defs,mesh,tinycrypt} +
 # the FreeRTOS NPL) — file(GLOB) over the vendored upstream dirs, the same
 # wildcard those Makefiles use; that's upstream code, not ours. Our 2 platform
 # glue files are listed explicitly. KM4-only; EXCLUDE_FROM_ALL until app_km4 links it.
@@ -22,11 +22,11 @@ if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     return()
 endif()
 
-set(_nb "${CMAKE_SOURCE_DIR}/component/thirdparty/nimble")
+set(_nb "${CMAKE_SOURCE_DIR}/component/nimble_config/nimble")
 if(NOT EXISTS "${_nb}/nimble/host/src/ble_hs.c")
     message(FATAL_ERROR
         "component/amebad/nimble_port: NimBLE submodule missing — run "
-        "`git submodule update --init component/thirdparty/nimble`")
+        "`git submodule update --init component/nimble_config/nimble`")
 endif()
 
 file(GLOB _nb_src

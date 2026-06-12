@@ -1,6 +1,6 @@
 # component/amebad/freertos_port — the AmebaD FreeRTOS layer, in one folder:
 #   (1) the upstream FreeRTOS-Kernel V10.6.2 (built from the
-#       component/thirdparty/freertos-kernel submodule), per-core port + heap; and
+#       component/freertos-kernel_config/freertos-kernel submodule), per-core port + heap; and
 #   (2) the AmebaD SDK FreeRTOS extensions that are NOT part of upstream (the
 #       "glue"): backtrace, the heap_5 region table / bflb_mm heap surface, and the
 #       application hooks the SDK kept in port.c.
@@ -36,7 +36,7 @@
 #     uses the upstream ARMv6-M CM0 port (runs fine on the M23, exactly as the SDK
 #     LP port did) which never touches MSP.
 #
-# FreeRTOSConfig.h: the single cross-platform header in component/freertos_config
+# FreeRTOSConfig.h: the single cross-platform header in component/freertos-kernel_config
 # is carried by the shared freertos_config STATIC; AmebaD attaches amebad_sdk_includes
 # to it below so platform_autoconf.h + the kernel headers resolve.
 
@@ -50,7 +50,7 @@ else()
     return()
 endif()
 
-set(_kernel_src "${CMAKE_SOURCE_DIR}/component/thirdparty/freertos-kernel")
+set(_kernel_src "${CMAKE_SOURCE_DIR}/component/freertos-kernel_config/freertos-kernel")
 
 # Consolidated header INTERFACE for amebad_sdk_includes: the FreeRTOS glue headers
 # (this dir: freertos_service.h / freertos_heap5_config.h / backtrace_ext.h) + the
@@ -73,21 +73,21 @@ target_include_directories(amebad_freertos_headers SYSTEM INTERFACE
 if(NOT EXISTS "${_kernel_src}/tasks.c")
     message(FATAL_ERROR
         "FreeRTOS: '${_kernel_src}/tasks.c' missing — run "
-        "'git submodule update --init component/thirdparty/freertos-kernel'")
+        "'git submodule update --init component/freertos-kernel_config/freertos-kernel'")
 endif()
 
 # --- freertos_config: the upstream kernel CMake mandates a target of this name to
 # locate FreeRTOSConfig.h. It is the cross-platform STATIC lib defined in
-# component/freertos_config (the portable FreeRTOS extensions + bflb_mm heap surface;
+# component/freertos-kernel_config (the portable FreeRTOS extensions + bflb_mm heap surface;
 # PUBLIC-exposes FreeRTOSConfig.h), added at the top level before this subtree, so it
 # already exists here. Guard only as a safety net.
 if(NOT TARGET freertos_config)
     message(FATAL_ERROR
-        "freertos_config target missing — component/freertos_config must be added "
+        "freertos_config target missing — component/freertos-kernel_config must be added "
         "(top-level CMakeLists) before component/amebad")
 endif()
 
-# The shared component/freertos_config names no AmebaD target, so attach the AmebaD
+# The shared component/freertos-kernel_config names no AmebaD target, so attach the AmebaD
 # SDK include bundle here: amebad_sdk_includes carries the FreeRTOS kernel headers
 # (FreeRTOS.h/portmacro.h) + platform_autoconf.h (pulled by FreeRTOSConfig.h's
 # CONFIG_PLATFORM_8721D branch) needed to compile the extension sources. PUBLIC so
@@ -105,16 +105,16 @@ set(FREERTOS_PORT "${_frt_port}" CACHE STRING "FreeRTOS port name" FORCE)
 # as a custom heap source.) On KM0 (LP, no libc/libgcc) the libc/libgcc symbols
 # TLSF pulls (strncpy, ...) are aliased to the ROM in app_km0/rlx8721d_img2_romalias.ld.
 # The portable FreeRTOS extension sources (heap surfaces, hooks, backtrace) live in
-# the shared component/freertos_config; the amebad-memory-map region table
+# the shared component/freertos-kernel_config; the amebad-memory-map region table
 # (heap5_config.c) stays here. The per-core glue lib below compiles both.
-set(_cfg "${CMAKE_SOURCE_DIR}/component/freertos_config")
+set(_cfg "${CMAKE_SOURCE_DIR}/component/freertos-kernel_config")
 
 set(FREERTOS_HEAP "${_cfg}/freertos_heap_none.c"
     CACHE STRING "FreeRTOS heap model" FORCE)
 
 if(NOT TARGET freertos_kernel)
     add_subdirectory("${_kernel_src}"
-                     "${CMAKE_BINARY_DIR}/component/thirdparty/freertos-kernel")
+                     "${CMAKE_BINARY_DIR}/component/freertos-kernel_config/freertos-kernel")
 endif()
 
 # Keep the `FreeRTOS` name every consumer already links.
@@ -139,7 +139,7 @@ endif()
 #
 # The portable FreeRTOS extensions (backtrace, hooks, the bflb_mm heap surface, the
 # empty heap stub) are compiled by the freertos_config STATIC lib in
-# component/freertos_config. Only the AmebaD memory-map heap_5 region table stays
+# component/freertos-kernel_config. Only the AmebaD memory-map heap_5 region table stays
 # here (it fills vPortDefineHeapRegions from the chip linker symbols). Target name
 # amebad_freertos_glue_km{0,4} kept so the app link groups don't change; it links
 # freertos_config for the heap surface / hooks.

@@ -9,7 +9,7 @@
 #
 # Builds: the upstream source set (42 files; TCP/IPv6/DNS compile near-empty with
 # the features off) + BufferAllocation_2 (heap). Upstream is the submodule
-# component/thirdparty/freertos-plus-tcp.
+# component/freertos-plus-tcp_config/freertos-plus-tcp.
 #
 # NB: BufferAllocation_1 (static pool) was tried to cut per-packet pvPortMalloc
 # but its ~61 KB BSS overran the SRAM the closed lib_wlan.a hardcodes as free
@@ -22,7 +22,7 @@
 # split: portable stack here, platform bridge in the port. It needs the kernel +
 # FreeRTOSConfig on whatever platform builds it.
 
-set(FT "${CMAKE_SOURCE_DIR}/component/thirdparty/freertos-plus-tcp")
+set(FT "${CMAKE_SOURCE_DIR}/component/freertos-plus-tcp_config/freertos-plus-tcp")
 
 # Upstream library sources — glob the stack. Globbing the UPSTREAM tree is fine;
 # the platform glue (the Realtek NetworkInterface) is listed explicitly in the port.

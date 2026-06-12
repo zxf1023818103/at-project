@@ -217,7 +217,7 @@ target_link_options(target_img2_km4 PRIVATE
 # PSA calls + NS layout/boot handoff are a follow-on stage.
 if(AMEBAD_TFM_BOOT)
     set(_tfm_export "${CMAKE_BINARY_DIR}/component/amebad/app_km4_secure/tfm_spe_export")
-    set(_tfm_src    "${CMAKE_SOURCE_DIR}/component/thirdparty/trusted-firmware-m")
+    set(_tfm_src    "${CMAKE_SOURCE_DIR}/component/trusted-firmware-m_config/trusted-firmware-m")
     add_dependencies(target_img2_km4 tfm_spe)
     # app_km4 IS the NSPE: issue a real PSA call into TF-M. Link the PSA client
     # interface (tfm_platform_ioctl -> psa_call -> dispatch -> SG veneer) + the

@@ -1,4 +1,4 @@
-# wolfssl_config — wolfCrypt (from component/thirdparty/wolfssl, v5.9.1-stable)
+# wolfssl_config — wolfCrypt (from component/wolfssl_config/wolfssl, v5.9.1-stable)
 # built for KM4 (Cortex-M33) as a bare-metal static lib for on-target crypto
 # benchmarking. Config lives in user_settings.h (this dir); selected via
 # -DWOLFSSL_USER_SETTINGS. See doc/amebad_wolfssl_hwaccel_eval.md.
@@ -16,7 +16,7 @@ option(AMEBAD_WOLFSSL_ARMASM "wolfSSL: use Thumb2 asm for symmetric/hash" OFF)
 option(AMEBAD_WOLFSSL_SP_ASM "wolfSSL: SP Cortex-M asm for public-key (PK)" ON)
 option(AMEBAD_WOLFSSL_TLS    "wolfSSL: build full TLS 1.3 + QUIC layer (for ngtcp2)" OFF)
 
-set(_wolf "${CMAKE_SOURCE_DIR}/component/thirdparty/wolfssl")
+set(_wolf "${CMAKE_SOURCE_DIR}/component/wolfssl_config/wolfssl")
 set(_wc   "${_wolf}/wolfcrypt/src")
 
 # Curated wolfCrypt source set. PK (sp_cortexm.c = dedicated Cortex-M asm for

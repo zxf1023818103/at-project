@@ -2,7 +2,7 @@
  * mesh_defaults.h — BLE Mesh (MYNEWT_VAL_BLE_MESH_*) defaults for NimBLE 1.9.0.
  * The upstream porting default syscfg.h omits these (mesh off by default); this is
  * the mesh sub-option block lifted verbatim from
- * component/thirdparty/nimble/porting/examples/linux_blemesh/include/syscfg/syscfg.h
+ * component/nimble_config/nimble/porting/examples/linux_blemesh/include/syscfg/syscfg.h
  * (a basic mesh node config). All #ifndef-guarded — override individual knobs in
  * syscfg.h before this is pulled. Generated; re-extract on NimBLE bump.
  */

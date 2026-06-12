@@ -66,7 +66,7 @@ target_include_directories(bflb_mbedtls_hw_acc PUBLIC
 # Same pattern as bflb_mbedtls_port: PUBLIC-borrow mbedcrypto's
 # INTERFACE include set so consumers (wifi4_internal_headers etc.) see
 # mbedtls/* transitively, and PRIVATE-borrow its SOURCE_DIR
-# (component/thirdparty/mbedtls/library/) for the upstream-private
+# (component/mbedtls_config/mbedtls/library/) for the upstream-private
 # common.h / ecp_invasive.h / bignum_core.h headers our alt impls reach
 # into. The mbedtls block in component/thirdparty/CMakeLists.txt
 # propagates this lib's headers BACK into mbedcrypto via SOURCE_DIR (not

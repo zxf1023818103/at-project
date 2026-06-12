@@ -4,7 +4,7 @@
  * NimBLE is normally configured by Mynewt's `newt` tool (syscfg.yml -> generated
  * syscfg.h). For our non-Mynewt CMake build we provide this small override header:
  * it pre-defines the handful of MYNEWT_VAL_* we change, then #include_next pulls
- * the upstream default (component/thirdparty/nimble/porting/nimble/include/syscfg/
+ * the upstream default (component/nimble_config/nimble/porting/nimble/include/syscfg/
  * syscfg.h) for everything else. Every upstream default is `#ifndef`-guarded, so
  * our pre-defines win. This dir MUST be first on the include path.
  */

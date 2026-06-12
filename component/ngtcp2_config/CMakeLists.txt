@@ -6,7 +6,7 @@
 # individual archives.
 #
 # Core transport: use ngtcp2's OWN upstream CMake target `ngtcp2_static`
-# (component/thirdparty/ngtcp2 @ v1.23.0) via add_subdirectory, instead of a
+# (component/ngtcp2_config/ngtcp2 @ v1.23.0) via add_subdirectory, instead of a
 # hand-maintained file list. We force the upstream options to a lib-only static
 # build with no TLS backend / shared lib / tests (its defaults pull OpenSSL via
 # find_package and build examples/tests, which don't exist in this cross env).
@@ -26,7 +26,7 @@
 # Cross-platform: no chip gate — the QUIC stack builds wherever ngtcp2_config /
 # ngtcp2_crypto are linked (EXCLUDE_FROM_ALL until then).
 
-set(_ng "${CMAKE_SOURCE_DIR}/component/thirdparty/ngtcp2")
+set(_ng "${CMAKE_SOURCE_DIR}/component/ngtcp2_config/ngtcp2")
 
 # ---- core transport: upstream ngtcp2_static ----
 # Pin the upstream options BEFORE add_subdirectory (FORCE: override its option()

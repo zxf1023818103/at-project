@@ -15,14 +15,17 @@ project(at_project C CXX ASM)
 #
 # Add new top-level dirs here.
 
-# Cross-platform third-party libs (cjson / littlefs / zlib). Always added —
-# AmebaD reads zlibstatic out of the user_link.list it produces, Bouffalo
-# stitches the same targets into its bouffalo_sdk umbrella below.
-add_subdirectory(component/thirdparty)
-
-# Cross-platform LittleFS parameter set (doc/lfs.md) — geometry + runtime config
-# shared by every platform's lfs port. After thirdparty so `littlefs` exists.
-add_subdirectory(component/lfs_config)
+# Cross-platform third-party libs. Each lib now lives in its own
+# component/<name>_config (submodule + build wrapper); the universal ones are
+# assembled here. AmebaD reads zlibstatic out of the user_link.list it produces,
+# Bouffalo stitches the same targets into its bouffalo_sdk umbrella below.
+# (The consumer-coupled libs — mbedtls/lwip/freertos-*/tfm — are added from their
+# consumers, not here.)
+add_subdirectory(component/zlib_config)
+add_subdirectory(component/cjson_config)
+# littlefs_config: the littlefs submodule (-> `littlefs`) PLUS the cross-platform
+# LittleFS service layer (-> `lfs_config`: geometry + mount lifecycle, doc/lfs.md).
+add_subdirectory(component/littlefs_config)
 
 # Cross-platform stdio (fd 0/1/2) console dispatcher — the shared line discipline
 # + backend hook that every platform's newlib retarget routes the console fds to.
@@ -36,7 +39,7 @@ add_subdirectory(component/bflb_mm)
 
 # Cross-platform FreeRTOS config base — the settings common to AmebaD KM0/KM4 and
 # Bouffalo; each platform's FreeRTOSConfig.h includes it (freertos_config_common.h).
-add_subdirectory(component/freertos_config)
+add_subdirectory(component/freertos-kernel_config)
 
 # Shared user sources (src/main.cpp + ragel-generated AT parser).
 add_subdirectory(src)
@@ -58,7 +61,7 @@ if(AMEBAD_CHIP MATCHES "^amebad-km[04]$")
     # NimBLE: the cross-platform config + header surface (component/nimble_config)
     # and the AmebaD port (component/amebad/nimble_port, wired from
     # component/amebad/CMakeLists.txt) on top of component/amebad/hci. KM4-only (the
-    # port early-returns for km0). Upstream is the submodule component/thirdparty/nimble.
+    # port early-returns for km0). Upstream is the submodule component/nimble_config/nimble.
 endif()
 
 # Forward src/'s AT_USER_SOURCES / AT_USER_SRC_DIR one more scope up so a

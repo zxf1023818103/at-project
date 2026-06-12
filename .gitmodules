@@ -13,25 +13,25 @@
 	url = https://github.com/zxf1023818103/bouffalo_sdk.git
 	branch = at-v2.3.26
 [submodule "component/zlib"]
-	path = component/thirdparty/zlib
+	path = component/zlib_config/zlib
 	url = https://github.com/madler/zlib.git
 [submodule "component/freertos-kernel"]
-	path = component/thirdparty/freertos-kernel
+	path = component/freertos-kernel_config/freertos-kernel
 	url = https://github.com/zxf1023818103/FreeRTOS-Kernel.git
 	branch = bouffalo-port
 [submodule "component/lwip"]
-	path = component/thirdparty/lwip
+	path = component/lwip_config/lwip
 	url = https://github.com/zxf1023818103/lwip.git
 	branch = bouffalo-port
 [submodule "component/cjson"]
-	path = component/thirdparty/cjson
+	path = component/cjson_config/cjson
 	url = https://github.com/DaveGamble/cJSON.git
 [submodule "component/mbedtls"]
-	path = component/thirdparty/mbedtls
+	path = component/mbedtls_config/mbedtls
 	url = https://github.com/Mbed-TLS/mbedtls.git
 	branch = v3.6.4
 [submodule "component/littlefs"]
-	path = component/thirdparty/littlefs
+	path = component/littlefs_config/littlefs
 	url = https://github.com/littlefs-project/littlefs.git
 	branch = v2.8.2
 [submodule "component/lfs_image/mklittlefs"]
@@ -39,25 +39,25 @@
 	url = https://github.com/zxf1023818103/mklittlefs.git
 	branch = at-project
 [submodule "component/thirdparty/freertos-plus-tcp"]
-	path = component/thirdparty/freertos-plus-tcp
+	path = component/freertos-plus-tcp_config/freertos-plus-tcp
 	url = https://github.com/FreeRTOS/FreeRTOS-Plus-TCP.git
 [submodule "component/thirdparty/wolfssl"]
-	path = component/thirdparty/wolfssl
+	path = component/wolfssl_config/wolfssl
 	url = https://github.com/wolfSSL/wolfssl.git
 	branch = v5.9.1-stable
 	shallow = true
 [submodule "component/thirdparty/nimble"]
-	path = component/thirdparty/nimble
+	path = component/nimble_config/nimble
 	url = https://github.com/apache/mynewt-nimble
 [submodule "component/thirdparty/ngtcp2"]
-	path = component/thirdparty/ngtcp2
+	path = component/ngtcp2_config/ngtcp2
 	url = https://github.com/ngtcp2/ngtcp2
 [submodule "component/thirdparty/trusted-firmware-m"]
-	path = component/thirdparty/trusted-firmware-m
+	path = component/trusted-firmware-m_config/trusted-firmware-m
 	url = https://github.com/TrustedFirmware-M/trusted-firmware-m.git
 [submodule "component/thirdparty/coremqtt"]
-	path = component/thirdparty/coremqtt
+	path = component/coremqtt_config/coremqtt
 	url = https://github.com/FreeRTOS/coreMQTT.git
 [submodule "component/thirdparty/corehttp"]
-	path = component/thirdparty/corehttp
+	path = component/corehttp_config/corehttp
 	url = https://github.com/FreeRTOS/coreHTTP.git

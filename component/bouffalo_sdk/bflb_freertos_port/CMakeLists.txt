@@ -3,7 +3,7 @@
 # Upstream's divergent files were folded back into the kernel itself: the
 # patches now live on the `bouffalo-port` branch of the
 # https://github.com/zxf1023818103/FreeRTOS-Kernel.git fork, which is what
-# component/thirdparty/freertos-kernel points at. That leaves only the Bouffalo-only
+# component/freertos-kernel_config/freertos-kernel points at. That leaves only the Bouffalo-only
 # additions here:
 #
 #   freertos_port.c           Bouffalo's port glue (timer/IRQ setup, etc.)
@@ -23,7 +23,7 @@ target_include_directories(bflb_freertos_port PUBLIC
 target_link_libraries(bflb_freertos_port PUBLIC freertos_kernel)
 
 # Attach the Bouffalo RISC-V FreeRTOS config onto the shared freertos_config (repo
-# root, component/freertos_config) — done here, in this real component, not in the
+# root, component/freertos-kernel_config) — done here, in this real component, not in the
 # bouffalo_sdk umbrella. The RISC-V port asm needs the chip mtime / trap-handler defs
 # at compile time, and freertos_config's extension sources (heap/hooks/backtrace) need
 # FreeRTOSConfig.h (this dir's include/) + the kernel headers. CMake resolves target

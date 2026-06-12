@@ -10,19 +10,19 @@
 # that add_subdirectory's this one). We can rely on it being set + valid
 # by the time we get here.
 
-# FreeRTOS-Kernel (component/thirdparty/freertos-kernel, the bouffalo-port
+# FreeRTOS-Kernel (component/freertos-kernel_config/freertos-kernel, the bouffalo-port
 # branch on the zxf1023818103 fork). Configure it BEFORE add_subdirectory
 # so the kernel's CMakeLists can read FREERTOS_PORT + freertos_config.
 #
 # `freertos_config` is the cross-platform STATIC at the repo root
-# (component/freertos_config). Bouffalo's RISC-V-specific config (atomic_rtos.h path
+# (component/freertos-kernel_config). Bouffalo's RISC-V-specific config (atomic_rtos.h path
 # + mtime / trap-handler defs + the kernel-header feed) is attached to it from the
 # bflb_freertos_port COMPONENT, not here — this umbrella only sets FREERTOS_PORT/HEAP
 # (kernel-build orchestration, must precede the kernel add_subdirectory) + adds the
 # kernel. The feed resolves at generate time, so it still reaches the kernel's compile.
 if(NOT TARGET freertos_config)
     message(FATAL_ERROR
-        "freertos_config target missing — component/freertos_config must be added "
+        "freertos_config target missing — component/freertos-kernel_config must be added "
         "(repo-root CMakeLists) before component (bouffalo_sdk)")
 endif()
 
@@ -31,14 +31,14 @@ endif()
 # kernel compiles no heap_N.c (no heap_4 pvPortMalloc to collide with the shared
 # surface). board.c's ram_heap_init() already registers the OCRAM heap with bflb_mm,
 # which the surface's MM_FLAG_HEAP_ANY spans.
-set(FREERTOS_HEAP "${CMAKE_CURRENT_SOURCE_DIR}/../freertos_config/freertos_heap_none.c"
+set(FREERTOS_HEAP "${CMAKE_CURRENT_SOURCE_DIR}/../freertos-kernel_config/freertos_heap_none.c"
     CACHE STRING "FreeRTOS heap model" FORCE)
 
 set(FREERTOS_PORT GCC_RISC_V CACHE STRING "FreeRTOS port name" FORCE)
 if(NOT TARGET freertos_kernel)
     add_subdirectory(
-        "${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty/freertos-kernel"
-        "${CMAKE_BINARY_DIR}/component/thirdparty/freertos-kernel"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../freertos-kernel_config/freertos-kernel"
+        "${CMAKE_BINARY_DIR}/component/freertos-kernel_config/freertos-kernel"
     )
 endif()
 
@@ -92,7 +92,7 @@ add_subdirectory(bflb_mbedtls_port)
 add_subdirectory(bflb_mbedtls_hw_acc)
 
 # -------------------------------------------------------------------------
-# Upstream Mbed TLS v3.6.4 (component/thirdparty/mbedtls, clean upstream).
+# Upstream Mbed TLS v3.6.4 (component/mbedtls_config/mbedtls, clean upstream).
 # Pulled here — not in component/thirdparty/CMakeLists.txt — because the
 # upstream sources are unbuildable without bflb_mbedtls_config /
 # _port / _hw_acc headers, and nothing outside the Bouffalo SDK consumes
@@ -138,7 +138,7 @@ include_directories("${CMAKE_CURRENT_LIST_DIR}/bflb_mbedtls_hw_acc")
 # Same story for the port header named by MBEDTLS_PLATFORM_STD_MEM_HDR.
 include_directories("${CMAKE_CURRENT_LIST_DIR}/bflb_mbedtls_port")
 
-add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../thirdparty/mbedtls"
+add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../mbedtls_config/mbedtls"
                  ${CMAKE_BINARY_DIR}/at_mbedtls_build
                  EXCLUDE_FROM_ALL)
 

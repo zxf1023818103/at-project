@@ -1,4 +1,4 @@
-# coremqtt_config — FreeRTOS coreMQTT (component/thirdparty/coremqtt, v5.0.2) built as
+# coremqtt_config — FreeRTOS coreMQTT (component/coremqtt_config/coremqtt, v5.0.2) built as
 # a cross-platform static lib, with the project's core_mqtt_config.h (this dir) on the
 # include path. Mirrors the wolfssl_config / ngtcp2_config arrangement: the third-party
 # source stays untouched under thirdparty/, the build glue + config live here.
@@ -6,7 +6,7 @@
 # Cross-platform: no chip gate. coreMQTT is transport-agnostic — the consumer supplies
 # the TransportInterface_t (send/recv fn ptrs) and the MQTTGetCurrentTimeFunc_t — so the
 # library itself has no platform dependency. EXCLUDE_FROM_ALL until a consumer links it.
-set(_mqtt "${CMAKE_SOURCE_DIR}/component/thirdparty/coremqtt/source")
+set(_mqtt "${CMAKE_SOURCE_DIR}/component/coremqtt_config/coremqtt/source")
 
 add_library(coremqtt_config STATIC EXCLUDE_FROM_ALL
     "${_mqtt}/core_mqtt.c"

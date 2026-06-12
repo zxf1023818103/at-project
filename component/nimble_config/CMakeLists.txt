@@ -15,12 +15,12 @@
 # tc_aes_encrypt/uECC_* for the upstream tinycrypt CMAC), so the final image lists
 # both inside one --start-group (app_km4's cross_refs LINK_GROUP).
 #
-# Upstream is the submodule component/thirdparty/nimble (pinned nimble_1_9_0_tag).
+# Upstream is the submodule component/nimble_config/nimble (pinned nimble_1_9_0_tag).
 # Cross-platform: no chip gate — built wherever nimble_config is linked
 # (EXCLUDE_FROM_ALL-style: only the consuming port pulls it). It needs FreeRTOS +
 # the wolfCrypt build (wolfssl_config) on whatever platform builds it.
 
-set(_nb "${CMAKE_SOURCE_DIR}/component/thirdparty/nimble")
+set(_nb "${CMAKE_SOURCE_DIR}/component/nimble_config/nimble")
 
 add_library(nimble_config STATIC EXCLUDE_FROM_ALL
     "${CMAKE_CURRENT_SOURCE_DIR}/nimble_app.c"         # amebad_nimble_start() + host task (printf)

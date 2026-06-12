@@ -8,7 +8,7 @@ ROOT="$(cd "$HERE/../../.." && pwd)"
 
 WROOT="$ROOT/build/host/wolfssl/_install"
 NG="$ROOT/build/host/ngtcp2"
-NGSRC="$ROOT/component/thirdparty/ngtcp2"
+NGSRC="$ROOT/component/ngtcp2_config/ngtcp2"
 
 # Throwaway self-signed ECDSA P-256 cert for the perf server (the chip runs
 # SSL_VERIFY_NONE, so any self-signed cert works — not a real secret). Generated

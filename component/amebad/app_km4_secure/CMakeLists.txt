@@ -31,7 +31,7 @@ endif()
 include(ExternalProject)
 
 # ---- Inputs (all absolute) ------------------------------------------------
-set(_tfm_src       "${CMAKE_SOURCE_DIR}/component/thirdparty/trusted-firmware-m")
+set(_tfm_src       "${CMAKE_SOURCE_DIR}/component/trusted-firmware-m_config/trusted-firmware-m")
 set(_tfm_platform  "${CMAKE_CURRENT_SOURCE_DIR}/platform/rtl8721d")
 set(_tfm_toolchain "${_tfm_src}/toolchain_GNUARM.cmake")
 
