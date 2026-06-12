@@ -98,7 +98,7 @@ add_dependencies(target_img2_km4 amebad_km4_img2_ld)
 
 # BLE images on top of component/amebad/hci (no btgap.a):
 #   AMEBAD_ENABLE_HCI    — raw HCI / DTM bridge test image (auto-enter bridge).
-#   AMEBAD_ENABLE_NIMBLE — Apache NimBLE host (LE/GATT/Mesh/coex), via component/nimble.
+#   AMEBAD_ENABLE_NIMBLE — Apache NimBLE host (LE/GATT/Mesh/coex), via component/amebad/nimble_port.
 # Both ride the same controller bring-up (amebad_hci + firmware blob; the newlib
 # syscalls come from amebad_syscalls, linked unconditionally below). NimBLE
 # additionally links the `nimble` lib. Pick one. OFF by default.
@@ -123,7 +123,7 @@ if(AMEBAD_ENABLE_HCI OR AMEBAD_ENABLE_NIMBLE)
         "${_hci_fw_src}")
 endif()
 if(AMEBAD_ENABLE_NIMBLE)
-    set(_hci_grp ",amebad_hci,nimble")
+    set(_hci_grp ",amebad_hci,nimble,nimble_config")
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_NIMBLE)
 elseif(AMEBAD_ENABLE_HCI)
@@ -131,7 +131,7 @@ elseif(AMEBAD_ENABLE_HCI)
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_HCI)
 endif()
 
-# QUIC self-test (ngtcp2 + full wolfSSL TLS 1.3). The component/amebad/ngtcp2
+# QUIC self-test (ngtcp2 + full wolfSSL TLS 1.3). The component/ngtcp2_config
 # targets are only defined when AMEBAD_ENABLE_QUIC is ON (see component/amebad/
 # CMakeLists.txt), which also forces AMEBAD_WOLFSSL_TLS so amebad_wolfssl (already
 # in the link group) carries the TLS/QUIC layer. ngtcp2 + crypto join the group:
@@ -145,8 +145,8 @@ set(_quic_grp "")
 if(AMEBAD_ENABLE_QUIC)
     set(_diag_grp "")
     # The hand-tuned flat --start-group needs real archive names (CMake won't
-    # expand an INTERFACE aggregate like `ngtcp2-config` inside a LINK_GROUP).
-    # Normal consumers can link `ngtcp2-config` directly; this image lists the
+    # expand an INTERFACE aggregate like `ngtcp2_config` inside a LINK_GROUP).
+    # Normal consumers can link `ngtcp2_config` directly; this image lists the
     # members so they share the one cross_refs group with amebad_wolfssl.
     set(_quic_grp ",amebad_ngtcp2_crypto,ngtcp2_static")
     target_sources(target_img2_km4 PRIVATE
@@ -176,15 +176,15 @@ target_link_libraries(target_img2_km4 PRIVATE
     amebad_sdk_includes
     amebad_syscalls      # OBJECT lib: newlib retarget (_write/_read/_sbrk/...) force-included so its strong defs beat libc's ENOSYS stubs
     amebad_mbedtls_rom   # INTERFACE: ROM mbedTLS 2.4.0 headers + MBEDTLS_CONFIG_FILE (no archive)
-    # amebad_wolfssl is INSIDE the group: NimBLE's SM crypto (nimble, in the group)
-    # pulls wc_* (wc_ecc_*/wc_AesEncryptDirect) that the bench didn't, so wolfCrypt
-    # must rescan alongside nimble — wolfCrypt<->FreeRTOS<->nimble are mutually refed.
+    # amebad_wolfssl is INSIDE the group: NimBLE's SM crypto (nimble_config, in the
+    # group) pulls wc_* (wc_ecc_*/wc_AesEncryptDirect) that the bench didn't, so
+    # wolfCrypt must rescan alongside it — wolfCrypt<->FreeRTOS<->nimble are mutually refed.
     # LittleFS (amebad_lfs_port + lfs_config + littlefs) and its flash backend
     # (amebad_mbed) join the group: littlefs is a leaf needing libc (printf/strspn)
     # + libgcc (__popcountsi2), which follow the group, and as a transitive
     # EXCLUDE_FROM_ALL lib CMake would otherwise sink it past -lc/-lgcc and leave
     # those undefined. amebad_mbed (flash_api) is lfs_port's backend.
-    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km4,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,amebad_wlan,amebad_wps,amebad_wolfssl,amebad_lfs_port,amebad_mbed,lfs_config,littlefs${_diag_grp}${_hci_grp}${_quic_grp}>"
+    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km4,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,freertos_tcp_config,amebad_wlan,amebad_wps,amebad_wolfssl,amebad_lfs_port,amebad_mbed,lfs_config,littlefs${_diag_grp}${_hci_grp}${_quic_grp}>"
     m
     stdc++
     c

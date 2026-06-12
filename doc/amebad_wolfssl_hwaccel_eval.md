@@ -156,7 +156,7 @@ wolfSSL 用 **single-precision math + Cortex-M 内联汇编**专门打这块。
 
 ## 7. 实测结果(KM4 Cortex-M33 @200MHz,wolfSSL v5.9.1,-Os)
 
-已落地并实机跑通:`component/amebad/wolfssl/`(wolfCrypt lib + `user_settings.h`)+
+已落地并实机跑通:`component/wolfssl_config/`(wolfCrypt lib + `user_settings.h`)+
 `app_km4/wolfcrypt_bench.c`(SysTick 周期计时——**DWT CYCCNT 在本 NTZ image 读 0,
 和 HW crypto 引擎一样被 secure-gate**,故用 SysTick 派生 CPU 周期,实测基频 200.000 MHz)。
 三档构建(CMake 选项 `AMEBAD_WOLFSSL_SP_ASM` / `AMEBAD_WOLFSSL_ARMASM`):

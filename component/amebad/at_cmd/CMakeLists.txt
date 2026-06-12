@@ -36,7 +36,7 @@ target_include_directories(amebad_at_cmd BEFORE PRIVATE
 # commands (the only lwip-header consumers) are ATVER_2-only and not built here
 # (CONFIG_EXAMPLE_UART_ATCMD=0), so their lwip includes are #if'd out.
 target_include_directories(amebad_at_cmd SYSTEM PRIVATE
-    "${CMAKE_SOURCE_DIR}/component/amebad/netif_shim")  # netif_shim.h (vendored shim)
+    "${CMAKE_SOURCE_DIR}/component/amebad/freertos_tcp_port")  # netif_shim.h (vendored shim, now in the freertos_tcp port)
 
 target_link_libraries(amebad_at_cmd PUBLIC FreeRTOS)
 

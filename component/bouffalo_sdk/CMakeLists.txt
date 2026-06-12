@@ -13,29 +13,43 @@
 # FreeRTOS-Kernel (component/thirdparty/freertos-kernel, the bouffalo-port
 # branch on the zxf1023818103 fork). Configure it BEFORE add_subdirectory
 # so the kernel's CMakeLists can read FREERTOS_PORT + freertos_config.
+#
+# `freertos_config` is the cross-platform STATIC defined at the repo root
+# (component/freertos_config) — the portable FreeRTOS extensions + the bflb_mm heap
+# surface, shared with AmebaD. Bouffalo no longer creates its own INTERFACE; instead
+# it attaches the RISC-V-specific config (atomic_rtos.h path + the mtime / trap-handler
+# defs) onto that shared target, so the kernel's port sees them at compile time.
 if(NOT TARGET freertos_config)
-    if("${BOUFFALO_CHIP}" STREQUAL "bl602")
-        set(_mtime_base    "0x0200BFF8UL")
-        set(_mtimecmp_base "0x02004000UL")
-    else()
-        # bl616, bl616cl
-        set(_mtime_base    "0xE000BFF8UL")
-        set(_mtimecmp_base "0xE0004000UL")
-    endif()
-    add_library(freertos_config INTERFACE)
-    target_include_directories(freertos_config SYSTEM INTERFACE
-        "${CMAKE_CURRENT_SOURCE_DIR}/bflb_freertos_port/include"
-    )
-    # Shared cross-platform FreeRTOS config base (freertos_config_common.h),
-    # #included by bflb_freertos_port/include/FreeRTOSConfig.h. Co-travels with it.
-    target_link_libraries(freertos_config INTERFACE freertos_config_common)
-    target_compile_definitions(freertos_config INTERFACE
-        "configMTIME_BASE_ADDRESS=${_mtime_base}"
-        "configMTIMECMP_BASE_ADDRESS=${_mtimecmp_base}"
-        portasmHANDLE_INTERRUPT=interrupt_entry
-        default_interrupt_handler=freertos_risc_v_trap_handler
-    )
+    message(FATAL_ERROR
+        "freertos_config target missing — component/freertos_config must be added "
+        "(repo-root CMakeLists) before component (bouffalo_sdk)")
 endif()
+if("${BOUFFALO_CHIP}" STREQUAL "bl602")
+    set(_mtime_base    "0x0200BFF8UL")
+    set(_mtimecmp_base "0x02004000UL")
+else()
+    # bl616, bl616cl
+    set(_mtime_base    "0xE000BFF8UL")
+    set(_mtimecmp_base "0xE0004000UL")
+endif()
+target_include_directories(freertos_config SYSTEM PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/bflb_freertos_port/include"
+)
+target_compile_definitions(freertos_config PUBLIC
+    "configMTIME_BASE_ADDRESS=${_mtime_base}"
+    "configMTIMECMP_BASE_ADDRESS=${_mtimecmp_base}"
+    portasmHANDLE_INTERRUPT=interrupt_entry
+    default_interrupt_handler=freertos_risc_v_trap_handler
+)
+
+# FreeRTOS heap = the shared bflb_mm surface (freertos_heap_bflb_mm.c in
+# freertos_config), same as AmebaD. Point FREERTOS_HEAP at the empty stub so the
+# kernel compiles no heap_N.c (no heap_4 pvPortMalloc to collide with the shared
+# surface). board.c's ram_heap_init() already registers the OCRAM heap with bflb_mm,
+# which the surface's MM_FLAG_HEAP_ANY spans.
+set(FREERTOS_HEAP "${CMAKE_CURRENT_SOURCE_DIR}/../freertos_config/freertos_heap_none.c"
+    CACHE STRING "FreeRTOS heap model" FORCE)
+
 set(FREERTOS_PORT GCC_RISC_V CACHE STRING "FreeRTOS port name" FORCE)
 if(NOT TARGET freertos_kernel)
     add_subdirectory(
@@ -43,6 +57,16 @@ if(NOT TARGET freertos_kernel)
         "${CMAKE_BINARY_DIR}/component/thirdparty/freertos-kernel"
     )
 endif()
+
+# The shared freertos_config STATIC compiles its extension sources (heap surface,
+# hooks, backtrace) which #include FreeRTOS.h / portmacro.h. Feed it the kernel's
+# include dirs *as directory strings* (TARGET_PROPERTY, not a link) so no dependency
+# cycle forms with the kernel (freertos_kernel_include already links back to
+# freertos_config for FreeRTOSConfig.h). AmebaD gets the same via amebad_sdk_includes.
+target_include_directories(freertos_config SYSTEM PRIVATE
+    $<TARGET_PROPERTY:freertos_kernel_include,INTERFACE_INCLUDE_DIRECTORIES>
+    $<TARGET_PROPERTY:freertos_kernel_port,INTERFACE_INCLUDE_DIRECTORIES>
+)
 
 # bflb_autoconf must come first: its INTERFACE forces -include autoconf.h
 # into every TU that links it (transitively, via bflb_lhal below).

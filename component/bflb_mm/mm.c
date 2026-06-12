@@ -79,14 +79,8 @@ int mem_manager_init(void)
     /* Zero-initialize manager structure */
     memset(manager, 0, sizeof(mem_manager_t));
 
-    /* Register compile-time configured managers */
-#if IS_ENABLED(CONFIG_MM_TLSF_EN)
+    /* Register the TLSF allocator (the only backend). */
     mm_register_allocator(MM_ALLOCATOR_TLSF, &g_tlsf_allocator);
-#endif
-
-#if IS_ENABLED(CONFIG_MM_ENABLE_FREERTOS_HEAP5)
-    mm_register_allocator(MM_ALLOCATOR_HEAP5, &g_heap5_allocator);
-#endif
 
     /* Set manager status */
     manager->initialized = true;

@@ -17,7 +17,7 @@ __attribute__((weak)) void netif_set_link_up( void * n )   { ( void ) n; }
 __attribute__((weak)) void netif_set_link_down( void * n ) { ( void ) n; }
 
 /* lwip DHCP stop (status path, not ours). LwIP_GetMAC/IP/GW/MASK are provided
- * for-real in component/amebad/freertos_tcp/realtek_xnetif.c — they must return
+ * for-real in component/amebad/freertos_tcp_port/realtek_xnetif.c — they must return
  * valid pointers (the mgmt-frame handler dereferences LwIP_GetMAC's result). */
 __attribute__((weak)) void dhcp_stop( void * n )           { ( void ) n; }
 

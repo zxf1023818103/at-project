@@ -19,7 +19,7 @@
 #include "host/util/util.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
-#include "platform_stdlib_rtl8721d.h"   /* DiagPrintf */
+#include <stdio.h>   /* printf */
 
 extern void amebad_nimble_coex_init(void);
 extern void amebad_nimble_coex_set_conn(int connected); /* coex_amebad.c: BLE-active hint -> WiFi */
@@ -55,7 +55,7 @@ sample_chr_access(uint16_t conn, uint16_t attr, struct ble_gatt_access_ctxt *ctx
         uint16_t len = OS_MBUF_PKTLEN(ctxt->om);
         if (len >= 1) {
             os_mbuf_copydata(ctxt->om, 0, 1, &sample_val);
-            DiagPrintf("[NimBLE] characteristic written: 0x%02x\n\r", sample_val);
+            printf("[NimBLE] characteristic written: 0x%02x\n\r", sample_val);
         }
         return 0;
     }
@@ -84,7 +84,7 @@ nimble_gap_event(struct ble_gap_event *event, void *arg)
     (void)arg;
     switch (event->type) {
     case BLE_GAP_EVENT_CONNECT:
-        DiagPrintf("[NimBLE] connect %s (handle %d)\n\r",
+        printf("[NimBLE] connect %s (handle %d)\n\r",
                    event->connect.status == 0 ? "OK" : "FAIL", event->connect.conn_handle);
         if (event->connect.status == 0) {
             amebad_nimble_coex_set_conn(1);   /* BLE link up -> hint WiFi coex */
@@ -93,7 +93,7 @@ nimble_gap_event(struct ble_gap_event *event, void *arg)
         }
         return 0;
     case BLE_GAP_EVENT_DISCONNECT:
-        DiagPrintf("[NimBLE] disconnect (reason 0x%x) — re-advertising\n\r",
+        printf("[NimBLE] disconnect (reason 0x%x) — re-advertising\n\r",
                    event->disconnect.reason);
         amebad_nimble_coex_set_conn(0);       /* BLE idle -> hint WiFi coex */
         nimble_advertise();
@@ -125,7 +125,7 @@ nimble_advertise(void)
 
     rc = ble_gap_adv_set_fields(&fields);
     if (rc != 0) {
-        DiagPrintf("[NimBLE] adv_set_fields rc=%d\n\r", rc);
+        printf("[NimBLE] adv_set_fields rc=%d\n\r", rc);
         return;
     }
 
@@ -135,10 +135,10 @@ nimble_advertise(void)
     rc = ble_gap_adv_start(own_addr_type, NULL, BLE_HS_FOREVER,
                            &adv_params, nimble_gap_event, NULL);
     if (rc != 0) {
-        DiagPrintf("[NimBLE] adv_start rc=%d\n\r", rc);
+        printf("[NimBLE] adv_start rc=%d\n\r", rc);
         return;
     }
-    DiagPrintf("[NimBLE] advertising as '%s'\n\r", name);
+    printf("[NimBLE] advertising as '%s'\n\r", name);
 }
 
 static void
@@ -147,28 +147,28 @@ nimble_on_sync(void)
     int rc;
     rc = ble_hs_util_ensure_addr(0);
     if (rc != 0) {
-        DiagPrintf("[NimBLE] ensure_addr rc=%d\n\r", rc);
+        printf("[NimBLE] ensure_addr rc=%d\n\r", rc);
     }
     rc = ble_hs_id_infer_auto(0, &own_addr_type);
     if (rc != 0) {
-        DiagPrintf("[NimBLE] infer_auto rc=%d\n\r", rc);
+        printf("[NimBLE] infer_auto rc=%d\n\r", rc);
         return;
     }
-    DiagPrintf("[NimBLE] host synced — controller ready\n\r");
+    printf("[NimBLE] host synced — controller ready\n\r");
     nimble_advertise();
 }
 
 static void
 nimble_on_reset(int reason)
 {
-    DiagPrintf("[NimBLE] host reset, reason=%d\n\r", reason);
+    printf("[NimBLE] host reset, reason=%d\n\r", reason);
 }
 
 static void
 nimble_host_task(void *param)
 {
     (void)param;
-    DiagPrintf("[NimBLE] host task: nimble_port_run()\n\r");
+    printf("[NimBLE] host task: nimble_port_run()\n\r");
     nimble_port_run();   /* runs the host eventq forever */
 }
 
@@ -181,11 +181,11 @@ amebad_nimble_start(void)
     amebad_nimble_sm_crypto_selftest();
 
     /* 1. controller up over our HCI (gnt_bt + trace + patch download + HCI reset) */
-    DiagPrintf("\n\r[NimBLE] controller bring-up (bt_dtm_bringup) ...\n\r");
+    printf("\n\r[NimBLE] controller bring-up (bt_dtm_bringup) ...\n\r");
     bt_dtm_bringup();
 
     /* 2. NimBLE port + sysinit (-> ble_transport_ll_init inits our H4 SM) */
-    DiagPrintf("[NimBLE] nimble_port_init ...\n\r");
+    printf("[NimBLE] nimble_port_init ...\n\r");
     nimble_port_init();
 
     /* 3. services: standard GAP/GATT + our sample service, set the device name */
@@ -196,7 +196,7 @@ amebad_nimble_start(void)
         rc = ble_gatts_add_svcs(gatt_svcs);
     }
     if (rc != 0) {
-        DiagPrintf("[NimBLE] gatt svc register rc=%d\n\r", rc);
+        printf("[NimBLE] gatt svc register rc=%d\n\r", rc);
     }
     ble_svc_gap_device_name_set(NIMBLE_DEV_NAME);
 
@@ -208,5 +208,5 @@ amebad_nimble_start(void)
     /* 4. HCI RX task + host task */
     nimble_amebad_transport_start_rx();
     nimble_port_freertos_init(nimble_host_task);
-    DiagPrintf("[NimBLE] host task created\n\r");
+    printf("[NimBLE] host task created\n\r");
 }

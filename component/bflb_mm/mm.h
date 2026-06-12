@@ -30,8 +30,7 @@ extern "C" {
  */
 typedef enum {
     MM_ALLOCATOR_INVALID = 0, ///< Invalid allocator
-    MM_ALLOCATOR_TLSF,        ///< TLSF allocator
-    MM_ALLOCATOR_HEAP5,       ///< FreeRTOS heap5 allocator
+    MM_ALLOCATOR_TLSF,        ///< TLSF allocator (the only backend)
 
     MM_ALLOCATOR_DEFAULT = MM_ALLOCATOR_TLSF, ///< Default allocator
     MM_ALLOCATOR_MAX                          ///< Maximum allocator count
@@ -444,8 +443,6 @@ size_t kmin_free_size_reset(void);
 
 /* TLSF allocator local declaration */
 extern const mm_allocator_t g_tlsf_allocator;
-/* Heap5 allocator local declaration */
-extern const mm_allocator_t g_heap5_allocator;
 
 /* Global manager instance - the only global variable */
 extern mem_manager_t g_mem_manager;

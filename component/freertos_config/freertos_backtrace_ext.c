@@ -42,9 +42,15 @@ volatile uint32_t * vTaskStackTOPAddr(void)
 
 uint32_t vTaskStackSize(void)
 {
+#if ( ( portSTACK_GROWTH > 0 ) || ( configRECORD_STACK_HIGH_ADDRESS == 1 ) )
 	TaskHandle_t pTask = xTaskGetCurrentTaskHandle();
-	
+
     return (((MinTCB_t *)pTask)->pxEndOfStack - ((MinTCB_t *)pTask)->pxStack + 1);
+#else
+    /* pxEndOfStack is only in the TCB when the stack-high address is recorded
+     * (AmebaD config). Without it the stack size isn't derivable here. */
+    return 0;
+#endif
 }
 
 char * vTaskName(void)

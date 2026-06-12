@@ -9,7 +9,7 @@
 # component/thirdparty/mbedtls), test/example/utilities, api/wifi, api/network,
 # mbed HAL (moved onto the wifi target, its only consumer). lwip is fully removed
 # (IP stack = FreeRTOS-Plus-TCP); the residual driver/netif ABI shim is
-# component/amebad/netif_shim/netif_shim.h.
+# component/amebad/freertos_tcp_port/netif_shim.h (target amebad_netif_shim).
 #
 # In-tree members (NOT out-of-tree): amebad_fwlib_headers (69 chip/HAL headers),
 # our freertos/config override, the upstream freertos-kernel headers, shared
@@ -32,7 +32,7 @@ if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
     # KM0 runs the upstream ARMv6-M CM0 port (matches the SDK LP port; the native
     # ARMv8-M CM23_NTZ port faults on scheduler start because it resets MSP from
     # KM0 image2's VTOR[0], which is not a valid stack top — see
-    # component/amebad/freertos/CMakeLists.txt). Must match the kernel's port so
+    # component/amebad/freertos_port/CMakeLists.txt). Must match the kernel's port so
     # portmacro.h (pulled in by FreeRTOS.h) is consistent everywhere.
     set(_kernel_port    "GCC/ARM_CM0")
 elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
@@ -126,9 +126,9 @@ target_include_directories(amebad_sdk_includes SYSTEM INTERFACE
     "${_kernel}/portable/${_kernel_port}"
     # OS abstraction headers now live with their owning components, not in the
     # sdk_headers mirror: freertos glue headers (freertos_service/pmu/heap5_config/
-    # backtrace_ext.h) with freertos_glue, osdep headers (osdep_service/
+    # backtrace_ext.h) with freertos_port, osdep headers (osdep_service/
     # psram_reserve/device_lock/tcm_heap.h) with osdep.
-    "${CMAKE_SOURCE_DIR}/component/amebad/freertos_glue"
+    "${CMAKE_SOURCE_DIR}/component/amebad/freertos_port"
     "${CMAKE_SOURCE_DIR}/component/amebad/osdep"
     # SoC-level. monitor (shell/monitor_rom/rtl_trace.h) headers live here;
     # xmodem (xmodem_*.h) + swlib-string (strproc/memproc/printf/diag...) + CMSIS

@@ -18,7 +18,7 @@
  * signatures — rltk_wlan_set_netif_info / rltk_wlan_send / rltk_wlan_recv /
  * netif_rx / netif_is_valid_IP / netif_get_hwaddr / netif_*_sleep_processing — but
  * the stack work is delegated to the FreeRTOS+TCP NetworkInterface
- * (component/amebad/freertos_tcp/realtek_netif.c) via the amebad_tcp_* helpers
+ * (component/amebad/freertos_tcp_port/realtek_netif.c) via the amebad_tcp_* helpers
  * below. No lwIP types are referenced here. The TX/RX skb copy is driver-only and
  * now compiles unconditionally (it never depended on the IP stack).
  *

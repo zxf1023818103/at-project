@@ -8,7 +8,7 @@ FreeRTOS+TCP)与 **加密吞吐**(SSL/wolfCrypt v5.9.1)。两者都是 driver-on
 
 ## 1. 网络吞吐(TCP / UDP,iperf2)
 
-- **栈**:FreeRTOS-Plus-TCP V4.0.0(替 lwip),`component/amebad/freertos_tcp/`;Realtek 闭源
+- **栈**:FreeRTOS-Plus-TCP V4.0.0(替 lwip),`component/freertos_tcp_config` + `component/amebad/freertos_tcp_port`;Realtek 闭源
   `lib_wlan.a` ↔ 栈 copy-based 桥。测具:`app_km4/iperf_{client,server,udp_client,udp_server}.c`
   设备端自报 + host `iperf -s` / `iperf -u -s` 双读数一致。
 - **链路**:连 5 GHz AIoT(BSSID `9c:9d:7e:59:3e:84`,ch40),RSSI -41 dBm,RTT 4 ms,

@@ -320,13 +320,8 @@ void ram_heap_init(void)
 
     /* ocram heap init */
     heap_len = ((size_t)&__HeapLimit - (size_t)&__HeapBase);
-#ifdef CONFIG_MEM_HEAP5_EN
-    mm_register_heap(MM_HEAP_OCRAM_0, "OCRAM", MM_ALLOCATOR_HEAP5, &__HeapBase, heap_len);
-    mm_register_heap(MM_HEAP_WRAM_0, "WRAM", MM_ALLOCATOR_HEAP5, &_heap_wifi_start, (uintptr_t)&_heap_wifi_size);
-#else
     mm_register_heap(MM_HEAP_OCRAM_0, "OCRAM", MM_ALLOCATOR_TLSF, &__HeapBase, heap_len);
     mm_register_heap(MM_HEAP_WRAM_0, "WRAM", MM_ALLOCATOR_TLSF, &_heap_wifi_start, (uintptr_t)&_heap_wifi_size);
-#endif
 
 #ifdef CONFIG_PSRAM
     /* psram init */

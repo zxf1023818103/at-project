@@ -41,7 +41,7 @@ add_library(amebad_wifi STATIC EXCLUDE_FROM_ALL
     "${CMAKE_CURRENT_SOURCE_DIR}/wlan_network.c"
     # NB: lwip_netconf.c (LwIP_Init / xnetif / lwip DHCP) was deleted — the
     # FreeRTOS+TCP bring-up replaces lwip's IP role. xnetif[] is provided by
-    # component/amebad/freertos_tcp/realtek_xnetif.c, and wifi_conf.c's residual
+    # component/amebad/freertos_tcp_port/realtek_xnetif.c, and wifi_conf.c's residual
     # lwip references (netif_add / dhcp_* etc.) are weak-stubbed in app_km4
     # (freertos_tcp_compat.c) — not on the connect path we use.
 )

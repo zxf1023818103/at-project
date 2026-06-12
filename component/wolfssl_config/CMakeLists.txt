@@ -8,11 +8,9 @@
 #   ON  (Build B): + Thumb2 hand-asm for AES/SHA/ChaCha/Poly1305/Curve25519.
 # SP asm (sp_int.c + sp_cortexm.c) is ALWAYS on — it's the handshake headline.
 #
-# KM4-only, EXCLUDE_FROM_ALL until app_km4 links it.
-
-if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km4")
-    return()
-endif()
+# Cross-platform: no chip gate — any platform that links amebad_wolfssl builds it
+# (EXCLUDE_FROM_ALL until then). The SP Cortex-M asm + Thumb2 options below are
+# guarded by their own cache vars, so a non-Cortex-M consumer can turn them off.
 
 option(AMEBAD_WOLFSSL_ARMASM "wolfSSL: use Thumb2 asm for symmetric/hash" OFF)
 option(AMEBAD_WOLFSSL_SP_ASM "wolfSSL: SP Cortex-M asm for public-key (PK)" ON)

@@ -23,7 +23,7 @@ extern void shell_init_rom(u32 TBLSz, void *pTBL);
 extern void shell_init_ram(void);
 extern void shell_uart_irq_rom(void *Data);
 
-/* FreeRTOS+TCP Realtek glue (component/amebad/freertos_tcp) */
+/* FreeRTOS+TCP Realtek glue (component/amebad/freertos_tcp_port) */
 extern NetworkInterface_t *pxRealtek_FillInterfaceDescriptor(BaseType_t xEMACIndex,
                                                              NetworkInterface_t *pxInterface);
 extern void amebad_register_wlan_netif(int idx, unsigned char *mac);
@@ -334,7 +334,7 @@ static void wifi_bringup_thread( void *param )
 
 #ifdef AT_PROJECT_NIMBLE
     /* NimBLE host image: start the Apache NimBLE host (controller bring-up + host +
-     * advertising) on top of our HCI transport (component/nimble). Then FALL THROUGH
+     * advertising) on top of our HCI transport (component/amebad/nimble_port). Then FALL THROUGH
      * to the normal WiFi connect + FreeRTOS+TCP + iperf path so WiFi traffic and BLE
      * run concurrently — exercising WiFi/BT coex (P5). amebad_nimble_start() spawns
      * its own host/RX tasks and returns. */

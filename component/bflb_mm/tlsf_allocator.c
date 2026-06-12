@@ -10,8 +10,8 @@
  * Copyright (c) 2025 Bouffalo Lab
  */
 
-#include "../mm.h" /* Include framework header for all type definitions */
-#include "../mm_config.h"
+#include "mm.h" /* Include framework header for all type definitions */
+#include "mm_config.h"
 #include "tlsf.h"
 #include <string.h>
 

@@ -43,7 +43,7 @@ One function-call change in our NimBLE SM-crypto glue flips boot↔hang by chang
 code is linked ahead of `app_start`:
 
 ```c
-/* component/nimble/wolfcrypt_sm_glue.c, uECC_make_key() */
+/* component/amebad/nimble_port/wolfcrypt_sm_glue.c, uECC_make_key() */
 
 /* BOOTS — app_start @ 0x0e062c18 */
 rc = mp_to_unsigned_bin_len(key->pubkey.x, p_public_key,      32);

@@ -11,7 +11,8 @@
  */
 #include "FreeRTOS.h"
 #include "task.h"
-#include "diag.h"
+#include <stdio.h>   /* printf — on AmebaD KM0 (no libc) it's aliased to the ROM
+                      * DiagPrintfD in app_km0/rlx8721d_img2_romalias.ld */
 
 /* Each hook is gated on the config option that makes the kernel reference it,
  * so this one file is correct for both cores (KM0 inc_lp and KM4 inc_hp differ —
@@ -38,7 +39,7 @@ void vApplicationStackOverflowHook( TaskHandle_t xTask, char *pcTaskName )
 {
 	( void ) xTask;
 
-	DiagPrintf( "\n\r[%s] STACK OVERFLOW - TaskName(%s)\n\r", __FUNCTION__, pcTaskName );
+	printf( "\n\r[%s] STACK OVERFLOW - TaskName(%s)\n\r", __FUNCTION__, pcTaskName );
 	for( ;; )
 	{
 	}
@@ -53,7 +54,7 @@ void vApplicationStackOverflowHook( TaskHandle_t xTask, char *pcTaskName )
  */
 void vApplicationMallocFailedHook( void )
 {
-	DiagPrintf( "\n\r[%s] Malloc failed [free heap size: %d]\n\r", __FUNCTION__, xPortGetFreeHeapSize() );
+	printf( "\n\r[%s] Malloc failed [free heap size: %d]\n\r", __FUNCTION__, xPortGetFreeHeapSize() );
 	taskDISABLE_INTERRUPTS();
 	for( ;; )
 	{

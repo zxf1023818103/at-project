@@ -24,8 +24,8 @@ extern "C" {
 /**
  * @brief Number of supported memory allocators
  *
- * Defines the maximum number of allocators supported by the system,
- * including TLSF, FreeRTOS heap5, etc.
+ * Defines the maximum number of allocators supported by the system
+ * (TLSF is the only backend today).
  */
 #ifndef CONFIG_MM_ALLOCATOR_COUNT
 #define CONFIG_MM_ALLOCATOR_COUNT 4
@@ -94,27 +94,9 @@ extern "C" {
 #define CONFIG_MM_ENABLE_MIN_FREE_TRACKING 0
 #endif
 
-/* ======================================================================== */
-/** @brief Allocator selection configuration */
-/* ======================================================================== */
-
-/**
- * @brief Enable TLSF allocator
- *
- * TLSF (Two-Level Segregate Fit) efficient memory allocator.
- */
-#ifndef CONFIG_MM_TLSF_EN
-#define CONFIG_MM_TLSF_EN 1
-#endif
-
-/**
- * @brief Enable FreeRTOS heap5 allocator
- *
- * Compatible with FreeRTOS heap5 memory allocator.
- */
-#ifndef CONFIG_MM_ENABLE_FREERTOS_HEAP5
-#define CONFIG_MM_ENABLE_FREERTOS_HEAP5 0
-#endif
+/* The only allocator backend is TLSF (Two-Level Segregated Fit); it is always
+ * registered by mem_manager_init(). The optional FreeRTOS heap_5 backend was
+ * removed (unused), so there is no allocator-selection config here anymore. */
 
 /* ======================================================================== */
 /** @brief Internal macros */

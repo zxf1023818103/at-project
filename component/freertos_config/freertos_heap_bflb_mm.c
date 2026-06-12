@@ -14,7 +14,8 @@
  * Also provides a STRONG mm_lock_save/mm_unlock_restore (bflb_mm's are weak): a
  * pre-scheduler-safe critical section via the Cortex-M PRIMASK.
  */
-#include <basic_types.h>
+#include <stdint.h>
+#include <stddef.h>
 #include "FreeRTOS.h"
 #include "task.h"
 #include <string.h>

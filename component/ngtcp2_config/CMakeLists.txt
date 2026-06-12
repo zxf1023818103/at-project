@@ -1,6 +1,6 @@
-# amebad ngtcp2-config — QUIC transport for KM4 (Cortex-M33), bare-metal.
+# ngtcp2_config — QUIC transport for KM4 (Cortex-M33), bare-metal.
 #
-# Exposes one aggregate link target, `ngtcp2-config`: downstream code links it to
+# Exposes one aggregate link target, `ngtcp2_config`: downstream code links it to
 # pull the whole QUIC dependency chain (ngtcp2_static core + the wolfSSL crypto
 # helper amebad_ngtcp2_crypto + the wolfSSL TLS/QUIC lib) without naming the
 # individual archives.
@@ -23,11 +23,8 @@
 #   - default ngtcp2_mem -> malloc/free/calloc/realloc + bare htonl/htons come
 #     from amebad_syscalls, resolved at the final KM4 image link.
 #
-# KM4-only. Gated by the caller: add_subdirectory'd only when AMEBAD_ENABLE_QUIC.
-
-if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km4")
-    return()
-endif()
+# Cross-platform: no chip gate — the QUIC stack builds wherever ngtcp2_config /
+# amebad_ngtcp2_crypto are linked (EXCLUDE_FROM_ALL until then).
 
 set(_ng "${CMAKE_SOURCE_DIR}/component/thirdparty/ngtcp2")
 
@@ -85,5 +82,5 @@ target_compile_options(amebad_ngtcp2_crypto PRIVATE -w)
 # interface transitively brings in everything a QUIC consumer needs (ngtcp2.h,
 # ngtcp2_crypto.h, the wolfSSL TLS/QUIC API). ngtcp2_static is listed explicitly
 # too so it is named inside a consumer's --start-group (cross-archive QUIC refs).
-add_library(ngtcp2-config INTERFACE)
-target_link_libraries(ngtcp2-config INTERFACE amebad_ngtcp2_crypto ngtcp2_static)
+add_library(ngtcp2_config INTERFACE)
+target_link_libraries(ngtcp2_config INTERFACE amebad_ngtcp2_crypto ngtcp2_static)

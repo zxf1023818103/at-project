@@ -1,6 +1,6 @@
 /*
  * wolfcrypt_sm_glue.c — back NimBLE 1.9.0's Security Manager crypto with wolfCrypt
- * (component/amebad/wolfssl, v5.9.1) instead of the bundled tinycrypt.
+ * (component/wolfssl_config, v5.9.1) instead of the bundled tinycrypt.
  *
  * NimBLE 1.9.0's ble_sm_alg.c hard-codes the tinycrypt API (no BLE_CRYPTO_STACK_*
  * switch), so rather than patch upstream we re-implement the small primitive surface
@@ -13,7 +13,7 @@
  *   ECDH P-256             uECC_make_key / uECC_shared_secret / uECC_valid_public_key
  *                          / uECC_set_rng -> wc_ecc_*.
  *
- * The matching upstream sources are dropped from the build (component/nimble
+ * The matching upstream sources are dropped from the build (component/amebad/nimble_port
  * CMakeLists REMOVE_ITEM): ext/tinycrypt/src/{aes_encrypt,ecc,ecc_dh,ecc_dsa,
  * ecc_platform_specific}.c. cmac_mode.c / utils.c / aes_decrypt.c stay.
  *
@@ -55,6 +55,7 @@
 #include <wolfssl/wolfcrypt/aes.h>
 #include <wolfssl/wolfcrypt/ecc.h>
 #include <wolfssl/wolfcrypt/random.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "tinycrypt/aes.h"        /* struct tc_aes_key_sched_struct, TCAesKeySched_t */
@@ -64,11 +65,10 @@
 
 extern void *pvPortMalloc(unsigned int);
 extern void  vPortFree(void *);
-extern unsigned int DiagPrintf(const char *fmt, ...);
 
 /* 1 = full wolfCrypt SM (AES/CMAC + ECDH P-256), tinycrypt ecc*.c dropped (shipped).
  * 0 = AES/CMAC on wolfCrypt only, ECDH stays on tinycrypt (keep tinycrypt ecc*.c in
- *     the component/nimble CMakeLists build). */
+ *     the component/amebad/nimble_port CMakeLists build). */
 #define SM_ECC_WOLF 1
 
 /* ---------------------------------------------------------------- AES (ECB) -- */
@@ -364,7 +364,7 @@ amebad_nimble_sm_crypto_selftest(void)
         int ok = tc_aes128_set_encrypt_key(&s, key) == TC_CRYPTO_SUCCESS &&
                  tc_aes_encrypt(out, pt, &s) == TC_CRYPTO_SUCCESS &&
                  eq(out, ct, 16);
-        DiagPrintf("[SM-KAT] AES-128-ECB (wolfCrypt): %s\n\r", ok ? "PASS" : "FAIL");
+        printf("[SM-KAT] AES-128-ECB (wolfCrypt): %s\n\r", ok ? "PASS" : "FAIL");
         pass &= ok;
     }
 
@@ -389,7 +389,7 @@ amebad_nimble_sm_crypto_selftest(void)
         ok &= tc_cmac_setup(&state, key, &sched) != TC_CRYPTO_FAIL &&
               tc_cmac_update(&state, m16, 16) != TC_CRYPTO_FAIL &&
               tc_cmac_final(tag, &state) != TC_CRYPTO_FAIL && eq(tag, t16, 16);
-        DiagPrintf("[SM-KAT] AES-CMAC (RFC4493): %s\n\r", ok ? "PASS" : "FAIL");
+        printf("[SM-KAT] AES-CMAC (RFC4493): %s\n\r", ok ? "PASS" : "FAIL");
         pass &= ok;
     }
 
@@ -407,14 +407,14 @@ amebad_nimble_sm_crypto_selftest(void)
                  uECC_shared_secret(kPubA, privC, s1, (uECC_Curve)0) == TC_CRYPTO_SUCCESS &&
                  uECC_shared_secret(pubC, kPrivA, s2, (uECC_Curve)0) == TC_CRYPTO_SUCCESS &&
                  eq(s1, s2, 32);
-        DiagPrintf("[SM-KAT] ECDH P-256 symmetry: %s\n\r", ok_sym ? "PASS" : "FAIL");
+        printf("[SM-KAT] ECDH P-256 symmetry: %s\n\r", ok_sym ? "PASS" : "FAIL");
 
         /* (b) BT spec sample DHKey (anchors output format/curve to an external KAT) */
         ok_spec = uECC_shared_secret(kPubB, kPrivA, s1, (uECC_Curve)0) == TC_CRYPTO_SUCCESS &&
                   eq(s1, kDHKey, 32) &&
                   uECC_shared_secret(kPubA, kPrivB, s2, (uECC_Curve)0) == TC_CRYPTO_SUCCESS &&
                   eq(s2, kDHKey, 32);
-        DiagPrintf("[SM-KAT] ECDH P-256 spec DHKey: %s\n\r", ok_spec ? "PASS" : "FAIL");
+        printf("[SM-KAT] ECDH P-256 spec DHKey: %s\n\r", ok_spec ? "PASS" : "FAIL");
 
         /* (c) public-key validation: good accepted, tampered rejected */
         {
@@ -424,12 +424,12 @@ amebad_nimble_sm_crypto_selftest(void)
             ok_valid = uECC_valid_public_key(kPubA, (uECC_Curve)0) >= 0 &&
                        uECC_valid_public_key(bad, (uECC_Curve)0) < 0;
         }
-        DiagPrintf("[SM-KAT] P-256 pubkey validate: %s\n\r", ok_valid ? "PASS" : "FAIL");
+        printf("[SM-KAT] P-256 pubkey validate: %s\n\r", ok_valid ? "PASS" : "FAIL");
 
         uECC_set_rng(saved);              /* restore (NimBLE sets the real one) */
         pass &= ok_sym & ok_spec & ok_valid;
     }
 #endif /* SM_ECC_WOLF */
 
-    DiagPrintf("[SM-KAT] wolfCrypt SM crypto: %s\n\r", pass ? "ALL PASS" : "FAILURES ABOVE");
+    printf("[SM-KAT] wolfCrypt SM crypto: %s\n\r", pass ? "ALL PASS" : "FAILURES ABOVE");
 }

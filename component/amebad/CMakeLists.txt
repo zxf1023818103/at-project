@@ -26,13 +26,13 @@
 #                    (rtl8721dlp_* — KM0 flash/intf/pinmap/sleep), usrcfg_hp
 #                    (rtl8721dhp_* — KM4 trustzone/interface).
 #
-#   freertos         Upstream FreeRTOS-Kernel V10.6.2 from the
-#                    component/thirdparty/freertos-kernel submodule (shared with
-#                    Bouffalo), via add_subdirectory + a per-core ARMv8-M GCC
-#                    port. Target `FreeRTOS` (ALIAS of freertos_kernel).
-#   freertos_glue    AmebaD SDK FreeRTOS extensions (freertos_backtrace_ext /
-#                    freertos_heap5_config / freertos_hooks), vendored here and
-#                    kept out of the kernel lib. One chip-gated CMakeLists builds
+#   freertos_port    The AmebaD FreeRTOS layer in one folder: (1) the upstream
+#                    FreeRTOS-Kernel V10.6.2 from the component/thirdparty/
+#                    freertos-kernel submodule (shared with Bouffalo), via
+#                    add_subdirectory + a per-core ARMv8-M GCC port — target
+#                    `FreeRTOS` (ALIAS of freertos_kernel); and (2) the SDK
+#                    FreeRTOS extensions / glue (freertos_backtrace_ext /
+#                    freertos_heap5_config / freertos_hooks), built per-core into
 #                    amebad_freertos_glue_km0 or _km4 from the same sources.
 #   monitor          AmebaD debug monitor / shell (shell_init_ram), vendored
 #                    from SDK app/monitor. One chip-gated CMakeLists builds
@@ -86,15 +86,17 @@ add_subdirectory(dlist)              # header-only doubly-linked-list (amebad_dl
 add_subdirectory(platform_stdlib)    # header-only libc-retarget header (amebad_platform_stdlib: platform_stdlib_rtl8721d.h); linked by sdk_includes below (must precede sdk_headers)
 add_subdirectory(sdk_headers)        # defines amebad_sdk_includes (aggregates fwlib_headers/xmodem/string_rom/cmsis_rom/dlist/platform_stdlib + SDK include paths); consumed by the ram HAL libs (forward ref) and app/boot
 add_subdirectory(usrcfg)             # chip-gated: usrcfg_common (+ _lp on KM0 / _hp on KM4)
-add_subdirectory(freertos)           # upstream FreeRTOS kernel -> target `FreeRTOS`
-add_subdirectory(freertos_glue)      # SDK FreeRTOS extensions, chip-gated (after freertos)
+add_subdirectory(freertos_port)      # upstream FreeRTOS kernel (-> `FreeRTOS`) + SDK glue (amebad_freertos_glue_km{0,4}), chip-gated
 add_subdirectory(monitor)            # chip-gated (image2 shell/monitor)
 add_subdirectory(osdep)              # KM4-gated internally (osdep/os abstraction)
 add_subdirectory(mbed)               # KM4-gated: flattened mbed HAL (amebad_mbed: flash_api.c + headers), consumed by wifi
 add_subdirectory(at_cmd)             # KM4-gated internally (basic AT log/command service)
 add_subdirectory(mbedtls_rom)        # KM4-gated: headers to call ROM mbedTLS 2.4.0 as SW (no build)
-add_subdirectory(netif_shim)         # KM4-gated: residual driver<->netif ABI shim (lwip removed)
-add_subdirectory(freertos_tcp)       # KM4-gated: FreeRTOS-Plus-TCP V4.0.0 (DHCP bring-up, EXCLUDE)
+# FreeRTOS+TCP: portable core stack + config (top-level component/freertos_tcp_config,
+# out-of-tree add) then the AmebaD Realtek NetworkInterface port (in-tree). The port
+# also now owns the netif_shim ABI header (INTERFACE target amebad_netif_shim).
+add_subdirectory("${CMAKE_SOURCE_DIR}/component/freertos_tcp_config" "${CMAKE_CURRENT_BINARY_DIR}/freertos_tcp_config")  # KM4-gated: FreeRTOS-Plus-TCP V4.0.0 core stack + FreeRTOSIPConfig.h
+add_subdirectory(freertos_tcp_port)  # KM4-gated: Realtek WiFi <-> stack bridge (`amebad_freertos_tcp`, DHCP bring-up, EXCLUDE)
 add_subdirectory(pmu)                # chip-gated: prebuilt PMC lib (lib_pmc_lp/hp.a) + pmu headers
 add_subdirectory(wlan)               # KM4-gated: host WiFi driver libs (lib_wlan*.a) + API headers
 add_subdirectory(wpa_supplicant)     # KM4-gated: supplicant cores (lib_wps.a + lib_eap.a) + config/glue source + headers
@@ -112,10 +114,18 @@ endif()
 # call). Declared here so both subdirs see it.
 option(AMEBAD_VFS_SELFTEST "Build + run the POSIX-fd VFS self-test (fopen/open/socket over LFS+sockets)" OFF)
 
-add_subdirectory(wolfssl)            # KM4-gated: wolfCrypt (v5.9.1) bare-metal lib for on-target crypto benchmark (+TLS1.3/QUIC when AMEBAD_WOLFSSL_TLS)
-add_subdirectory(ngtcp2-config)      # KM4-gated: ngtcp2 QUIC + crypto/wolfssl (only built when AMEBAD_ENABLE_QUIC); exposes the `ngtcp2-config` aggregate link target
+# wolfSSL + ngtcp2 config components now live at the top level (component/wolfssl_config,
+# component/ngtcp2_config) so they can be shared; still wired from here (KM4-gated, and the
+# AMEBAD_WOLFSSL_TLS option above must be set before wolfssl_config reads it). Out-of-tree
+# add_subdirectory needs an explicit binary dir.
+add_subdirectory("${CMAKE_SOURCE_DIR}/component/wolfssl_config" "${CMAKE_CURRENT_BINARY_DIR}/wolfssl_config")   # KM4-gated: wolfCrypt (v5.9.1) bare-metal lib for on-target crypto benchmark (+TLS1.3/QUIC when AMEBAD_WOLFSSL_TLS)
+add_subdirectory("${CMAKE_SOURCE_DIR}/component/ngtcp2_config" "${CMAKE_CURRENT_BINARY_DIR}/ngtcp2_config")     # KM4-gated: ngtcp2 QUIC + crypto/wolfssl (only built when AMEBAD_ENABLE_QUIC); exposes the `ngtcp2_config` aggregate link target
 add_subdirectory(build_info)         # INTERFACE: UTS_VERSION banner -D (replaces the vendored build_info.h shim)
 add_subdirectory(hci)                # KM4-gated: BLE controller bring-up + HCI transport + bridge (no btgap.a)
+# NimBLE: config + header surface (top-level component/nimble_config, out-of-tree
+# add) then the AmebaD port (in-tree, KM4-gated; links nimble_config + amebad_hci).
+add_subdirectory("${CMAKE_SOURCE_DIR}/component/nimble_config" "${CMAKE_CURRENT_BINARY_DIR}/nimble_config")   # INTERFACE: syscfg + upstream NimBLE include surface
+add_subdirectory(nimble_port)        # KM4-gated: NimBLE host stack (`nimble` lib) on amebad_hci; SM crypto on wolfCrypt
 add_subdirectory(syscalls)           # KM4-gated: consolidated newlib syscall retarget (amebad_syscalls OBJECT lib)
 add_subdirectory(lfs-port)           # KM4-gated: AmebaD flash adapter for LittleFS (amebad_lfs_port; diskio over flash_api + mount)
 add_subdirectory(image_tool)         # defines amebad_make_{boot,image2}_all_bin*(...)
