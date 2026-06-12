@@ -11,7 +11,7 @@
 set(_http "${CMAKE_SOURCE_DIR}/component/corehttp_config/corehttp/source")
 set(_llhttp "${_http}/dependency/3rdparty/llhttp")
 
-add_library(corehttp_config STATIC EXCLUDE_FROM_ALL
+add_library(corehttp STATIC EXCLUDE_FROM_ALL
     "${_http}/core_http_client.c"
     "${_llhttp}/src/api.c"
     "${_llhttp}/src/http.c"
@@ -21,7 +21,7 @@ add_library(corehttp_config STATIC EXCLUDE_FROM_ALL
 # PUBLIC: core_http_client.h pulls core_http_config_defaults.h -> core_http_config.h, so
 # every consumer of <core_http_client.h> needs this dir on its path too. SYSTEM to keep
 # upstream's headers (and llhttp's) out of -Werror.
-target_include_directories(corehttp_config SYSTEM PUBLIC
+target_include_directories(corehttp SYSTEM PUBLIC
     "${_http}/include"               # -> <core_http_client.h>, *_defaults.h
     "${_llhttp}/include"             # -> <llhttp.h> (the bundled parser)
     "${_http}/interface"             # -> <transport_interface.h>
@@ -30,4 +30,8 @@ target_include_directories(corehttp_config SYSTEM PUBLIC
 
 # Vendor source (core_http_client.c + the bundled llhttp parser): silence warnings under
 # the SDK's strict -Wall/-Wextra/-Werror stack — same treatment as zlib / cjson / littlefs.
-target_compile_options(corehttp_config PRIVATE -w)
+target_compile_options(corehttp PRIVATE -w)
+
+# Umbrella INTERFACE (伞形): consumers link `corehttp_config` to get the coreHTTP lib.
+add_library(corehttp_config INTERFACE)
+target_link_libraries(corehttp_config INTERFACE corehttp)

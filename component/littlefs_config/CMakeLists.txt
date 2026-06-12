@@ -40,3 +40,8 @@ target_include_directories(lfs_config PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 # mutex (semphr.h) — header-only borrow, the kernel archive is in the image.
 target_link_libraries(lfs_config PUBLIC littlefs)
 target_link_libraries(lfs_config PRIVATE FreeRTOS)
+
+# Umbrella INTERFACE (伞形): consumers link `littlefs_config` to get the littlefs lib
+# + the lfs_config service layer.
+add_library(littlefs_config INTERFACE)
+target_link_libraries(littlefs_config INTERFACE littlefs lfs_config)

@@ -54,3 +54,8 @@ target_link_libraries(freertos_tcp_config PUBLIC
 target_compile_options(freertos_tcp_config PRIVATE
     -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function
     -Wno-sign-compare)
+
+# Umbrella INTERFACE (伞形): consumers link `freertos-plus-tcp_config` to get the
+# FreeRTOS+TCP stack lib.
+add_library(freertos-plus-tcp_config INTERFACE)
+target_link_libraries(freertos-plus-tcp_config INTERFACE freertos_tcp_config)

@@ -34,3 +34,7 @@ set_property(GLOBAL PROPERTY TARGET_SUPPORTS_SHARED_LIBS "${_at_tsl_save}")
 # zlib's source trips the SDK's strict -Wundef -Wall -Wextra -Werror stack (`#if
 # BIG_ENDIAN`, signedness comparisons, unused vars). Silence on the zlib target only.
 target_compile_options(zlibstatic PRIVATE -w)
+
+# Umbrella INTERFACE (伞形): consumers link `zlib_config` to get the static lib.
+add_library(zlib_config INTERFACE)
+target_link_libraries(zlib_config INTERFACE zlibstatic)

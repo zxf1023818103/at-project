@@ -26,3 +26,7 @@ add_subdirectory(cjson
 
 # Public headers live at the submodule root (cJSON.h, cJSON_Utils.h); upstream sets that
 # via target_include_directories on the cjson target.
+
+# Umbrella INTERFACE (伞形): consumers link `cjson_config` to get cJSON (+utils).
+add_library(cjson_config INTERFACE)
+target_link_libraries(cjson_config INTERFACE cjson cjson-utils)

@@ -8,7 +8,7 @@
 # library itself has no platform dependency. EXCLUDE_FROM_ALL until a consumer links it.
 set(_mqtt "${CMAKE_SOURCE_DIR}/component/coremqtt_config/coremqtt/source")
 
-add_library(coremqtt_config STATIC EXCLUDE_FROM_ALL
+add_library(coremqtt STATIC EXCLUDE_FROM_ALL
     "${_mqtt}/core_mqtt.c"
     "${_mqtt}/core_mqtt_state.c"
     "${_mqtt}/core_mqtt_serializer.c"
@@ -20,7 +20,7 @@ add_library(coremqtt_config STATIC EXCLUDE_FROM_ALL
 # PUBLIC: core_mqtt.h pulls core_mqtt_config_defaults.h -> core_mqtt_config.h, so every
 # consumer of <core_mqtt.h> needs this dir on its path too (same as wolfssl_config's
 # user_settings.h). SYSTEM to keep upstream's headers out of -Werror.
-target_include_directories(coremqtt_config SYSTEM PUBLIC
+target_include_directories(coremqtt SYSTEM PUBLIC
     "${_mqtt}/include"               # -> <core_mqtt.h>, <core_mqtt_serializer.h>, *_defaults.h
     "${_mqtt}/interface"             # -> <transport_interface.h>
     "${CMAKE_CURRENT_SOURCE_DIR}"    # -> "core_mqtt_config.h"
@@ -28,4 +28,8 @@ target_include_directories(coremqtt_config SYSTEM PUBLIC
 
 # Vendor source: silence its warnings under the SDK's strict -Wall/-Wextra/-Werror
 # stack — same treatment as zlib / cjson / littlefs / wolfssl_config.
-target_compile_options(coremqtt_config PRIVATE -w)
+target_compile_options(coremqtt PRIVATE -w)
+
+# Umbrella INTERFACE (伞形): consumers link `coremqtt_config` to get the coreMQTT lib.
+add_library(coremqtt_config INTERFACE)
+target_link_libraries(coremqtt_config INTERFACE coremqtt)

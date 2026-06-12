@@ -54,3 +54,8 @@ target_link_libraries(freertos_config PUBLIC freertos_config_common bflb_mm)
 
 target_compile_options(freertos_config PRIVATE
     -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function -Wno-sign-compare)
+
+# Umbrella INTERFACE (伞形): consumers link `freertos-kernel_config` to get the
+# freertos_config target (which PUBLIC-links freertos_config_common).
+add_library(freertos-kernel_config INTERFACE)
+target_link_libraries(freertos-kernel_config INTERFACE freertos_config)
