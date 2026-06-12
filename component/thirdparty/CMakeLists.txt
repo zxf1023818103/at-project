@@ -109,3 +109,8 @@ add_subdirectory(cjson
 # CMakeLists). The wrapper add_library lives in its own subdir (littlefs_lib) so this
 # umbrella stays add_subdirectory-only; it still produces the `littlefs` STATIC target.
 add_subdirectory(littlefs_lib)
+
+# coreMQTT / coreHTTP submodules are present here but NOT wired from this umbrella:
+# like wolfssl / nimble / ngtcp2, they carry config + glue, so their add_library
+# lives in a consuming component (component/<name>_config) added when a consumer
+# needs them — keeping this umbrella to the universal cross-platform basics.

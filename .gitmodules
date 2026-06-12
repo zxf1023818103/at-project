@@ -55,3 +55,9 @@
 [submodule "component/thirdparty/trusted-firmware-m"]
 	path = component/thirdparty/trusted-firmware-m
 	url = https://github.com/TrustedFirmware-M/trusted-firmware-m.git
+[submodule "component/thirdparty/coremqtt"]
+	path = component/thirdparty/coremqtt
+	url = https://github.com/FreeRTOS/coreMQTT.git
+[submodule "component/thirdparty/corehttp"]
+	path = component/thirdparty/corehttp
+	url = https://github.com/FreeRTOS/coreHTTP.git
