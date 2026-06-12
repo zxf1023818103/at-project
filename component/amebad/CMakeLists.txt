@@ -95,7 +95,7 @@ add_subdirectory(mbedtls_rom)        # KM4-gated: headers to call ROM mbedTLS 2.
 # FreeRTOS+TCP: portable core stack + config (top-level component/freertos_tcp_config,
 # out-of-tree add) then the AmebaD Realtek NetworkInterface port (in-tree). The port
 # also now owns the netif_shim ABI header (INTERFACE target amebad_netif_shim).
-add_subdirectory("${CMAKE_SOURCE_DIR}/component/freertos_tcp_config" "${CMAKE_CURRENT_BINARY_DIR}/freertos_tcp_config")  # KM4-gated: FreeRTOS-Plus-TCP V4.0.0 core stack + FreeRTOSIPConfig.h
+add_subdirectory("${CMAKE_SOURCE_DIR}/component/freertos-plus-tcp_config" "${CMAKE_CURRENT_BINARY_DIR}/freertos-plus-tcp_config")  # KM4-gated: FreeRTOS-Plus-TCP V4.0.0 core stack + FreeRTOSIPConfig.h (target: freertos_tcp_config)
 add_subdirectory(freertos_tcp_port)  # KM4-gated: Realtek WiFi <-> stack bridge (`amebad_freertos_tcp`, DHCP bring-up, EXCLUDE)
 add_subdirectory(pmu)                # chip-gated: prebuilt PMC lib (lib_pmc_lp/hp.a) + pmu headers
 add_subdirectory(wlan)               # KM4-gated: host WiFi driver libs (lib_wlan*.a) + API headers
