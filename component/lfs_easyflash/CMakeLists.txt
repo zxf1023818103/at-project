@@ -39,3 +39,10 @@ target_link_libraries(lfs_easyflash PUBLIC
     bflb_log
     freertos_kernel
 )
+
+# Register into the Bouffalo SDK umbrella aggregate from here (the component owns
+# "I'm part of bouffalo_sdk"), so component/CMakeLists.txt stays add_subdirectory-only.
+# bouffalo_sdk is defined before this subdir is added.
+if(TARGET bouffalo_sdk)
+    target_link_libraries(bouffalo_sdk INTERFACE lfs_easyflash)
+endif()

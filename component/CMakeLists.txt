@@ -61,44 +61,14 @@ enable_language(ASM)
 # bouffalo_sdk's umbrella can pull into its INTERFACE link list.
 add_subdirectory(bouffalo_sdk)
 
-# Auto-close the link group bouffalo_sdk's INTERFACE link options open.
-# `-Wl,--end-group` is smuggled in as a library entry so CMake appends
-# it to INTERFACE_LINK_LIBRARIES (which gets emitted AFTER the link
-# options block where --start-group sits, and after every archive the
-# umbrella transitively pulls). Putting it in target_link_options would
-# lump it together with --start-group before any libraries — wrong slot,
-# group never opens.
-#
-# The cmake_language(DEFER) call schedules the append for the very end
-# of the top-level project's CMakeLists.txt scope. Deferring to project
-# scope guarantees `-Wl,--end-group` is the very last entry in the list,
-# past every archive ld needs to resolve.
-#
-# Consumer side is a one-liner: target_link_libraries(<exe> PRIVATE bouffalo_sdk).
-# No finalize call needed.
-function(_bouffalo_sdk_close_link_group)
-    target_link_libraries(bouffalo_sdk INTERFACE -Wl,--end-group)
-endfunction()
-cmake_language(DEFER DIRECTORY ${CMAKE_SOURCE_DIR}
-    CALL _bouffalo_sdk_close_link_group)
-
-# ---------------------------------------------------------------------
-# lwip_dhcpd — Bouffalo's raw-DHCP-server-on-lwip app. Lives at this
-# level (not inside bouffalo_sdk) because it depends on the upstream
-# lwip target `lwipcore`, defined by the bflb_lwip_port block.
-# ---------------------------------------------------------------------
+# lwip_dhcpd / lfs_easyflash live at this level (not inside bouffalo_sdk) because they
+# depend on targets the bouffalo_sdk subtree defines (lwipcore / bflb_littlefs_port).
+# Each self-registers into the bouffalo_sdk umbrella aggregate from its OWN CMakeLists
+# (target_link_libraries(bouffalo_sdk INTERFACE <self>) there), and the --start/--end
+# link-group is owned by bouffalo_sdk/CMakeLists.txt — so this subtree umbrella stays
+# add_subdirectory-only.
 add_subdirectory(lwip_dhcpd)
-target_link_libraries(bouffalo_sdk INTERFACE lwip_dhcpd)
-
-# ---------------------------------------------------------------------
-# lfs_easyflash — EasyFlash KV API on top of upstream littlefs. Hard
-# prereqs (already registered by this point):
-#   littlefs            from thirdparty/
-#   bflb_littlefs_port  from bouffalo_sdk
-#   freertos_kernel + bflb_log
-# ---------------------------------------------------------------------
 add_subdirectory(lfs_easyflash)
-target_link_libraries(bouffalo_sdk INTERFACE lfs_easyflash)
 
 # ---------------------------------------------------------------------
 # lfs_image — host-side LittleFS image builder. Dual-mode CMakeLists:

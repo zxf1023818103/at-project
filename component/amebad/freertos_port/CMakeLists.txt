@@ -51,6 +51,25 @@ else()
 endif()
 
 set(_kernel_src "${CMAKE_SOURCE_DIR}/component/thirdparty/freertos-kernel")
+
+# Consolidated header INTERFACE for amebad_sdk_includes: the FreeRTOS glue headers
+# (this dir: freertos_service.h / freertos_heap5_config.h / backtrace_ext.h) + the
+# upstream kernel's FreeRTOS.h (include/) + portmacro.h (the per-core port dir).
+# Linked — not raw-pathed — by amebad_sdk_includes. An INTERFACE so it carries no
+# objects and no cycle (linking the freertos_kernel_port STATIC would cycle back via
+# freertos_config). The port PATH differs from the FREERTOS_PORT name above.
+if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
+    set(_kernel_port_path "GCC/ARM_CM0")
+else()
+    set(_kernel_port_path "GCC/ARM_CM33_NTZ/non_secure")
+endif()
+add_library(amebad_freertos_headers INTERFACE)
+target_include_directories(amebad_freertos_headers SYSTEM INTERFACE
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${_kernel_src}/include"
+    "${_kernel_src}/portable/${_kernel_port_path}"
+)
+
 if(NOT EXISTS "${_kernel_src}/tasks.c")
     message(FATAL_ERROR
         "FreeRTOS: '${_kernel_src}/tasks.c' missing — run "

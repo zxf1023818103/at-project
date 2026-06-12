@@ -23,6 +23,13 @@ if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     return()
 endif()
 
+# Project config headers (platform_opts / Kconfig autoconf / main.h + the base
+# FreeRTOSConfig path) this app owns. Exposed as an INTERFACE so amebad_sdk_includes
+# links it (per-core: only the matching app defines amebad_proj_config) instead of a
+# raw target_include_directories.
+add_library(amebad_proj_config INTERFACE)
+target_include_directories(amebad_proj_config SYSTEM INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
+
 foreach(_p
         "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_img2_is.ld"

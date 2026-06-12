@@ -15,6 +15,11 @@
 # the AT log framework running with the built-in log commands; richer AT+ sets
 # get wired in (with their HAL) later. KM4 only.
 
+# Header-only INTERFACE (before the chip gate so it exists on BOTH cores). Linked by
+# amebad_sdk_includes instead of a raw target_include_directories.
+add_library(amebad_at_cmd_headers INTERFACE)
+target_include_directories(amebad_at_cmd_headers SYSTEM INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
+
 if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     return()
 endif()

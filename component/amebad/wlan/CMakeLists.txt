@@ -30,6 +30,12 @@
 # Resync the .a from project_hp/asdk/lib/application when the
 # platform/ameba-rtos-d submodule pointer moves.
 
+# Header-only INTERFACE (before the chip gate so it exists on BOTH cores — autoconf.h
+# is needed KM0+KM4 even though the prebuilt driver libs are KM4-only). Linked by
+# amebad_sdk_includes instead of a raw target_include_directories.
+add_library(amebad_wlan_headers INTERFACE)
+target_include_directories(amebad_wlan_headers SYSTEM INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
+
 if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     return()
 endif()

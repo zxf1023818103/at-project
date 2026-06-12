@@ -132,22 +132,7 @@ add_subdirectory(nimble_port)        # KM4-gated: NimBLE host stack (`nimble` li
 # OBJECT libs, linked into the image by app_km4.
 add_subdirectory("${CMAKE_SOURCE_DIR}/component/syscall_config" "${CMAKE_CURRENT_BINARY_DIR}/syscall_config")  # KM4-gated consumer: cross-platform newlib retarget (`syscall_config` OBJECT lib)
 add_subdirectory(syscall_port)       # KM4-gated: AmebaD console backend (amebad_syscall_port OBJECT lib: console_loguart/lpuart) + vfs_lfs_mount via lfs_port
-add_subdirectory(lfs_port)           # KM4-gated: AmebaD flash adapter for LittleFS (amebad_lfs_port; diskio over flash_api + mount)
-
-# LittleFS self-tests live in the shared component/lfs_config (lfs_selftest.c is always
-# compiled there; lfs_port links lfs_config above). Attach the AmebaD-specific gates to
-# that target: the POSIX-fd VFS self-test needs FreeRTOS+TCP sockets + the syscall_config
-# header; the C++ std::filesystem self-test adds cpp_selftest.cpp (CXX, XIP-tail-pinned
-# via liblfs_config.a). Both compile-time only — the archive is in app_km4's link group.
-if(AMEBAD_VFS_SELFTEST)
-    target_compile_definitions(lfs_config PRIVATE AMEBAD_VFS_SELFTEST)
-    target_link_libraries(lfs_config PRIVATE amebad_freertos_tcp)
-    target_include_directories(lfs_config PRIVATE "${CMAKE_SOURCE_DIR}/component/syscall_config")
-endif()
-if(AMEBAD_CPP_SELFTEST)
-    target_compile_definitions(lfs_config PRIVATE AMEBAD_CPP_SELFTEST)
-    target_sources(lfs_config PRIVATE "${CMAKE_SOURCE_DIR}/component/lfs_config/cpp_selftest.cpp")
-endif()
+add_subdirectory(lfs_port)           # KM4-gated: AmebaD flash adapter for LittleFS (amebad_lfs_port; diskio over flash_api + mount) + attaches the AmebaD LittleFS self-test gates onto lfs_config
 
 add_subdirectory(image_tool)         # defines amebad_make_{boot,image2}_all_bin*(...)
                                      #   + amebad_make_image_all_bin() (-> target

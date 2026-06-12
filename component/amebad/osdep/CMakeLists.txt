@@ -6,6 +6,12 @@
 #   osdep_service.c      the generic OSDEP service layer
 #   psram_reserve.c      PSRAM heap reserve (g_Psram_heap_inited, ...)
 
+# Header-only INTERFACE (before the chip gate so it exists on BOTH cores —
+# amebad_sdk_includes carries osdep's headers KM0+KM4 even though the STATIC lib is
+# KM4-only). Linked by amebad_sdk_includes instead of a raw target_include_directories.
+add_library(amebad_osdep_headers INTERFACE)
+target_include_directories(amebad_osdep_headers SYSTEM INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
+
 if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     return()
 endif()

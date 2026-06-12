@@ -20,3 +20,19 @@ target_include_directories(amebad_lfs_port PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 # amebad_sdk_includes) are implementation detail.
 target_link_libraries(amebad_lfs_port PUBLIC  littlefs lfs_config)
 target_link_libraries(amebad_lfs_port PRIVATE amebad_sdk_includes amebad_mbed)
+
+# AmebaD LittleFS self-test gates, attached onto the shared lfs_config (which carries
+# lfs_selftest.c always + cpp_selftest.cpp on demand — see component/lfs_config). Kept
+# here, in the AmebaD lfs component, not in the component/amebad umbrella. Both are
+# compile-time only; the liblfs_config.a archive is already in app_km4's link group.
+#   VFS self-test: FreeRTOS+TCP sockets (amebad_freertos_tcp) + syscall_config's syscalls.h.
+#   C++ self-test: adds cpp_selftest.cpp (CXX, XIP-tail-pinned via liblfs_config.a).
+if(AMEBAD_VFS_SELFTEST)
+    target_compile_definitions(lfs_config PRIVATE AMEBAD_VFS_SELFTEST)
+    target_link_libraries(lfs_config PRIVATE amebad_freertos_tcp)
+    target_include_directories(lfs_config PRIVATE "${CMAKE_SOURCE_DIR}/component/syscall_config")
+endif()
+if(AMEBAD_CPP_SELFTEST)
+    target_compile_definitions(lfs_config PRIVATE AMEBAD_CPP_SELFTEST)
+    target_sources(lfs_config PRIVATE "${CMAKE_SOURCE_DIR}/component/lfs_config/cpp_selftest.cpp")
+endif()

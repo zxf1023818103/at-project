@@ -12,6 +12,11 @@
 # amebad_sdk_includes (app/monitor/include, swlib/string, os_dep, fwlib) via the
 # FreeRTOS link below.
 
+# Header-only INTERFACE (before the chip gate). Linked by amebad_sdk_includes instead
+# of a raw target_include_directories.
+add_library(amebad_monitor_headers INTERFACE)
+target_include_directories(amebad_monitor_headers SYSTEM INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
+
 if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
 elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
 else()

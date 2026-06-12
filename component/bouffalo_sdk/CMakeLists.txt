@@ -14,33 +14,17 @@
 # branch on the zxf1023818103 fork). Configure it BEFORE add_subdirectory
 # so the kernel's CMakeLists can read FREERTOS_PORT + freertos_config.
 #
-# `freertos_config` is the cross-platform STATIC defined at the repo root
-# (component/freertos_config) — the portable FreeRTOS extensions + the bflb_mm heap
-# surface, shared with AmebaD. Bouffalo no longer creates its own INTERFACE; instead
-# it attaches the RISC-V-specific config (atomic_rtos.h path + the mtime / trap-handler
-# defs) onto that shared target, so the kernel's port sees them at compile time.
+# `freertos_config` is the cross-platform STATIC at the repo root
+# (component/freertos_config). Bouffalo's RISC-V-specific config (atomic_rtos.h path
+# + mtime / trap-handler defs + the kernel-header feed) is attached to it from the
+# bflb_freertos_port COMPONENT, not here — this umbrella only sets FREERTOS_PORT/HEAP
+# (kernel-build orchestration, must precede the kernel add_subdirectory) + adds the
+# kernel. The feed resolves at generate time, so it still reaches the kernel's compile.
 if(NOT TARGET freertos_config)
     message(FATAL_ERROR
         "freertos_config target missing — component/freertos_config must be added "
         "(repo-root CMakeLists) before component (bouffalo_sdk)")
 endif()
-if("${BOUFFALO_CHIP}" STREQUAL "bl602")
-    set(_mtime_base    "0x0200BFF8UL")
-    set(_mtimecmp_base "0x02004000UL")
-else()
-    # bl616, bl616cl
-    set(_mtime_base    "0xE000BFF8UL")
-    set(_mtimecmp_base "0xE0004000UL")
-endif()
-target_include_directories(freertos_config SYSTEM PUBLIC
-    "${CMAKE_CURRENT_SOURCE_DIR}/bflb_freertos_port/include"
-)
-target_compile_definitions(freertos_config PUBLIC
-    "configMTIME_BASE_ADDRESS=${_mtime_base}"
-    "configMTIMECMP_BASE_ADDRESS=${_mtimecmp_base}"
-    portasmHANDLE_INTERRUPT=interrupt_entry
-    default_interrupt_handler=freertos_risc_v_trap_handler
-)
 
 # FreeRTOS heap = the shared bflb_mm surface (freertos_heap_bflb_mm.c in
 # freertos_config), same as AmebaD. Point FREERTOS_HEAP at the empty stub so the
@@ -57,16 +41,6 @@ if(NOT TARGET freertos_kernel)
         "${CMAKE_BINARY_DIR}/component/thirdparty/freertos-kernel"
     )
 endif()
-
-# The shared freertos_config STATIC compiles its extension sources (heap surface,
-# hooks, backtrace) which #include FreeRTOS.h / portmacro.h. Feed it the kernel's
-# include dirs *as directory strings* (TARGET_PROPERTY, not a link) so no dependency
-# cycle forms with the kernel (freertos_kernel_include already links back to
-# freertos_config for FreeRTOSConfig.h). AmebaD gets the same via amebad_sdk_includes.
-target_include_directories(freertos_config SYSTEM PRIVATE
-    $<TARGET_PROPERTY:freertos_kernel_include,INTERFACE_INCLUDE_DIRECTORIES>
-    $<TARGET_PROPERTY:freertos_kernel_port,INTERFACE_INCLUDE_DIRECTORIES>
-)
 
 # bflb_autoconf must come first: its INTERFACE forces -include autoconf.h
 # into every TU that links it (transitively, via bflb_lhal below).
@@ -409,3 +383,15 @@ target_link_options(bouffalo_sdk INTERFACE
     -Wl,-u,_sbrk
     -Wno-maybe-uninitialized
 )
+
+# Close the --start-group above. `-Wl,--end-group` is smuggled in as a library entry
+# (not a link option) so CMake appends it to INTERFACE_LINK_LIBRARIES — emitted AFTER
+# the link-options block and after every archive the umbrella transitively pulls. The
+# cmake_language(DEFER) to project scope guarantees it is the very LAST entry, past
+# every external lib (cjson / lwip / mbedtls / the late lwip_dhcpd + lfs_easyflash
+# self-registrations). Lives here with --start-group (was in component/CMakeLists.txt).
+function(_bouffalo_sdk_close_link_group)
+    target_link_libraries(bouffalo_sdk INTERFACE -Wl,--end-group)
+endfunction()
+cmake_language(DEFER DIRECTORY ${CMAKE_SOURCE_DIR}
+    CALL _bouffalo_sdk_close_link_group)

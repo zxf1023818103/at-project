@@ -16,6 +16,12 @@
 #
 # KM4-only: the newlib-stdio consumers (BLE / QUIC / monitor shell) are all KM4.
 
+# Header-only INTERFACE (before the chip gate so it exists on BOTH cores — time64.h
+# is on the sdk include path KM0+KM4 even though this OBJECT lib is KM4-only). Linked
+# by amebad_sdk_includes instead of a raw target_include_directories.
+add_library(amebad_syscall_port_headers INTERFACE)
+target_include_directories(amebad_syscall_port_headers SYSTEM INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
+
 if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     return()
 endif()

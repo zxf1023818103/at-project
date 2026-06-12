@@ -12,6 +12,12 @@
 # Resync the .a from project_{lp,hp}/asdk/lib/application when the
 # platform/ameba-rtos-d submodule pointer moves.
 
+# Header-only INTERFACE (before the chip gate so it exists on BOTH cores —
+# freertos_pmu.h is pulled by ameba_soc.h everywhere). Linked by amebad_sdk_includes
+# instead of a raw target_include_directories.
+add_library(amebad_pmu_headers INTERFACE)
+target_include_directories(amebad_pmu_headers SYSTEM INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
+
 if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
     set(_pmc amebad_pmc_lp)
     set(_lib lib_pmc_lp.a)

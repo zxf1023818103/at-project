@@ -105,36 +105,7 @@ add_subdirectory(cjson
 # Public headers live at the submodule root (cJSON.h, cJSON_Utils.h).
 # Upstream sets that via target_include_directories on the cjson target.
 
-# ---------------------------------------------------------------------
-# littlefs — upstream littlefs-project/littlefs v2.8.2.
-# ---------------------------------------------------------------------
-#
-# Upstream ships no CMakeLists — only a Makefile that builds liblfs.a —
-# so we add the lib here.
-#
-# Target produced:
-#   littlefs   STATIC. Exports the submodule root on the include path so
-#              consumers see <lfs.h>, <lfs_util.h>.
-
-add_library(littlefs STATIC
-    "${CMAKE_CURRENT_LIST_DIR}/littlefs/lfs.c"
-    "${CMAKE_CURRENT_LIST_DIR}/littlefs/lfs_util.c"
-)
-
-target_include_directories(littlefs PUBLIC
-    "${CMAKE_CURRENT_LIST_DIR}/littlefs"
-)
-
-# Upstream's lfs.c / lfs_util.c trigger upstream-acknowledged warnings
-# under -Wall -Wextra. Silence them on the lfs target only — same
-# treatment as zlib / cjson upstream sources.
-target_compile_options(littlefs PRIVATE -w)
-
-# LFS_THREADSAFE changes sizeof(struct lfs_config) by adding lock/unlock fn
-# ptrs. It MUST be defined identically wherever lfs.h is included, or static
-# instances initialized in one TU get read with shifted field offsets in
-# another — silently corrupts pointers like read_buffer to whatever the
-# preceding lfs_size_t field happened to be. Pin it PUBLIC on `littlefs`
-# itself so both lfs.c (this lib's own source) and every consumer of lfs.h
-# (bflb_littlefs_port, lfs_easyflash, future Ameba adapters) agree.
-target_compile_definitions(littlefs PUBLIC LFS_THREADSAFE)
+# littlefs — upstream littlefs-project/littlefs v2.8.2 (a submodule that ships no
+# CMakeLists). The wrapper add_library lives in its own subdir (littlefs_lib) so this
+# umbrella stays add_subdirectory-only; it still produces the `littlefs` STATIC target.
+add_subdirectory(littlefs_lib)

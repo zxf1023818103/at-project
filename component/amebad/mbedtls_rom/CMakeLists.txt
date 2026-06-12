@@ -21,6 +21,13 @@
 # amebad_mbedtls_rom for the header (rom_mbedtls.c needs the SDK basic_types.h on
 # its include path, which the app_km4 image already has).
 
+# Header INTERFACE for the SHARED upstream Mbed TLS headers (mbedtls/version.h is
+# pulled by rtl8721d_ota.h via ameba_soc.h on BOTH cores). Defined before the chip
+# gate so it exists KM0+KM4; linked by amebad_sdk_includes instead of a raw path.
+add_library(amebad_mbedtls_headers INTERFACE)
+target_include_directories(amebad_mbedtls_headers SYSTEM INTERFACE
+    "${CMAKE_SOURCE_DIR}/component/thirdparty/mbedtls/include")
+
 if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     return()
 endif()

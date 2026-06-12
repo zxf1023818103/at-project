@@ -20,7 +20,35 @@ target_include_directories(bflb_freertos_port PUBLIC
 
 # Anything that links bflb_freertos_port pulls in the FreeRTOS kernel
 # (including the Bouffalo patches now on the bouffalo-port branch).
-# Chip-specific configMTIME_* / portasmHANDLE_INTERRUPT defines live on
-# the parent umbrella's freertos_config INTERFACE target so the kernel
-# itself sees them at compile time, not only consumers downstream.
 target_link_libraries(bflb_freertos_port PUBLIC freertos_kernel)
+
+# Attach the Bouffalo RISC-V FreeRTOS config onto the shared freertos_config (repo
+# root, component/freertos_config) — done here, in this real component, not in the
+# bouffalo_sdk umbrella. The RISC-V port asm needs the chip mtime / trap-handler defs
+# at compile time, and freertos_config's extension sources (heap/hooks/backtrace) need
+# FreeRTOSConfig.h (this dir's include/) + the kernel headers. CMake resolves target
+# usage-requirements at generate time, so even though the umbrella adds the kernel
+# BEFORE this subdir, the kernel still compiles with these defs.
+if("${BOUFFALO_CHIP}" STREQUAL "bl602")
+    set(_mtime_base    "0x0200BFF8UL")
+    set(_mtimecmp_base "0x02004000UL")
+else()
+    # bl616, bl616cl
+    set(_mtime_base    "0xE000BFF8UL")
+    set(_mtimecmp_base "0xE0004000UL")
+endif()
+target_include_directories(freertos_config SYSTEM PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"          # atomic_rtos.h + FreeRTOSConfig.h reach
+)
+target_compile_definitions(freertos_config PUBLIC
+    "configMTIME_BASE_ADDRESS=${_mtime_base}"
+    "configMTIMECMP_BASE_ADDRESS=${_mtimecmp_base}"
+    portasmHANDLE_INTERRUPT=interrupt_entry
+    default_interrupt_handler=freertos_risc_v_trap_handler
+)
+# Kernel include dirs as directory strings (TARGET_PROPERTY, not a link) so no cycle
+# forms (freertos_kernel_include links back to freertos_config for FreeRTOSConfig.h).
+target_include_directories(freertos_config SYSTEM PRIVATE
+    $<TARGET_PROPERTY:freertos_kernel_include,INTERFACE_INCLUDE_DIRECTORIES>
+    $<TARGET_PROPERTY:freertos_kernel_port,INTERFACE_INCLUDE_DIRECTORIES>
+)
