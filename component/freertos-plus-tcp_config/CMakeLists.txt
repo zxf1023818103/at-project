@@ -1,61 +1,49 @@
-# component/freertos-plus-tcp_config — the FreeRTOS-Plus-TCP V4.0.0 submodule
-# (component/freertos-plus-tcp_config/freertos-plus-tcp) built into the
-# `freertos_tcp_config` lib, plus our FreeRTOSIPConfig.h (formerly
-# component/freertos_tcp_config).
+# component/freertos-plus-tcp_config — FreeRTOS-Plus-TCP V4.0.0 submodule
+# (component/freertos-plus-tcp_config/freertos-plus-tcp) built via its OWN upstream CMake
+# (add_subdirectory), the ngtcp2_config way. Produces the upstream `freertos_plus_tcp`
+# core stack; `freertos_tcp_config` is kept as the consumer-facing INTERFACE umbrella over
+# it (existing consumers link that name), and `freertos-plus-tcp_config` is the dir umbrella.
 #
-# The platform-independent half of the FreeRTOS+TCP integration: FreeRTOSIPConfig.h
-# (flat at this component root, features gated to DHCP-only IPv4 — no TCP/IPv6/DNS)
-# plus the whole upstream core stack and a buffer manager. The platform
-# NetworkInterface (the Realtek WiFi driver <-> stack bridge) lives in the port
-# (component/amebad/freertos_tcp_port), which links this.
+# We add_subdirectory the submodule's source/ subdir, NOT its top-level CMakeLists: the
+# top-level unconditionally FetchContent-clones FreeRTOS-Kernel + CMock from GitHub and
+# add_subdirectory(test)->build-combination (an x86 test-config builder), none of which
+# belong in this cross-compile. source/ builds the core + add_subdirectory(portable)
+# (BufferAllocation + the GCC compiler port + the board NetworkInterfaces, which self-gate
+# on FREERTOS_PLUS_TCP_NETWORK_IF).
 #
-# Builds: the upstream source set (42 files; TCP/IPv6/DNS compile near-empty with the
-# features off) + BufferAllocation_2 (heap).
+# Custom NetworkInterface: A_CUSTOM_NETWORK_IF — the real Realtek bridge is
+# component/amebad/freertos_tcp_port (amebad_freertos_tcp). Upstream PRIVATE-links
+# `freertos_plus_tcp_network_if` (and `_utilities`) into the core; we satisfy those names
+# with empty placeholder INTERFACE libs so there is no CMake-level cycle — the real
+# NetworkInterface symbols resolve at the app_km4 image link (amebad_freertos_tcp is
+# co-listed in app_km4's --start-group with freertos_plus_tcp).
 #
-# NB: BufferAllocation_1 (static pool) was tried to cut per-packet pvPortMalloc but its
-# ~61 KB BSS overran the SRAM the closed lib_wlan.a hardcodes as free (link didn't catch
-# it — driver RAM is invisible to our ld), faulting the driver at wifi_connect. And the
-# per-packet cost is ~0.5-0.8 ms (closed-driver path), not malloc (µs), so it wouldn't
-# have helped. Staying on heap (_2).
+# FreeRTOSIPConfig.h (this dir, DHCP-only IPv4) is put on the core's include path; the
+# upstream TCP/IPv6/DNS sources compile near-empty with those features off.
 #
-# Cross-platform: no chip gate — the portable FreeRTOS+TCP stack builds wherever
-# freertos_tcp_config is linked (EXCLUDE_FROM_ALL until then). The nimble-style split:
-# portable stack here, platform bridge in the port. It needs the kernel +
-# FreeRTOSConfig on whatever platform builds it.
+# KM4-only in practice (added from component/amebad/CMakeLists; Bouffalo uses lwip).
 
-set(FT "${CMAKE_CURRENT_SOURCE_DIR}/freertos-plus-tcp")
+# Upstream options — pin BEFORE add_subdirectory.
+set(FREERTOS_PLUS_TCP_BUFFER_ALLOCATION "2" CACHE STRING "" FORCE)   # heap (BufferAllocation_2)
+set(FREERTOS_PLUS_TCP_NETWORK_IF "A_CUSTOM_NETWORK_IF" CACHE STRING "" FORCE)
+set(FREERTOS_PLUS_TCP_COMPILER "" CACHE STRING "" FORCE)             # auto-detect GNU
 
-# Upstream library sources — glob the stack. Globbing the UPSTREAM tree is fine; the
-# platform glue (the Realtek NetworkInterface) is listed explicitly in the port.
-file(GLOB _ft_src CONFIGURE_DEPENDS "${FT}/source/*.c")
+# Placeholders for the names the core PRIVATE-links (real netif = amebad_freertos_tcp,
+# resolved at image link). Empty INTERFACE -> no archive, no cycle.
+add_library(freertos_plus_tcp_network_if INTERFACE)
+add_library(freertos_plus_tcp_utilities INTERFACE)
 
-add_library(freertos_tcp_config STATIC EXCLUDE_FROM_ALL
-    ${_ft_src}
-    "${FT}/source/portable/BufferManagement/BufferAllocation_2.c"
-)
+add_subdirectory(freertos-plus-tcp/source "${CMAKE_CURRENT_BINARY_DIR}/upstream" EXCLUDE_FROM_ALL)
 
-# Config + header surface. PUBLIC so both this lib's own sources and the port (and
-# header-only consumers: lfs_port, syscalls) see FreeRTOSIPConfig.h + the stack API.
-target_include_directories(freertos_tcp_config PUBLIC
-    "${CMAKE_CURRENT_SOURCE_DIR}"                  # FreeRTOSIPConfig.h (flat)
-    "${FT}/source/include"
-    "${FT}/source/portable/Compiler/GCC"          # pack_struct_start/end.h
-)
+# Our FreeRTOSIPConfig.h (DHCP-only IPv4) onto the core; silence the vendor warnings.
+target_include_directories(freertos_plus_tcp SYSTEM PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_options(freertos_plus_tcp PRIVATE -w)
+target_compile_options(freertos_plus_tcp_port PRIVATE -w)
 
-# Just the kernel: FreeRTOS carries FreeRTOSConfig.h (configMAX_PRIORITIES etc.) and,
-# transitively, whatever the platform's FreeRTOSConfig.h needs — on AmebaD that's
-# platform_autoconf.h, which reaches here via FreeRTOS -> freertos_config ->
-# amebad_sdk_includes (wired on the AmebaD side). Naming no platform target keeps this
-# stack reusable as-is by any FreeRTOS platform (Dplus / Green2 / Bouffalo).
-target_link_libraries(freertos_tcp_config PUBLIC
-    FreeRTOS
-)
-
-target_compile_options(freertos_tcp_config PRIVATE
-    -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function
-    -Wno-sign-compare)
-
-# Umbrella INTERFACE (伞形): consumers link `freertos-plus-tcp_config` to get the
-# FreeRTOS+TCP stack lib.
+# Umbrella INTERFACE (伞形): header-only consumers (syscall_config) link
+# `freertos-plus-tcp_config` to get FreeRTOSIPConfig.h + the FreeRTOS_IP API headers.
+# (Archive consumers — the app_km4 link group, the Realtek bridge — link freertos_plus_tcp
+# / freertos_plus_tcp_port directly so they stay INSIDE the --start-group with no bridge
+# target dragging the group into a cycle.)
 add_library(freertos-plus-tcp_config INTERFACE)
-target_link_libraries(freertos-plus-tcp_config INTERFACE freertos_tcp_config)
+target_link_libraries(freertos-plus-tcp_config INTERFACE freertos_plus_tcp)

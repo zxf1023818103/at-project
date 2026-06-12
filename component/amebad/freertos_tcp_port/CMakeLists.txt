@@ -3,7 +3,7 @@
 # The AmebaD-specific half of the FreeRTOS+TCP integration: the Realtek WiFi driver
 # <-> stack bridge, compiled into the `amebad_freertos_tcp` lib (name kept so the
 # consumers — lfs_port, syscalls, app_km4's link group — don't churn). The core
-# stack + config (FreeRTOSIPConfig.h) come from component/freertos_tcp_config,
+# stack + config (FreeRTOSIPConfig.h) come from component/freertos_plus_tcp,
 # linked PUBLIC below so header-only consumers reach FreeRTOS_IP.h/FreeRTOS_Sockets.h
 # transitively.
 #
@@ -12,7 +12,7 @@
 #   - realtek_netif.c : TX/RX bridge + app hooks (amebad_freertos_tcp_set_ready)
 #   - realtek_xnetif.c: the xnetif[] storage the vendored lwip_intf.c needs
 #
-# The stack (freertos_tcp_config) and this bridge call into each other (stack ->
+# The stack (freertos_plus_tcp) and this bridge call into each other (stack ->
 # NetworkInterface fns here; here -> FreeRTOS_IP APIs), so app_km4 lists BOTH inside
 # one --start-group (its cross_refs LINK_GROUP).
 #
@@ -42,7 +42,7 @@ add_library(amebad_freertos_tcp STATIC EXCLUDE_FROM_ALL
 
 # Core stack + config + the upstream include surface.
 target_link_libraries(amebad_freertos_tcp PUBLIC
-    freertos_tcp_config    # FreeRTOSIPConfig.h + the FreeRTOS+TCP core stack/API
+    freertos_plus_tcp    # FreeRTOSIPConfig.h + the FreeRTOS+TCP core stack/API
     FreeRTOS
     amebad_sdk_includes
 )

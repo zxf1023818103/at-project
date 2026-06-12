@@ -23,7 +23,7 @@
 #
 # Built where its deps exist (FreeRTOS heap + littlefs + FreeRTOS+TCP), so it is
 # add_subdirectory'd by the consuming platform (AmebaD KM4), not at the repo root —
-# freertos_tcp_config is KM4-gated. lfs.h (littlefs) is the only universally-present dep.
+# freertos-plus-tcp_config is KM4-gated. lfs.h (littlefs) is the only universally-present dep.
 add_library(syscall_config OBJECT newlib_syscalls.c)
 
 # PUBLIC: syscalls.h (vfs_lfs_mount / fd_open_socket hooks).
@@ -33,9 +33,9 @@ target_include_directories(syscall_config PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 # archives are already in the consumer's link group):
 #   FreeRTOS            -> FreeRTOS.h / semphr.h (heap + the fd-table mutex)
 #   littlefs            -> lfs.h (lfs_t / lfs_file_* / LFS_O_*)
-#   freertos_tcp_config -> FreeRTOS_IP.h / FreeRTOS_Sockets.h (htonl + the socket
+#   freertos-plus-tcp_config -> FreeRTOS_IP.h / FreeRTOS_Sockets.h (htonl + the socket
 #                          backend); it owns the FreeRTOS+TCP include surface.
 # at_console (PUBLIC) -> console.h (at_console_read/write); propagated to the consumer
 #   so the shared dispatcher archive is in the final image link.
-target_link_libraries(syscall_config PRIVATE FreeRTOS littlefs freertos_tcp_config)
+target_link_libraries(syscall_config PRIVATE FreeRTOS littlefs freertos-plus-tcp_config)
 target_link_libraries(syscall_config PUBLIC at_console)
