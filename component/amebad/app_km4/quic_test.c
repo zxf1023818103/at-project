@@ -463,6 +463,13 @@ static int client_socket_init(struct quic_client *c)
         return -1;
     }
 
+    /* Turn OFF UDP TX checksum for this socket: QUIC packets are AEAD-protected, so the
+     * UDP checksum is redundant (the RTL8721D NetworkInterface does no checksum offload).
+     * pvOptionValue == NULL clears FREERTOS_SO_UDPCKSUM_OUT; outgoing UDP goes out with
+     * checksum 0 (legal in IPv4), the IP header checksum is still computed. NB: not the
+     * QUIC blocker on this bench — handshake times out the same with checksum on/off. */
+    (void)FreeRTOS_setsockopt(c->sock, 0, FREERTOS_SO_UDPCKSUM_OUT, NULL, 0);
+
     /* Remote (FreeRTOS form for sendto, ngtcp2 form for the path). */
     (void)memset(&c->fr_remote, 0, sizeof(c->fr_remote));
     c->fr_remote.sin_family = FREERTOS_AF_INET;
