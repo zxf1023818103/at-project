@@ -41,6 +41,11 @@ add_subdirectory(component/bflb_mm)
 # Bouffalo; each platform's FreeRTOSConfig.h includes it (freertos_config_common.h).
 add_subdirectory(component/freertos-kernel_config)
 
+# Cross-platform FreeRTOS-Plus-POSIX layer (pthread/mqueue/sem/timer over the kernel).
+# After freertos-kernel_config so the `FreeRTOS` alias exists. EXCLUDE_FROM_ALL — built
+# only when a consumer links freertos_posix / freertos-posix_config.
+add_subdirectory(component/freertos-posix_config)
+
 # Shared user sources (src/main.cpp + ragel-generated AT parser).
 add_subdirectory(src)
 

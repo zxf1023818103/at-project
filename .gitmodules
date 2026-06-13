@@ -61,3 +61,6 @@
 [submodule "component/thirdparty/corehttp"]
 	path = component/corehttp_config/corehttp
 	url = https://github.com/FreeRTOS/coreHTTP.git
+[submodule "component/freertos-posix_config/freertos-posix"]
+	path = component/freertos-posix_config/freertos-posix
+	url = https://github.com/FreeRTOS/Lab-Project-FreeRTOS-POSIX.git
