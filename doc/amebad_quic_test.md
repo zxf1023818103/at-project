@@ -54,6 +54,15 @@ for it: Schannel's TLS 1.3 only offers `TLS_AES_128/256_GCM` (no
 ChaCha end-to-end would need a ChaCha-capable native Windows QUIC server (cross-compile
 the wolfSSL/OpenSSL `quic_perf` with mingw).
 
+**UDP checksum is NOT the bottleneck (2026-06-13).** Disabling the software UDP TX
+checksum on the QUIC socket (`FreeRTOS_setsockopt(sock, 0, FREERTOS_SO_UDPCKSUM_OUT,
+NULL, 0)` — `quic_test.c`; outgoing UDP goes out with checksum 0, IP header checksum
+still computed) gave **4.20/1.89 Mbps vs 4.19/1.88** with it on — no measurable change.
+QUIC's AEAD makes the UDP checksum redundant anyway. Consistent with the CPU/protocol-
+bound finding: the per-datagram software checksum pass is noise next to the crypto.
+(checksum-0 UDP traverses the WiFi→host path fine; the native-Windows server still
+received and completed both transfers.)
+
 ## Build
 
 ```
