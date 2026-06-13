@@ -55,6 +55,55 @@ target_link_libraries(freertos_config PUBLIC freertos_config_common bflb_mm)
 target_compile_options(freertos_config PRIVATE
     -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function -Wno-sign-compare)
 
+# ---- (3) upstream FreeRTOS kernel (V10.6.2): built here via the submodule's own CMake ----
+# The kernel needs a port chosen per platform/core. Derive it from the chip vars (known at
+# configure start; AmebaD km0/km4 configure into separate build trees, so the per-core value
+# never clashes), set FREERTOS_PORT/HEAP, then add_subdirectory the submodule — the standard
+# upstream contract. Platform specifics are still attached to freertos_config from each
+# platform's own CMakeLists *after* this (amebad_sdk_includes -> platform_autoconf.h on
+# AmebaD; the mtime defs on Bouffalo); target usage requirements resolve at generate, so the
+# attach order doesn't matter.
+#   KM0 (LP) = Cortex-M23 -> GCC_ARM_CM0 (ARMv6-M; the ARMv8-M CM23 port faults at scheduler
+#              start on KM0's image2 — see component/amebad/freertos_port for the why)
+#   KM4 (HP) image2 = Cortex-M33, non-secure -> GCC_ARM_CM33_NTZ_NONSECURE
+#   Bouffalo (RISC-V)                        -> GCC_RISC_V
+if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
+    set(_frt_port GCC_ARM_CM0)
+elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
+    set(_frt_port GCC_ARM_CM33_NTZ_NONSECURE)
+elseif(BOUFFALO_CHIP)
+    set(_frt_port GCC_RISC_V)
+endif()
+
+if(_frt_port)
+    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/freertos-kernel/tasks.c")
+        message(FATAL_ERROR "FreeRTOS: 'freertos-kernel/tasks.c' missing — run "
+            "'git submodule update --init component/freertos-kernel_config/freertos-kernel'")
+    endif()
+    # CACHE ... FORCE so we win over the kernel's own defaults (FREERTOS_HEAP "4"). Heap: both
+    # AmebaD cores + Bouffalo use the shared bflb_mm (TLSF); point FREERTOS_HEAP at the empty
+    # stub so the kernel compiles no heap_N.c (the pvPortMalloc surface is freertos_config's
+    # freertos_heap_bflb_mm.c over bflb_mm).
+    set(FREERTOS_PORT "${_frt_port}" CACHE STRING "FreeRTOS port name" FORCE)
+    set(FREERTOS_HEAP "${CMAKE_CURRENT_SOURCE_DIR}/freertos_heap_none.c"
+        CACHE STRING "FreeRTOS heap model" FORCE)
+    if(NOT TARGET freertos_kernel)
+        add_subdirectory(freertos-kernel
+                         "${CMAKE_BINARY_DIR}/component/freertos-kernel_config/freertos-kernel")
+    endif()
+    # The name every consumer already links.
+    if(NOT TARGET FreeRTOS)
+        add_library(FreeRTOS ALIAS freertos_kernel)
+    endif()
+    # The upstream kernel compiles -Wall -Wextra -Wpedantic -Werror; the platform
+    # FreeRTOSConfig.h (empty configASSERT, etc.) can trip config-driven warnings inside the
+    # otherwise-clean sources. Demote -Werror so they don't fail the build (warnings stay).
+    target_compile_options(freertos_kernel PRIVATE -Wno-error)
+    if(TARGET freertos_kernel_port)
+        target_compile_options(freertos_kernel_port PRIVATE -Wno-error)
+    endif()
+endif()
+
 # Umbrella INTERFACE (伞形): consumers link `freertos-kernel_config` to get the
 # freertos_config target (which PUBLIC-links freertos_config_common).
 add_library(freertos-kernel_config INTERFACE)

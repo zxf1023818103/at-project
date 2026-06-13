@@ -41,10 +41,8 @@
 # to it below so platform_autoconf.h + the kernel headers resolve.
 
 if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
-    set(_frt_port GCC_ARM_CM0)
     set(_glue_tgt amebad_freertos_glue_km0)
 elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
-    set(_frt_port GCC_ARM_CM33_NTZ_NONSECURE)
     set(_glue_tgt amebad_freertos_glue_km4)
 else()
     return()
@@ -94,44 +92,10 @@ endif()
 # the kernel (which links freertos_config) sees the same FreeRTOSConfig.h deps.
 target_link_libraries(freertos_config PUBLIC amebad_sdk_includes)
 
-# Port + heap selection for the upstream kernel CMakeLists. CACHE ... FORCE so we
-# win over the kernel's own default (set(FREERTOS_HEAP "4" CACHE ...)). km0/km4
-# configure into separate build dirs, so the per-core port value never clashes.
-set(FREERTOS_PORT "${_frt_port}" CACHE STRING "FreeRTOS port name" FORCE)
-# Heap: both cores use the shared bflb_mm (TLSF). Point FREERTOS_HEAP at an EMPTY
-# source so the kernel compiles no heap_N.c; the heap surface (pvPortMalloc/
-# vPortFree/vPortDefineHeapRegions/...) comes from freertos_config's
-# freertos_heap_bflb_mm.c over bflb_mm. (The kernel CMake accepts an absolute path
-# as a custom heap source.) On KM0 (LP, no libc/libgcc) the libc/libgcc symbols
-# TLSF pulls (strncpy, ...) are aliased to the ROM in app_km0/rlx8721d_img2_romalias.ld.
-# The portable FreeRTOS extension sources (heap surfaces, hooks, backtrace) live in
-# the shared component/freertos-kernel_config; the amebad-memory-map region table
-# (heap5_config.c) stays here. The per-core glue lib below compiles both.
-set(_cfg "${CMAKE_SOURCE_DIR}/component/freertos-kernel_config")
-
-set(FREERTOS_HEAP "${_cfg}/freertos_heap_none.c"
-    CACHE STRING "FreeRTOS heap model" FORCE)
-
-if(NOT TARGET freertos_kernel)
-    add_subdirectory("${_kernel_src}"
-                     "${CMAKE_BINARY_DIR}/component/freertos-kernel_config/freertos-kernel")
-endif()
-
-# Keep the `FreeRTOS` name every consumer already links.
-if(NOT TARGET FreeRTOS)
-    add_library(FreeRTOS ALIAS freertos_kernel)
-endif()
-
-# The upstream kernel CMakeLists compiles with -Wall -Wextra -Wpedantic -Werror
-# (directory-scoped). The AmebaD FreeRTOSConfig.h (empty configASSERT, etc.) can
-# trip set-but-unused / pedantic warnings inside the otherwise-clean kernel
-# sources. Demote -Werror on the kernel targets so config-driven warnings don't
-# fail the build (warnings stay visible). Same spirit as the warning-silencing
-# the thirdparty zlib / littlefs / cjson targets get.
-target_compile_options(freertos_kernel PRIVATE -Wno-error)
-if(TARGET freertos_kernel_port)
-    target_compile_options(freertos_kernel_port PRIVATE -Wno-error)
-endif()
+# The upstream kernel is now built by component/freertos-kernel_config itself (it derives
+# FREERTOS_PORT from AMEBAD_CHIP, sets FREERTOS_HEAP, and add_subdirectory's the submodule),
+# so freertos_kernel / FreeRTOS already exist here. This dir attaches the AmebaD specifics
+# (amebad_sdk_includes above) and builds the per-core memory-map glue below.
 
 # ============================================================================
 # (2) AmebaD memory-map glue (amebad_freertos_glue_km{0,4})

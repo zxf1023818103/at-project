@@ -15,31 +15,16 @@
 # so the kernel's CMakeLists can read FREERTOS_PORT + freertos_config.
 #
 # `freertos_config` is the cross-platform STATIC at the repo root
-# (component/freertos-kernel_config). Bouffalo's RISC-V-specific config (atomic_rtos.h path
-# + mtime / trap-handler defs + the kernel-header feed) is attached to it from the
-# bflb_freertos_port COMPONENT, not here — this umbrella only sets FREERTOS_PORT/HEAP
-# (kernel-build orchestration, must precede the kernel add_subdirectory) + adds the
-# kernel. The feed resolves at generate time, so it still reaches the kernel's compile.
-if(NOT TARGET freertos_config)
-    message(FATAL_ERROR
-        "freertos_config target missing — component/freertos-kernel_config must be added "
-        "(repo-root CMakeLists) before component (bouffalo_sdk)")
-endif()
-
-# FreeRTOS heap = the shared bflb_mm surface (freertos_heap_bflb_mm.c in
-# freertos_config), same as AmebaD. Point FREERTOS_HEAP at the empty stub so the
-# kernel compiles no heap_N.c (no heap_4 pvPortMalloc to collide with the shared
-# surface). board.c's ram_heap_init() already registers the OCRAM heap with bflb_mm,
-# which the surface's MM_FLAG_HEAP_ANY spans.
-set(FREERTOS_HEAP "${CMAKE_CURRENT_SOURCE_DIR}/../freertos-kernel_config/freertos_heap_none.c"
-    CACHE STRING "FreeRTOS heap model" FORCE)
-
-set(FREERTOS_PORT GCC_RISC_V CACHE STRING "FreeRTOS port name" FORCE)
+# (component/freertos-kernel_config), which now also derives FREERTOS_PORT (GCC_RISC_V for
+# BOUFFALO_CHIP) + FREERTOS_HEAP and add_subdirectory's the kernel itself — so freertos_kernel
+# / FreeRTOS already exist here. Bouffalo's RISC-V-specific config (atomic_rtos.h path + mtime
+# / trap-handler defs + the kernel-header feed) is attached to freertos_config from the
+# bflb_freertos_port COMPONENT; it resolves at generate time, so it still reaches the kernel's
+# compile.
 if(NOT TARGET freertos_kernel)
-    add_subdirectory(
-        "${CMAKE_CURRENT_SOURCE_DIR}/../freertos-kernel_config/freertos-kernel"
-        "${CMAKE_BINARY_DIR}/component/freertos-kernel_config/freertos-kernel"
-    )
+    message(FATAL_ERROR
+        "freertos_kernel target missing — component/freertos-kernel_config must be added "
+        "(repo-root CMakeLists) before component (bouffalo_sdk)")
 endif()
 
 # bflb_autoconf must come first: its INTERFACE forces -include autoconf.h
