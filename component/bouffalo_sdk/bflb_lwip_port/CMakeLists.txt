@@ -53,50 +53,11 @@ else()
     )
 endif()
 
-# ---------------------------------------------------------------------
-# Upstream lwIP 2.1.2 (component/lwip_config/lwip, Bouffalo-port branch).
-# Lives next to the port adapter because the upstream sources are
-# unbuildable without bflb_lwip_port's lwipopts.h + arch/ headers, and
-# nothing else in the tree consumes upstream lwip directly. Keeping the
-# pull here makes the dependency one-directional — thirdparty/ knows
-# nothing about Bouffalo.
-#
-# Bouffalo's patches replaced the upstream top-level CMakeLists with
-# their sdk_* macro style, so we bypass it and consume src/Filelists.cmake
-# directly — that's upstream's source-list distribution file, untouched
-# by Bouffalo's patches.
-#
-# Targets produced (both STATIC, EXCLUDE_FROM_ALL — only linked when a
-# consumer references them):
-#   lwipcore       core stack (IPv4 + IPv6 + netif + api + sys + tcp/udp)
-#   lwipallapps    bundled apps (HTTP, MDNS, SNTP, etc.) — optional
-# ---------------------------------------------------------------------
-
-set(LWIP_DIR "${CMAKE_CURRENT_LIST_DIR}/../../lwip_config/lwip")
-
-# bflb_lwip_port::INTERFACE_INCLUDE_DIRECTORIES gives us lwipopts.h + arch.
-get_target_property(_bflb_lwip_port_inc bflb_lwip_port INTERFACE_INCLUDE_DIRECTORIES)
-
-set(LWIP_INCLUDE_DIRS
-    "${LWIP_DIR}/src/include"
-    ${_bflb_lwip_port_inc}
-)
-set(LWIP_DEFINITIONS "")
-set(LWIP_MBEDTLS_INCLUDE_DIRS "")
-set(LWIP_MBEDTLS_DEFINITIONS  "")
-
-include("${LWIP_DIR}/src/Filelists.cmake")
-
-# Filelists adds includes PRIVATE — fine for compiling lwipcore itself,
-# but leaves no way for consumers to reach <lwip/...> headers. Promote
-# the public lwip include dirs to INTERFACE on both targets so anything
-# linking lwipcore / lwipallapps automatically sees them.
-foreach(_t lwipcore lwipcore4 lwipcore6 lwipallapps)
-    if(TARGET ${_t})
-        target_include_directories(${_t} PUBLIC
-            "${LWIP_DIR}/src/include"
-            "${LWIP_DIR}/src/include/compat/posix"
-        )
-        target_link_libraries(${_t} PUBLIC bflb_lwip_port)
-    endif()
-endforeach()
+# Upstream lwIP 2.1.2 (component/lwip_config/lwip) is built by component/lwip_config
+# itself — it reads this port's include surface (lwipopts.h + arch/) and consumes lwip's
+# src/Filelists.cmake to produce lwipcore. Added here, AFTER bflb_lwip_port is defined, so
+# its INTERFACE_INCLUDE_DIRECTORIES is available; out-of-tree add needs an explicit binary
+# dir. (lwip is NOT add_subdirectory'd: its top-level CMakeLists is Bouffalo sdk_*-macro
+# style, unavailable in this clean build — see component/lwip_config.)
+add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../../lwip_config"
+                 "${CMAKE_BINARY_DIR}/component/lwip_config")
