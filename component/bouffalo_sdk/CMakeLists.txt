@@ -98,33 +98,24 @@ add_subdirectory(bflb_mbedtls_hw_acc)
 #   everest       Curve25519 fast impl (3rdparty submodule)
 #   p256m         secp256r1 fast impl (3rdparty submodule)
 
-# Strip upstream's testing scaffolding and install/export — none of it
-# makes sense on bare metal.
-set(ENABLE_TESTING       OFF CACHE BOOL "" FORCE)
-set(ENABLE_PROGRAMS      OFF CACHE BOOL "" FORCE)
-set(BUILD_SHARED_LIBS    OFF CACHE BOOL "" FORCE)
-set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
-set(USE_SHARED_MBEDTLS_LIBRARY OFF CACHE BOOL "" FORCE)
-set(USE_STATIC_MBEDTLS_LIBRARY ON  CACHE BOOL "" FORCE)
-set(DISABLE_PACKAGE_CONFIG_AND_INSTALL ON CACHE BOOL "" FORCE)
-set(GEN_FILES            OFF CACHE BOOL "" FORCE)
-
-# Point upstream at the Bouffalo config wrapper (config-tls-generic.h)
-# carried by bflb_mbedtls_config. Use -DMBEDTLS_CONFIG_FILE +
-# include_directories BEFORE the subdirectory so every target the
-# upstream tree creates (mbedcrypto, mbedtls, mbedx509, p256m, everest,
-# …) sees both the macro AND the path that makes it resolve.
+# The upstream option knobs (ENABLE_TESTING OFF, USE_STATIC_MBEDTLS_LIBRARY, …) + the
+# add_subdirectory of the submodule now live in component/mbedtls_config (the standard
+# "set options then add_subdirectory" wrapper). The Bouffalo-specific config is set HERE
+# first so it is inherited into that subdirectory: point upstream at the config wrapper
+# (config-tls-generic.h, carried by bflb_mbedtls_config) via -DMBEDTLS_CONFIG_FILE +
+# include_directories BEFORE the add, so every target the upstream tree creates
+# (mbedcrypto, mbedtls, mbedx509, p256m, everest, …) sees both the macro AND the path.
 add_compile_definitions(MBEDTLS_CONFIG_FILE="config-tls-generic.h")
 include_directories("${CMAKE_CURRENT_LIST_DIR}/bflb_mbedtls_config")
-# hw_acc headers (aes_alt.h etc.) likewise need to be on the include
-# path of every TU because upstream's public headers #include "aes_alt.h"
-# unconditionally when MBEDTLS_AES_ALT is set.
+# hw_acc headers (aes_alt.h etc.) likewise need to be on the include path of every TU
+# because upstream's public headers #include "aes_alt.h" unconditionally when
+# MBEDTLS_AES_ALT is set.
 include_directories("${CMAKE_CURRENT_LIST_DIR}/bflb_mbedtls_hw_acc")
 # Same story for the port header named by MBEDTLS_PLATFORM_STD_MEM_HDR.
 include_directories("${CMAKE_CURRENT_LIST_DIR}/bflb_mbedtls_port")
 
-add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../mbedtls_config/mbedtls"
-                 ${CMAKE_BINARY_DIR}/at_mbedtls_build
+add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../mbedtls_config"
+                 ${CMAKE_BINARY_DIR}/component/mbedtls_config
                  EXCLUDE_FROM_ALL)
 
 # Wire the Bouffalo include paths (config + hw_acc) onto the upstream
