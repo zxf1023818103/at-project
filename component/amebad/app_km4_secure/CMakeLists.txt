@@ -65,6 +65,15 @@ set(_tfm_args
     "-DBL2=OFF"
     "-DCMAKE_INSTALL_PREFIX=${_tfm_export}"
     "-DCMAKE_BUILD_TYPE=${_tfm_build_type}"
+    # Share ONE Mbed TLS version with the NS side. TF-M's lib/ext/mbedcrypto must own/patch
+    # its own checkout (apply_patches does a destructive git reset --hard / clean -df on the
+    # source), so we can't point it AT our submodule. Instead, make it FETCH FROM our local
+    # tree at OUR version (mbedtls-3.6.4) — no separate upstream download, same version on
+    # SPE + NS, and our submodule stays untouched (TF-M clones into its own build dir).
+    # The CC3XX patch (0005) is renamed out (above): it doesn't apply to 3.6.4 and the
+    # RTL8721D has no CryptoCell (CRYPTO_HW_ACCELERATOR=OFF -> vanilla software wrappers).
+    "-DMBEDCRYPTO_GIT_REMOTE=${CMAKE_SOURCE_DIR}/component/mbedtls_config/mbedtls"
+    "-DMBEDCRYPTO_VERSION=mbedtls-3.6.4"
 )
 
 # PSA secure storage (make STORAGE=ON): enables ITS + PS (encrypted) + the Crypto
@@ -74,6 +83,16 @@ set(_tfm_args
 # (cmsis_drivers/Driver_Flash.c) + the flash_layout.h TFM_HAL_ITS/PS_* + OTP/NV areas.
 if(AMEBAD_TFM_STORAGE)
     list(APPEND _tfm_args "-DAMEBAD_TFM_STORAGE=ON")
+endif()
+
+# Skip TF-M's CC3XX mbedcrypto patch (0005): it targets mbedtls-3.6.2 and does NOT apply to
+# our shared 3.6.4, and the RTL8721D has no CryptoCell (CRYPTO_HW_ACCELERATOR=OFF -> vanilla
+# software PSA driver wrappers), so it is unneeded. Renaming it out of the *.patch glob that
+# fetch_remote_library applies is done HERE (from our tracked CMake) so it is reproducible
+# after a `git submodule update` restores the upstream TF-M tree.
+set(_cc3xx_patch "${_tfm_src}/lib/ext/mbedcrypto/0005-Hardcode-CC3XX-entry-points.patch")
+if(EXISTS "${_cc3xx_patch}")
+    file(RENAME "${_cc3xx_patch}" "${_cc3xx_patch}.skip-rtl8721d-sw")
 endif()
 
 # Wrap the nested CMake invocations so the toolchain bin dir is on PATH.
