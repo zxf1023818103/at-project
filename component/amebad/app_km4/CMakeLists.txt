@@ -151,8 +151,8 @@ if(AMEBAD_ENABLE_HCI OR AMEBAD_ENABLE_NIMBLE)
 endif()
 if(AMEBAD_ENABLE_NIMBLE)
     # NimBLE SM crypto now rides upstream mbedTLS (mbedtls_sm_glue.c), not wolfCrypt:
-    # mbedcrypto (aes/ecp) + amebad_mbedtls_port (FreeRTOS threading-alt + entropy) join the group.
-    set(_hci_grp ",amebad_hci,nimble,nimble_config,mbedcrypto,amebad_mbedtls_port")
+    # mbedcrypto (aes/ecp) + mbedtls_port (HW ALTs + entropy) + mbedtls_config (threading-alt) join.
+    set(_hci_grp ",amebad_hci,nimble,nimble_config,mbedcrypto,mbedtls_port,mbedtls_config")
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_NIMBLE)
 elseif(AMEBAD_ENABLE_HCI)
@@ -174,7 +174,7 @@ if(AMEBAD_ENABLE_QUIC)
     # The hand-tuned flat --start-group needs real archive names (CMake won't expand the
     # ngtcp2_config / picotls_config INTERFACE aggregates inside a LINK_GROUP), so list the
     # members. ngtcp2_crypto_picotls (picotls binding) replaces ngtcp2_crypto (wolfSSL).
-    set(_quic_grp ",ngtcp2_crypto_picotls,ngtcp2_static,picotls_core,picotls_mbedtls,mbedcrypto,mbedx509,amebad_mbedtls_port")
+    set(_quic_grp ",ngtcp2_crypto_picotls,ngtcp2_static,picotls_core,picotls_mbedtls,mbedcrypto,mbedx509,mbedtls_port,mbedtls_config")
     target_sources(target_img2_km4 PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/quic_test.c")   # newlib syscalls now from the syscalls core
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
@@ -188,7 +188,7 @@ endif()
 # archive names; the _config/umbrella INTERFACEs don't expand inside LINK_GROUP).
 set(_pk11_grp "")
 if(AMEBAD_ENABLE_PKCS11)
-    set(_pk11_grp ",corepkcs11,mbedcrypto,mbedx509,amebad_mbedtls_port")
+    set(_pk11_grp ",corepkcs11,mbedcrypto,mbedx509,mbedtls_port,mbedtls_config")
     set(_pal "${CMAKE_SOURCE_DIR}/component/corepkcs11_config/corepkcs11/source/portable/os")
     target_sources(target_img2_km4 PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/pkcs11_selftest.c"
@@ -208,7 +208,7 @@ endif()
 # join the cross_refs group (real archive names; the _config umbrellas don't expand in LINK_GROUP).
 set(_bench_grp "")
 if(AMEBAD_ENABLE_CRYPTOBENCH)
-    set(_bench_grp ",mbedcrypto,amebad_mbedtls_port")
+    set(_bench_grp ",mbedcrypto,mbedtls_port,mbedtls_config")
     target_sources(target_img2_km4 PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/mbedtls_bench.c")
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"

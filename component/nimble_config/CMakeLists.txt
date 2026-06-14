@@ -59,7 +59,7 @@ target_link_libraries(nimble_config PUBLIC FreeRTOS)
 
 # mbedTLS headers + the AmebaD MBEDTLS_USER_CONFIG_FILE for mbedtls_sm_glue.c — COMPILE
 # requirements only, NOT a link edge (the mbedtls_* symbols resolve via app_km4's
-# cross_refs LINK_GROUP, which lists mbedcrypto + amebad_mbedtls_port). mbedcrypto carries
+# cross_refs LINK_GROUP, which lists mbedcrypto + mbedtls_port). mbedcrypto carries
 # the amebad config (via amebad_mbedtls_cfg); the gen-exprs resolve at generate regardless
 # of subdir order. (wolfCrypt migration — see component/amebad/mbedtls_port.)
 target_include_directories(nimble_config SYSTEM PRIVATE

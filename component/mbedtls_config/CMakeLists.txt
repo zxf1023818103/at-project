@@ -32,8 +32,25 @@ add_subdirectory(mbedtls "${CMAKE_BINARY_DIR}/at_mbedtls_build" EXCLUDE_FROM_ALL
 #   - mbedtls_threading_alt.c       : the MBEDTLS_THREADING_ALT FreeRTOS callbacks +
 #                                     mbedtls_threading_freertos_init()
 #   - mbedtls_amebad_user_config.h  : the AmebaD MBEDTLS_USER_CONFIG_FILE deltas
-# These are NOT compiled here (a platform port compiles mbedtls_threading_alt.c WITH its own
-# mbedtls config so the types match, and adds this dir to the mbedtls include path). Export the
-# dir so the port can reference it without a fragile relative path.
+# Export the dir so a port can reference these headers (user config / threading_alt.h) without a
+# fragile relative path.
 set(MBEDTLS_CONFIG_DIR "${CMAKE_CURRENT_SOURCE_DIR}" CACHE INTERNAL
     "component/mbedtls_config source dir (threading_alt.h / mbedtls_threading_alt.c / user config)")
+
+# AmebaD: compile the FreeRTOS threading-alt into its own `mbedtls_config` lib. It links mbedtls +
+# mbedtls_port (both carry amebad_mbedtls_cfg PUBLIC) only to INHERIT the config surface
+# (MBEDTLS_THREADING_ALT + the include path to threading_alt.h) so the mutex types match the rest
+# of the build. `mbedtls_port` is a forward reference — defined later in the amebad subtree, which
+# is add_subdirectory'd after this dir; target_link_libraries resolves target names at generate
+# time, so that's fine. Bouffalo also add_subdirectory's this component but has no mbedtls_port
+# (and its own threading), so this is gated on the AmebaD chip.
+if("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
+    add_library(mbedtls_config STATIC EXCLUDE_FROM_ALL mbedtls_threading_alt.c)
+    # Link mbedcrypto (not the TLS `mbedtls` lib) + mbedtls_port purely to INHERIT their config:
+    # both carry amebad_mbedtls_cfg PUBLIC, which is all threading_alt.c needs to compile
+    # (MBEDTLS_THREADING_ALT + the threading_alt.h include path). mbedcrypto is the archive the
+    # consumers' cross_refs LINK_GROUP already pulls; linking the TLS `mbedtls` lib instead pulls a
+    # group-external target and forms a strongly-connected cycle (the group depends on it and it
+    # depends back into the group), which the generator rejects.
+    target_link_libraries(mbedtls_config mbedcrypto mbedtls_port)
+endif()

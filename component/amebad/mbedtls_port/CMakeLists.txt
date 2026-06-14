@@ -8,7 +8,8 @@
 #     our deltas. The shared config (user config, threading_alt.h, the FreeRTOS threading-alt
 #     source) now lives in component/mbedtls_config; only the AmebaD-specific entropy
 #     (entropy_hardware_alt.c) and the HW *_ALT impls (gcm_alt/chachapoly_alt) stay here.
-#   - the runtime glue lib `amebad_mbedtls_port` (entropy + shared threading-alt + HW ALTs).
+#   - the runtime glue lib `mbedtls_port` (entropy + HW ALTs). The shared FreeRTOS threading-alt
+#     is compiled into the `mbedtls_config` lib over in component/mbedtls_config.
 #
 # Consumers link the `amebad_mbedtls` umbrella (crypto + x509 + glue). This is the modern
 # software crypto backend for corePKCS11 today and the planned picotls/ngtcp2 QUIC stack
@@ -54,20 +55,20 @@ foreach(_t mbedcrypto mbedx509 mbedtls p256m everest)
     endif()
 endforeach()
 
-# Runtime glue lib. entropy_hardware_alt.c (AmebaD-specific entropy) is local; the generic
-# FreeRTOS threading-alt (mbedtls_threading_alt.c) is the SHARED source in component/mbedtls_config,
-# compiled here so it picks up amebad_mbedtls_cfg's THREADING_ALT + threading_alt.h. gcm_alt.c /
-# chachapoly_alt.c supply the mbedtls_gcm_*/chachapoly_* symbols that gcm.c/chachapoly.c omit
-# under the ALTs (must be linked), so add them only when the ALTs are on.
-set(_amebad_mbedtls_port_srcs
+# Runtime glue lib (`mbedtls_port`). entropy_hardware_alt.c (AmebaD-specific entropy) is always
+# in. gcm_alt.c / chachapoly_alt.c supply the mbedtls_gcm_*/chachapoly_* symbols that
+# gcm.c/chachapoly.c omit under MBEDTLS_GCM_ALT / MBEDTLS_CHACHAPOLY_ALT; both are #if-guarded
+# internally (compile to empty TUs when the ALTs are off), so they're listed unconditionally —
+# the sources go straight into add_library, no list variable (see feedback_cmake_explicit_simple).
+# The generic FreeRTOS threading-alt (mbedtls_threading_alt.c) is compiled by the `mbedtls_config`
+# lib over in component/mbedtls_config, not here.
+add_library(mbedtls_port STATIC EXCLUDE_FROM_ALL
     entropy_hardware_alt.c
-    "${MBEDTLS_CONFIG_DIR}/mbedtls_threading_alt.c")
-if(AMEBAD_MBEDTLS_HW_GCM)
-    list(APPEND _amebad_mbedtls_port_srcs gcm_alt.c chachapoly_alt.c)
-endif()
-add_library(amebad_mbedtls_port STATIC EXCLUDE_FROM_ALL ${_amebad_mbedtls_port_srcs})
-target_link_libraries(amebad_mbedtls_port PUBLIC amebad_mbedtls_cfg mbedcrypto FreeRTOS freertos_config)
+    gcm_alt.c
+    chachapoly_alt.c)
+target_link_libraries(mbedtls_port PUBLIC amebad_mbedtls_cfg mbedcrypto FreeRTOS freertos_config)
 
-# Umbrella (伞形): consumers link `amebad_mbedtls` for crypto + x509 + the glue.
+# Umbrella (伞形): consumers link `amebad_mbedtls` for crypto + x509 + the glue (port HW ALTs +
+# entropy, plus `mbedtls_config` which carries mbedtls_threading_freertos_init()).
 add_library(amebad_mbedtls INTERFACE)
-target_link_libraries(amebad_mbedtls INTERFACE mbedcrypto mbedx509 amebad_mbedtls_port amebad_mbedtls_cfg)
+target_link_libraries(amebad_mbedtls INTERFACE mbedcrypto mbedx509 mbedtls_port mbedtls_config amebad_mbedtls_cfg)
