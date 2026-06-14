@@ -98,7 +98,7 @@ int mbedtls_chachapoly_setkey(mbedtls_chachapoly_context *ctx,
     return 0;
 }
 
-int mbedtls_chachapoly_crypt_and_tag(mbedtls_chachapoly_context *ctx, size_t length,
+int mbedtls_chachapoly_encrypt_and_tag(mbedtls_chachapoly_context *ctx, size_t length,
                                      const unsigned char nonce[12],
                                      const unsigned char *aad, size_t aad_len,
                                      const unsigned char *input, unsigned char *output,

@@ -17,7 +17,7 @@
 #include "psa/crypto.h"
 #include "ameba_soc.h"            /* DiagPrintf */
 
-extern void amebad_mbedtls_port_init( void );   /* component/amebad/mbedtls_port */
+extern void mbedtls_threading_freertos_init( void );   /* component/amebad/mbedtls_port */
 
 #define PK_OK( call )                                                       \
     do {                                                                    \
@@ -65,7 +65,7 @@ void amebad_pkcs11_selftest( void )
     DiagPrintf( "\n\r[PK11] ===== corePKCS11 token self-test (mbedTLS backend) =====\n\r" );
 
     /* mbedTLS runtime: FreeRTOS threading callbacks + PSA. */
-    amebad_mbedtls_port_init();
+    mbedtls_threading_freertos_init();
     if( psa_crypto_init() != PSA_SUCCESS )
     {
         DiagPrintf( "[PK11] FAIL psa_crypto_init\n\r" );

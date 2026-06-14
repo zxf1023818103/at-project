@@ -26,3 +26,14 @@ set(DISABLE_PACKAGE_CONFIG_AND_INSTALL ON CACHE BOOL "" FORCE)
 set(GEN_FILES            OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(mbedtls "${CMAKE_BINARY_DIR}/at_mbedtls_build" EXCLUDE_FROM_ALL)
+
+# Shared (non-vendored) mbedTLS glue that also lives here, for platform ports to consume:
+#   - threading_alt.h               : the FreeRTOS-friendly opaque mutex type (void*)
+#   - mbedtls_threading_alt.c       : the MBEDTLS_THREADING_ALT FreeRTOS callbacks +
+#                                     mbedtls_threading_freertos_init()
+#   - mbedtls_amebad_user_config.h  : the AmebaD MBEDTLS_USER_CONFIG_FILE deltas
+# These are NOT compiled here (a platform port compiles mbedtls_threading_alt.c WITH its own
+# mbedtls config so the types match, and adds this dir to the mbedtls include path). Export the
+# dir so the port can reference it without a fragile relative path.
+set(MBEDTLS_CONFIG_DIR "${CMAKE_CURRENT_SOURCE_DIR}" CACHE INTERNAL
+    "component/mbedtls_config source dir (threading_alt.h / mbedtls_threading_alt.c / user config)")

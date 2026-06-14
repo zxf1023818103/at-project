@@ -26,7 +26,7 @@
  * ONLY for mbedtls_ecp_mul point blinding, never for key material.
  *
  * Threading: ensure_init() registers the Mbed TLS FreeRTOS threading-alt callbacks
- * (amebad_mbedtls_port_init) before the first crypto op, since MBEDTLS_THREADING_ALT is on.
+ * (mbedtls_threading_freertos_init) before the first crypto op, since MBEDTLS_THREADING_ALT is on.
  */
 #include <string.h>
 #include <stdio.h>
@@ -44,7 +44,7 @@
  * 0 = AES/CMAC on Mbed TLS only, ECDH stays on tinycrypt. */
 #define SM_ECC_MBEDTLS 1
 
-extern void amebad_mbedtls_port_init( void );                                   /* component/amebad/mbedtls_port */
+extern void mbedtls_threading_freertos_init( void );                                   /* component/amebad/mbedtls_port */
 extern int  mbedtls_hardware_poll( void *, unsigned char *, size_t, size_t * ); /* entropy alt (port) */
 
 static int s_inited;
@@ -52,7 +52,7 @@ static void ensure_init( void )
 {
     if( !s_inited )
     {
-        amebad_mbedtls_port_init();   /* MBEDTLS_THREADING_ALT callbacks */
+        mbedtls_threading_freertos_init();   /* MBEDTLS_THREADING_ALT callbacks */
         s_inited = 1;
     }
 }

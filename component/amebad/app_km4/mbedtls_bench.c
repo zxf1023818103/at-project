@@ -25,7 +25,7 @@
 #include "mbedtls/bignum.h"
 
 extern void DiagPrintf(const char *fmt, ...);
-extern void amebad_mbedtls_port_init(void);                          /* threading-alt */
+extern void mbedtls_threading_freertos_init(void);                          /* threading-alt */
 extern int  mbedtls_hardware_poll(void *, unsigned char *, size_t, size_t *);
 
 /* ---- SysTick cycle timer (DWT->CYCCNT reads 0 in this NTZ image) — verbatim from the
@@ -73,7 +73,7 @@ void mbedtls_bench(void)
     unsigned long long t0;
     unsigned int i, n;
 
-    amebad_mbedtls_port_init();
+    mbedtls_threading_freertos_init();
     cyc_init();
     DiagPrintf("\n\r[MCB] ===== Mbed TLS v3.6.4 benchmark — KM4 Cortex-M33 @200MHz =====\n\r");
     DiagPrintf("[MCB] SysTick clock: %d Hz\n\r", g_hz);
@@ -120,9 +120,9 @@ void mbedtls_bench(void)
             memcpy(cpt, cp_pt, 114);
             mbedtls_chachapoly_init(&cc);
             mbedtls_chachapoly_setkey(&cc, ck);
-            mbedtls_chachapoly_crypt_and_tag(&cc, 114, cn, ca, 12, cpt, co, ct_buf);
+            mbedtls_chachapoly_encrypt_and_tag(&cc, 114, cn, ca, 12, cpt, co, ct_buf);
             ok = (memcmp(co, cp_ct, 114) == 0 && memcmp(ct_buf, cp_tag, 16) == 0);
-            DiagPrintf("[MCB-KAT] ChaCha20-Poly1305 crypt_and_tag: %s\n\r", ok ? "MATCH" : "FAIL");
+            DiagPrintf("[MCB-KAT] ChaCha20-Poly1305 encrypt_and_tag: %s\n\r", ok ? "MATCH" : "FAIL");
             mbedtls_chachapoly_free(&cc);
             vPortFree(cpt);
         }

@@ -52,7 +52,7 @@
 #include "mbedtls/build_info.h"   /* MBEDTLS_SHA384_C — gates the AES-256-GCM-SHA384 suite */
 
 extern void DiagPrintf(const char *, ...);
-extern void amebad_mbedtls_port_init(void);   /* MBEDTLS_THREADING_ALT callbacks */
+extern void mbedtls_threading_freertos_init(void);   /* MBEDTLS_THREADING_ALT callbacks */
 /* The libc/POSIX bits picotls pulls (posix_memalign / aligned_alloc / inet_pton) live in the
  * newlib retarget — component/syscall_config/newlib_syscalls.c — with the malloc family. */
 
@@ -663,7 +663,7 @@ static void quic_client_task(void *arg)
 
     /* mbedTLS runtime: FreeRTOS threading-alt callbacks + PSA (ptls_mbedtls_random_bytes
      * and the whole picotls mbedTLS backend run on PSA). */
-    amebad_mbedtls_port_init();
+    mbedtls_threading_freertos_init();
     if (psa_crypto_init() != PSA_SUCCESS) {   /* PSA backs ptls_mbedtls_* + the whole handshake */
         DiagPrintf("[QUIC] psa_crypto_init failed\n\r");
         vTaskDelete(NULL);
