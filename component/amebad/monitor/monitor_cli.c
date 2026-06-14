@@ -65,9 +65,11 @@ static BaseType_t cmd_version( char *out, size_t outlen, const char *cmd )
 static BaseType_t cmd_heap( char *out, size_t outlen, const char *cmd )
 {
     ( void ) cmd;
-    snprintf( out, outlen, "free heap: %u bytes  (min ever: %u)\r\n",
-              ( unsigned ) xPortGetFreeHeapSize(),
-              ( unsigned ) xPortGetMinimumEverFreeHeapSize() );
+    /* %d (not %u): KM0's snprintf is the ROM DiagSnPrintf, which doesn't implement %u. Heap
+     * sizes are small positive values, so signed prints the same. */
+    snprintf( out, outlen, "free heap: %d bytes  (min ever: %d)\r\n",
+              ( int ) xPortGetFreeHeapSize(),
+              ( int ) xPortGetMinimumEverFreeHeapSize() );
     return pdFALSE;
 }
 
@@ -266,6 +268,13 @@ void shell_switch_ipc_int( VOID *Data, u32 IrqStatus, u32 ChanNum )
 void amebad_monitor_start( void )
 {
     unsigned i;
+
+    /* We POLL the LOGUART RX (LOGUART_Readable). Mask the LOGUART RX IRQ (IRQ 3) on THIS core so
+     * the ROM boot-console ISR doesn't drain the RX FIFO out from under the poll (and so an
+     * unhandled-but-enabled line can't trigger the ROM "Irq 3 Fun Not Assign" storm). The RX
+     * hardware keeps filling the FIFO with the IRQ masked, so LOGUART_Readable() still sees bytes.
+     * UART_LOG_IRQ == UART_LOG_IRQ_LP == 3; InterruptDis acts on the current core's NVIC. */
+    InterruptDis( UART_LOG_IRQ );
 
     /* KM4 owns the console at boot; KM0 waits for the user to hand it over. */
     g_owner = ( strcmp( amebad_monitor_core_name(), "KM4" ) == 0 ) ? 1 : 0;
