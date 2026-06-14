@@ -143,4 +143,39 @@ void amebad_tfm_psa_selftest(void)
                        (int)(ns_per ? ((unsigned long long)PKT * HZ / ns_per / 1024u) : 0u));
         }
     }
+
+    /* Can the NSPE call HW crypto DIRECTLY (no PSA round-trip)? target_cfg's SAU
+     * marks the crypto NS alias (0x40022000) as NS, but the AmebaD bus-level slave
+     * security gate (PPC/TZC) is NOT configured by TF-M. Test empirically: call the
+     * NS ROM crypto aliases from the NS world. If the slave gate blocks NS this
+     * BusFaults/hangs (prior no-TF-M finding); if it allows NS, the KAT MATCHes and
+     * we can skip the SPE entirely. Step prints show exactly where it dies. Run LAST
+     * so the IOCTL results above are already out if this faults pre-scheduler. */
+    {
+        typedef int (*crypto_init_fn)(void *);
+        typedef int (*aes_init_fn)(const unsigned char *, unsigned int);
+        typedef int (*aes_ecb_fn)(const unsigned char *, unsigned int,
+                                  const unsigned char *, unsigned int, unsigned char *);
+        crypto_init_fn NS_CRYPTO_Init     = (crypto_init_fn)0x1010ea49u;   /* NS ROM aliases */
+        aes_init_fn    NS_aes_ecb_init    = (aes_init_fn)0x1010dd19u;
+        aes_ecb_fn     NS_aes_ecb_encrypt = (aes_ecb_fn)0x1010dd69u;
+        static unsigned char k[16], pt[16], hw[16];
+        static const unsigned char exp[16] = {
+            0x69,0xc4,0xe0,0xd8,0x6a,0x7b,0x04,0x30,
+            0xd8,0xcd,0xb7,0x80,0x70,0xb4,0xc5,0x5a };
+        int r; uint32_t i;
+        for (i = 0; i < 16; i++) { k[i] = (unsigned char)i; pt[i] = (unsigned char)((i << 4) | i); }
+        DiagPrintf("[HWNS] NSPE-direct HW crypto via NS ROM aliases (no SPE/PSA)...\n\r");
+        DiagPrintf("[HWNS] CRYPTO_Init...\n\r");
+        r = NS_CRYPTO_Init(0);
+        DiagPrintf("[HWNS]   CRYPTO_Init=%d (survived)\n\r", r);
+        DiagPrintf("[HWNS] aes_ecb_init...\n\r");
+        r = NS_aes_ecb_init(k, 16);
+        DiagPrintf("[HWNS]   aes_ecb_init=%d (survived)\n\r", r);
+        DiagPrintf("[HWNS] aes_ecb_encrypt... (prior NS death point)\n\r");
+        r = NS_aes_ecb_encrypt(pt, 16, 0, 0, hw);
+        DiagPrintf("[HWNS]   aes_ecb_encrypt=%d (SURVIVED) hw[0..1]=%02x %02x -> %s\n\r",
+                   r, hw[0], hw[1],
+                   memcmp(hw, exp, 16) == 0 ? "MATCH (NSPE CAN call HW crypto directly!)" : "mismatch");
+    }
 }
