@@ -27,6 +27,24 @@
 # main.h) is now in-tree, owned by the app component: app_km0 (KM0) /
 # app_km4 (KM4). Chip-gated below via _proj_cfg_inc.
 
+# amebad_freertos_headers — the FreeRTOS HEADER bundle for AmebaD (moved here from
+# component/amebad/freertos_port, which is now just the heap_5 glue lib): the upstream kernel's
+# FreeRTOS.h (include/) + portmacro.h (per-core port dir) + the freertos_port glue headers
+# (freertos_service.h / freertos_heap5_config.h). INTERFACE so it carries only include dirs —
+# linking the kernel STATIC would cycle back via freertos_config. Per-core port path
+# (km0 = ARMv6-M CM0; km4 image2 = ARMv8-M CM33, no-TrustZone non-secure).
+if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
+    set(_frt_port_path "GCC/ARM_CM0")
+else()
+    set(_frt_port_path "GCC/ARM_CM33_NTZ/non_secure")
+endif()
+set(_frt_src "${CMAKE_SOURCE_DIR}/component/freertos-kernel_config/freertos-kernel")
+add_library(amebad_freertos_headers INTERFACE)
+target_include_directories(amebad_freertos_headers SYSTEM INTERFACE
+    "${CMAKE_SOURCE_DIR}/component/amebad/freertos_port"   # freertos_service.h / freertos_heap5_config.h
+    "${_frt_src}/include"
+    "${_frt_src}/portable/${_frt_port_path}")
+
 add_library(amebad_sdk_includes INTERFACE)
 # The entire SDK header surface comes via each owner's header INTERFACE target —
 # header deps through target_link_libraries, NOT a pile of raw
@@ -113,3 +131,13 @@ target_compile_definitions(amebad_sdk_includes INTERFACE
 # (The former raw target_include_directories block — kernel include/port, freertos
 # glue, osdep, monitor, pmu, syscall_port, at_cmd, wlan, mbedtls — moved to each
 # owner's *_headers INTERFACE, linked above. See git history for the path list.)
+
+# The shared freertos_config (the kernel's FreeRTOSConfig.h carrier, defined in
+# component/freertos-kernel_config) needs AmebaD's platform_autoconf.h — pulled by
+# FreeRTOSConfig.h's CONFIG_PLATFORM_8721D branch. Attach our include bundle onto it so the kernel
+# and every freertos_config consumer resolve it. No cycle: amebad_sdk_includes reaches the FreeRTOS
+# kernel headers only through amebad_freertos_headers (include-only, no link edge back to the
+# kernel / freertos_config). (Moved here from component/amebad/freertos_port.)
+if(TARGET freertos_config)
+    target_link_libraries(freertos_config PUBLIC amebad_sdk_includes)
+endif()

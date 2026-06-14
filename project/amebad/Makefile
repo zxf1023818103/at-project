@@ -14,7 +14,6 @@
 #   make CLI=ON          # FreeRTOS-Plus-CLI interactive console on the LOGUART
 #   make BENCH=ON        # upstream Mbed TLS v3.6.4 crypto microbenchmark ([MCB] scores)
 #   make TFM=ON          # in-tree TF-M secure world (SPE via ExternalProject; app_km4 = NSPE)
-#   make SECURE=ON       # standalone FreeRTOS TrustZone secure image + KM4 secure-context feature test (excl. TFM)
 #   make STORAGE=ON      # TF-M PSA secure storage (ITS + PS) + NS storage self-test (implies TFM=ON)
 #   make clean           # ninja clean both cores
 #   make distclean       # delete build/km0 build/km4 build/amebad
@@ -37,7 +36,6 @@ PKCS11     ?= OFF          # ON -> corePKCS11 token self-test (upstream mbedTLS 
 BENCH      ?= OFF          # ON -> upstream Mbed TLS v3.6.4 crypto microbenchmark ([MCB] scores)
 TFM        ?= OFF          # ON -> build + boot in-tree TF-M SPE (app_km4 becomes the NS side)
 HWGCM      ?= $(TFM)       # default = TFM: route mbedTLS AES-GCM + ChaCha20-Poly1305 to the RTL8721D IPSEC HW engine (needs TFM=ON's SAU, so on iff TFM is on)
-SECURE     ?= OFF          # ON -> standalone FreeRTOS TrustZone secure image + KM4 secure-context feature test (mutually exclusive with TFM)
 STORAGE    ?= OFF          # ON -> TF-M PSA secure storage (ITS + PS) + NS storage self-test; implies TFM=ON
 ifeq ($(STORAGE),ON)
 TFM        := ON           # secure storage lives in the TF-M SPE
@@ -75,7 +73,6 @@ configure:
 	  -DAMEBAD_ENABLE_CRYPTOBENCH=$(BENCH) -DAMEBAD_MBEDTLS_HW_GCM=$(HWGCM) \
 	  -DAMEBAD_TFM_BOOT=$(TFM) \
 	  -DAMEBAD_TFM_STORAGE=$(STORAGE) \
-	  -DAMEBAD_FREERTOS_SECURE=$(SECURE) \
 	  -DAMEBAD_VFS_SELFTEST=$(VFSTEST) \
 	  -DAMEBAD_CPP_SELFTEST=$(CPPTEST)
 

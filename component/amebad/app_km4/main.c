@@ -69,11 +69,11 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
          * are not linked in this image). */
         extern void quic_test_start( void );
         quic_test_start();
-#elif !defined(AT_PROJECT_PKCS11)
+#elif !defined(AT_PROJECT_PKCS11) && !defined(AT_PROJECT_CRYPTOBENCH)
         /* Default = TCP TX (device -> WSL `iperf -s`); also exercises the
          * rewritten FreeRTOS+TCP RX bridge via the ACK path. The UDP TX/RX and
          * TCP-sink probes are kept available for throughput diagnostics.
-         * The PKCS11 self-test image drops the iperf TUs (focused token test). */
+         * The PKCS11 / crypto-bench images drop the iperf TUs (focused tests). */
         iperf_client_start();
         ( void ) iperf_udp_client_start;
         ( void ) iperf_udp_server_start;
@@ -489,10 +489,19 @@ static void wifi_bringup_thread( void *param )
         DiagPrintf( "[KM4] associated; power-save off; RSSI %d dBm; waiting for DHCP...\n\r", rssi );
     }
 
+    /* Upstream Mbed TLS v3.6.4 microbenchmark ([MCB] scores) — the apples-to-apples
+     * successor to the removed wolfCrypt [WCB] bench. Runs here at 200 MHz, after
+     * associate, so the timebase matches the old wolfCrypt run. Replaces the ROM-mbedTLS
+     * KAT in this image (the ROM mbedTLS 2.4.0 TU is not linked alongside upstream). */
+#if defined(AT_PROJECT_CRYPTOBENCH)
+    {
+        extern void mbedtls_bench( void );
+        mbedtls_bench();
+    }
+#elif !defined(AT_PROJECT_QUIC) && !defined(AT_PROJECT_PKCS11)
     /* ROM mbedTLS KAT (pure software crypto, independent of the link). Skipped in the
      * QUIC/PKCS11 images (their diagnostic TUs aren't linked). The wolfCrypt benchmarks
      * were removed with the wolfSSL retirement (crypto is now mbedTLS/picotls). */
-#if !defined(AT_PROJECT_QUIC) && !defined(AT_PROJECT_PKCS11)
     {
         extern void rom_mbedtls_kat( void );
         rom_mbedtls_kat();
@@ -531,17 +540,6 @@ int main(void)
         amebad_tfm_storage_selftest();
     }
 #endif
-#endif
-
-#ifdef AMEBAD_FREERTOS_SECURE
-    /* app_km4 is the Non-Secure world of the standalone FreeRTOS TrustZone secure
-     * image: spin up the secure-context preemption test. Tasks are created here
-     * (pre-scheduler); each allocates its secure context lazily on first run via
-     * the handler-mode SVC. See freertos_secure_test.c. */
-    {
-        extern void freertos_secure_test_start(void);
-        freertos_secure_test_start();
-    }
 #endif
 
     /* AT log / shell console (ROM + RAM shell + LOGUART RX ISR). */

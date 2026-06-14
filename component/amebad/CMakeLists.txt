@@ -26,14 +26,11 @@
 #                    (rtl8721dlp_* — KM0 flash/intf/pinmap/sleep), usrcfg_hp
 #                    (rtl8721dhp_* — KM4 trustzone/interface).
 #
-#   freertos_port    The AmebaD FreeRTOS layer in one folder: (1) the upstream
-#                    FreeRTOS-Kernel V10.6.2 from the component/thirdparty/
-#                    freertos-kernel submodule (shared with Bouffalo), via
-#                    add_subdirectory + a per-core ARMv8-M GCC port — target
-#                    `FreeRTOS` (ALIAS of freertos_kernel); and (2) the SDK
-#                    FreeRTOS extensions / glue (freertos_backtrace_ext /
-#                    freertos_heap5_config / freertos_hooks), built per-core into
-#                    amebad_freertos_glue_km0 or _km4 from the same sources.
+#   freertos_port    The AmebaD heap_5 memory-map glue lib `freertos_port`
+#                    (freertos_heap5_config.c -> vPortDefineHeapRegions). The upstream
+#                    FreeRTOS-Kernel (-> `FreeRTOS`) + per-core port/heap is built by
+#                    component/freertos-kernel_config; the kernel/glue header bundle +
+#                    the freertos_config <- amebad_sdk_includes attach live in sdk_headers.
 #   monitor          AmebaD debug monitor / shell (shell_init_ram), vendored
 #                    from SDK app/monitor. One chip-gated CMakeLists builds
 #                    amebad_monitor_common (shared) + amebad_monitor (per-core
@@ -78,13 +75,6 @@ endif()
 # (s_veneers.o + PSA headers). OFF by default; build with `make TFM=ON`.
 option(AMEBAD_TFM_BOOT "Build + boot TF-M (KM4 secure-world SPE) instead of the plain NS app" OFF)
 
-# Standalone FreeRTOS TrustZone secure world (in-tree). When ON, app_km4_freertos_secure
-# builds a minimal FreeRTOS secure image (NOT TF-M) as the KM4 secure world, and the
-# NS app_km4 switches to the TZ-aware GCC_ARM_CM33_NONSECURE FreeRTOS port (per-task
-# secure context). Brings up + tests the FreeRTOS secure-context feature. OFF by
-# default; build with `make SECURE=ON`. Mutually exclusive with AMEBAD_TFM_BOOT.
-option(AMEBAD_FREERTOS_SECURE "Build + boot the standalone FreeRTOS TrustZone secure image (KM4 secure-context feature test)" OFF)
-
 # TF-M PSA secure storage (ITS + PS). When ON (make STORAGE=ON, implies TFM=ON),
 # the TF-M SPE enables the Internal Trusted Storage + Protected Storage partitions
 # (PS pulls the crypto partition / mbedcrypto into the SPE), backed by a real
@@ -99,7 +89,7 @@ add_subdirectory(dlist)              # header-only doubly-linked-list (amebad_dl
 add_subdirectory(platform_stdlib)    # header-only libc-retarget header (amebad_platform_stdlib: platform_stdlib_rtl8721d.h); linked by sdk_includes below (must precede sdk_headers)
 add_subdirectory(sdk_headers)        # defines amebad_sdk_includes (aggregates fwlib_headers/xmodem/string_rom/cmsis_rom/dlist/platform_stdlib + SDK include paths); consumed by the ram HAL libs (forward ref) and app/boot
 add_subdirectory(usrcfg)             # chip-gated: usrcfg_common (+ _lp on KM0 / _hp on KM4)
-add_subdirectory(freertos_port)      # upstream FreeRTOS kernel (-> `FreeRTOS`) + SDK glue (amebad_freertos_glue_km{0,4}), chip-gated
+add_subdirectory(freertos_port)      # AmebaD heap_5 memory-map glue lib `freertos_port` (kernel built by freertos-kernel_config)
 add_subdirectory(monitor)            # chip-gated (image2 shell/monitor)
 add_subdirectory(osdep)              # KM4-gated internally (osdep/os abstraction)
 add_subdirectory(mbed)               # KM4-gated: flattened mbed HAL (amebad_mbed: flash_api.c + headers), consumed by wifi
@@ -153,7 +143,6 @@ elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     add_subdirectory(bootloader_km4)
     add_subdirectory(app_km4)              # KM4 HP application image (image2)
     add_subdirectory(app_km4_secure)       # KM4 secure-world: TF-M SPE (ExternalProject), opt-in AMEBAD_TFM_BOOT
-    add_subdirectory(app_km4_freertos_secure) # KM4 secure-world: standalone FreeRTOS TZ secure image, opt-in AMEBAD_FREERTOS_SECURE
 endif()
 
 # Cross-core final image. `cmake --build <km0-or-km4-build-dir> -t amebad_image_all`
