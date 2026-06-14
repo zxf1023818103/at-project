@@ -49,6 +49,7 @@
 #include <ngtcp2/ngtcp2_crypto_picotls.h>
 
 #include "psa/crypto.h"           /* psa_crypto_init — PSA backs ptls_mbedtls_random_bytes */
+#include "mbedtls/build_info.h"   /* MBEDTLS_SHA384_C — gates the AES-256-GCM-SHA384 suite */
 
 extern void DiagPrintf(const char *, ...);
 extern void amebad_mbedtls_port_init(void);   /* MBEDTLS_THREADING_ALT callbacks */
@@ -181,6 +182,21 @@ static uint64_t quic_ptls_time(ptls_get_time_t *self)
 static ptls_get_time_t s_ptls_get_time = { quic_ptls_time };
 static ptls_context_t  s_ptls_ctx;
 
+/* Cipher-suite preference: AES-GCM first. The RTL8721D IPSEC engine HW-accelerates
+ * AES-GCM (MBEDTLS_GCM_ALT, ~48 MB/s vs ~419 KB/s software — see reference_amebad_hw_crypto
+ * / amebad_crypto_mbedtls_vs_wolfssl.md), so we offer AES-GCM ahead of ChaCha20-Poly1305 and
+ * put the faster AES-128-GCM first (fewer rounds; what the C# server uses). ChaCha is kept
+ * last as a fallback for ChaCha-only peers (also HW-backed via chachapoly_alt). This overrides
+ * the picotls default order (ptls_mbedtls_cipher_suites lists AES-256-GCM first). */
+static ptls_cipher_suite_t *s_cipher_suites[] = {
+    &ptls_mbedtls_aes128gcmsha256,
+#if defined(MBEDTLS_SHA384_C)
+    &ptls_mbedtls_aes256gcmsha384,
+#endif
+    &ptls_mbedtls_chacha20poly1305sha256,
+    NULL,
+};
+
 static int client_ssl_init(struct quic_client *c)
 {
     static const ptls_iovec_t alpn = { (uint8_t *)QUIC_ALPN, sizeof(QUIC_ALPN) - 1 };
@@ -197,7 +213,7 @@ static int client_ssl_init(struct quic_client *c)
         s_ptls_ctx.random_bytes  = ptls_mbedtls_random_bytes;
         s_ptls_ctx.get_time      = &s_ptls_get_time;
         s_ptls_ctx.key_exchanges = ptls_mbedtls_key_exchanges;
-        s_ptls_ctx.cipher_suites = ptls_mbedtls_cipher_suites;
+        s_ptls_ctx.cipher_suites = s_cipher_suites;   /* AES-GCM-first (HW); see s_cipher_suites */
         if (ngtcp2_crypto_picotls_configure_client_context(&s_ptls_ctx) != 0) {
             DiagPrintf("[QUIC] configure_client_context failed\n\r");
             return -1;
