@@ -5,7 +5,7 @@
 # platform glue files (transport_amebad.c, coex_amebad.c) into the `nimble` static
 # lib, sitting on top of the controller bring-up + HCI transport in
 # component/amebad/hci (no btgap.a). The config/headers AND the portable app +
-# SM-crypto layer (nimble_app.c, wolfcrypt_sm_glue.c) come from
+# SM-crypto layer (nimble_app.c, mbedtls_sm_glue.c) come from
 # component/nimble_config (linked below). Upstream is component/nimble_config/nimble.
 #
 # Build: the BLE controller is external silicon over our HCI UART, so
@@ -47,12 +47,12 @@ file(GLOB _nb_src
     "${_nb}/nimble/transport/src/*.c"
     "${_nb}/nimble/transport/common/hci_h4/src/*.c"   # H4 framing state machine (custom transport uses it)
     "${_nb}/nimble/host/mesh/src/*.c"        # BLE Mesh
-    "${_nb}/ext/tinycrypt/src/*.c"           # SM CMAC + helpers (AES/ECC swapped to wolfCrypt below)
+    "${_nb}/ext/tinycrypt/src/*.c"           # SM CMAC + helpers (AES/ECC swapped to mbedTLS below)
 )
 
-# SM crypto on wolfCrypt, not tinycrypt: drop the tinycrypt AES block + the
-# micro-ecc P-256; tc_aes_encrypt / uECC_* are supplied over wolfCrypt in
-# component/nimble_config/wolfcrypt_sm_glue.c. cmac_mode.c / utils.c / aes_decrypt.c
+# SM crypto on mbedTLS, not tinycrypt: drop the tinycrypt AES block + the
+# micro-ecc P-256; tc_aes_encrypt / uECC_* are supplied over mbedTLS in
+# component/nimble_config/mbedtls_sm_glue.c. cmac_mode.c / utils.c / aes_decrypt.c
 # stay (CMAC rides on our tc_aes_encrypt). See that file for the curve_secp256r1 stubs.
 list(REMOVE_ITEM _nb_src
     "${_nb}/ext/tinycrypt/src/aes_encrypt.c"

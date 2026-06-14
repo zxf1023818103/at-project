@@ -558,12 +558,18 @@ char **environ  = __env;
 #endif
 
 /* ===== 3. malloc family over the FreeRTOS heap =========================== *
- * 8-byte header keeps the returned payload 8-byte aligned (FreeRTOS heap returns
- * 8-byte-aligned blocks; portBYTE_ALIGNMENT is 8 on Cortex-M). */
+ * Each block carries an 8-byte header (immediately before the payload) recording
+ * the pvPortMalloc() base + the user size. Storing the base — rather than assuming
+ * payload == base + header — lets memalign()/posix_memalign()/aligned_alloc()
+ * return an arbitrarily-aligned pointer that plain free()/realloc() still accept
+ * (third-party code — picotls/mbedTLS, ngtcp2 — pulls posix_memalign). For plain
+ * malloc the header sits at the pvPortMalloc base and the payload is 8-byte aligned. */
 typedef struct {
-    size_t size;
-    size_t _pad;
+    void  *base;   /* the pvPortMalloc() return that free() must hand back */
+    size_t size;   /* user-visible size (for realloc) */
 } mem_hdr_t;
+
+extern void DiagPrintf(const char *, ...);
 
 void *malloc(size_t size)
 {
@@ -572,10 +578,19 @@ void *malloc(size_t size)
     if (size == 0) {
         size = 1;
     }
+    /* Overflow guard: sizeof(mem_hdr_t) + size must not wrap (a SIZE_MAX-ish request
+     * otherwise allocates a tiny block and the caller's zero/copy walks off into — on
+     * the secure-attributed AmebaD RAM — a SecureFault). Return NULL like a real malloc. */
+    if (size > (size_t)-1 - sizeof(mem_hdr_t)) {
+        DiagPrintf("[MEM] malloc overflow sz=0x%x ret=0x%x\n\r",
+                   (unsigned int)size, (unsigned int)__builtin_return_address(0));
+        return NULL;
+    }
     h = (mem_hdr_t *)pvPortMalloc(sizeof(mem_hdr_t) + size);
     if (h == NULL) {
         return NULL;
     }
+    h->base = h;
     h->size = size;
     return (void *)(h + 1);
 }
@@ -585,7 +600,7 @@ void free(void *ptr)
     if (ptr == NULL) {
         return;
     }
-    vPortFree((void *)(((mem_hdr_t *)ptr) - 1));
+    vPortFree((((mem_hdr_t *)ptr) - 1)->base);
 }
 
 void *calloc(size_t nmemb, size_t size)
@@ -597,7 +612,7 @@ void *calloc(size_t nmemb, size_t size)
     if (nmemb != 0 && total / nmemb != size) {
         return NULL;
     }
-    p = malloc(total);
+    p = malloc(total);   /* malloc guards the sizeof(hdr)+size overflow */
     if (p != NULL) {
         memset(p, 0, total);
     }
@@ -626,6 +641,103 @@ void *realloc(void *ptr, size_t size)
     memcpy(np, ptr, old < size ? old : size);
     free(ptr);
     return np;
+}
+
+/* Aligned allocation that stays free()/realloc()-compatible: over-allocate, place the
+ * payload at the first aligned address that leaves room for the header, and record the
+ * pvPortMalloc base in that header. `alignment` must be a power of two. amebad routes
+ * malloc/free to the FreeRTOS heap but newlib ships no memalign over it, so these live here
+ * (a memalign over the _sbrk heap would be freed via the FreeRTOS free() -> corruption). */
+void *memalign(size_t alignment, size_t size)
+{
+    void      *raw;
+    uintptr_t  u;
+    mem_hdr_t *h;
+
+    if (alignment < sizeof(mem_hdr_t)) {
+        alignment = sizeof(mem_hdr_t);          /* leave room for the header before u */
+    }
+    if (alignment & (alignment - 1)) {
+        return NULL;                            /* not a power of two */
+    }
+    if (size == 0) {
+        size = 1;
+    }
+    raw = pvPortMalloc(size + alignment + sizeof(mem_hdr_t));
+    if (raw == NULL) {
+        return NULL;
+    }
+    u = ((uintptr_t)raw + sizeof(mem_hdr_t) + alignment - 1) & ~(uintptr_t)(alignment - 1);
+    h = (mem_hdr_t *)(u - sizeof(mem_hdr_t));
+    h->base = raw;
+    h->size = size;
+    return (void *)u;
+}
+
+int posix_memalign(void **memptr, size_t alignment, size_t size)
+{
+    void *p;
+
+    if (memptr == NULL || (alignment % sizeof(void *)) != 0 ||
+        (alignment & (alignment - 1)) != 0) {
+        return 22;                              /* EINVAL */
+    }
+    p = memalign(alignment, size);
+    if (p == NULL) {
+        return 12;                              /* ENOMEM */
+    }
+    *memptr = p;
+    return 0;
+}
+
+void *aligned_alloc(size_t alignment, size_t size)   /* C11 */
+{
+    return memalign(alignment, size);
+}
+
+/* inet_pton — presentation -> network address. newlib ships none and the FreeRTOS+TCP stack
+ * uses its own FreeRTOS_inet_pton, so third-party POSIX code (picotls) links this. IPv4 is
+ * parsed for real; IPv6 (AF_INET6) is not supported here (returns 0). Returns 1 ok / 0 invalid
+ * / -1 unsupported family. AF_INET=2 / AF_INET6=10 (Linux convention; no <sys/socket.h> here). */
+int inet_pton(int af, const char *src, void *dst)
+{
+    if (af == 2) {                              /* AF_INET — dotted decimal */
+        unsigned char out[4];
+        const char   *p = src;
+        int           i;
+
+        for (i = 0; i < 4; i++) {
+            unsigned v = 0;
+            int      digits = 0;
+            while (*p >= '0' && *p <= '9') {
+                v = v * 10u + (unsigned)(*p - '0');
+                if (v > 255u) {
+                    return 0;
+                }
+                p++;
+                digits++;
+            }
+            if (digits == 0) {
+                return 0;
+            }
+            out[i] = (unsigned char)v;
+            if (i < 3) {
+                if (*p != '.') {
+                    return 0;
+                }
+                p++;
+            }
+        }
+        if (*p != '\0') {
+            return 0;
+        }
+        memcpy(dst, out, 4);
+        return 1;
+    }
+    if (af == 10) {                             /* AF_INET6 — not supported here */
+        return 0;
+    }
+    return -1;                                  /* EAFNOSUPPORT */
 }
 
 /* newlib's stdio (fopen/__sfp/stream buffers) and libstdc++ allocate through the

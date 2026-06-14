@@ -41,11 +41,6 @@
 [submodule "component/thirdparty/freertos-plus-tcp"]
 	path = component/freertos-plus-tcp_config/freertos-plus-tcp
 	url = https://github.com/FreeRTOS/FreeRTOS-Plus-TCP.git
-[submodule "component/thirdparty/wolfssl"]
-	path = component/wolfssl_config/wolfssl
-	url = https://github.com/wolfSSL/wolfssl.git
-	branch = v5.9.1-stable
-	shallow = true
 [submodule "component/thirdparty/nimble"]
 	path = component/nimble_config/nimble
 	url = https://github.com/apache/mynewt-nimble
@@ -64,3 +59,9 @@
 [submodule "component/freertos-posix_config/freertos-posix"]
 	path = component/freertos-posix_config/freertos-posix
 	url = https://github.com/FreeRTOS/Lab-Project-FreeRTOS-POSIX.git
+[submodule "component/thirdparty/corepkcs11"]
+	path = component/corepkcs11_config/corepkcs11
+	url = https://github.com/FreeRTOS/corePKCS11.git
+[submodule "component/thirdparty/picotls"]
+	path = component/picotls_config/picotls
+	url = https://github.com/h2o/picotls.git

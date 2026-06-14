@@ -105,21 +105,19 @@ add_subdirectory(osdep)              # KM4-gated internally (osdep/os abstractio
 add_subdirectory(mbed)               # KM4-gated: flattened mbed HAL (amebad_mbed: flash_api.c + headers), consumed by wifi
 add_subdirectory(at_cmd)             # KM4-gated internally (basic AT log/command service)
 add_subdirectory(mbedtls_rom)        # KM4-gated: headers to call ROM mbedTLS 2.4.0 as SW (no build)
-# FreeRTOS+TCP: portable core stack + config (top-level component/freertos_tcp_config,
-# out-of-tree add) then the AmebaD Realtek NetworkInterface port (in-tree). The port
-# also now owns the netif_shim ABI header (INTERFACE target amebad_netif_shim).
-add_subdirectory("${CMAKE_SOURCE_DIR}/component/freertos-plus-tcp_config" "${CMAKE_CURRENT_BINARY_DIR}/freertos-plus-tcp_config")  # KM4-gated: FreeRTOS-Plus-TCP V4.0.0 core stack + FreeRTOSIPConfig.h (target: freertos_tcp_config)
+add_subdirectory(mbedtls)            # KM4-gated: AmebaD port of upstream mbedTLS v3.6.4 (config + FreeRTOS threading-alt + entropy) attached onto mbedcrypto/mbedx509 (added by component/CMakeLists.txt); umbrella `amebad_mbedtls`
+# FreeRTOS+TCP: the portable core stack + config (freertos-plus-tcp_config) is added by
+# the parent component/CMakeLists.txt; here we add the AmebaD Realtek NetworkInterface
+# port (in-tree) that links it. The port also owns the netif_shim ABI header (INTERFACE
+# target amebad_netif_shim).
 add_subdirectory(freertos_tcp_port)  # KM4-gated: Realtek WiFi <-> stack bridge (`amebad_freertos_tcp`, DHCP bring-up, EXCLUDE)
 add_subdirectory(pmu)                # chip-gated: prebuilt PMC lib (lib_pmc_lp/hp.a) + pmu headers
 add_subdirectory(wlan)               # KM4-gated: host WiFi driver libs (lib_wlan*.a) + API headers
 add_subdirectory(wpa_supplicant)     # KM4-gated: supplicant cores (lib_wps.a + lib_eap.a) + config/glue source + headers
 add_subdirectory(wifi)               # KM4-gated: host WiFi API + bring-up (amebad_wifi, EXCLUDE)
-# QUIC test (ngtcp2 + full wolfSSL TLS 1.3). AMEBAD_ENABLE_QUIC forces the
-# wolfSSL TLS layer ON (AMEBAD_WOLFSSL_TLS) before the wolfssl subdir reads it.
-option(AMEBAD_ENABLE_QUIC "Build ngtcp2 QUIC client self-test (pulls full wolfSSL TLS 1.3)" OFF)
-if(AMEBAD_ENABLE_QUIC)
-    set(AMEBAD_WOLFSSL_TLS ON CACHE BOOL "wolfSSL TLS 1.3 + QUIC (forced by AMEBAD_ENABLE_QUIC)" FORCE)
-endif()
+# AMEBAD_ENABLE_QUIC (+ the derived AMEBAD_WOLFSSL_TLS force) is declared in the parent
+# component/CMakeLists.txt, before wolfssl_config / ngtcp2_config are added there. It
+# stays a cache var so app_km4 (below) still reads it.
 
 # POSIX-fd VFS self-test (syscalls/newlib_syscalls.c): fopen/open + socket-fd over
 # LittleFS + FreeRTOS+TCP. OFF by default (the VFS is otherwise gc-stripped when no
@@ -127,28 +125,18 @@ endif()
 # call). Declared here so both subdirs see it.
 option(AMEBAD_VFS_SELFTEST "Build + run the POSIX-fd VFS self-test (fopen/open/socket over LFS+sockets)" OFF)
 
-# wolfSSL + ngtcp2 config components now live at the top level (component/wolfssl_config,
-# component/ngtcp2_config) so they can be shared; still wired from here (KM4-gated, and the
-# AMEBAD_WOLFSSL_TLS option above must be set before wolfssl_config reads it). Out-of-tree
-# add_subdirectory needs an explicit binary dir.
-add_subdirectory("${CMAKE_SOURCE_DIR}/component/wolfssl_config" "${CMAKE_CURRENT_BINARY_DIR}/wolfssl_config")   # KM4-gated: wolfCrypt (v5.9.1) bare-metal lib for on-target crypto benchmark (+TLS1.3/QUIC when AMEBAD_WOLFSSL_TLS)
-add_subdirectory("${CMAKE_SOURCE_DIR}/component/ngtcp2_config" "${CMAKE_CURRENT_BINARY_DIR}/ngtcp2_config")     # KM4-gated: ngtcp2 QUIC + crypto/wolfssl (only built when AMEBAD_ENABLE_QUIC); exposes the `ngtcp2_config` aggregate link target
-# coreMQTT / coreHTTP: top-level config components (component/{coremqtt,corehttp}_config),
-# transport-agnostic, EXCLUDE_FROM_ALL until a consumer links the coremqtt_config /
-# corehttp_config target. Out-of-tree add needs an explicit binary dir.
-add_subdirectory("${CMAKE_SOURCE_DIR}/component/coremqtt_config" "${CMAKE_CURRENT_BINARY_DIR}/coremqtt_config")   # coreMQTT (v5.0.2) static lib + core_mqtt_config.h
-add_subdirectory("${CMAKE_SOURCE_DIR}/component/corehttp_config" "${CMAKE_CURRENT_BINARY_DIR}/corehttp_config")   # coreHTTP (v3.1.3) static lib + core_http_config.h
+# wolfssl_config / ngtcp2_config / coremqtt_config / corehttp_config / freertos-cli_config
+# are added by the parent component/CMakeLists.txt (shared, consumer-coupled config dirs);
+# the in-tree consumers below (app_km4, ngtcp2 self-test, ...) just link the resulting targets.
 add_subdirectory(build_info)         # INTERFACE: UTS_VERSION banner -D (replaces the vendored build_info.h shim)
 add_subdirectory(hci)                # KM4-gated: BLE controller bring-up + HCI transport + bridge (no btgap.a)
-# NimBLE: config + header surface (top-level component/nimble_config, out-of-tree
-# add) then the AmebaD port (in-tree, KM4-gated; links nimble_config + amebad_hci).
-add_subdirectory("${CMAKE_SOURCE_DIR}/component/nimble_config" "${CMAKE_CURRENT_BINARY_DIR}/nimble_config")   # INTERFACE: syscfg + upstream NimBLE include surface
-add_subdirectory(nimble_port)        # KM4-gated: NimBLE host stack (`nimble` lib) on amebad_hci; SM crypto on wolfCrypt
-# newlib retarget: the cross-platform core (top-level component/syscall_config,
-# out-of-tree add — `syscall_config` OBJECT lib: VFS + malloc + byte-order, needs
-# freertos_plus_tcp added above) then the AmebaD console backend (in-tree). Both
-# OBJECT libs, linked into the image by app_km4.
-add_subdirectory("${CMAKE_SOURCE_DIR}/component/syscall_config" "${CMAKE_CURRENT_BINARY_DIR}/syscall_config")  # KM4-gated consumer: cross-platform newlib retarget (`syscall_config` OBJECT lib)
+# NimBLE: the config + header surface (nimble_config) is added by the parent
+# component/CMakeLists.txt; here we add the AmebaD port (in-tree, KM4-gated; links
+# nimble_config + amebad_hci).
+add_subdirectory(nimble_port)        # KM4-gated: NimBLE host stack (`nimble` lib) on amebad_hci; SM crypto on mbedTLS
+# newlib retarget: the cross-platform core (syscall_config OBJECT lib: VFS + malloc +
+# byte-order) is added by the parent component/CMakeLists.txt; here we add the AmebaD
+# console backend (in-tree). Both OBJECT libs, linked into the image by app_km4.
 add_subdirectory(syscall_port)       # KM4-gated: AmebaD console backend (amebad_syscall_port OBJECT lib: console_loguart/lpuart) + vfs_lfs_mount via lfs_port
 add_subdirectory(lfs_port)           # KM4-gated: AmebaD flash adapter for LittleFS (amebad_lfs_port; diskio over flash_api + mount) + attaches the AmebaD LittleFS self-test gates onto lfs_config
 

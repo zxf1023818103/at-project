@@ -69,10 +69,11 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
          * are not linked in this image). */
         extern void quic_test_start( void );
         quic_test_start();
-#else
+#elif !defined(AT_PROJECT_PKCS11)
         /* Default = TCP TX (device -> WSL `iperf -s`); also exercises the
          * rewritten FreeRTOS+TCP RX bridge via the ACK path. The UDP TX/RX and
-         * TCP-sink probes are kept available for throughput diagnostics. */
+         * TCP-sink probes are kept available for throughput diagnostics.
+         * The PKCS11 self-test image drops the iperf TUs (focused token test). */
         iperf_client_start();
         ( void ) iperf_udp_client_start;
         ( void ) iperf_udp_server_start;
@@ -271,6 +272,15 @@ static void wifi_bringup_thread( void *param )
         extern void lfs_selftest( void );
         lfs_selftest();
     }
+
+#ifdef AT_PROJECT_PKCS11
+    /* corePKCS11 token self-test: needs LittleFS mounted (above) for the PAL + the scheduler
+     * (mbedTLS FreeRTOS threading mutexes). Independent of WiFi. See pkcs11_selftest.c. */
+    {
+        extern void amebad_pkcs11_selftest( void );
+        amebad_pkcs11_selftest();
+    }
+#endif
 
 #ifdef AMEBAD_CPP_SELFTEST
     /* C++ std::filesystem / iostream self-test over the POSIX VFS. Brings up the
@@ -479,12 +489,10 @@ static void wifi_bringup_thread( void *param )
         DiagPrintf( "[KM4] associated; power-save off; RSSI %d dBm; waiting for DHCP...\n\r", rssi );
     }
 
-    /* Crypto/SSL self-tests run AFTER WiFi is connected (boot goes straight into
-     * WiFi bring-up first). The ROM mbedTLS KAT + wolfCrypt benchmark are pure
-     * software crypto, independent of the link. Skipped in the QUIC image (those
-     * diagnostic TUs aren't linked; the QUIC handshake test runs from the
-     * network-up hook instead). */
-#ifndef AT_PROJECT_QUIC
+    /* ROM mbedTLS KAT (pure software crypto, independent of the link). Skipped in the
+     * QUIC/PKCS11 images (their diagnostic TUs aren't linked). The wolfCrypt benchmarks
+     * were removed with the wolfSSL retirement (crypto is now mbedTLS/picotls). */
+#if !defined(AT_PROJECT_QUIC) && !defined(AT_PROJECT_PKCS11)
     {
         extern void rom_mbedtls_kat( void );
         rom_mbedtls_kat();
@@ -498,16 +506,7 @@ static void wifi_bringup_thread( void *param )
         rom_hwcrypto_compare();
     }
 #endif
-    {
-        extern void wolfcrypt_bench( void );
-        wolfcrypt_bench();
-    }
-    /* ROM-mbedTLS vs wolfCrypt on the same algos across CPU clocks (200/100/50/25). */
-    {
-        extern void crypto_clock_bench( void );
-        crypto_clock_bench();
-    }
-#endif /* !AT_PROJECT_QUIC */
+#endif /* !AT_PROJECT_QUIC && !AT_PROJECT_PKCS11 */
 
     vTaskDelete( NULL );
 }
@@ -546,11 +545,14 @@ int main(void)
 #endif
 
     /* AT log / shell console (ROM + RAM shell + LOGUART RX ISR). */
-#ifndef AT_PROJECT_QUIC
+#if !defined(AT_PROJECT_QUIC) && !defined(AT_PROJECT_CLI)
     /* AT/monitor shell. Dropped from the QUIC image (the handshake self-test is
      * autonomous, runs from the network-up hook) to remove the at_cmd/monitor
      * code from KM4 image2 — this changes the XIP relative layout to dodge the
-     * boot-hang (doc/amebad_xip_layout_boot_hang.md) and shrinks the image. */
+     * boot-hang (doc/amebad_xip_layout_boot_hang.md) and shrinks the image.
+     * Also dropped from the CLI image (AT_PROJECT_CLI), which owns the LOGUART RX
+     * itself (FreeRTOS+CLI, polled — see below) and must NOT let the monitor grab
+     * IRQ 3. */
     shell_init_rom(0, 0);
     shell_init_ram();
     InterruptRegister((IRQ_FUN)shell_uart_irq_rom, UART_LOG_IRQ, (u32)NULL, 5);
@@ -564,6 +566,17 @@ int main(void)
      * (no IP). The QUIC console is output-only (DiagPrintf TX is unaffected), so
      * just leave RX disabled there. */
     InterruptEn(UART_LOG_IRQ, 5);
+#endif
+
+#ifdef AT_PROJECT_CLI
+    /* FreeRTOS-Plus-CLI interactive console on the LOGUART, in place of the AT
+     * monitor shell. It POLLS the UART (LOGUART_Readable) from its own task and
+     * never enables the RX IRQ — so it sidesteps the "Irq 3 Fun Not Assign" storm
+     * without giving up interactive input. See cli_task.c. */
+    {
+        extern void amebad_cli_start(void);
+        amebad_cli_start();
+    }
 #endif
 
     /* WiFi+DHCP bring-up runs as its own task (wifi_connect blocks). */

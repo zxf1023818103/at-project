@@ -11,6 +11,7 @@
 #   make NIMBLE=ON       # NimBLE host image (LE/GATT + wolfSSL SM crypto)
 #   make HCI=ON          # bare HCI / DTM test image (mutually exclusive with NIMBLE)
 #   make QUIC=ON         # ngtcp2 QUIC client self-test (full wolfSSL TLS1.3 + QUIC)
+#   make CLI=ON          # FreeRTOS-Plus-CLI interactive console on the LOGUART
 #   make TFM=ON          # in-tree TF-M secure world (SPE via ExternalProject; app_km4 = NSPE)
 #   make SECURE=ON       # standalone FreeRTOS TrustZone secure image + KM4 secure-context feature test (excl. TFM)
 #   make STORAGE=ON      # TF-M PSA secure storage (ITS + PS) + NS storage self-test (implies TFM=ON)
@@ -30,7 +31,8 @@ BUILD_TYPE := MinSizeRel
 NIMBLE     ?= OFF          # ON -> NimBLE host
 HCI        ?= OFF          # ON -> bare HCI/DTM
 QUIC       ?= OFF          # ON -> ngtcp2 QUIC client self-test (pulls full wolfSSL TLS1.3)
-WOLFASM    ?= ON           # ON -> wolfCrypt Thumb2 symmetric/hash asm (faster; OFF = portable C)
+CLI        ?= OFF          # ON -> FreeRTOS-Plus-CLI console on the LOGUART (replaces the AT-monitor shell)
+PKCS11     ?= OFF          # ON -> corePKCS11 token self-test (upstream mbedTLS backend + LittleFS PAL)
 TFM        ?= OFF          # ON -> build + boot in-tree TF-M SPE (app_km4 becomes the NS side)
 SECURE     ?= OFF          # ON -> standalone FreeRTOS TrustZone secure image + KM4 secure-context feature test (mutually exclusive with TFM)
 STORAGE    ?= OFF          # ON -> TF-M PSA secure storage (ITS + PS) + NS storage self-test; implies TFM=ON
@@ -58,8 +60,7 @@ configure:
 	  $$([ -f build/km4/CMakeCache.txt ] || echo -DCMAKE_TOOLCHAIN_FILE=cmake/amebad-km4.cmake) \
 	  -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) \
 	  -DAMEBAD_ENABLE_NIMBLE=$(NIMBLE) -DAMEBAD_ENABLE_HCI=$(HCI) \
-	  -DAMEBAD_ENABLE_QUIC=$(QUIC) \
-	  -DAMEBAD_WOLFSSL_ARMASM=$(WOLFASM) \
+	  -DAMEBAD_ENABLE_QUIC=$(QUIC) -DAMEBAD_ENABLE_CLI=$(CLI) -DAMEBAD_ENABLE_PKCS11=$(PKCS11) \
 	  -DAMEBAD_TFM_BOOT=$(TFM) \
 	  -DAMEBAD_TFM_STORAGE=$(STORAGE) \
 	  -DAMEBAD_FREERTOS_SECURE=$(SECURE) \

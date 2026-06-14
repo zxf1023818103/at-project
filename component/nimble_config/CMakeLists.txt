@@ -5,7 +5,7 @@
 #     plus every upstream NimBLE public include dir;
 #   - the portable application + SM-crypto glue, compiled into the `nimble_config`
 #     lib: nimble_app.c (amebad_nimble_start() — GAP/GATT sample peripheral + host
-#     task) and wolfcrypt_sm_glue.c (SM AES/AES-CMAC/ECDH P-256 over wolfCrypt,
+#     task) and mbedtls_sm_glue.c (SM AES/AES-CMAC/ECDH P-256 over mbedTLS,
 #     replacing NimBLE's bundled tinycrypt AES + micro-ecc). Both use plain printf
 #     (newlib -> console), no platform logger.
 #
@@ -18,13 +18,13 @@
 # Upstream is the submodule component/nimble_config/nimble (pinned nimble_1_9_0_tag).
 # Cross-platform: no chip gate — built wherever nimble_config is linked
 # (EXCLUDE_FROM_ALL-style: only the consuming port pulls it). It needs FreeRTOS +
-# the wolfCrypt build (wolfssl_config) on whatever platform builds it.
+# the mbedcrypto build on whatever platform builds it.
 
 set(_nb "${CMAKE_SOURCE_DIR}/component/nimble_config/nimble")
 
 add_library(nimble_config STATIC EXCLUDE_FROM_ALL
     "${CMAKE_CURRENT_SOURCE_DIR}/nimble_app.c"         # amebad_nimble_start() + host task (printf)
-    "${CMAKE_CURRENT_SOURCE_DIR}/wolfcrypt_sm_glue.c"  # SM AES/ECDH on wolfCrypt (replaces tinycrypt)
+    "${CMAKE_CURRENT_SOURCE_DIR}/mbedtls_sm_glue.c"    # SM AES/ECDH on upstream mbedTLS (replaces tinycrypt + the old wolfCrypt glue)
 )
 
 # Config + header surface. PUBLIC so both this lib's own sources and the port see
@@ -57,14 +57,15 @@ target_include_directories(nimble_config SYSTEM PUBLIC
 # FreeRTOS for nimble_app.c (nimble_port_freertos.h: task create + host task).
 target_link_libraries(nimble_config PUBLIC FreeRTOS)
 
-# wolfCrypt headers + WOLFSSL_USER_SETTINGS for wolfcrypt_sm_glue.c — COMPILE
-# requirements only, NOT a link edge (the wc_* symbols resolve via app_km4's
-# cross_refs LINK_GROUP, which lists nimble_config). wolfssl_config is the wolfCrypt
-# provider today; the gen-exprs resolve at generate time regardless of subdir order.
+# mbedTLS headers + the AmebaD MBEDTLS_USER_CONFIG_FILE for mbedtls_sm_glue.c — COMPILE
+# requirements only, NOT a link edge (the mbedtls_* symbols resolve via app_km4's
+# cross_refs LINK_GROUP, which lists mbedcrypto + amebad_mbedtls_port). mbedcrypto carries
+# the amebad config (via amebad_mbedtls_cfg); the gen-exprs resolve at generate regardless
+# of subdir order. (wolfCrypt migration — see component/amebad/mbedtls.)
 target_include_directories(nimble_config SYSTEM PRIVATE
-    $<TARGET_PROPERTY:wolfssl_config,INTERFACE_INCLUDE_DIRECTORIES>)
+    $<TARGET_PROPERTY:mbedcrypto,INTERFACE_INCLUDE_DIRECTORIES>)
 target_compile_definitions(nimble_config PRIVATE
-    $<TARGET_PROPERTY:wolfssl_config,INTERFACE_COMPILE_DEFINITIONS>)
+    $<TARGET_PROPERTY:mbedcrypto,INTERFACE_COMPILE_DEFINITIONS>)
 
 # Our glue rides on the vendored tinycrypt/NimBLE headers — silence their warnings
 # (the AmebaD flag stack is -Wall -Wextra -Werror). -w (last) overrides -Werror.

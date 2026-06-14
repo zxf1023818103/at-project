@@ -1,8 +1,8 @@
 # ngtcp2_config — QUIC transport for KM4 (Cortex-M33), bare-metal.
 #
 # Exposes one aggregate link target, `ngtcp2_config`: downstream code links it to
-# pull the whole QUIC dependency chain (ngtcp2_static core + the wolfSSL crypto
-# helper ngtcp2_crypto + the wolfSSL TLS/QUIC lib) without naming the
+# pull the whole QUIC dependency chain (ngtcp2_static core + the picotls crypto
+# helper ngtcp2_crypto_picotls + picotls's mbedTLS/PSA backend) without naming the
 # individual archives.
 #
 # Core transport: use ngtcp2's OWN upstream CMake target `ngtcp2_static`
@@ -11,8 +11,8 @@
 # build with no TLS backend / shared lib / tests (its defaults pull OpenSSL via
 # find_package and build examples/tests, which don't exist in this cross env).
 #
-# Crypto helper (shared.c + crypto/wolfssl) stays local (ngtcp2_crypto),
-# bound to the in-tree wolfSSL TLS 1.3 + QUIC layer (wolfssl_config).
+# Crypto helper (shared.c + crypto/picotls) stays local (ngtcp2_crypto_picotls),
+# bound to picotls on the mbedTLS/PSA backend (component/picotls_config) — wolfSSL retired.
 #
 # Portability for the no-OS target:
 #   - NGTCP2_USE_GENERIC_SOCKADDR: ngtcp2 uses its own sockaddr structs (newlib
@@ -50,37 +50,30 @@ target_compile_definitions(ngtcp2_static PUBLIC
 )
 target_compile_options(ngtcp2_static PRIVATE -w)   # vendor sources: silence warnings
 
-# ---- crypto helper bound to wolfSSL (crypto/shared.c + crypto/wolfssl) ----
-add_library(ngtcp2_crypto STATIC EXCLUDE_FROM_ALL
+# ---- crypto helper bound to picotls/mbedTLS (crypto/shared.c + crypto/picotls) ----
+# picotls binding over picotls's mbedTLS/PSA backend (component/picotls_config). The PRIVATE
+# picotls_compat dir puts our <picotls/openssl.h> mbedTLS-alias shim ahead of picotls's real
+# (OpenSSL) one, so ngtcp2's binding builds on mbedTLS with no source change.
+add_library(ngtcp2_crypto_picotls STATIC EXCLUDE_FROM_ALL
     "${_ng}/crypto/shared.c"
-    "${_ng}/crypto/wolfssl/wolfssl.c"
+    "${_ng}/crypto/picotls/picotls.c"
 )
-
-# ngtcp2's wolfssl crypto sources #include <wolfssl/options.h> (wolfSSL's autotools
-# configure artifact). This build configures wolfSSL via user_settings.h instead, so
-# write an empty options.h at configure time to satisfy the include.
-file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/wolfssl_compat/wolfssl/options.h"
-     "/* intentionally empty: wolfSSL is configured via user_settings.h\n"
-     " * (WOLFSSL_USER_SETTINGS, set PUBLIC on wolfssl_config). settings.h then\n"
-     " * pulls user_settings.h. */\n")
-
-target_include_directories(ngtcp2_crypto PUBLIC
-    "${_ng}/crypto/includes"                       # -> <ngtcp2/ngtcp2_crypto.h>, ngtcp2_crypto_wolfssl.h
-    "${CMAKE_CURRENT_BINARY_DIR}/wolfssl_compat"   # empty <wolfssl/options.h> shim (file(WRITE) above)
+target_include_directories(ngtcp2_crypto_picotls PUBLIC
+    "${_ng}/crypto/includes"                            # <ngtcp2/ngtcp2_crypto.h>, ngtcp2_crypto_picotls.h
 )
-target_include_directories(ngtcp2_crypto PRIVATE
-    "${_ng}/crypto"                 # shared.h
-    "${_ng}/lib"                    # ngtcp2_macro.h, ngtcp2_net.h
+target_include_directories(ngtcp2_crypto_picotls PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/picotls_compat"        # <picotls/openssl.h> -> mbedTLS aliases (searched first)
+    "${_ng}/crypto"                                     # shared.h
+    "${_ng}/lib"                                        # ngtcp2_macro.h, ngtcp2_net.h
 )
-
-# Public deps: ngtcp2 core (ngtcp2.h, via ngtcp2_static) + full wolfSSL TLS/QUIC.
-target_link_libraries(ngtcp2_crypto PUBLIC ngtcp2_static wolfssl_config)
-target_compile_options(ngtcp2_crypto PRIVATE -w)
+# Link the real picotls archives (NOT the picotls_config INTERFACE umbrella): a consumer's
+# flat cross_refs LINK_GROUP lists picotls_core/picotls_mbedtls as members, and routing
+# through the INTERFACE would make CMake see a group<->umbrella dependency cycle.
+target_link_libraries(ngtcp2_crypto_picotls PUBLIC ngtcp2_static picotls_mbedtls picotls_core)
+target_compile_options(ngtcp2_crypto_picotls PRIVATE -w)
 
 # ---- aggregate target: link this to pull the whole QUIC dependency chain ----
-# ngtcp2_crypto already PUBLIC-links ngtcp2_static + wolfssl_config, so the
-# interface transitively brings in everything a QUIC consumer needs (ngtcp2.h,
-# ngtcp2_crypto.h, the wolfSSL TLS/QUIC API). ngtcp2_static is listed explicitly
-# too so it is named inside a consumer's --start-group (cross-archive QUIC refs).
+# ngtcp2_crypto_picotls PUBLIC-links ngtcp2_static + picotls, so the interface transitively
+# brings in everything a QUIC consumer needs (ngtcp2.h, ngtcp2_crypto.h, the picotls API).
 add_library(ngtcp2_config INTERFACE)
-target_link_libraries(ngtcp2_config INTERFACE ngtcp2_crypto ngtcp2_static)
+target_link_libraries(ngtcp2_config INTERFACE ngtcp2_crypto_picotls ngtcp2_static)
