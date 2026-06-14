@@ -37,18 +37,24 @@ add_subdirectory(mbedtls "${CMAKE_BINARY_DIR}/at_mbedtls_build" EXCLUDE_FROM_ALL
 set(MBEDTLS_CONFIG_DIR "${CMAKE_CURRENT_SOURCE_DIR}" CACHE INTERNAL
     "component/mbedtls_config source dir (threading_alt.h / mbedtls_threading_alt.c / user config)")
 
-# The MBEDTLS_USER_CONFIG_FILE selection lives here, next to the file it names. AmebaD compiles
-# upstream mbedTLS with the DEFAULT mbedtls_config.h + these deltas (mbedtls_amebad_user_config.h:
-# disable net/fs/time, enable threading + no-platform-entropy). Attached PUBLIC onto the upstream
-# targets so (a) their own sources compile with the deltas and (b) every consumer inherits them.
-# AmebaD-only: Bouffalo replaces the whole config via MBEDTLS_CONFIG_FILE=config-tls-generic.h
-# (set in component/bouffalo_sdk), so a USER_CONFIG_FILE pointing at AmebaD deltas must not leak
-# there. The HW-specific *_ALT flags + gcm_alt.h stay in component/amebad/mbedtls_port.
+# These selections live HERE, each next to the file it names/uses (tree-structured: a macro sits
+# with its implementation, not in a far-off port):
+#   - MBEDTLS_USER_CONFIG_FILE -> mbedtls_amebad_user_config.h (this dir): the default-config deltas
+#     (disable net/fs/time, enable threading + no-platform-entropy).
+#   - MBEDTLS_THREADING_ALT    -> threading_alt.h + mbedtls_threading_alt.c (this dir): route the
+#     mbedTLS mutexes to the FreeRTOS callbacks compiled into the mbedtls_config lib above.
+# Attached PUBLIC onto the upstream targets so (a) their own sources compile with them and (b) every
+# consumer inherits them; the include dir (this dir) lets their threading.h find threading_alt.h.
+# AmebaD-only: Bouffalo replaces the whole config via MBEDTLS_CONFIG_FILE=config-tls-generic.h (set
+# in component/bouffalo_sdk) and doesn't use the FreeRTOS threading-alt, so neither may leak there —
+# upstream threading.h pulls threading_alt.h on MBEDTLS_THREADING_ALT alone (no THREADING_C guard).
+# The HW-specific *_ALT (entropy/gcm/chachapoly) sit with THEIR impls in component/amebad/mbedtls_port.
 if("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     foreach(_t mbedcrypto mbedx509 mbedtls p256m everest)
         if(TARGET ${_t})
             target_compile_definitions(${_t} PUBLIC
-                MBEDTLS_USER_CONFIG_FILE="mbedtls_amebad_user_config.h")
+                MBEDTLS_USER_CONFIG_FILE="mbedtls_amebad_user_config.h"
+                MBEDTLS_THREADING_ALT)
             target_include_directories(${_t} SYSTEM PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
         endif()
     endforeach()

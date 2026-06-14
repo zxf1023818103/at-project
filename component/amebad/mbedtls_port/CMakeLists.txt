@@ -19,19 +19,18 @@ if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     return()
 endif()
 
-# Config surface attached PUBLIC onto the upstream mbedcrypto/mbedx509 targets: the MBEDTLS_*_ALT
-# selections (as -D, so the HW-crypto ones can be gated on a build option) + the include dirs for
-# the headers their sources pull by bare name. (MBEDTLS_USER_CONFIG_FILE itself is selected in
-# component/mbedtls_config, next to the mbedtls_amebad_user_config.h it names.)
-#   - threading_alt.h                                  -> component/mbedtls_config (MBEDTLS_CONFIG_DIR)
-#   - gcm_alt.h / chachapoly_alt.h (the HW *_ALT contexts) -> this dir
+# Config surface attached PUBLIC onto the upstream mbedcrypto/mbedx509 targets: ONLY the *_ALT
+# selections whose implementations live in THIS dir (tree-structured — define-with-impl). The
+# selections backed by component/mbedtls_config (MBEDTLS_USER_CONFIG_FILE, MBEDTLS_THREADING_ALT)
+# are declared there, next to their files.
+#   - MBEDTLS_ENTROPY_HARDWARE_ALT -> entropy_hardware_alt.c (this dir)
+#   - MBEDTLS_GCM_ALT / _CHACHAPOLY_ALT (option below) -> gcm_alt.c / chachapoly_alt.c (this dir)
+# The include dir carries gcm_alt.h / chachapoly_alt.h (the HW *_ALT context structs) by bare name.
 add_library(amebad_mbedtls_cfg INTERFACE)
 target_compile_definitions(amebad_mbedtls_cfg INTERFACE
-    MBEDTLS_THREADING_ALT            # FreeRTOS mutex: threading_alt.h + mbedtls_threading_alt.c
     MBEDTLS_ENTROPY_HARDWARE_ALT)    # mbedtls_hardware_poll(): entropy_hardware_alt.c
 target_include_directories(amebad_mbedtls_cfg SYSTEM INTERFACE
-    "${CMAKE_CURRENT_SOURCE_DIR}"    # gcm_alt.h / chachapoly_alt.h
-    "${MBEDTLS_CONFIG_DIR}")         # threading_alt.h
+    "${CMAKE_CURRENT_SOURCE_DIR}")   # gcm_alt.h / chachapoly_alt.h
 
 # Opt-in: route the AEAD ciphers to the RTL8721D IPSEC HW engine — MBEDTLS_GCM_ALT (gcm_alt.{h,c})
 # + MBEDTLS_CHACHAPOLY_ALT (chachapoly_alt.{h,c}); both NS ROM, NSPE-direct. AES-GCM ~115x the
