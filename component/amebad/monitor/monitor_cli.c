@@ -130,6 +130,45 @@ static BaseType_t cmd_reboot( char *out, size_t outlen, const char *cmd )
     return pdFALSE;
 }
 
+/* ---- low-level ROM commands (dw / ew / flash / efuse) -------------------- */
+/* The AmebaD ROM (+ monitor_rom.c on KM4) provides cmd_dump_word / cmd_write_word / cmd_flash /
+ * cmd_efuse with the classic (argc, argv) handler ABI; they print their own output via
+ * MONITOR_LOG (DiagPrintf). Adapt a FreeRTOS+CLI line to that ABI: split the parameters into a
+ * small argv[] of NUL-terminated tokens (argv[0] = first param, i.e. the command name is already
+ * stripped by the CLI), call the handler, and leave the CLI output buffer empty. */
+typedef u32 ( *mon_cmd_fn )( u16 argc, u8 *argv[] );
+
+#define MON_MAX_ARGV  5
+#define MON_ARG_LEN   68          /* fits an efuse 32-byte hex data string (64 chars) + NUL */
+
+static BaseType_t run_rom_cmd( mon_cmd_fn fn, const char *cmd, char *out, size_t outlen )
+{
+    static char tok[ MON_MAX_ARGV ][ MON_ARG_LEN ];
+    static u8  *argv[ MON_MAX_ARGV ];
+    u16 argc = 0;
+
+    ( void ) outlen;
+    while( argc < MON_MAX_ARGV )
+    {
+        BaseType_t plen = 0;
+        const char *p = FreeRTOS_CLIGetParameter( cmd, argc + 1, &plen );
+        if( p == NULL ) { break; }
+        if( plen > MON_ARG_LEN - 1 ) { plen = MON_ARG_LEN - 1; }
+        memcpy( tok[ argc ], p, plen );
+        tok[ argc ][ plen ] = '\0';
+        argv[ argc ] = ( u8 * ) tok[ argc ];
+        argc++;
+    }
+    out[ 0 ] = '\0';              /* the ROM handler prints directly via MONITOR_LOG */
+    fn( argc, argv );
+    return pdFALSE;
+}
+
+static BaseType_t cmd_dw( char *o, size_t n, const char *c )    { return run_rom_cmd( cmd_dump_word,  c, o, n ); }
+static BaseType_t cmd_ew( char *o, size_t n, const char *c )    { return run_rom_cmd( cmd_write_word, c, o, n ); }
+static BaseType_t cmd_flash_( char *o, size_t n, const char *c ){ return run_rom_cmd( cmd_flash,      c, o, n ); }
+static BaseType_t cmd_efuse_( char *o, size_t n, const char *c ){ return run_rom_cmd( cmd_efuse,      c, o, n ); }
+
 /* ---- console hand-off commands ( >> / km0 / km4 ) ------------------------- */
 
 /* target == NULL -> toggle (always hand off); else hand off iff `target` names the OTHER core. */
@@ -172,6 +211,10 @@ static const CLI_Command_Definition_t kCmds[] = {
     { "tasks",   "tasks:\r\n list the FreeRTOS tasks\r\n",                        cmd_tasks,     0 },
     { "echo",    "echo <text>:\r\n echo the argument back\r\n",                   cmd_echo,      1 },
     { "reboot",  "reboot [uartburn]:\r\n watchdog-reset this core (uartburn -> UART download mode)\r\n", cmd_reboot, -1 },
+    { "dw",      "dw <hexaddr>:\r\n dump a memory dword\r\n",                     cmd_dw,        -1 },
+    { "ew",      "ew <hexaddr> <hexval>:\r\n write a memory dword\r\n",           cmd_ew,        -1 },
+    { "flash",   "flash <erase|read|write|...> ...:\r\n flash ops (see SDK cmd_flash)\r\n", cmd_flash_, -1 },
+    { "efuse",   "efuse <wmap|rmap|wraw|rraw> ...:\r\n efuse ops (wmap/wraw BURN efuse)\r\n", cmd_efuse_, -1 },
     { ">>",      ">>:\r\n hand the console to the other core\r\n",                cmd_sw_toggle, 0 },
     { "km0",     "km0:\r\n switch the console to KM0\r\n",                        cmd_sw_km0,    0 },
     { "km4",     "km4:\r\n switch the console to KM4\r\n",                        cmd_sw_km4,    0 },

@@ -52,8 +52,8 @@ set(_combined_ld "${CMAKE_CURRENT_BINARY_DIR}/rlx8721d.ld")
 add_custom_command(
     OUTPUT  "${_combined_ld}"
     COMMAND "${CMAKE_COMMAND}" -E cat "${_img2_ld}" "${AMEBAD_COMMON_ROM_SYMBOL_LD}"
-                                       "${AMEBAD_FWLIB_ROM_KM0_LD}" "${AMEBAD_STRING_ROM_KM0_LD}" "${AMEBAD_CMSIS_ROM_KM0_LD}" "${AMEBAD_XMODEM_ROM_SYMBOL_LD}" "${_romalias_ld}" > "${_combined_ld}"
-    DEPENDS "${_img2_ld}" "${AMEBAD_COMMON_ROM_SYMBOL_LD}" "${AMEBAD_FWLIB_ROM_KM0_LD}" "${AMEBAD_STRING_ROM_KM0_LD}" "${AMEBAD_CMSIS_ROM_KM0_LD}" "${AMEBAD_XMODEM_ROM_SYMBOL_LD}"
+                                       "${AMEBAD_FWLIB_ROM_KM0_LD}" "${AMEBAD_STRING_ROM_KM0_LD}" "${AMEBAD_CMSIS_ROM_KM0_LD}" "${AMEBAD_MONITOR_ROM_LD}" "${AMEBAD_XMODEM_ROM_SYMBOL_LD}" "${_romalias_ld}" > "${_combined_ld}"
+    DEPENDS "${_img2_ld}" "${AMEBAD_COMMON_ROM_SYMBOL_LD}" "${AMEBAD_FWLIB_ROM_KM0_LD}" "${AMEBAD_STRING_ROM_KM0_LD}" "${AMEBAD_CMSIS_ROM_KM0_LD}" "${AMEBAD_MONITOR_ROM_LD}" "${AMEBAD_XMODEM_ROM_SYMBOL_LD}"
             "${AMEBAD_COMMON_LAYOUT_LD}" "${_romalias_ld}"
     COMMENT "concat KM0 image2 linker script"
     VERBATIM

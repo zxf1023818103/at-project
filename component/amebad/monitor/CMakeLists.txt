@@ -26,13 +26,13 @@ else()
     return()
 endif()
 
-# monitor_rom.ld: KM0 mask-ROM addresses of the ROM boot-shell (shell_rom, cmd_*, shell_*). The
-# image2 console no longer uses the ROM shell (it's FreeRTOS-Plus-CLI now), but the KM0
-# BOOTLOADER still calls shell_rom (boot_ram_lp.c / boot_flash_lp.c — the boot-time uartburn
-# console), so this ROM-symbol PROVIDE table is still cat'd into the KM0 bootloader links via
-# AMEBAD_MONITOR_ROM_LD (NOT into image2 anymore). KM4 builds the boot shell differently — no table.
+# monitor_rom.ld: KM0 mask-ROM addresses of the ROM shell (shell_rom, cmd_*, shell_*). Cat'd into
+# the KM0 bootloader AND image2 links via AMEBAD_MONITOR_ROM_LD (PROVIDE -> unreferenced entries
+# cost nothing). Two live users on KM0: the BOOTLOADER calls shell_rom (boot-time uartburn
+# console), and the image2 CLI's dw/ew/flash/efuse commands call the ROM cmd_* handlers. KM4 has
+# no ROM table for these (it compiles cmd_* from monitor_rom.c), so no KM4 table.
 set(AMEBAD_MONITOR_ROM_LD "${CMAKE_CURRENT_SOURCE_DIR}/monitor_rom.ld"
-    CACHE INTERNAL "AmebaD KM0 ROM boot-shell symbol PROVIDE linker script (bootloader-only)")
+    CACHE INTERNAL "AmebaD KM0 ROM shell/cmd symbol PROVIDE linker script (bootloader + image2)")
 
 # Vendor-code warning suppression (the engine pulls the SDK headers under -Wall -Wextra).
 set(_monitor_warnings
@@ -53,9 +53,13 @@ target_compile_options(amebad_monitor_common PRIVATE ${_monitor_warnings})
 # Per-core identity seam; links the shared engine (PUBLIC so a consumer that links the per-core
 # lib also pulls amebad_monitor_common). Same target name on both cores — never in one build.
 if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
+    # KM0 gets the cmd_* (dw/ew/flash/efuse) ROM handlers from monitor_rom.ld (ROM addresses),
+    # cat'd into the KM0 image2 link via AMEBAD_MONITOR_ROM_LD.
     add_library(amebad_monitor STATIC monitor_plat_lp.c)
 elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
-    add_library(amebad_monitor STATIC monitor_plat_hp.c)
+    # KM4 has no ROM table for cmd_*, so compile them from monitor_rom.c (self-contained:
+    # ameba_soc.h + MONITOR_LOG; SHELL_ROM_TEXT_SECTION is a no-op in a normal build).
+    add_library(amebad_monitor STATIC monitor_plat_hp.c monitor_rom.c)
 endif()
 target_link_libraries(amebad_monitor PUBLIC amebad_monitor_common)
 target_compile_options(amebad_monitor PRIVATE ${_monitor_warnings})
