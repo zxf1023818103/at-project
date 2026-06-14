@@ -104,6 +104,17 @@ wolfCrypt 一旦开 SP Cortex-M / Thumb2 asm（本项目 `WOLFASM=ON` 的实际�
 - **X25519**：换用 mbedTLS 的 `MBEDTLS_ECP_DP_CURVE25519` 优化路径或外部 25519 实现（当前最大短板）。
 - **AES**：纯 C 打不过 wolf Thumb2；如需高吞吐 TLS，考虑把 AES 表/代码放 SRAM（参考 [amebad_crypto_rom_mbedtls_vs_wolfcrypt.md](amebad_crypto_rom_mbedtls_vs_wolfcrypt.md) §优化二）或上 PSA AES driver。
 
+### ★ HW AES-GCM 出路已实测可行（2026-06-14）
+
+之前以为 RTL8721D 的 IPSEC 硬件加密引擎"调不通"——**翻案了**：从 **TF-M SPE（secure 世界）** 调通了，
+NIST AES-128-GCM KAT MATCH，**4.04 cyc/B ≈ 48 MB/s vs 软件 465.59 cyc/B / 419 KB/s → ~115×**。
+关键：① 外设是 secure-only attributed，必须在 secure 世界跑（NS SecureFault）；② IPSEC 是 DMA 引擎、
+读不了 flash，key/数据要放 SRAM。落地为 TF-M Platform IOCTL `AMEBAD_IOCTL_HWCRYPTO_GCM`（KAT + cyc/B），
+ROM `rtl_crypto_aes_gcm_*`（secure 0x10104065/0x101040b9）。详见 [[reference_amebad_hw_crypto]] 记忆。
+**意义**：软件 GCM 419 KB/s 低于 WiFi ceiling（~9 Mbps）= crypto 是 QUIC 的墙；HW 48 MB/s 后 crypto 不再是瓶颈。
+**剩余 caveat**：真接 QUIC 要 per-packet（~1200B）NS→SPE PSA 调用，跨界 + per-op setup 开销可能吃掉部分收益，
+需实测（PSA AEAD HW driver）。
+
 ## 复现
 
 ```bash

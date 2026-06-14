@@ -32,6 +32,19 @@
  * leaking the key (only a folded 32-bit hash + a blank flag cross the boundary). */
 #define AMEBAD_IOCTL_EFUSE_HUK_INFO  ((tfm_platform_ioctl_req_t)0x8721E0)
 
+/* HW-crypto KAT: run the IPSEC engine AES-128-ECB known-answer test from the
+ * SECURE side. The crypto peripheral is security-attributed secure-only — the NS
+ * driver-only image SecureFaults on it (see reference_amebad_hw_crypto); now that
+ * we have TF-M, test whether the SPE can reach it. Step-based (step in in_vec) so
+ * the NS client sees exactly which call dies if the engine hangs/faults:
+ *   0 = CRYPTO_Init(NULL)   1 = rtl_crypto_aes_ecb_init(key,16)
+ *   2 = rtl_crypto_aes_ecb_encrypt(pt) [prior NS death point]   3 = compare vs FIPS-197
+ * ROM entry points are the SECURE aliases from rom_symbol_s.txt (called secure->
+ * secure here, unlike the NS attempt). */
+#define AMEBAD_IOCTL_HWCRYPTO_KAT    ((tfm_platform_ioctl_req_t)0x8721F0)
+/* HW AES-128-GCM (QUIC record cipher) KAT + cyc/B throughput, run in the SPE. */
+#define AMEBAD_IOCTL_HWCRYPTO_GCM    ((tfm_platform_ioctl_req_t)0x872200)
+
 void tfm_platform_hal_system_reset(void)
 {
     /* Flush any platform state here if needed, then reset the SoC. The KM4 is
@@ -87,6 +100,116 @@ enum tfm_platform_err_t tfm_platform_hal_ioctl(tfm_platform_ioctl_req_t request,
 
         memcpy(out_vec->base, out, sizeof(out));
         out_vec->len = sizeof(out);
+        return TFM_PLATFORM_ERR_SUCCESS;
+    }
+    case AMEBAD_IOCTL_HWCRYPTO_KAT: {
+        typedef int (*crypto_init_fn)(void *);
+        typedef int (*aes_init_fn)(const unsigned char *, unsigned int);
+        typedef int (*aes_ecb_fn)(const unsigned char *, unsigned int,
+                                  const unsigned char *, unsigned int, unsigned char *);
+        /* SECURE ROM aliases (rom_symbol_s.txt: secure ROM 0x10104xxx). */
+        crypto_init_fn ROM_CRYPTO_Init     = (crypto_init_fn)0x10104a49u;
+        aes_init_fn    ROM_aes_ecb_init    = (aes_init_fn)0x10103d19u;
+        aes_ecb_fn     ROM_aes_ecb_encrypt = (aes_ecb_fn)0x10103d69u;
+        static const unsigned char exp[16] = {
+            0x69,0xc4,0xe0,0xd8,0x6a,0x7b,0x04,0x30,
+            0xd8,0xcd,0xb7,0x80,0x70,0xb4,0xc5,0x5a };
+        /* The IPSEC engine DMA-reads key/message — they must live in SRAM, NOT in
+         * the secure XIP flash (.rodata). Use static .bss (SRAM) so they also persist
+         * across the separate step IOCTL calls (aes_ecb_init saves the key pointer,
+         * loaded later by aes_ecb_encrypt). */
+        static unsigned char k[16], pt[16];
+        static unsigned char hw[16];   /* .bss = SRAM (engine DMA-writes here) */
+        uint32_t step, res = 0, i;
+
+        if (in_vec == NULL || in_vec->base == NULL || in_vec->len != sizeof(uint32_t) ||
+            out_vec == NULL || out_vec->base == NULL || out_vec->len < sizeof(uint32_t)) {
+            return TFM_PLATFORM_ERR_INVALID_PARAM;
+        }
+        for (i = 0; i < 16; i++) { k[i] = (unsigned char)i; pt[i] = (unsigned char)((i << 4) | i); }
+        memcpy(&step, in_vec->base, sizeof(step));
+
+        switch (step) {
+        case 0: res = (uint32_t)ROM_CRYPTO_Init(0); break;                  /* touch secure-only periph */
+        case 1: res = (uint32_t)ROM_aes_ecb_init(k, 16); break;
+        case 2: res = (uint32_t)ROM_aes_ecb_encrypt(pt, 16, 0, 0, hw); break; /* prior NS death point */
+        case 3:                                                            /* compare vs FIPS-197 */
+            res  = (memcmp(hw, exp, 16) == 0) ? 1u : 0u;
+            res |= (uint32_t)hw[0] << 8;
+            res |= (uint32_t)hw[1] << 16;
+            break;
+        default:
+            return TFM_PLATFORM_ERR_INVALID_PARAM;
+        }
+        memcpy(out_vec->base, &res, sizeof(res));
+        out_vec->len = sizeof(res);
+        return TFM_PLATFORM_ERR_SUCCESS;
+    }
+    case AMEBAD_IOCTL_HWCRYPTO_GCM: {
+        /* HW AES-128-GCM (the QUIC record cipher) from the SPE: KAT + cyc/B via the
+         * DWT cycle counter, to compare vs the software [MCB] number (465 cyc/B,
+         * 419 KB/s). All buffers in SRAM .bss (the IPSEC DMA can't read flash). */
+        typedef int (*gcm_init_fn)(const unsigned char *, unsigned int);
+        typedef int (*gcm_enc_fn)(const unsigned char *msg, unsigned int msglen,
+                                  const unsigned char *iv, const unsigned char *aad,
+                                  unsigned int aadlen, unsigned char *out, unsigned char *tag);
+        gcm_init_fn ROM_gcm_init = (gcm_init_fn)0x10104065u;   /* secure ROM */
+        gcm_enc_fn  ROM_gcm_enc  = (gcm_enc_fn)0x101040b9u;
+        /* NIST GCM AES-128 test case 2: all-zero key/IV/PT, no AAD. */
+        static const unsigned char exp_ct[16] = {
+            0x03,0x88,0xda,0xce,0x60,0xb6,0xa3,0x92,0xf3,0x28,0xc2,0xb9,0x71,0xb2,0xfe,0x78 };
+        static const unsigned char exp_tag[16] = {
+            0xab,0x6e,0x47,0xd4,0x2c,0xec,0x13,0xbd,0xf5,0x3a,0x67,0xb2,0x12,0x57,0xbd,0xdf };
+        static unsigned char zk[16], ziv[12], zpt[16], ctk[16], tag[16], iv[12];
+        static unsigned char buf[4096], obuf[4096];
+        uint32_t res[4] = {0,0,0,0};
+        uint32_t i, n, c0, c1, cyc, total, kat;
+        const uint32_t HZ = 200000000u;
+        const uint32_t LOOPS = 64u;        /* 64 * 4 KB = 256 KB through GCM */
+
+        if (out_vec == NULL || out_vec->base == NULL || out_vec->len < sizeof(res)) {
+            return TFM_PLATFORM_ERR_INVALID_PARAM;
+        }
+        for (i = 0; i < 16; i++) { zk[i] = 0; zpt[i] = 0; }
+        for (i = 0; i < 12; i++) { ziv[i] = 0; iv[i] = (unsigned char)i; }
+
+        /* ---- KAT (correctness) ---- */
+        ROM_gcm_init(zk, 16);
+        ROM_gcm_enc(zpt, 16, ziv, 0, 0, ctk, tag);
+        kat = (memcmp(ctk, exp_ct, 16) == 0 && memcmp(tag, exp_tag, 16) == 0) ? 1u : 0u;
+
+        /* ---- throughput (cyc/B over 256 KB) ---- */
+        for (i = 0; i < sizeof(buf); i++) { buf[i] = (unsigned char)i; }
+        ROM_gcm_init(zk, 16);
+        /* This M33 has no DWT CYCCNT (NOCYCCNT=1) -> use SysTick. A single 4 KB GCM
+         * op is well under the 24-bit (16.7M) wrap, so measure per-op and accumulate.
+         * Save/restore SysTick so TF-M timing is undisturbed. */
+        {
+            volatile uint32_t *SYST_CSR = (volatile uint32_t *)0xE000E010u;
+            volatile uint32_t *SYST_RVR = (volatile uint32_t *)0xE000E014u;
+            volatile uint32_t *SYST_CVR = (volatile uint32_t *)0xE000E018u;
+            uint32_t save_csr = *SYST_CSR, save_rvr = *SYST_RVR;
+            cyc = 0;
+            *SYST_CSR = 0;                 /* stop */
+            *SYST_RVR = 0x00FFFFFFu;       /* 24-bit max */
+            *SYST_CVR = 0;                 /* clear -> reloads to RVR */
+            *SYST_CSR = 5u;                /* ENABLE | CLKSOURCE=processor */
+            for (n = 0; n < LOOPS; n++) {
+                uint32_t s = *SYST_CVR;
+                ROM_gcm_enc(buf, sizeof(buf), iv, 0, 0, obuf, tag);
+                cyc += (s - *SYST_CVR) & 0x00FFFFFFu;   /* down-counter delta (1 op << 16M) */
+            }
+            *SYST_CSR = 0; *SYST_RVR = save_rvr; *SYST_CVR = 0; *SYST_CSR = save_csr;
+        }
+        total = LOOPS * (uint32_t)sizeof(buf);
+        res[0] = kat;
+        res[1] = (cyc != 0) ? (uint32_t)((unsigned long long)cyc * 100u / total) : 0u;  /* cyc/B x100 */
+        res[2] = (cyc != 0) ? (uint32_t)((unsigned long long)total * HZ / cyc / 1024u) : 0u; /* KB/s */
+        res[3] = ((uint32_t)ctk[0] << 24) | ((uint32_t)ctk[1] << 16) |
+                 ((uint32_t)tag[0] << 8) | (uint32_t)tag[1];
+        (void)c0; (void)c1;
+        memcpy(out_vec->base, res, sizeof(res));
+        out_vec->len = sizeof(res);
         return TFM_PLATFORM_ERR_SUCCESS;
     }
     default:
