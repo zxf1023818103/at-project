@@ -22,10 +22,17 @@
 #define LFS_CFG_LOOKAHEAD_SIZE  256u
 #define LFS_CFG_BLOCK_CYCLES    500
 
-/* LFS partition is identical on every platform: raw flash offset 0x300000 to the
- * 4 MB flash end = 1024 KB = 256 * 4 KB blocks. See doc/lfs.md / flash_layout.md. */
+/* LFS partition is identical on every platform: raw flash offset 0x300000, size
+ * 960 KB = 240 * 4 KB blocks, ending at 0x3F0000. The top 64 KB (0x3F0000-0x400000)
+ * is RESERVED for platform secure storage — on Ameba D it holds the TF-M PSA
+ * ITS/PS/NV-counter areas (see doc/amebad_tfm_storage.md §2); on the other
+ * platforms it is simply left blank. Kept uniform across platforms so a single
+ * lfs.bin (formatted at 240 blocks) mounts everywhere. See doc/lfs.md /
+ * flash_layout.md. NB block_count is recorded in the LFS superblock, so this
+ * value must match the image mklittlefs produces (IMAGE_SIZE in
+ * component/lfs_image/CMakeLists.txt). */
 #define LFS_CFG_REGION_OFFSET   0x300000u
-#define LFS_CFG_REGION_SIZE     0x100000u
+#define LFS_CFG_REGION_SIZE     0x0F0000u
 #define LFS_CFG_BLOCK_COUNT     (LFS_CFG_REGION_SIZE / LFS_CFG_BLOCK_SIZE)
 
 #ifdef __cplusplus

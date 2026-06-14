@@ -12,6 +12,8 @@
 #   make HCI=ON          # bare HCI / DTM test image (mutually exclusive with NIMBLE)
 #   make QUIC=ON         # ngtcp2 QUIC client self-test (full wolfSSL TLS1.3 + QUIC)
 #   make TFM=ON          # in-tree TF-M secure world (SPE via ExternalProject; app_km4 = NSPE)
+#   make SECURE=ON       # standalone FreeRTOS TrustZone secure image + KM4 secure-context feature test (excl. TFM)
+#   make STORAGE=ON      # TF-M PSA secure storage (ITS + PS) + NS storage self-test (implies TFM=ON)
 #   make clean           # ninja clean both cores
 #   make distclean       # delete build/km0 build/km4 build/amebad
 #
@@ -30,6 +32,11 @@ HCI        ?= OFF          # ON -> bare HCI/DTM
 QUIC       ?= OFF          # ON -> ngtcp2 QUIC client self-test (pulls full wolfSSL TLS1.3)
 WOLFASM    ?= ON           # ON -> wolfCrypt Thumb2 symmetric/hash asm (faster; OFF = portable C)
 TFM        ?= OFF          # ON -> build + boot in-tree TF-M SPE (app_km4 becomes the NS side)
+SECURE     ?= OFF          # ON -> standalone FreeRTOS TrustZone secure image + KM4 secure-context feature test (mutually exclusive with TFM)
+STORAGE    ?= OFF          # ON -> TF-M PSA secure storage (ITS + PS) + NS storage self-test; implies TFM=ON
+ifeq ($(STORAGE),ON)
+TFM        := ON           # secure storage lives in the TF-M SPE
+endif
 VFSTEST    ?= OFF          # ON -> POSIX-fd VFS self-test (fopen/open/socket over LFS+sockets)
 CPPTEST    ?= OFF          # ON -> C++ std::filesystem/iostream self-test (cout/cin over LPUART, stderr LOGUART)
 IMAGE      := $(REPO)/build/amebad/firmware.bin
@@ -54,6 +61,8 @@ configure:
 	  -DAMEBAD_ENABLE_QUIC=$(QUIC) \
 	  -DAMEBAD_WOLFSSL_ARMASM=$(WOLFASM) \
 	  -DAMEBAD_TFM_BOOT=$(TFM) \
+	  -DAMEBAD_TFM_STORAGE=$(STORAGE) \
+	  -DAMEBAD_FREERTOS_SECURE=$(SECURE) \
 	  -DAMEBAD_VFS_SELFTEST=$(VFSTEST) \
 	  -DAMEBAD_CPP_SELFTEST=$(CPPTEST)
 

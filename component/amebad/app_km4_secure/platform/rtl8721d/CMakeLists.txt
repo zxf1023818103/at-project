@@ -56,6 +56,25 @@ target_sources(platform_s
         cmsis_drivers/Driver_Flash.c
 )
 
+#-------------------- crypto keys: HUK from the TrustZone-secure eFuse ---------
+# When STORAGE=ON (-DAMEBAD_TFM_STORAGE), replace the default flash-OTP HUK with
+# our eFuse-backed crypto_keys.c (tfm_plat_get_huk reads 0x150, 32 B). config.cmake
+# set PLATFORM_DEFAULT_CRYPTO_KEYS OFF (skip the template source) but kept the
+# -DPLATFORM_DEFAULT_CRYPTO_KEYS define (HUK slot enum). The platform_crypto_keys
+# target's link libs (header paths) are added unconditionally by TF-M; we only add
+# our source + the crypto_keys + port (efuse_huk.h) include dirs. This runs before
+# TF-M's default crypto-keys block, and with the var OFF that block adds no source.
+if(AMEBAD_TFM_STORAGE AND TARGET platform_crypto_keys)
+    target_sources(platform_crypto_keys
+        PRIVATE
+            ${CMAKE_CURRENT_LIST_DIR}/services/src/crypto_keys.c)
+    target_include_directories(platform_crypto_keys
+        PRIVATE
+            ${CMAKE_SOURCE_DIR}/interface/include/crypto_keys   # tfm_builtin_key_ids.h
+            ${CMAKE_CURRENT_LIST_DIR})                          # efuse_huk.h
+    target_compile_options(platform_crypto_keys PUBLIC ${COMPILER_CMSE_FLAG})
+endif()
+
 #-------------------- secure image: startup + scatter -------------------------
 target_sources(tfm_s
     PRIVATE

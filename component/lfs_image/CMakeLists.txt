@@ -32,8 +32,11 @@
 #   PAGE_SIZE  = 256    (mklittlefs hardcodes its own cache_size etc. to
 #                        64 internally; disk format depends only on
 #                        block_size, so runtime mount works regardless)
-#   IMAGE_SIZE = 1048576  (1024 KB — fills LFS to flash end now that the
-#                          Ameba D FTL/settings cluster is gone)
+#   IMAGE_SIZE = 983040   (960 KB — LFS region 0x300000-0x3F0000; the top 64 KB
+#                          0x3F0000-0x400000 is reserved for platform secure
+#                          storage = TF-M ITS/PS/NV on Ameba D. MUST match
+#                          LFS_CFG_BLOCK_COUNT in component/littlefs_config, since
+#                          mklittlefs records block_count in the superblock.)
 #   TARGET     = lfs_image
 
 # ---------------------------------------------------------------------
@@ -149,7 +152,10 @@ function(lfs_image_add target_path)
         set(LFS_PAGE_SIZE 256)
     endif()
     if(NOT LFS_IMAGE_SIZE)
-        set(LFS_IMAGE_SIZE 1048576)
+        # 960 KB = 240 * 4 KB blocks (0x300000-0x3F0000). Top 64 KB reserved for
+        # platform secure storage (TF-M ITS/PS/NV on Ameba D). MUST match
+        # LFS_CFG_BLOCK_COUNT in component/littlefs_config (superblock records it).
+        set(LFS_IMAGE_SIZE 983040)
     endif()
     if(NOT LFS_TARGET)
         set(LFS_TARGET lfs_image)

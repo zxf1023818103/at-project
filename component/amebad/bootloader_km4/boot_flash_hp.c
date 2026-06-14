@@ -683,8 +683,15 @@ void BOOT_FLASH_Image1(void)
 		goto INVALID_IMG2;
 	}
 
-#ifdef AMEBAD_TFM_BOOT
-	/* TF-M-first NS handoff: app_km4's image2 is now loaded (.data copied above,
+#if defined(AMEBAD_TFM_BOOT) || defined(AMEBAD_SECURE_BOOT)
+	/* Secure-world-first NS handoff. The secure-jump block below is payload-
+	 * agnostic — it works identically for TF-M (AMEBAD_TFM_BOOT, secure image =
+	 * tfm_s.bin) and for the standalone FreeRTOS secure image (AMEBAD_SECURE_BOOT,
+	 * secure image = freertos_s.bin). Both are raw vector-table-first images that
+	 * run cached-XIP from S_CODE_START 0x0E400000 and do their own SAU/IDAU +
+	 * BLXNS using the handoff block written here.
+	 *
+	 * TF-M-first NS handoff: app_km4's image2 is now loaded (.data copied above,
 	 * Image2EntryFun resolved, signature OK). tfm_s runs CACHED-XIP in place from
 	 * S_CODE_START (0x0E100000): the image2 load already linear-maps all flash to
 	 * 0x0E000000, so 0x0E100000 -> flash 0x08100000 (tfm_s.bin) for free — we map
@@ -720,8 +727,10 @@ void BOOT_FLASH_Image1(void)
 		SCB->NSACR    |= BIT(10) | BIT(11);
 		/* Dedicated RSIP entry maps S_CODE_START (0x0E400000, above image2's
 		 * 0x0E000000-0x0E3FFFFF window) -> tfm_s's dynamic flash slot, then
-		 * secure-jump. Offset is now runtime-computed (tracks image2 size). */
-		RSIP_MMU_Config(4, 0x0E400000, 0x0E40FFFF, 1, 0x0E400000 - tfm_flash_phys);
+		 * secure-jump. Offset is now runtime-computed (tracks image2 size). The
+		 * window end (0x0E45FFFF = 384 KB) must match region_defs.h S_CODE_SIZE:
+		 * the STORAGE=ON SPE (mbedcrypto) needs the larger window. */
+		RSIP_MMU_Config(4, 0x0E400000, 0x0E45FFFF, 1, 0x0E400000 - tfm_flash_phys);
 		RSIP_MMU_Cmd(4, ENABLE);
 		__DSB(); __ISB();
 		__set_MSP(xip[0]);

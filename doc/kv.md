@@ -41,7 +41,8 @@ Ameba 两边的 `kv.c` 不做转义，直接 `sprintf("KV/%s", key)`。
   2.1（参见前次提交记录）
 - 三方 lfs config 一致：`block_size=4096`, `read_size=prog_size=256`,
   `cache_size=512`, `lookahead_size=256`, `block_cycles=500`
-- LFS 分区大小一致（默认 1 MB → 256 blocks）—— 参见 [flash_layout.md](flash_layout.md)
+- LFS 分区大小一致（960 KB → 240 blocks，`0x300000`–`0x3F0000`；末尾 64 KB 保留给平台安全存储，
+  Ameba D = TF-M ITS/PS/NV）—— 参见 [flash_layout.md](flash_layout.md) / [lfs.md](lfs.md)
 - 不启用 `kv_encrypt`（默认就关）
 - KV key 满足上面的命名约束
 

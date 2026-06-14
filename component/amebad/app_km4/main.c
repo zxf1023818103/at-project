@@ -525,6 +525,24 @@ int main(void)
         extern void amebad_tfm_psa_selftest(void);
         amebad_tfm_psa_selftest();
     }
+#ifdef AMEBAD_TFM_STORAGE
+    /* PSA secure storage (ITS [+ PS]) round-trip + reboot-persistence test. */
+    {
+        extern void amebad_tfm_storage_selftest(void);
+        amebad_tfm_storage_selftest();
+    }
+#endif
+#endif
+
+#ifdef AMEBAD_FREERTOS_SECURE
+    /* app_km4 is the Non-Secure world of the standalone FreeRTOS TrustZone secure
+     * image: spin up the secure-context preemption test. Tasks are created here
+     * (pre-scheduler); each allocates its secure context lazily on first run via
+     * the handler-mode SVC. See freertos_secure_test.c. */
+    {
+        extern void freertos_secure_test_start(void);
+        freertos_secure_test_start();
+    }
 #endif
 
     /* AT log / shell console (ROM + RAM shell + LOGUART RX ISR). */

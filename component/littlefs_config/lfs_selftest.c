@@ -15,6 +15,7 @@
 #include <stdio.h>          /* printf */
 
 #include "lfs.h"
+#include "lfs_config.h"     /* LFS_CFG_REGION_OFFSET / BLOCK_COUNT / BLOCK_SIZE */
 
 /* The mounted LittleFS singleton, from the platform's VFS hook (the component/
  * syscall_config contract; AmebaD's component/amebad/lfs_port supplies the strong def). */
@@ -51,7 +52,10 @@ void lfs_selftest(void)
         printf("[LFS] mount FAILED\n\r");
         return;
     }
-    printf("[LFS] mounted (region 0x300000, 256 x 4 KB)\n\r");
+    printf("[LFS] mounted (region 0x%x, %u x %u KB)\n\r",
+           (unsigned)LFS_CFG_REGION_OFFSET,
+           (unsigned)LFS_CFG_BLOCK_COUNT,
+           (unsigned)(LFS_CFG_BLOCK_SIZE / 1024u));
 
     /* 1) list the root directory */
     {

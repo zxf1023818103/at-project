@@ -78,6 +78,19 @@ endif()
 # (s_veneers.o + PSA headers). OFF by default; build with `make TFM=ON`.
 option(AMEBAD_TFM_BOOT "Build + boot TF-M (KM4 secure-world SPE) instead of the plain NS app" OFF)
 
+# Standalone FreeRTOS TrustZone secure world (in-tree). When ON, app_km4_freertos_secure
+# builds a minimal FreeRTOS secure image (NOT TF-M) as the KM4 secure world, and the
+# NS app_km4 switches to the TZ-aware GCC_ARM_CM33_NONSECURE FreeRTOS port (per-task
+# secure context). Brings up + tests the FreeRTOS secure-context feature. OFF by
+# default; build with `make SECURE=ON`. Mutually exclusive with AMEBAD_TFM_BOOT.
+option(AMEBAD_FREERTOS_SECURE "Build + boot the standalone FreeRTOS TrustZone secure image (KM4 secure-context feature test)" OFF)
+
+# TF-M PSA secure storage (ITS + PS). When ON (make STORAGE=ON, implies TFM=ON),
+# the TF-M SPE enables the Internal Trusted Storage + Protected Storage partitions
+# (PS pulls the crypto partition / mbedcrypto into the SPE), backed by a real
+# AmebaD flash driver; app_km4 runs a psa_its/psa_ps self-test. OFF by default.
+option(AMEBAD_TFM_STORAGE "Enable TF-M PSA Internal Trusted Storage + Protected Storage + NS self-test" OFF)
+
 add_subdirectory(fwlib)              # chip fwlib: headers (amebad_fwlib_headers) + ROM-symbol ld vars + RAM HAL libs (amebad_ram_common/_lp/_hp, chip-gated)
 add_subdirectory(xmodem)             # ROM xmodem headers (amebad_xmodem) + xmodem.ld symbols; linked by sdk_includes below
 add_subdirectory(string_rom)         # ROM swlib-string headers (amebad_string_rom) + string_rom_km{4,0}.ld; linked by sdk_includes below
@@ -152,6 +165,7 @@ elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     add_subdirectory(bootloader_km4)
     add_subdirectory(app_km4)              # KM4 HP application image (image2)
     add_subdirectory(app_km4_secure)       # KM4 secure-world: TF-M SPE (ExternalProject), opt-in AMEBAD_TFM_BOOT
+    add_subdirectory(app_km4_freertos_secure) # KM4 secure-world: standalone FreeRTOS TZ secure image, opt-in AMEBAD_FREERTOS_SECURE
 endif()
 
 # Cross-core final image. `cmake --build <km0-or-km4-build-dir> -t amebad_image_all`

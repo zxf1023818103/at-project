@@ -58,6 +58,9 @@ set(_kernel_src "${CMAKE_SOURCE_DIR}/component/freertos-kernel_config/freertos-k
 # freertos_config). The port PATH differs from the FREERTOS_PORT name above.
 if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
     set(_kernel_port_path "GCC/ARM_CM0")
+elseif(AMEBAD_FREERTOS_SECURE)
+    # TZ-aware NS port (per-task secure context) — see freertos-kernel_config.
+    set(_kernel_port_path "GCC/ARM_CM33/non_secure")
 else()
     set(_kernel_port_path "GCC/ARM_CM33_NTZ/non_secure")
 endif()
@@ -67,6 +70,12 @@ target_include_directories(amebad_freertos_headers SYSTEM INTERFACE
     "${_kernel_src}/include"
     "${_kernel_src}/portable/${_kernel_port_path}"
 )
+if(AMEBAD_FREERTOS_SECURE)
+    # The TZ-aware NS port (port.c) includes "secure_context.h" (SecureContextHandle_t)
+    # from the kernel's secure port dir — put it on the path for the kernel + consumers.
+    target_include_directories(amebad_freertos_headers SYSTEM INTERFACE
+        "${_kernel_src}/portable/GCC/ARM_CM33/secure")
+endif()
 
 if(NOT EXISTS "${_kernel_src}/tasks.c")
     message(FATAL_ERROR

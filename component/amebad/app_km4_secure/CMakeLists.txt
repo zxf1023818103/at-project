@@ -67,6 +67,15 @@ set(_tfm_args
     "-DCMAKE_BUILD_TYPE=${_tfm_build_type}"
 )
 
+# PSA secure storage (make STORAGE=ON): enables ITS + PS (encrypted) + the Crypto
+# partition (mbedcrypto) + NV counters in the SPE. The actual partition/crypto/OTP
+# knobs are gated on AMEBAD_TFM_STORAGE inside platform/rtl8721d/config.cmake; here
+# we just forward the flag into the TF-M configure. Backed by the real flash driver
+# (cmsis_drivers/Driver_Flash.c) + the flash_layout.h TFM_HAL_ITS/PS_* + OTP/NV areas.
+if(AMEBAD_TFM_STORAGE)
+    list(APPEND _tfm_args "-DAMEBAD_TFM_STORAGE=ON")
+endif()
+
 # Wrap the nested CMake invocations so the toolchain bin dir is on PATH.
 set(_env "${CMAKE_COMMAND}" -E env "PATH=${_tc_bin}:$ENV{PATH}")
 

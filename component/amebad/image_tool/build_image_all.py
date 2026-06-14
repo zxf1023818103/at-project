@@ -45,6 +45,10 @@ KM4_IMG2  = ("component/amebad/app_km4/km4_image2_all.bin")
 # TF-M SPE blob — read from the BUILD dir (never the source tree): the in-tree
 # TF-M build (CMake target tfm_spe) copies tfm_s.bin here.
 KM4_TFM_S  = ("component/amebad/app_km4_secure/tfm_s.bin")
+# Standalone FreeRTOS TrustZone secure image (make SECURE=ON), built by the CMake
+# target target_img3_km4_frtos_s -> objcopy raw binary. Same headerless cached-XIP
+# model as tfm_s.bin; laid at the same dynamic IMG3 slot.
+KM4_FRTOS_S = ("component/amebad/app_km4_freertos_secure/freertos_s.bin")
 
 OFF_KM0_BOOT  = 0x0000
 OFF_KM4_BOOT  = 0x4000
@@ -111,12 +115,15 @@ def main():
     args = ap.parse_args()
 
     tfm_boot = cache_bool(args.km4_build, "AMEBAD_TFM_BOOT")
+    frtos_secure = cache_bool(args.km4_build, "AMEBAD_FREERTOS_SECURE")
 
     if not args.no_build:
         build(args.km0_build, ["target_loader_km0", "target_img2_km0"])
         km4_targets = ["target_loader_km4", "target_img2_km4"]
         if tfm_boot:
             km4_targets.append("tfm_spe")                  # in-tree TF-M SPE -> tfm_s.bin
+        if frtos_secure:
+            km4_targets.append("target_img3_km4_frtos_s")  # FreeRTOS secure image -> freertos_s.bin
         build(args.km4_build, km4_targets)
 
     km0_boot = read(os.path.join(args.km0_build, KM0_BOOT))
@@ -138,20 +145,40 @@ def main():
     # flash slot. That slot is DYNAMIC — 4 KB-aligned right after the merged
     # image2 — so growing image2 never collides with tfm_s. The bootloader
     # computes the identical offset at runtime from the image2 segment chain.
+    # Secure image (IMG3): TF-M (tfm_s.bin) or the standalone FreeRTOS secure image
+    # (freertos_s.bin). Both are headerless vector-table-first blobs that execute
+    # cached-XIP from S_CODE_START 0x0E400000 via a dedicated RSIP MMU entry the
+    # bootloader programs; the slot is DYNAMIC — 4 KB-aligned right after the merged
+    # image2 — so growing image2 never collides with it. (TFM and SECURE are
+    # mutually exclusive at configure time.)
+    secure_blob = None
+    secure_label = None
     if tfm_boot:
         tfm_path = os.path.join(args.km4_build, KM4_TFM_S)
         if not os.path.exists(tfm_path):
             sys.exit("AMEBAD_TFM_BOOT: %s not found.\n"
                      "  Expected the in-tree TF-M build (CMake target 'tfm_spe') to produce it.\n"
                      "  Run: cmake --build %s -t tfm_spe" % (tfm_path, args.km4_build))
-        tfm = read(tfm_path)
+        secure_blob = read(tfm_path)
+        secure_label = "tfm_s.bin (TF-M SPE)"
+    elif frtos_secure:
+        frtos_path = os.path.join(args.km4_build, KM4_FRTOS_S)
+        if not os.path.exists(frtos_path):
+            sys.exit("AMEBAD_FREERTOS_SECURE: %s not found.\n"
+                     "  Expected the CMake target 'target_img3_km4_frtos_s' to produce it.\n"
+                     "  Run: cmake --build %s -t target_img3_km4_frtos_s" % (frtos_path, args.km4_build))
+        secure_blob = read(frtos_path)
+        secure_label = "freertos_s.bin (FreeRTOS TZ secure)"
+
+    if secure_blob is not None:
         off_img3 = (len(image) + 0xFFF) & ~0xFFF        # 4 KB-aligned, right after image2
-        if off_img3 + len(tfm) > OFF_OTA2:
-            sys.exit("tfm_s (@0x%06x + %d B) overruns OTA2 @0x%06x — image2 too big"
-                     % (off_img3, len(tfm), OFF_OTA2))
-        place(image, off_img3, tfm,
-              "tfm_s.bin (TF-M SPE, cached XIP @0x0E400000, dynamic @flash 0x%08x)"
-              % (0x08000000 + off_img3))
+        if off_img3 + len(secure_blob) > OFF_OTA2:
+            sys.exit("secure image (@0x%06x + %d B) overruns OTA2 @0x%06x — image2 too big"
+                     % (off_img3, len(secure_blob), OFF_OTA2))
+        place(image, off_img3,
+              secure_blob,
+              "%s, cached XIP @0x0E400000, dynamic @flash 0x%08x"
+              % (secure_label, 0x08000000 + off_img3))
 
     outdir = os.path.dirname(args.out)
     os.makedirs(outdir, exist_ok=True)

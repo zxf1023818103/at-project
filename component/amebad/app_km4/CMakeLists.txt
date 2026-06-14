@@ -245,6 +245,51 @@ if(AMEBAD_TFM_BOOT)
     # the NS heap ran up to BD_RAM_NS top 0x1007C000, overlapping the secure window.
     target_link_options(target_img2_km4 PRIVATE
         "-Wl,--defsym=__tz_sram_top__=0x10060000")
+
+    # PSA secure storage self-test (make STORAGE=ON). Adds the ITS [+ PS] NS client
+    # interface + the storage round-trip/persistence test (tfm_storage_selftest.c).
+    # The psa_its_* / psa_ps_* veneers come from s_veneers.o; the storage flag also
+    # enables the partitions in the SPE (app_km4_secure passes the -D). PS sources +
+    # AMEBAD_TFM_STORAGE_PS are added in Milestone B once the crypto-enabled SPE is built.
+    if(AMEBAD_TFM_STORAGE)
+        target_sources(target_img2_km4 PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/tfm_storage_selftest.c"
+            "${_tfm_src}/interface/src/tfm_its_api.c"
+            "${_tfm_src}/interface/src/tfm_ps_api.c")   # Protected Storage NS client
+        target_compile_definitions(target_img2_km4 PRIVATE
+            AMEBAD_TFM_STORAGE=1 AMEBAD_TFM_STORAGE_PS=1)
+        set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
+                     APPEND PROPERTY COMPILE_DEFINITIONS AMEBAD_TFM_STORAGE)
+    endif()
+endif()
+
+# Standalone FreeRTOS TrustZone secure world (make SECURE=ON): app_km4 is the NS
+# side running the TZ-aware FreeRTOS port (per-task secure context). It consumes
+# the secure image's SG-veneer import lib (s_veneers_freertos.o, built by
+# app_km4_freertos_secure) so the kernel's SecureContext_*/SecureInit_* + our demo
+# veneer resolve to the SG stubs at 0x0E400400. Mirrors the TF-M block above (same
+# __tz_sram_top__ clamp keeping the NS heap below the secure S_DATA @0x10060000).
+if(AMEBAD_FREERTOS_SECURE)
+    set(_frtos_s_dir "${CMAKE_BINARY_DIR}/component/amebad/app_km4_freertos_secure")
+    add_dependencies(target_img2_km4 target_img3_km4_frtos_s)
+    target_sources(target_img2_km4 PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/freertos_secure_test.c")
+    target_include_directories(target_img2_km4 PRIVATE
+        # ONLY the include/ subdir (the shared veneer header) — NOT the secure
+        # image's top dir, which holds a minimal FreeRTOSConfig.h that would shadow
+        # the shared NS one.
+        "${CMAKE_SOURCE_DIR}/component/amebad/app_km4_freertos_secure/include")  # secure_demo.h
+    # CONFIG_TRUSTZONE_EN=1 here too -> the app's own TUs (main.c, freertos_secure_test.c)
+    # see configENABLE_TRUSTZONE=1 so portALLOCATE_SECURE_CONTEXT expands to the real
+    # vPortAllocateSecureContext. PRIVATE: only app_km4's own sources, NOT the linked
+    # SDK libs (amebad_ram_hp keeps its app_start non-TZ — see freertos-kernel_config).
+    target_compile_definitions(target_img2_km4 PRIVATE AMEBAD_FREERTOS_SECURE=1 CONFIG_TRUSTZONE_EN=1)
+    set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
+                 APPEND PROPERTY COMPILE_DEFINITIONS AMEBAD_FREERTOS_SECURE)
+    target_link_libraries(target_img2_km4 PRIVATE
+        "${_frtos_s_dir}/s_veneers_freertos.o")
+    target_link_options(target_img2_km4 PRIVATE
+        "-Wl,--defsym=__tz_sram_top__=0x10060000")
 endif()
 
 # XIP boot-hang dodge: shift the whole .xip_image2.text block by AMEBAD_XIP_PAD

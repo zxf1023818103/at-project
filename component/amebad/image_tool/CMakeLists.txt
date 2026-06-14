@@ -59,7 +59,7 @@ find_program(AMEBAD_PYTHON3 NAMES python3 python)
 option(AMEBAD_RSIP_ENABLE "Encrypt boot/image bins via RSIP (EncTool)" OFF)
 set(AMEBAD_RSIP_KEY "32982100546871a0aa983b2987560000"
     CACHE STRING "RSIP 128-bit key (32 hex chars)")
-set(AMEBAD_RSIP_IV  "213253647586a7b8c9aacb1c00000000"
+set(AMEBAD_RSIP_IV  "90acd34ec70a53fa6eba8ca400000000"
     CACHE STRING "RSIP 128-bit IV (32 hex chars)")
 
 # ===========================================================================

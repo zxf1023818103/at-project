@@ -21,9 +21,9 @@ Platform SDKs are managed as git submodules under `platform/`. Run `git submodul
 
 ### Realtek Ameba D (RTL8721D / RTL8710C)
 - SDK: `platform/ameba-rtos-d` (driver-only, dual-core: KM0 LP + KM4 HP)
-- Build: `cd project/amebad && make` — drives the in-tree **CMake + Ninja** two-core build (`build/km0`, `build/km4`, toolchain files `cmake/amebad-km{0,4}.cmake`) via `component/amebad/image_tool/build_image_all.py`. Options: `make NIMBLE=ON` (NimBLE host + wolfSSL SM crypto), `make HCI=ON` (bare HCI/DTM test image), `make QUIC=ON` (ngtcp2 QUIC client self-test + full wolfSSL TLS 1.3/QUIC; builds & flashes, but on-HW boot is blocked by the KM4 XIP hang — see `doc/amebad_quic_test.md`), `make distclean` (drop build trees, e.g. to switch generator). Needs the ASDK ARM toolchain at `toolchain/` (gitignored, install separately).
+- Build: `cd project/amebad && make` — drives the in-tree **CMake + Ninja** two-core build (`build/km0`, `build/km4`, toolchain files `cmake/amebad-km{0,4}.cmake`) via `component/amebad/image_tool/build_image_all.py`. Options: `make NIMBLE=ON` (NimBLE host + wolfSSL SM crypto), `make HCI=ON` (bare HCI/DTM test image), `make QUIC=ON` (ngtcp2 QUIC client self-test + full wolfSSL TLS 1.3/QUIC; builds & flashes, but on-HW boot is blocked by the KM4 XIP hang — see `doc/amebad_quic_test.md`), `make TFM=ON` (TF-M secure world / SPE; `make STORAGE=ON` adds PSA ITS+PS encrypted secure storage — see `doc/amebad_tfm_storage.md`), `make distclean` (drop build trees, e.g. to switch generator). Needs the ASDK ARM toolchain at `toolchain/` (gitignored, install separately).
 - Output: `build/amebad/Image_All.bin` (KM0+KM4 boot + image2; flash @ 0x08000000 via `project/amebad/flash.ps1`)
-- Build system / image pipeline: `doc/build_system.md`, `doc/amebad_image_build.md`; the layout-sensitive XIP boot-hang gotcha: `doc/amebad_xip_layout_boot_hang.md`
+- Build system / image pipeline: `doc/build_system.md`, `doc/amebad_image_build.md`; the layout-sensitive XIP boot-hang gotcha: `doc/amebad_xip_layout_boot_hang.md`; TF-M secure storage (ITS+PS) + the flash/memory layout: `doc/amebad_tfm_storage.md`; the chip's key/cert inventory (RSIP/RDP/HUK/SBOOT eFuse map + manufacturer key-handling): `doc/amebad_keys.md`
 
 ### Realtek Ameba Dplus (RTL8711Dx) and Green 2 (RTL8711F)
 - SDK: `platform/ameba-rtos` (Python + CMake build via `ameba.py`)

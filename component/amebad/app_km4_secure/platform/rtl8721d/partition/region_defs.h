@@ -56,7 +56,13 @@
  * 0x0E400000 is 0x400-aligned (valid VTOR). Only data lives in RAM (S_DATA);
  * startup copies .TFM_DATA from its flash LMA (in the cached XIP window). */
 #define S_CODE_START            (0x0E400000)
-#define S_CODE_SIZE             (0x00010000)   /* 64 KB cached XIP window for tfm_s */
+/* 384 KB cached-XIP window. 64 KB held the crypto-free SPE (Platform + ITS), but
+ * the STORAGE=ON build links mbedcrypto (Crypto partition for PS encryption) which
+ * is ~100 KB+. The bootloader's RSIP MMU entry 4 (boot_flash_hp.c) maps this whole
+ * window 0x0E400000..S_CODE_LIMIT -> tfm_s's dynamic flash slot; keep the two in
+ * lockstep. tfm_s.bin's slot (4 KB-aligned after image2, ~flash 0x0A2000) + 384 KB
+ * still ends well before OTA2 (flash 0x183000). */
+#define S_CODE_SIZE             (0x00060000)
 #define S_CODE_LIMIT            (S_CODE_START + S_CODE_SIZE - 1)
 #define S_CODE_VECTOR_TABLE_SIZE (0x00000400)
 /* tfm_s's flash slot is dynamic (right after the merged image2); the bootloader

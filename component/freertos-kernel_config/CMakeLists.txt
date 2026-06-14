@@ -70,7 +70,18 @@ target_compile_options(freertos_config PRIVATE
 if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
     set(_frt_port GCC_ARM_CM0)
 elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
-    set(_frt_port GCC_ARM_CM33_NTZ_NONSECURE)
+    # KM4 image2 is non-secure. Default = the No-TrustZone port. When the
+    # standalone FreeRTOS secure world is built (AMEBAD_FREERTOS_SECURE, make
+    # SECURE=ON) the NS kernel switches to the TZ-aware port so it allocates +
+    # saves/restores a per-task secure context against the secure image's
+    # SecureContext_* SG veneers. (CONFIG_TRUSTZONE_EN=1 — set globally for the
+    # km4 tree by the root CMakeLists when the flag is on — turns on
+    # configENABLE_TRUSTZONE in FreeRTOSConfig.h.)
+    if(AMEBAD_FREERTOS_SECURE)
+        set(_frt_port GCC_ARM_CM33_NONSECURE)
+    else()
+        set(_frt_port GCC_ARM_CM33_NTZ_NONSECURE)
+    endif()
 elseif(BOUFFALO_CHIP)
     set(_frt_port GCC_RISC_V)
 endif()
@@ -101,6 +112,21 @@ if(_frt_port)
     target_compile_options(freertos_kernel PRIVATE -Wno-error)
     if(TARGET freertos_kernel_port)
         target_compile_options(freertos_kernel_port PRIVATE -Wno-error)
+    endif()
+
+    # TZ secure-context port (make SECURE=ON): the kernel (tasks.c/port.c/portasm.c)
+    # must see configENABLE_TRUSTZONE=1 so the TCB carries xSecureContext and the
+    # port compiles the secure-context save/restore. Scoped PRIVATE to the kernel
+    # (NOT global) so the SDK's app_start in amebad_ram_hp keeps configENABLE_TRUSTZONE=0
+    # and does NOT compile its BOOT_IMG3/load_psram_image_s secure-load branch (the
+    # bootloader owns the secure handoff). xSecureContext is appended to the end of
+    # the TCB and there is no static task allocation, so this stays ABI-safe vs the
+    # NS SDK TUs that include FreeRTOS headers with configENABLE_TRUSTZONE=0.
+    if(AMEBAD_FREERTOS_SECURE AND "${AMEBAD_CHIP}" STREQUAL "amebad-km4")
+        target_compile_definitions(freertos_kernel PRIVATE CONFIG_TRUSTZONE_EN=1)
+        if(TARGET freertos_kernel_port)
+            target_compile_definitions(freertos_kernel_port PRIVATE CONFIG_TRUSTZONE_EN=1)
+        endif()
     endif()
 endif()
 

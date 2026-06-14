@@ -22,6 +22,7 @@ extern int DiagPrintf(const char *fmt, ...);
  * component/amebad/app_km4_secure/platform/rtl8721d/services/src/tfm_platform_system.c */
 #define AMEBAD_IOCTL_PING        ((tfm_platform_ioctl_req_t)0x8721D0)
 #define AMEBAD_IOCTL_PING_XOR    (0x8721D000u)
+#define AMEBAD_IOCTL_EFUSE_HUK_INFO  ((tfm_platform_ioctl_req_t)0x8721E0)
 
 void amebad_tfm_psa_selftest(void)
 {
@@ -40,4 +41,16 @@ void amebad_tfm_psa_selftest(void)
     DiagPrintf("[KM4] PSA: ioctl PING ret=%d out=0x%x expect=0x%x -> %s\n\r",
                (int)r, out, expect,
                (r == TFM_PLATFORM_ERR_SUCCESS && out == expect) ? "PASS" : "FAIL");
+
+    /* eFuse HUK probe: read the 32-byte TrustZone-secure user eFuse in the secure
+     * world, return only a non-secret summary {blank, fingerprint}. Proves the SPE
+     * can read the secure eFuse + tells blank-vs-programmed (the would-be HUK). */
+    {
+        uint32_t info[2] = { 0, 0 };
+        psa_outvec ov2 = { .base = info, .len = sizeof(info) };
+        enum tfm_platform_err_t r2 =
+            tfm_platform_ioctl(AMEBAD_IOCTL_EFUSE_HUK_INFO, NULL, &ov2);
+        DiagPrintf("[KM4] eFuse HUK(0x150,32B): ret=%d blank=%d fingerprint=0x%08x\n\r",
+                   (int)r2, (int)info[0], info[1]);
+    }
 }

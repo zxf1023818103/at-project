@@ -99,6 +99,14 @@ if(AMEBAD_TFM_BOOT)
     target_compile_definitions(target_loader_km4 PRIVATE AMEBAD_TFM_BOOT=1)
 endif()
 
+# Standalone FreeRTOS secure world (make SECURE=ON): enable the SAME payload-
+# agnostic secure-jump in boot_flash_hp.c (it hands off to freertos_s.bin's vector
+# table @0x0E400000 just like tfm_s). AMEBAD_SECURE_BOOT keeps the ifdef readable
+# (it's not TF-M), but the block is shared.
+if(AMEBAD_FREERTOS_SECURE)
+    target_compile_definitions(target_loader_km4 PRIVATE AMEBAD_SECURE_BOOT=1)
+endif()
+
 add_custom_command(TARGET target_loader_km4 POST_BUILD
     COMMAND "${CMAKE_SIZE}" -A --radix=16 "$<TARGET_FILE:target_loader_km4>"
     COMMAND "${CMAKE_SIZE}" -t --radix=16 "$<TARGET_FILE:target_loader_km4>"

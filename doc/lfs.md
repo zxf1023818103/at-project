@@ -60,16 +60,18 @@ adapter 走自己的"FNF 自动 format"逻辑。
 | 字段 | 值 | 备注 |
 |---|---|---|
 | 起始 raw offset | `0x300000` | 3 MB 处 —— 跨平台一致，也是 flash 写保护边界 |
-| 大小 | **1024 KB** (`0x100000`) | 占满到 flash 末尾（整 1 MB）。原先受 Ameba D 末尾 24 KB settings cluster 限制只能 1000 KB；蓝牙换 NimBLE 后 FTL/settings 不再需要，全平台一起扩满 |
+| 大小 | **960 KB** (`0x0F0000`) | `0x300000`–`0x3F0000`。**末尾 64 KB（`0x3F0000`–`0x400000`）保留给平台安全存储**：Ameba D 放 TF-M PSA ITS/PS/NV（见 [amebad_tfm_storage.md](amebad_tfm_storage.md) §2），其余平台留空。曾短暂扩到整 1 MB（NimBLE 取代 FTL/settings 后），现为了 TF-M 安全存储回收顶部 64 KB |
 | block_size | 4096 | NOR sector |
-| block_count | 256 | = 1024 KB / 4 KB |
+| block_count | 240 | = 960 KB / 4 KB |
 | disk version | 2.1 | littlefs v2.8.0 默认 `LFS_DISK_VERSION = 0x00020001` |
 
-具体每个平台的全 flash layout 见 [flash_layout.md](flash_layout.md)。四家 LFS 区现在都
-占满到 flash 末尾（`0x300000`–`0x3FFFFF`，整 1 MB）。Ameba D 原来在末尾放的 24 KB
-settings cluster（UART/AP/FTL/Fast-reconnect）在蓝牙栈换成 NimBLE 后不再需要 —— NimBLE
-不用 FTL（RAM-only，不持久化），WiFi fast-reconnect 也已禁用（其 4 KB sector 并入 LFS）——
-所以删掉；其余三家原本只是为对齐 D 才留空，也一起扩满。
+具体每个平台的全 flash layout 见 [flash_layout.md](flash_layout.md)。四家 LFS 区统一为
+`0x300000`–`0x3F0000`（960 KB），**末尾 64 KB（`0x3F0000`–`0x400000`）保留给平台安全存储**
+—— Ameba D 用作 TF-M PSA ITS/PS/NV-counter 区（见 [amebad_tfm_storage.md](amebad_tfm_storage.md)），
+其余平台暂时留空。之所以全平台一起保留（而非只缩 Ameba D），是因为 block_count 写在 LFS
+superblock 里，**一份 lfs.bin 要在 6 个平台都挂得上就必须几何一致**（240 blocks）。
+（Ameba D 原来末尾的 24 KB settings cluster 在蓝牙换 NimBLE 后已删 —— NimBLE 不用 FTL、
+WiFi fast-reconnect 也禁用；那段历史见 git。）
 
 ## 运行时 lfs config（lfs_config 结构体）
 
@@ -107,10 +109,10 @@ prebuilt mklfs-ubuntu 跨平台更彻底）。我们维护一个分支
 命令模板（跨平台统一，cmake 帮你拼好）：
 
 ```
-mklittlefs -c <input_dir> -b 4096 -p 256 -s 1048576 <output.bin>
+mklittlefs -c <input_dir> -b 4096 -p 256 -s 983040 <output.bin>
 ```
 
-- `-s 1048576` 字节 = 1024 KB
+- `-s 983040` 字节 = 960 KB（= 240 × 4 KB block；末尾 64 KB 保留给安全存储）
 - mklittlefs 内部把 `cache_size = read_size = prog_size = lookahead_size = 64` 写死。
   这四个都是 RAM-only 不写盘，跟运行时 512 / 256 / ... 的差异不影响 mount
 - 注意 mklittlefs 不接 `-r read_size` 参数（mklfs 那条 `-r 256` 改用 `-p` 顶替）
