@@ -35,12 +35,20 @@ QUIC       ?= OFF          # ON -> ngtcp2 QUIC client self-test (pulls full wolf
 CLI        ?= OFF          # ON -> FreeRTOS-Plus-CLI console on the LOGUART (replaces the AT-monitor shell)
 PKCS11     ?= OFF          # ON -> corePKCS11 token self-test (upstream mbedTLS backend + LittleFS PAL)
 BENCH      ?= OFF          # ON -> upstream Mbed TLS v3.6.4 crypto microbenchmark ([MCB] scores)
-HWGCM      ?= OFF          # ON -> route mbedTLS AES-GCM to the RTL8721D IPSEC HW engine (MBEDTLS_GCM_ALT)
+HWGCM      ?= OFF          # ON -> route mbedTLS AES-GCM + ChaCha20-Poly1305 to the RTL8721D IPSEC HW engine (needs TFM=ON for the SAU)
 TFM        ?= OFF          # ON -> build + boot in-tree TF-M SPE (app_km4 becomes the NS side)
 SECURE     ?= OFF          # ON -> standalone FreeRTOS TrustZone secure image + KM4 secure-context feature test (mutually exclusive with TFM)
 STORAGE    ?= OFF          # ON -> TF-M PSA secure storage (ITS + PS) + NS storage self-test; implies TFM=ON
 ifeq ($(STORAGE),ON)
 TFM        := ON           # secure storage lives in the TF-M SPE
+endif
+# NS-direct HW crypto reaches the secure-only crypto peripheral only once a TrustZone
+# image has configured the SAU (target_cfg). Without TF-M there is no SAU -> the first HW
+# crypto op hangs on the secure-attributed peripheral. Fail the build rather than hang.
+ifeq ($(HWGCM),ON)
+ifneq ($(TFM),ON)
+$(error HWGCM=ON requires TFM=ON (NS-direct HW crypto needs TF-M's SAU; a non-TF-M image hangs))
+endif
 endif
 VFSTEST    ?= OFF          # ON -> POSIX-fd VFS self-test (fopen/open/socket over LFS+sockets)
 CPPTEST    ?= OFF          # ON -> C++ std::filesystem/iostream self-test (cout/cin over LPUART, stderr LOGUART)

@@ -53,13 +53,12 @@
  *                         decrypt} are in ROM (clean addresses, no SDK source, no engine-
  *                         struct access). ~4 cyc/B / 48 MB/s vs 465 cyc/B / 419 KB/s SW —
  *                         the QUIC AES-GCM record-cipher bottleneck. gcm_alt.{h,c}.
- *   MBEDTLS_CHACHAPOLY_ALT  skipped. No one-shot wrapper in ROM (only CRYPTO_chacha_20 /
- *                         CRYPTO_poly1305_* primitives); rtl_crypto_chacha_poly1305_* lives
- *                         in fwlib/crypto/rtl8721dhp_chacha_poly1305.c, which pulls ameba_soc.h
- *                         + touches crypto_engine internals -> reintroduces SDK-source coupling
- *                         (against the decoupling goal). And with HW AES-GCM we PREFER GCM in
- *                         cipher negotiation, so ChaCha is the cold path. Revisit only if a
- *                         ChaCha-only peer matters.
+ *   MBEDTLS_CHACHAPOLY_ALT  ENABLED. No one-shot wrapper in ROM (only CRYPTO_chacha_20 /
+ *                         CRYPTO_poly1305_* primitives), so chachapoly_alt.c drives the ROM
+ *                         generic-cipher path (CRYPTO_CipherInit/EncryptAD + the ROM
+ *                         crypto_engine) inline — no SDK source vendored. Cold path: with HW
+ *                         AES-GCM we PREFER GCM in cipher negotiation, so this only serves a
+ *                         ChaCha-only peer. chachapoly_alt.{h,c}.
  *   MBEDTLS_SHA256/512_ALT  skipped. HW SHA shares the single-context engine, but mbedTLS
  *                         clones / keeps multiple concurrent SHA contexts alive (the TLS
  *                         transcript hash), which one HW context cannot hold; and SW SHA-256
@@ -73,6 +72,7 @@
  * software [MCB] bench and non-QUIC images are unaffected. */
 #if defined(AMEBAD_MBEDTLS_HW_GCM)
 #define MBEDTLS_GCM_ALT
+#define MBEDTLS_CHACHAPOLY_ALT
 #endif
 
 #endif /* MBEDTLS_AMEBAD_USER_CONFIG_H */

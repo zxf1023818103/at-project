@@ -47,7 +47,7 @@ endforeach()
 # the mbedtls_gcm_* symbols that gcm.c then omits, so it MUST be in the linked image.
 set(_amebad_mbedtls_port_srcs mbedtls_amebad_port.c)
 if(AMEBAD_MBEDTLS_HW_GCM)
-    list(APPEND _amebad_mbedtls_port_srcs gcm_alt.c)
+    list(APPEND _amebad_mbedtls_port_srcs gcm_alt.c chachapoly_alt.c)
 endif()
 add_library(amebad_mbedtls_port STATIC EXCLUDE_FROM_ALL ${_amebad_mbedtls_port_srcs})
 target_link_libraries(amebad_mbedtls_port PUBLIC amebad_mbedtls_cfg mbedcrypto FreeRTOS freertos_config)

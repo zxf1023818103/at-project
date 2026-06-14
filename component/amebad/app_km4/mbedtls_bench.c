@@ -75,8 +75,58 @@ void mbedtls_bench(void)
 
     amebad_mbedtls_port_init();
     cyc_init();
-    DiagPrintf("\n\r[MCB] ===== Mbed TLS v3.6.4 benchmark — KM4 Cortex-M33 @200MHz (software, portable C) =====\n\r");
+    DiagPrintf("\n\r[MCB] ===== Mbed TLS v3.6.4 benchmark — KM4 Cortex-M33 @200MHz =====\n\r");
     DiagPrintf("[MCB] SysTick clock: %d Hz\n\r", g_hz);
+
+    /* ---- one-shot AEAD known-answer tests (crypt_and_tag — the path picotls/QUIC
+     *      uses). Verifies correctness of the SOFTWARE path, or of GCM_ALT /
+     *      CHACHAPOLY_ALT when built with HWGCM=ON. Inputs are stack/heap (SRAM):
+     *      the IPSEC DMA can't read the const vectors in flash. ---- */
+    {
+        /* AES-128-GCM, NIST test case 2: zero key/IV/PT, no AAD. */
+        static const unsigned char g_ct[16]  = {0x03,0x88,0xda,0xce,0x60,0xb6,0xa3,0x92,0xf3,0x28,0xc2,0xb9,0x71,0xb2,0xfe,0x78};
+        static const unsigned char g_tag[16] = {0xab,0x6e,0x47,0xd4,0x2c,0xec,0x13,0xbd,0xf5,0x3a,0x67,0xb2,0x12,0x57,0xbd,0xdf};
+        unsigned char gk[16] = {0}, giv[12] = {0}, gpt[16] = {0}, go[16], gt[16];
+        mbedtls_gcm_context gc; int ok;
+        mbedtls_gcm_init(&gc);
+        mbedtls_gcm_setkey(&gc, MBEDTLS_CIPHER_ID_AES, gk, 128);
+        mbedtls_gcm_crypt_and_tag(&gc, MBEDTLS_GCM_ENCRYPT, 16, giv, 12, NULL, 0, gpt, go, 16, gt);
+        ok = (memcmp(go, g_ct, 16) == 0 && memcmp(gt, g_tag, 16) == 0);
+        DiagPrintf("[MCB-KAT] AES-128-GCM crypt_and_tag: %s\n\r", ok ? "MATCH" : "FAIL");
+        mbedtls_gcm_free(&gc);
+    }
+    {
+        /* ChaCha20-Poly1305, RFC 8439 section 2.8.2 (114-byte message + AAD). */
+        static const char cp_pt[] =
+            "Ladies and Gentlemen of the class of '99: If I could offer you only one tip for the future, sunscreen would be it.";
+        static const unsigned char cp_nonce[12] = {0x07,0,0,0,0x40,0x41,0x42,0x43,0x44,0x45,0x46,0x47};
+        static const unsigned char cp_aad[12]   = {0x50,0x51,0x52,0x53,0xc0,0xc1,0xc2,0xc3,0xc4,0xc5,0xc6,0xc7};
+        static const unsigned char cp_ct[114] = {
+            0xd3,0x1a,0x8d,0x34,0x64,0x8e,0x60,0xdb,0x7b,0x86,0xaf,0xbc,0x53,0xef,0x7e,0xc2,
+            0xa4,0xad,0xed,0x51,0x29,0x6e,0x08,0xfe,0xa9,0xe2,0xb5,0xa7,0x36,0xee,0x62,0xd6,
+            0x3d,0xbe,0xa4,0x5e,0x8c,0xa9,0x67,0x12,0x82,0xfa,0xfb,0x69,0xda,0x92,0x72,0x8b,
+            0x1a,0x71,0xde,0x0a,0x9e,0x06,0x0b,0x29,0x05,0xd6,0xa5,0xb6,0x7e,0xcd,0x3b,0x36,
+            0x92,0xdd,0xbd,0x7f,0x2d,0x77,0x8b,0x8c,0x98,0x03,0xae,0xe3,0x28,0x09,0x1b,0x58,
+            0xfa,0xb3,0x24,0xe4,0xfa,0xd6,0x75,0x94,0x55,0x85,0x80,0x8b,0x48,0x31,0xd7,0xbc,
+            0x3f,0xf4,0xde,0xf0,0x8e,0x4b,0x7a,0x9d,0xe5,0x76,0xd2,0x65,0x86,0xce,0xc6,0x4b,
+            0x61,0x16};
+        static const unsigned char cp_tag[16] = {0x1a,0xe1,0x0b,0x59,0x4f,0x09,0xe2,0x6a,0x7e,0x90,0x2e,0xcb,0xd0,0x60,0x06,0x91};
+        unsigned char ck[32], cn[12], ca[12], co[114], ct_buf[16], *cpt;
+        mbedtls_chachapoly_context cc; unsigned int j; int ok;
+        for (j = 0; j < 32; j++) { ck[j] = (unsigned char)(0x80 + j); }
+        memcpy(cn, cp_nonce, 12); memcpy(ca, cp_aad, 12);
+        cpt = (unsigned char *) pvPortMalloc(114);
+        if (cpt != NULL) {
+            memcpy(cpt, cp_pt, 114);
+            mbedtls_chachapoly_init(&cc);
+            mbedtls_chachapoly_setkey(&cc, ck);
+            mbedtls_chachapoly_crypt_and_tag(&cc, 114, cn, ca, 12, cpt, co, ct_buf);
+            ok = (memcmp(co, cp_ct, 114) == 0 && memcmp(ct_buf, cp_tag, 16) == 0);
+            DiagPrintf("[MCB-KAT] ChaCha20-Poly1305 crypt_and_tag: %s\n\r", ok ? "MATCH" : "FAIL");
+            mbedtls_chachapoly_free(&cc);
+            vPortFree(cpt);
+        }
+    }
 
     buf = (unsigned char *) pvPortMalloc(BUF);
     if (buf == NULL) { DiagPrintf("[MCB] OOM\n\r"); return; }
