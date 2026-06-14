@@ -26,8 +26,6 @@
 # Cross-platform: no chip gate — the QUIC stack builds wherever ngtcp2_config /
 # ngtcp2_crypto are linked (EXCLUDE_FROM_ALL until then).
 
-set(_ng "${CMAKE_SOURCE_DIR}/component/ngtcp2_config/ngtcp2")
-
 # ---- core transport: upstream ngtcp2_static ----
 # Pin the upstream options BEFORE add_subdirectory (FORCE: override its option()
 # defaults, several of which — ENABLE_OPENSSL, ENABLE_SHARED_LIB, BUILD_TESTING —
@@ -38,7 +36,7 @@ set(ENABLE_SHARED_LIB OFF CACHE BOOL "" FORCE)
 set(ENABLE_OPENSSL    OFF CACHE BOOL "" FORCE)   # default ON -> find_package(OpenSSL REQUIRED)
 set(BUILD_TESTING     OFF CACHE BOOL "" FORCE)
 set(ENABLE_WERROR     OFF CACHE BOOL "" FORCE)
-add_subdirectory("${_ng}" "${CMAKE_CURRENT_BINARY_DIR}/upstream" EXCLUDE_FROM_ALL)
+add_subdirectory(ngtcp2 "${CMAKE_CURRENT_BINARY_DIR}/upstream" EXCLUDE_FROM_ALL)
 
 # Bare-metal portability defs applied to the upstream target (PUBLIC: lib sources
 # + consumers must agree on the sockaddr layout). NGTCP2_STATICLIB is already set
@@ -55,16 +53,16 @@ target_compile_options(ngtcp2_static PRIVATE -w)   # vendor sources: silence war
 # picotls_compat dir puts our <picotls/openssl.h> mbedTLS-alias shim ahead of picotls's real
 # (OpenSSL) one, so ngtcp2's binding builds on mbedTLS with no source change.
 add_library(ngtcp2_crypto_picotls STATIC EXCLUDE_FROM_ALL
-    "${_ng}/crypto/shared.c"
-    "${_ng}/crypto/picotls/picotls.c"
+    ngtcp2/crypto/shared.c
+    ngtcp2/crypto/picotls/picotls.c
 )
 target_include_directories(ngtcp2_crypto_picotls PUBLIC
-    "${_ng}/crypto/includes"                            # <ngtcp2/ngtcp2_crypto.h>, ngtcp2_crypto_picotls.h
+    ngtcp2/crypto/includes                              # <ngtcp2/ngtcp2_crypto.h>, ngtcp2_crypto_picotls.h
 )
 target_include_directories(ngtcp2_crypto_picotls PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/picotls_compat"        # <picotls/openssl.h> -> mbedTLS aliases (searched first)
-    "${_ng}/crypto"                                     # shared.h
-    "${_ng}/lib"                                        # ngtcp2_macro.h, ngtcp2_net.h
+    picotls_compat                                      # <picotls/openssl.h> -> mbedTLS aliases (searched first)
+    ngtcp2/crypto                                       # shared.h
+    ngtcp2/lib                                          # ngtcp2_macro.h, ngtcp2_net.h
 )
 # Link the real picotls archives (NOT the picotls_config INTERFACE umbrella): a consumer's
 # flat cross_refs LINK_GROUP lists picotls_core/picotls_mbedtls as members, and routing
