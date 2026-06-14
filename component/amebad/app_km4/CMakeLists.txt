@@ -85,7 +85,10 @@ add_executable(target_img2_km4
 # would put a second, ABI-incompatible mbedTLS world next to the upstream one this image links,
 # and the wolfCrypt bench is on the way out. Declared here so the gate below can see it.
 option(AMEBAD_ENABLE_PKCS11 "Build the corePKCS11 token self-test (upstream mbedTLS backend + LittleFS PAL)" OFF)
-if(NOT AMEBAD_ENABLE_QUIC AND NOT AMEBAD_ENABLE_PKCS11)
+# The crypto microbenchmark (make BENCH=ON) links the SAME upstream mbedTLS as QUIC/PKCS11, so
+# it likewise drops the ROM-mbedTLS diag TUs (a second, ABI-incompatible mbedTLS world).
+option(AMEBAD_ENABLE_CRYPTOBENCH "Build the upstream Mbed TLS v3.6.4 microbenchmark ([MCB] scores)" OFF)
+if(NOT AMEBAD_ENABLE_QUIC AND NOT AMEBAD_ENABLE_PKCS11 AND NOT AMEBAD_ENABLE_CRYPTOBENCH)
     target_sources(target_img2_km4 PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/iperf_client.c"        # iperf2 TCP client (TX throughput to WSL iperf -s)
         "${CMAKE_CURRENT_SOURCE_DIR}/iperf_server.c"        # iperf2 TCP sink (RX throughput from WSL iperf -c)
@@ -199,6 +202,19 @@ if(AMEBAD_ENABLE_PKCS11)
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_PKCS11)
 endif()
 
+# Crypto microbenchmark (AMEBAD_ENABLE_CRYPTOBENCH): the [MCB] scores for upstream Mbed TLS
+# v3.6.4 software crypto (SHA/AES/GCM/ChaChaPoly + ECDSA/ECDHE/X25519/RSA), the apples-to-apples
+# successor to the removed wolfCrypt [WCB] bench. mbedcrypto + the FreeRTOS-threading/entropy glue
+# join the cross_refs group (real archive names; the _config umbrellas don't expand in LINK_GROUP).
+set(_bench_grp "")
+if(AMEBAD_ENABLE_CRYPTOBENCH)
+    set(_bench_grp ",mbedcrypto,amebad_mbedtls_port")
+    target_sources(target_img2_km4 PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/mbedtls_bench.c")
+    set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
+                 APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_CRYPTOBENCH)
+endif()
+
 # POSIX-fd VFS self-test (vfs_selftest in amebad_lfs_port, gated by the option in
 # component/amebad/CMakeLists.txt). main.c calls it under the same define.
 if(AMEBAD_VFS_SELFTEST)
@@ -227,7 +243,7 @@ target_link_libraries(target_img2_km4 PRIVATE
     # EXCLUDE_FROM_ALL lib CMake would otherwise sink it past -lc/-lgcc and leave
     # those undefined. amebad_mbed (flash_api) is lfs_port's backend. (The upstream
     # mbedcrypto/mbedx509 + picotls/ngtcp2 crypto join per-feature via the _grp vars.)
-    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km4,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,freertos_plus_tcp,freertos_plus_tcp_port,amebad_wlan,amebad_wps,amebad_lfs_port,amebad_mbed,lfs_config,littlefs${_diag_grp}${_hci_grp}${_quic_grp}${_cli_grp}${_pk11_grp}>"
+    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_freertos_glue_km4,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,freertos_plus_tcp,freertos_plus_tcp_port,amebad_wlan,amebad_wps,amebad_lfs_port,amebad_mbed,lfs_config,littlefs${_diag_grp}${_hci_grp}${_quic_grp}${_cli_grp}${_pk11_grp}${_bench_grp}>"
     m
     stdc++
     c
