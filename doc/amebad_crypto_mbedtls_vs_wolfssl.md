@@ -92,6 +92,10 @@ wolfCrypt 一旦开 SP Cortex-M / Thumb2 asm（本项目 `WOLFASM=ON` 的实际�
   能接受但不快。
 - **要注意**：① **X25519 慢 10×**——若 peer 偏好 X25519，握手会更慢，建议群偏好排序优先 P-256，或补 25519 加速；
   ② 变基 ECC（ECDH/verify）慢于 wolf-C；③ AES 吞吐不如 wolf 的 asm（419 KB/s GCM 对高吞吐 TLS 记录层是瓶颈）。
+- **③ 已被端到端实测证实**：把 QUIC 从 ngtcp2+wolfSSL 迁到 ngtcp2+picotls/mbedTLS 后，同一 AES-128-GCM
+  服务器下 LAN 吞吐**下载 4.53→1.72 Mbps（2.6× 慢）、上传 2.42→1.29 Mbps（1.9× 慢）**——回归量正好对应
+  GCM 的 crypto 回归（mbedTLS SW-C GCM 419 KB/s vs wolfSSL asm-GCM ~2 MB/s）。详见
+  [amebad_quic_test.md](amebad_quic_test.md) 的 2026-06-14 更新。
 
 ## 后续（如果要把 mbedTLS 拉到 wolf-asm 档位）
 

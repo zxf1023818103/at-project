@@ -1,4 +1,4 @@
-# AmebaD (RTL8721D) QUIC LAN speed test — ngtcp2 + wolfSSL TLS 1.3
+# AmebaD (RTL8721D) QUIC LAN speed test — ngtcp2 + wolfSSL→picotls/mbedTLS TLS 1.3
 
 A QUIC v1 client on KM4 built on **ngtcp2** (transport) + the in-tree **wolfSSL**
 expanded to a full **TLS 1.3 + QUIC** crypto layer, driven over the existing
@@ -15,6 +15,25 @@ protocol against a host QUIC server and measures bidirectional LAN throughput.
 > | **Upload** (chip TX → server) | 4 MB / 13.88 s | **~2.42 Mbps** |
 >
 > Stable and repeatable across rounds; both sides report a clean `[ok]` teardown.
+
+> **Update (2026-06-14): wolfSSL → ngtcp2 + picotls/mbedTLS migration — measured, regressed.**
+> Same chip, same host (native Windows C# MsQuic/Schannel server `192.168.4.250:4567`,
+> **AES-128-GCM**), same 4 MB/direction perf protocol — only the chip's TLS 1.3 crypto
+> changed (wolfSSL → picotls on the mbedTLS/PSA backend). Throughput **dropped**:
+>
+> | Direction | wolfSSL (asm GCM) | picotls/mbedTLS (SW C GCM) | regression |
+> |---|---:|---:|---:|
+> | **Download** (RX) | ~4.53 Mbps | **~1.72 Mbps** (1721–1739 kbps) | **2.6× slower** |
+> | **Upload** (TX)   | ~2.42 Mbps | **~1.29 Mbps** (1283–1292 kbps) | **1.9× slower** |
+>
+> **Root cause = AES-128-GCM**, the QUIC record-layer cipher (Schannel offers only AES-GCM).
+> wolfSSL does GCM with Thumb2 asm (~2 MB/s); **mbedTLS does it in portable C at ~419 KB/s**
+> (`[MCB]` AES-128-GCM = 465 cyc/B — see [amebad_crypto_mbedtls_vs_wolfssl.md](amebad_crypto_mbedtls_vs_wolfssl.md)).
+> Per-byte GCM is the wall, so the QUIC throughput regression tracks the GCM crypto regression.
+> **To recover**: a Cortex-M AES-GCM for mbedTLS (asm / PSA AES driver / AES tables in SRAM), or a
+> ChaCha20-capable peer (mbedTLS ChaCha20-Poly1305 = 79.7 cyc/B ≈ 2.45 MB/s, ~5.8× faster than its
+> GCM — but the C# Schannel host can't negotiate ChaCha; would need a native ChaCha-capable QUIC server).
+> Repro: `make QUIC=ON TFM=ON`; numbers stable across rounds, clean `[ok]` teardown.
 
 ## Results & performance analysis (2026-06-09)
 
