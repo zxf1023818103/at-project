@@ -52,8 +52,8 @@ set(_combined_ld "${CMAKE_CURRENT_BINARY_DIR}/rlx8721d.ld")
 add_custom_command(
     OUTPUT  "${_combined_ld}"
     COMMAND "${CMAKE_COMMAND}" -E cat "${_img2_ld}" "${AMEBAD_COMMON_ROM_SYMBOL_LD}"
-                                       "${AMEBAD_FWLIB_ROM_KM0_LD}" "${AMEBAD_STRING_ROM_KM0_LD}" "${AMEBAD_CMSIS_ROM_KM0_LD}" "${AMEBAD_MONITOR_ROM_LD}" "${AMEBAD_XMODEM_ROM_SYMBOL_LD}" "${_romalias_ld}" > "${_combined_ld}"
-    DEPENDS "${_img2_ld}" "${AMEBAD_COMMON_ROM_SYMBOL_LD}" "${AMEBAD_FWLIB_ROM_KM0_LD}" "${AMEBAD_STRING_ROM_KM0_LD}" "${AMEBAD_CMSIS_ROM_KM0_LD}" "${AMEBAD_MONITOR_ROM_LD}" "${AMEBAD_XMODEM_ROM_SYMBOL_LD}"
+                                       "${AMEBAD_FWLIB_ROM_KM0_LD}" "${AMEBAD_STRING_ROM_KM0_LD}" "${AMEBAD_CMSIS_ROM_KM0_LD}" "${AMEBAD_XMODEM_ROM_SYMBOL_LD}" "${_romalias_ld}" > "${_combined_ld}"
+    DEPENDS "${_img2_ld}" "${AMEBAD_COMMON_ROM_SYMBOL_LD}" "${AMEBAD_FWLIB_ROM_KM0_LD}" "${AMEBAD_STRING_ROM_KM0_LD}" "${AMEBAD_CMSIS_ROM_KM0_LD}" "${AMEBAD_XMODEM_ROM_SYMBOL_LD}"
             "${AMEBAD_COMMON_LAYOUT_LD}" "${_romalias_ld}"
     COMMENT "concat KM0 image2 linker script"
     VERBATIM
@@ -71,7 +71,7 @@ add_dependencies(target_img2_km0 amebad_km0_img2_ld)
 target_link_libraries(target_img2_km0 PRIVATE
     amebad_sdk_includes
     amebad_common_ld_script
-    "$<LINK_GROUP:cross_refs,FreeRTOS,freertos_port,amebad_ram_common,amebad_ram_lp,amebad_usrcfg_common,amebad_usrcfg_lp,amebad_monitor,amebad_monitor_common,amebad_pmc_lp,amebad_wifi_fw>"
+    "$<LINK_GROUP:cross_refs,FreeRTOS,freertos_port,amebad_ram_common,amebad_ram_lp,amebad_usrcfg_common,amebad_usrcfg_lp,amebad_monitor,amebad_monitor_common,freertos_cli,amebad_pmc_lp,amebad_wifi_fw>"
     m
 )
 

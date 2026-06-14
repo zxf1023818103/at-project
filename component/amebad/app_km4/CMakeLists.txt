@@ -118,18 +118,12 @@ add_dependencies(target_img2_km4 amebad_km4_img2_ld)
 option(AMEBAD_ENABLE_HCI    "Build the BLE controller HCI test image (bring-up + HCI bridge)" OFF)
 option(AMEBAD_ENABLE_NIMBLE "Build the NimBLE host image (LE/GATT/Mesh/coex on amebad_hci)" OFF)
 
-# FreeRTOS-Plus-CLI interactive console on the LOGUART (make CLI=ON). Replaces the
-# ROM/RAM AT-monitor shell (they can't share the LOGUART RX); main.c starts the CLI
-# task under AT_PROJECT_CLI instead of shell_init_*. The CLI POLLS the UART
-# (LOGUART_Readable) — it never enables the RX IRQ, so no "Irq 3 Fun Not Assign" storm.
-option(AMEBAD_ENABLE_CLI    "Build the FreeRTOS-Plus-CLI console on the LOGUART (replaces the AT-monitor shell)" OFF)
-set(_cli_grp "")
-if(AMEBAD_ENABLE_CLI)
-    set(_cli_grp ",freertos_cli")        # real archive name (LINK_GROUP won't expand the freertos-cli_config INTERFACE)
-    target_sources(target_img2_km4 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/cli_task.c")
-    set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
-                 APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_CLI)
-endif()
+# The console (FreeRTOS-Plus-CLI over the LOGUART) is now the DEFAULT, built by
+# component/amebad/monitor (amebad_monitor + amebad_monitor_common, in _diag_grp below) and
+# started unconditionally by main.c (except the QUIC image). freertos_cli — the FreeRTOS-Plus-CLI
+# core archive the monitor links — must be a real name in the cross_refs LINK_GROUP (the
+# freertos-cli_config INTERFACE wouldn't expand there); it rides the _diag_grp so it is dropped
+# alongside the monitor in the QUIC image.
 
 set(_hci_grp "")
 if(AMEBAD_ENABLE_HCI OR AMEBAD_ENABLE_NIMBLE)
@@ -168,7 +162,7 @@ endif()
 # AT-command / monitor shell libs: linked by default, dropped from the QUIC
 # image (shell init is gated off in main.c under AT_PROJECT_QUIC). Removing them
 # changes the KM4 image2 XIP relative layout (boot-hang dodge) and shrinks it.
-set(_diag_grp ",amebad_at_cmd,amebad_monitor,amebad_monitor_common")
+set(_diag_grp ",amebad_at_cmd,amebad_monitor,amebad_monitor_common,freertos_cli")
 
 set(_quic_grp "")
 if(AMEBAD_ENABLE_QUIC)
@@ -254,7 +248,7 @@ target_link_libraries(target_img2_km4 PRIVATE
     # EXCLUDE_FROM_ALL lib CMake would otherwise sink it past -lc/-lgcc and leave
     # those undefined. amebad_mbed (flash_api) is lfs_port's backend. (The upstream
     # mbedcrypto/mbedx509 + picotls/ngtcp2 crypto join per-feature via the _grp vars.)
-    "$<LINK_GROUP:cross_refs,FreeRTOS,freertos_port,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,freertos_plus_tcp,freertos_plus_tcp_port,amebad_wlan,amebad_wps,amebad_lfs_port,amebad_mbed,lfs_config,littlefs${_diag_grp}${_hci_grp}${_quic_grp}${_cli_grp}${_pk11_grp}${_bench_grp}>"
+    "$<LINK_GROUP:cross_refs,FreeRTOS,freertos_port,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,freertos_plus_tcp,freertos_plus_tcp_port,amebad_wlan,amebad_wps,amebad_lfs_port,amebad_mbed,lfs_config,littlefs${_diag_grp}${_hci_grp}${_quic_grp}${_pk11_grp}${_bench_grp}>"
     m
     stdc++
     c

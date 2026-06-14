@@ -18,10 +18,8 @@
 #include "FreeRTOS_IP.h"
 #include "FreeRTOS_Routing.h"     /* NetworkInterface_t / NetworkEndPoint_t / FillEndPoint */
 
-/* basic AT log / shell console (monitor shell over the log UART) */
-extern void shell_init_rom(u32 TBLSz, void *pTBL);
-extern void shell_init_ram(void);
-extern void shell_uart_irq_rom(void *Data);
+/* console: FreeRTOS-Plus-CLI over the LOGUART (component/amebad/monitor) */
+extern void amebad_monitor_start(void);
 
 /* FreeRTOS+TCP Realtek glue (component/amebad/freertos_tcp_port) */
 extern NetworkInterface_t *pxRealtek_FillInterfaceDescriptor(BaseType_t xEMACIndex,
@@ -542,39 +540,15 @@ int main(void)
 #endif
 #endif
 
-    /* AT log / shell console (ROM + RAM shell + LOGUART RX ISR). */
-#if !defined(AT_PROJECT_QUIC) && !defined(AT_PROJECT_CLI)
-    /* AT/monitor shell. Dropped from the QUIC image (the handshake self-test is
-     * autonomous, runs from the network-up hook) to remove the at_cmd/monitor
-     * code from KM4 image2 — this changes the XIP relative layout to dodge the
-     * boot-hang (doc/amebad_xip_layout_boot_hang.md) and shrinks the image.
-     * Also dropped from the CLI image (AT_PROJECT_CLI), which owns the LOGUART RX
-     * itself (FreeRTOS+CLI, polled — see below) and must NOT let the monitor grab
-     * IRQ 3. */
-    shell_init_rom(0, 0);
-    shell_init_ram();
-    InterruptRegister((IRQ_FUN)shell_uart_irq_rom, UART_LOG_IRQ, (u32)NULL, 5);
-    /* Enable the LOGUART RX IRQ ONLY when a handler is registered. In the QUIC
-     * image the shell is gated out (above), so NOTHING registers IRQ 3 — yet we
-     * used to enable it here unconditionally. With the line enabled but no
-     * handler, any byte sent to the LOG UART makes ROM's INT_Entry fire forever
-     * ("Irq 3 Fun Not Assign" storm): ROM never clears the UART RX interrupt, so
-     * it re-pends at priority 5 and starves the WiFi/IP tasks — so typing to the
-     * console within the first seconds both spammed that message AND blocked DHCP
-     * (no IP). The QUIC console is output-only (DiagPrintf TX is unaffected), so
-     * just leave RX disabled there. */
-    InterruptEn(UART_LOG_IRQ, 5);
-#endif
-
-#ifdef AT_PROJECT_CLI
-    /* FreeRTOS-Plus-CLI interactive console on the LOGUART, in place of the AT
-     * monitor shell. It POLLS the UART (LOGUART_Readable) from its own task and
-     * never enables the RX IRQ — so it sidesteps the "Irq 3 Fun Not Assign" storm
-     * without giving up interactive input. See cli_task.c. */
-    {
-        extern void amebad_cli_start(void);
-        amebad_cli_start();
-    }
+    /* Console: FreeRTOS-Plus-CLI over the LOGUART (component/amebad/monitor). KM4 owns the
+     * console at boot; `>>` / `km0` hand it to KM0. It POLLS the UART (LOGUART_Readable) and
+     * never enables the RX IRQ, so it sidesteps the ROM "Irq 3 Fun Not Assign" storm an
+     * enabled-but-unhandled RX line causes. Dropped from the QUIC image (the handshake
+     * self-test is autonomous): removing the monitor from KM4 image2 shrinks .text and shifts
+     * the XIP layout to dodge the boot-hang (doc/amebad_xip_layout_boot_hang.md); that image's
+     * console stays output-only (DiagPrintf TX is unaffected). */
+#ifndef AT_PROJECT_QUIC
+    amebad_monitor_start();
 #endif
 
     /* WiFi+DHCP bring-up runs as its own task (wifi_connect blocks). */

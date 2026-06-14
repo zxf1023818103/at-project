@@ -22,3 +22,15 @@ PROVIDE(memset = _memset);
  * no CLZ — come from libgcc, which component/bflb_mm links on KM0.) */
 PROVIDE(strncpy = _strncpy);
 PROVIDE(printf  = DiagPrintfD);
+
+/* The FreeRTOS-Plus-CLI console (component/amebad/monitor) now runs on KM0 too. Its engine +
+ * commands + FreeRTOS_CLI.c + vTaskList pull a handful of libc str* / printf functions the LP
+ * core's -nostdlib link has no libc for. Alias to the ROM swlib routines (string_rom_km0.ld /
+ * rom_symbol_acut.ld); same ABI, no float specifiers used. snprintf/sprintf -> the Diag*Printf
+ * ROM formatters (size-bounded / unbounded). */
+PROVIDE(strcmp   = _strcmp);
+PROVIDE(strlen   = _strlen);
+PROVIDE(strncmp  = _strncmp);
+PROVIDE(strcpy   = _strcpy);
+PROVIDE(snprintf = DiagSnPrintf);
+PROVIDE(sprintf  = DiagSPrintf);
