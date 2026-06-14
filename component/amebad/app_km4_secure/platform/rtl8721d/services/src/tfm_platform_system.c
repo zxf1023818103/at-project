@@ -44,6 +44,9 @@
 #define AMEBAD_IOCTL_HWCRYPTO_KAT    ((tfm_platform_ioctl_req_t)0x8721F0)
 /* HW AES-128-GCM (QUIC record cipher) KAT + cyc/B throughput, run in the SPE. */
 #define AMEBAD_IOCTL_HWCRYPTO_GCM    ((tfm_platform_ioctl_req_t)0x872200)
+/* One 1200-byte GCM op (QUIC packet size) — step 0=init(key), 1=encrypt+time.
+ * Lets NS measure the full per-packet NS->SPE round-trip vs the SPE-internal op. */
+#define AMEBAD_IOCTL_HWCRYPTO_GCM1200 ((tfm_platform_ioctl_req_t)0x872210)
 
 void tfm_platform_hal_system_reset(void)
 {
@@ -209,6 +212,43 @@ enum tfm_platform_err_t tfm_platform_hal_ioctl(tfm_platform_ioctl_req_t request,
                  ((uint32_t)tag[0] << 8) | (uint32_t)tag[1];
         (void)c0; (void)c1;
         memcpy(out_vec->base, res, sizeof(res));
+        out_vec->len = sizeof(res);
+        return TFM_PLATFORM_ERR_SUCCESS;
+    }
+    case AMEBAD_IOCTL_HWCRYPTO_GCM1200: {
+        typedef int (*gcm_init_fn)(const unsigned char *, unsigned int);
+        typedef int (*gcm_enc_fn)(const unsigned char *, unsigned int, const unsigned char *,
+                                  const unsigned char *, unsigned int, unsigned char *, unsigned char *);
+        gcm_init_fn ROM_gcm_init = (gcm_init_fn)0x10104065u;
+        gcm_enc_fn  ROM_gcm_enc  = (gcm_enc_fn)0x101040b9u;
+        static unsigned char zk[16], iv[12], pbuf[1200], pout[1200], ptag[16];
+        volatile uint32_t *SYST_CSR = (volatile uint32_t *)0xE000E010u;
+        volatile uint32_t *SYST_RVR = (volatile uint32_t *)0xE000E014u;
+        volatile uint32_t *SYST_CVR = (volatile uint32_t *)0xE000E018u;
+        uint32_t step, res = 0, i;
+
+        if (in_vec == NULL || in_vec->base == NULL || in_vec->len != sizeof(uint32_t) ||
+            out_vec == NULL || out_vec->base == NULL || out_vec->len < sizeof(uint32_t)) {
+            return TFM_PLATFORM_ERR_INVALID_PARAM;
+        }
+        memcpy(&step, in_vec->base, sizeof(step));
+
+        if (step == 0) {                /* load key once (QUIC keeps the key across packets) */
+            for (i = 0; i < 16; i++) { zk[i] = 0; }
+            for (i = 0; i < 12; i++) { iv[i] = (unsigned char)i; }
+            for (i = 0; i < sizeof(pbuf); i++) { pbuf[i] = (unsigned char)i; }
+            ROM_gcm_init(zk, 16);
+            res = 0;
+        } else {                        /* time ONE 1200B encrypt with the secure SysTick */
+            uint32_t scsr = *SYST_CSR, srvr = *SYST_RVR, s, e;
+            *SYST_CSR = 0; *SYST_RVR = 0x00FFFFFFu; *SYST_CVR = 0; *SYST_CSR = 5u;
+            s = *SYST_CVR;
+            ROM_gcm_enc(pbuf, sizeof(pbuf), iv, 0, 0, pout, ptag);
+            e = *SYST_CVR;
+            *SYST_CSR = 0; *SYST_RVR = srvr; *SYST_CVR = 0; *SYST_CSR = scsr;
+            res = (s - e) & 0x00FFFFFFu;            /* SPE-internal 1200B encrypt cycles */
+        }
+        memcpy(out_vec->base, &res, sizeof(res));
         out_vec->len = sizeof(res);
         return TFM_PLATFORM_ERR_SUCCESS;
     }

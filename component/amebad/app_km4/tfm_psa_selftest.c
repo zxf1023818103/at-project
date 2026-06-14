@@ -25,6 +25,7 @@ extern int DiagPrintf(const char *fmt, ...);
 #define AMEBAD_IOCTL_EFUSE_HUK_INFO  ((tfm_platform_ioctl_req_t)0x8721E0)
 #define AMEBAD_IOCTL_HWCRYPTO_KAT    ((tfm_platform_ioctl_req_t)0x8721F0)
 #define AMEBAD_IOCTL_HWCRYPTO_GCM    ((tfm_platform_ioctl_req_t)0x872200)
+#define AMEBAD_IOCTL_HWCRYPTO_GCM1200 ((tfm_platform_ioctl_req_t)0x872210)
 
 void amebad_tfm_psa_selftest(void)
 {
@@ -100,6 +101,46 @@ void amebad_tfm_psa_selftest(void)
                        (int)(g[2] * 10 / 419 / 10), (int)(g[2] * 10 / 419 % 10));
         } else {
             DiagPrintf("[HWGCM] throughput timer dead (cyc=0); DWT_CTRL=0x%08x (bit25=NOCYCCNT)\n\r", g[3]);
+        }
+    }
+
+    /* Per-packet (1200 B) HW-GCM cost INCLUDING the NS->SPE PSA round-trip — the
+     * real cost QUIC would pay per packet. NS SysTick times the full ioctl; the SPE
+     * returns its internal encrypt-only cycles so we can split out the boundary. */
+    {
+        volatile uint32_t *CSR = (volatile uint32_t *)0xE000E010u;   /* NS SysTick */
+        volatile uint32_t *RVR = (volatile uint32_t *)0xE000E014u;
+        volatile uint32_t *CVR = (volatile uint32_t *)0xE000E018u;
+        uint32_t save_csr, save_rvr, k, init = 0, one = 1, spe = 0;
+        uint32_t ns_total = 0, spe_last = 0;
+        const uint32_t M = 64u, HZ = 200000000u, PKT = 1200u;
+        psa_invec  iv0 = { .base = &init, .len = sizeof(init) };
+        psa_outvec ov0 = { .base = &spe,  .len = sizeof(spe)  };
+
+        tfm_platform_ioctl(AMEBAD_IOCTL_HWCRYPTO_GCM1200, &iv0, &ov0);   /* load key once */
+
+        save_csr = *CSR; save_rvr = *RVR;
+        *CSR = 0; *RVR = 0x00FFFFFFu; *CVR = 0; *CSR = 5u;               /* NS SysTick, CPU clk */
+        for (k = 0; k < M; k++) {
+            uint32_t sp = 0, s;
+            psa_invec  ive = { .base = &one, .len = sizeof(one) };
+            psa_outvec ove = { .base = &sp,  .len = sizeof(sp)  };
+            s = *CVR;
+            tfm_platform_ioctl(AMEBAD_IOCTL_HWCRYPTO_GCM1200, &ive, &ove);
+            ns_total += (s - *CVR) & 0x00FFFFFFu;                        /* full round-trip cyc */
+            spe_last = sp;
+        }
+        *CSR = 0; *RVR = save_rvr; *CVR = 0; *CSR = save_csr;
+
+        {
+            uint32_t ns_per = ns_total / M;                 /* cyc per packet (round-trip) */
+            uint32_t boundary = (ns_per > spe_last) ? (ns_per - spe_last) : 0u;
+            DiagPrintf("[GCM1200] SPE-internal 1200B op : %d cyc (%d.%02d cyc/B)\n\r",
+                       (int)spe_last, (int)(spe_last / PKT), (int)((spe_last * 100u / PKT) % 100));
+            DiagPrintf("[GCM1200] NS->SPE round-trip/pkt: %d cyc (%d.%02d cyc/B); PSA boundary=%d cyc\n\r",
+                       (int)ns_per, (int)(ns_per / PKT), (int)((ns_per * 100u / PKT) % 100), (int)boundary);
+            DiagPrintf("[GCM1200] per-packet HW-GCM throughput: %d KB/s   (SW [MCB]=419 KB/s)\n\r",
+                       (int)(ns_per ? ((unsigned long long)PKT * HZ / ns_per / 1024u) : 0u));
         }
     }
 }

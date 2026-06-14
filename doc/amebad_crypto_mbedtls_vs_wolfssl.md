@@ -112,8 +112,9 @@ NIST AES-128-GCM KAT MATCH，**4.04 cyc/B ≈ 48 MB/s vs 软件 465.59 cyc/B / 4
 读不了 flash，key/数据要放 SRAM。落地为 TF-M Platform IOCTL `AMEBAD_IOCTL_HWCRYPTO_GCM`（KAT + cyc/B），
 ROM `rtl_crypto_aes_gcm_*`（secure 0x10104065/0x101040b9）。详见 [[reference_amebad_hw_crypto]] 记忆。
 **意义**：软件 GCM 419 KB/s 低于 WiFi ceiling（~9 Mbps）= crypto 是 QUIC 的墙；HW 48 MB/s 后 crypto 不再是瓶颈。
-**剩余 caveat**：真接 QUIC 要 per-packet（~1200B）NS→SPE PSA 调用，跨界 + per-op setup 开销可能吃掉部分收益，
-需实测（PSA AEAD HW driver）。
+**per-packet（1200B QUIC 包）实测**：SPE-internal op = 5.13 cyc/B；**含 NS→SPE round-trip = 8.56 cyc/B、
+22.8 MB/s（PSA 跨界 4115 cyc ≈ 40%）→ 仍 ~54× 软件**，且 ~20× 高过 WiFi ceiling。**即便付每包 PSA round-trip，
+HW GCM 仍把 crypto 移出 QUIC 瓶颈** → 值得做 PSA AEAD HW driver 接 picotls。
 
 ## 复现
 
