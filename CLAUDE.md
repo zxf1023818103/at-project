@@ -18,6 +18,7 @@ Platform SDKs are managed as git submodules under `platform/`. Run `git submodul
 - Output: `project/bouffalo/build_<CHIP>/build_out/whole_flash_data.bin`
 - Config: `project/bouffalo/proj.conf` (CMake, chip-conditional), `project/bouffalo/CMakeLists.txt`
 - Flash layout: derived from `platform/bouffalo_sdk/bsp/board/<BOARD>/config/partition_cfg_*.toml`; `project/bouffalo/tools/build_whole.py` reads it and drives `BLFlashCommand --build` to produce `whole_flash_data.bin`
+- Security/eFuse: the chip's eFuse security-field inventory (SF-AES flash encryption / RSA-ECC secure boot / ROTPK-hash / key slots / debug locks + Sec_Eng/PKA/TZC), with an AmebaD cross-reference: `doc/bouffalo_keys.md`
 
 ### Realtek Ameba D (RTL8721D / RTL8710C)
 - SDK: `platform/ameba-rtos-d` (driver-only, dual-core: KM0 LP + KM4 HP)
