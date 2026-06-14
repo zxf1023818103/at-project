@@ -217,18 +217,27 @@ if(AMEBAD_ENABLE_CRYPTOBENCH)
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_CRYPTOBENCH)
 endif()
 
-# POSIX-fd VFS self-test (vfs_selftest in amebad_lfs_port, gated by the option in
-# component/amebad/CMakeLists.txt). main.c calls it under the same define.
+# POSIX-fd VFS self-test (vfs_selftest, gated by the option in component/amebad/CMakeLists.txt).
+# main.c calls it; the impl is in the shared lfs_config's lfs_selftest.c (#ifdef AMEBAD_VFS_SELFTEST).
+# app_km4 is the consumer that owns the option, so per littlefs_config's design it enables the impl
+# there + attaches the AmebaD specifics vfs_selftest needs (FreeRTOS+TCP sockets, syscall_config's
+# syscalls.h) — kept out of the shared lfs_config / the mid-tree lfs_port library.
 if(AMEBAD_VFS_SELFTEST)
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
                  APPEND PROPERTY COMPILE_DEFINITIONS AMEBAD_VFS_SELFTEST)
+    target_compile_definitions(lfs_config PRIVATE AMEBAD_VFS_SELFTEST)
+    target_link_libraries(lfs_config PRIVATE amebad_freertos_tcp)
+    target_include_directories(lfs_config PRIVATE "${CMAKE_SOURCE_DIR}/component/syscall_config")
 endif()
 
 # C++ self-test (cpp_selftest.cpp + LPUART console port). main.c calls
-# amebad_console_init_lpuart() + cpp_selftest() under the same define.
+# amebad_console_init_lpuart() + cpp_selftest() under the same define; cpp_selftest.cpp (CXX,
+# XIP-tail-pinned via liblfs_config.a) is added onto the shared lfs_config here.
 if(AMEBAD_CPP_SELFTEST)
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
                  APPEND PROPERTY COMPILE_DEFINITIONS AMEBAD_CPP_SELFTEST)
+    target_compile_definitions(lfs_config PRIVATE AMEBAD_CPP_SELFTEST)
+    target_sources(lfs_config PRIVATE "${CMAKE_SOURCE_DIR}/component/littlefs_config/cpp_selftest.cpp")
 endif()
 
 # Archives wrapped in --start-group (cross_refs) for circular vendor refs.
