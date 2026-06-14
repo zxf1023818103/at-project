@@ -105,11 +105,23 @@ static BaseType_t cmd_reboot( char *out, size_t outlen, const char *cmd )
 {
     WDG_InitTypeDef WDG_InitStruct;
     u32 CountProcess, DivFacProcess;
-    ( void ) cmd;
+    BaseType_t plen = 0;
+    const char *p = FreeRTOS_CLIGetParameter( cmd, 1, &plen );
 
-    snprintf( out, outlen, "rebooting %s ...\r\n", amebad_monitor_core_name() );
-    /* 5 ms watchdog reset — identical sequence on KM4 and KM0 (see the old per-core
-     * cmd_reboot, minus the uartburn path we don't expose here). */
+    if( p != NULL && plen == 8 && strncmp( p, "uartburn", 8 ) == 0 )
+    {
+        /* Set the backup-register bit the boot ROM checks on the next reset to enter UART
+         * download mode (BIT_UARTBURN_BOOT survives the reset — it's in the always-on domain). */
+        BKUP_Set( 0, BIT_UARTBURN_BOOT );
+        snprintf( out, outlen, "rebooting %s into UART download mode ...\r\n",
+                  amebad_monitor_core_name() );
+    }
+    else
+    {
+        snprintf( out, outlen, "rebooting %s ...\r\n", amebad_monitor_core_name() );
+    }
+    /* 5 ms watchdog reset — identical sequence on KM4 and KM0. The 5 ms window is ample for the
+     * message above to flush at 1.5 Mbaud before the reset fires. */
     WDG_Scalar( 5, &CountProcess, &DivFacProcess );
     WDG_InitStruct.CountProcess  = CountProcess;
     WDG_InitStruct.DivFacProcess = DivFacProcess;
@@ -159,7 +171,7 @@ static const CLI_Command_Definition_t kCmds[] = {
     { "heap",    "heap:\r\n print free / minimum-ever heap\r\n",                  cmd_heap,      0 },
     { "tasks",   "tasks:\r\n list the FreeRTOS tasks\r\n",                        cmd_tasks,     0 },
     { "echo",    "echo <text>:\r\n echo the argument back\r\n",                   cmd_echo,      1 },
-    { "reboot",  "reboot:\r\n watchdog-reset this core\r\n",                      cmd_reboot,    0 },
+    { "reboot",  "reboot [uartburn]:\r\n watchdog-reset this core (uartburn -> UART download mode)\r\n", cmd_reboot, -1 },
     { ">>",      ">>:\r\n hand the console to the other core\r\n",                cmd_sw_toggle, 0 },
     { "km0",     "km0:\r\n switch the console to KM0\r\n",                        cmd_sw_km0,    0 },
     { "km4",     "km4:\r\n switch the console to KM4\r\n",                        cmd_sw_km4,    0 },
