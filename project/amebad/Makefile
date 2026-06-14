@@ -35,8 +35,8 @@ QUIC       ?= OFF          # ON -> ngtcp2 QUIC client self-test (pulls full wolf
 CLI        ?= OFF          # ON -> FreeRTOS-Plus-CLI console on the LOGUART (replaces the AT-monitor shell)
 PKCS11     ?= OFF          # ON -> corePKCS11 token self-test (upstream mbedTLS backend + LittleFS PAL)
 BENCH      ?= OFF          # ON -> upstream Mbed TLS v3.6.4 crypto microbenchmark ([MCB] scores)
-HWGCM      ?= OFF          # ON -> route mbedTLS AES-GCM + ChaCha20-Poly1305 to the RTL8721D IPSEC HW engine (needs TFM=ON for the SAU)
 TFM        ?= OFF          # ON -> build + boot in-tree TF-M SPE (app_km4 becomes the NS side)
+HWGCM      ?= $(TFM)       # default = TFM: route mbedTLS AES-GCM + ChaCha20-Poly1305 to the RTL8721D IPSEC HW engine (needs TFM=ON's SAU, so on iff TFM is on)
 SECURE     ?= OFF          # ON -> standalone FreeRTOS TrustZone secure image + KM4 secure-context feature test (mutually exclusive with TFM)
 STORAGE    ?= OFF          # ON -> TF-M PSA secure storage (ITS + PS) + NS storage self-test; implies TFM=ON
 ifeq ($(STORAGE),ON)

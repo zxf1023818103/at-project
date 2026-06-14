@@ -11,7 +11,7 @@
 #   - the runtime glue lib `mbedtls_port` (entropy + HW ALTs). The shared FreeRTOS threading-alt
 #     is compiled into the `mbedtls_config` lib over in component/mbedtls_config.
 #
-# Consumers link the `amebad_mbedtls` umbrella (crypto + x509 + glue). This is the modern
+# Consumers link the `mbedtls_config` umbrella (crypto + x509 + tls + this glue). This is the modern
 # software crypto backend for corePKCS11 today and the planned picotls/ngtcp2 QUIC stack
 # (replacing wolfSSL). Coexists with the ROM Mbed TLS 2.4.0 path (mbedtls_rom) — separate
 # targets, never linked into the same image.
@@ -41,7 +41,10 @@ target_include_directories(amebad_mbedtls_cfg SYSTEM INTERFACE
 # DMA block): SHA256/512_ALT - mbedTLS clones/keeps concurrent SHA contexts (TLS transcript) that
 # one HW context can't hold (and SW SHA-256 is already ~50 cyc/B); AES_ALT - per-16B-block DMA is
 # an anti-pattern (the win is at the AEAD level); CCM/DES/MD5 - not in ROM / not used by TLS1.3.
-option(AMEBAD_MBEDTLS_HW_GCM "Route mbedTLS AEAD (GCM + ChaCha20-Poly1305) to the RTL8721D IPSEC HW engine" OFF)
+# Default ON: HW AEAD is the preferred path. The Makefile drives the real value off HWGCM (which
+# itself defaults to TFM, since NS-direct HW crypto needs TF-M's SAU), so a non-TFM image still
+# gets it OFF and never touches the secure-only engine; this default just makes ON the baseline.
+option(AMEBAD_MBEDTLS_HW_GCM "Route mbedTLS AEAD (GCM + ChaCha20-Poly1305) to the RTL8721D IPSEC HW engine" ON)
 if(AMEBAD_MBEDTLS_HW_GCM)
     target_compile_definitions(amebad_mbedtls_cfg INTERFACE MBEDTLS_GCM_ALT MBEDTLS_CHACHAPOLY_ALT)
 endif()
@@ -68,7 +71,8 @@ add_library(mbedtls_port STATIC EXCLUDE_FROM_ALL
     chachapoly_alt.c)
 target_link_libraries(mbedtls_port PUBLIC amebad_mbedtls_cfg mbedcrypto FreeRTOS freertos_config)
 
-# Umbrella (伞形): consumers link `amebad_mbedtls` for crypto + x509 + the glue (port HW ALTs +
-# entropy, plus `mbedtls_config` which carries mbedtls_threading_freertos_init()).
-add_library(amebad_mbedtls INTERFACE)
-target_link_libraries(amebad_mbedtls INTERFACE mbedcrypto mbedx509 mbedtls_port mbedtls_config amebad_mbedtls_cfg)
+# Attach the AmebaD HW-ALT/entropy glue onto the shared `mbedtls_config` umbrella (defined earlier
+# in component/mbedtls_config). PUBLIC so a consumer linking just `mbedtls_config` also pulls the
+# port's gcm_alt/chachapoly_alt/entropy symbols. mbedtls_config is the single umbrella now (it
+# already re-exports mbedcrypto/mbedx509/mbedtls); no separate amebad_mbedtls aggregate.
+target_link_libraries(mbedtls_config mbedtls_port)   # plain sig (matches mbedtls_config/CMakeLists.txt)

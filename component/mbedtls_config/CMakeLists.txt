@@ -37,20 +37,20 @@ add_subdirectory(mbedtls "${CMAKE_BINARY_DIR}/at_mbedtls_build" EXCLUDE_FROM_ALL
 set(MBEDTLS_CONFIG_DIR "${CMAKE_CURRENT_SOURCE_DIR}" CACHE INTERNAL
     "component/mbedtls_config source dir (threading_alt.h / mbedtls_threading_alt.c / user config)")
 
-# AmebaD: compile the FreeRTOS threading-alt into its own `mbedtls_config` lib. It links mbedtls +
-# mbedtls_port (both carry amebad_mbedtls_cfg PUBLIC) only to INHERIT the config surface
-# (MBEDTLS_THREADING_ALT + the include path to threading_alt.h) so the mutex types match the rest
-# of the build. `mbedtls_port` is a forward reference — defined later in the amebad subtree, which
-# is add_subdirectory'd after this dir; target_link_libraries resolves target names at generate
-# time, so that's fine. Bouffalo also add_subdirectory's this component but has no mbedtls_port
-# (and its own threading), so this is gated on the AmebaD chip.
-if("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
-    add_library(mbedtls_config STATIC EXCLUDE_FROM_ALL mbedtls_threading_alt.c)
-    # Link mbedcrypto (not the TLS `mbedtls` lib) + mbedtls_port purely to INHERIT their config:
-    # both carry amebad_mbedtls_cfg PUBLIC, which is all threading_alt.c needs to compile
-    # (MBEDTLS_THREADING_ALT + the threading_alt.h include path). mbedcrypto is the archive the
-    # consumers' cross_refs LINK_GROUP already pulls; linking the TLS `mbedtls` lib instead pulls a
-    # group-external target and forms a strongly-connected cycle (the group depends on it and it
-    # depends back into the group), which the generator rejects.
-    target_link_libraries(mbedtls_config mbedcrypto mbedtls_port)
-endif()
+# `mbedtls_config` — the umbrella consumers link to pull the WHOLE upstream mbedTLS stack with one
+# target. It compiles the FreeRTOS threading-alt and re-exports the three upstream archives, so a
+# consumer just `target_link_libraries(<x> mbedtls_config)` and gets crypto + x509 + TLS without
+# naming each. Not chip-gated — every dep is a platform-agnostic target (AmebaD + Bouffalo both
+# build them and attach their own mbedTLS config PUBLIC onto crypto/x509/tls):
+#   - mbedcrypto / mbedx509 / mbedtls : the upstream libs (primitives+PSA / X.509 / TLS handshake).
+#     Re-exported PUBLIC. There's no --gc-sections here, but static-archive selection is per-member
+#     so an image that calls no TLS symbols pulls no mbedtls/x509 members — TLS-less images stay
+#     small. Linking these also INHERITS their config surface (MBEDTLS_THREADING_ALT + the
+#     threading_alt.h include path) so threading_alt.c's mutex types match the rest of the build.
+#   - FreeRTOS / freertos_config : the FreeRTOS.h / semphr.h the callbacks are written against
+#     (shared targets from component/freertos-kernel_config — same name on every platform).
+# All resolve as forward references at generate time. EXCLUDE_FROM_ALL: built only when linked.
+# NB AmebaD additionally attaches its HW-ALT/entropy `mbedtls_port` onto this umbrella from
+# component/amebad/mbedtls_port (a platform-specific augmentation kept out of this shared file).
+add_library(mbedtls_config STATIC EXCLUDE_FROM_ALL mbedtls_threading_alt.c)
+target_link_libraries(mbedtls_config mbedcrypto mbedx509 mbedtls FreeRTOS freertos_config)
