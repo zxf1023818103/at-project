@@ -1,6 +1,6 @@
 /*
  * mbedtls_sm_glue.c — back NimBLE 1.9.0's Security Manager crypto with upstream Mbed TLS
- * (component/amebad/mbedtls, v3.6.4) instead of wolfCrypt. The wolfSSL replacement
+ * (component/amebad/mbedtls_port, v3.6.4) instead of wolfCrypt. The wolfSSL replacement
  * (see wolfcrypt_sm_glue.c, which this supersedes — same approach, mbedTLS backend).
  *
  * NimBLE 1.9.0's ble_sm_alg.c hard-codes the tinycrypt API, so we re-implement the small
@@ -44,7 +44,7 @@
  * 0 = AES/CMAC on Mbed TLS only, ECDH stays on tinycrypt. */
 #define SM_ECC_MBEDTLS 1
 
-extern void amebad_mbedtls_port_init( void );                                   /* component/amebad/mbedtls */
+extern void amebad_mbedtls_port_init( void );                                   /* component/amebad/mbedtls_port */
 extern int  mbedtls_hardware_poll( void *, unsigned char *, size_t, size_t * ); /* entropy alt (port) */
 
 static int s_inited;

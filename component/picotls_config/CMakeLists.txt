@@ -9,7 +9,7 @@
 #                     ECDH). Compiled with -DPTLS_HAVE_MBEDTLS=1, links `mbedcrypto`.
 #
 # The PSA backend needs MBEDTLS_PSA_CRYPTO_C (on in the AmebaD config — see
-# component/amebad/mbedtls). Call psa_crypto_init() once at runtime before use. The minicrypto
+# component/amebad/mbedtls_port). Call psa_crypto_init() once at runtime before use. The minicrypto
 # / openssl / fusion backends and the cifra/micro-ecc deps are intentionally not built.
 #
 # Cross-platform definition (links `mbedcrypto` by name); EXCLUDE_FROM_ALL until a consumer

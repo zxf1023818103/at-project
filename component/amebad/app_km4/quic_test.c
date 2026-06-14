@@ -1,6 +1,6 @@
 /*
  * AmebaD KM4 QUIC LAN speed test — ngtcp2 (v1.23.0) + picotls TLS 1.3 on the upstream
- * mbedTLS/PSA backend (the wolfSSL replacement; component/picotls_config + component/amebad/mbedtls).
+ * mbedTLS/PSA backend (the wolfSSL replacement; component/picotls_config + component/amebad/mbedtls_port).
  *
  * Connects to the host quic_perf server (project/amebad/quic_perf) over the LAN
  * and measures QUIC throughput in both directions using the quic-interop "perf"
@@ -23,7 +23,7 @@
  *
  * Randomness: ngtcp2 callbacks + picotls use ptls_mbedtls_random_bytes (PSA
  * psa_generate_random over the mbedTLS entropy). The AmebaD entropy source is still
- * the placeholder xorshift (see component/amebad/mbedtls) — a real TRNG is a follow-up.
+ * the placeholder xorshift (see component/amebad/mbedtls_port) — a real TRNG is a follow-up.
  */
 #include <string.h>
 #include <stdint.h>

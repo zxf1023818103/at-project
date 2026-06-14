@@ -35,6 +35,7 @@ QUIC       ?= OFF          # ON -> ngtcp2 QUIC client self-test (pulls full wolf
 CLI        ?= OFF          # ON -> FreeRTOS-Plus-CLI console on the LOGUART (replaces the AT-monitor shell)
 PKCS11     ?= OFF          # ON -> corePKCS11 token self-test (upstream mbedTLS backend + LittleFS PAL)
 BENCH      ?= OFF          # ON -> upstream Mbed TLS v3.6.4 crypto microbenchmark ([MCB] scores)
+HWGCM      ?= OFF          # ON -> route mbedTLS AES-GCM to the RTL8721D IPSEC HW engine (MBEDTLS_GCM_ALT)
 TFM        ?= OFF          # ON -> build + boot in-tree TF-M SPE (app_km4 becomes the NS side)
 SECURE     ?= OFF          # ON -> standalone FreeRTOS TrustZone secure image + KM4 secure-context feature test (mutually exclusive with TFM)
 STORAGE    ?= OFF          # ON -> TF-M PSA secure storage (ITS + PS) + NS storage self-test; implies TFM=ON
@@ -63,7 +64,7 @@ configure:
 	  -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) \
 	  -DAMEBAD_ENABLE_NIMBLE=$(NIMBLE) -DAMEBAD_ENABLE_HCI=$(HCI) \
 	  -DAMEBAD_ENABLE_QUIC=$(QUIC) -DAMEBAD_ENABLE_CLI=$(CLI) -DAMEBAD_ENABLE_PKCS11=$(PKCS11) \
-	  -DAMEBAD_ENABLE_CRYPTOBENCH=$(BENCH) \
+	  -DAMEBAD_ENABLE_CRYPTOBENCH=$(BENCH) -DAMEBAD_MBEDTLS_HW_GCM=$(HWGCM) \
 	  -DAMEBAD_TFM_BOOT=$(TFM) \
 	  -DAMEBAD_TFM_STORAGE=$(STORAGE) \
 	  -DAMEBAD_FREERTOS_SECURE=$(SECURE) \

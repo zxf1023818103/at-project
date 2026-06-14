@@ -109,7 +109,7 @@ if(AMEBAD_CHIP MATCHES "^amebad-km[04]$")
     add_subdirectory(nimble_config)             # INTERFACE: NimBLE syscfg + upstream include surface
     add_subdirectory(syscall_config)            # newlib retarget OBJECT lib (VFS + malloc + byte-order); PRIVATE-links freertos-plus-tcp_config + at_console
     # Upstream Mbed TLS v3.6.4 software crypto (the AmebaD config/threading/entropy port lives
-    # in component/amebad/mbedtls, added with the amebad subtree below; it attaches the config
+    # in component/amebad/mbedtls_port, added with the amebad subtree below; it attaches the config
     # onto these targets at generate). Modern backend for corePKCS11 (and the planned
     # picotls/ngtcp2 QUIC stack). Coexists with the ROM mbedTLS 2.4.0 path.
     add_subdirectory(mbedtls_config)            # -> mbedcrypto / mbedx509 / mbedtls (EXCLUDE_FROM_ALL)

@@ -43,4 +43,13 @@
  * uses separate buffers. */
 #define MBEDTLS_PSA_ASSUME_EXCLUSIVE_BUFFERS
 
+/* ---- HW AES-GCM (opt-in via the AMEBAD_MBEDTLS_HW_GCM build option) ----------------- *
+ * Route the whole GCM module to the RTL8721D IPSEC engine (gcm_alt.{h,c}) instead of the
+ * software GHASH — measured ~4 cyc/B / 48 MB/s vs 465 cyc/B / 419 KB/s, the QUIC AES-GCM
+ * bottleneck. NSPE-direct works under TF-M's SAU (reference_amebad_hw_crypto). Off by
+ * default so the software bench / non-QUIC images are unaffected; enable per build. */
+#if defined(AMEBAD_MBEDTLS_HW_GCM)
+#define MBEDTLS_GCM_ALT
+#endif
+
 #endif /* MBEDTLS_AMEBAD_USER_CONFIG_H */

@@ -182,7 +182,7 @@ if(AMEBAD_ENABLE_QUIC)
 endif()
 
 # corePKCS11 token self-test (AMEBAD_ENABLE_PKCS11): the software PKCS#11 token over the
-# upstream mbedTLS backend (component/amebad/mbedtls) with object storage on LittleFS — the
+# upstream mbedTLS backend (component/amebad/mbedtls_port) with object storage on LittleFS — the
 # reused upstream POSIX PAL (fopen/remove) over the AmebaD newlib VFS. corePKCS11 + mbedcrypto
 # /mbedx509 + the mbedTLS FreeRTOS-threading/entropy glue join the cross_refs group (real
 # archive names; the _config/umbrella INTERFACEs don't expand inside LINK_GROUP).

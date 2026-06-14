@@ -105,7 +105,7 @@ add_subdirectory(osdep)              # KM4-gated internally (osdep/os abstractio
 add_subdirectory(mbed)               # KM4-gated: flattened mbed HAL (amebad_mbed: flash_api.c + headers), consumed by wifi
 add_subdirectory(at_cmd)             # KM4-gated internally (basic AT log/command service)
 add_subdirectory(mbedtls_rom)        # KM4-gated: headers to call ROM mbedTLS 2.4.0 as SW (no build)
-add_subdirectory(mbedtls)            # KM4-gated: AmebaD port of upstream mbedTLS v3.6.4 (config + FreeRTOS threading-alt + entropy) attached onto mbedcrypto/mbedx509 (added by component/CMakeLists.txt); umbrella `amebad_mbedtls`
+add_subdirectory(mbedtls_port)            # KM4-gated: AmebaD port of upstream mbedTLS v3.6.4 (config + FreeRTOS threading-alt + entropy) attached onto mbedcrypto/mbedx509 (added by component/CMakeLists.txt); umbrella `amebad_mbedtls`
 # FreeRTOS+TCP: the portable core stack + config (freertos-plus-tcp_config) is added by
 # the parent component/CMakeLists.txt; here we add the AmebaD Realtek NetworkInterface
 # port (in-tree) that links it. The port also owns the netif_shim ABI header (INTERFACE

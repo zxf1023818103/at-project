@@ -2,7 +2,7 @@
  * pkcs11_selftest.c — on-target corePKCS11 token self-test (AMEBAD_ENABLE_PKCS11).
  *
  * Exercises the full software token built on the upstream mbedTLS v3.6.4 backend
- * (component/amebad/mbedtls) with object persistence on LittleFS (the reused upstream POSIX
+ * (component/amebad/mbedtls_port) with object persistence on LittleFS (the reused upstream POSIX
  * PAL over the AmebaD newlib VFS). Flow: PSA + threading init -> C_Initialize -> generate an
  * EC P-256 key pair (persisted via the PAL) -> sign a digest -> verify. Proves the mbedTLS
  * crypto path + the PAL storage end to end.
@@ -17,7 +17,7 @@
 #include "psa/crypto.h"
 #include "ameba_soc.h"            /* DiagPrintf */
 
-extern void amebad_mbedtls_port_init( void );   /* component/amebad/mbedtls */
+extern void amebad_mbedtls_port_init( void );   /* component/amebad/mbedtls_port */
 
 #define PK_OK( call )                                                       \
     do {                                                                    \

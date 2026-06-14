@@ -61,7 +61,7 @@ target_link_libraries(nimble_config PUBLIC FreeRTOS)
 # requirements only, NOT a link edge (the mbedtls_* symbols resolve via app_km4's
 # cross_refs LINK_GROUP, which lists mbedcrypto + amebad_mbedtls_port). mbedcrypto carries
 # the amebad config (via amebad_mbedtls_cfg); the gen-exprs resolve at generate regardless
-# of subdir order. (wolfCrypt migration — see component/amebad/mbedtls.)
+# of subdir order. (wolfCrypt migration — see component/amebad/mbedtls_port.)
 target_include_directories(nimble_config SYSTEM PRIVATE
     $<TARGET_PROPERTY:mbedcrypto,INTERFACE_INCLUDE_DIRECTORIES>)
 target_compile_definitions(nimble_config PRIVATE

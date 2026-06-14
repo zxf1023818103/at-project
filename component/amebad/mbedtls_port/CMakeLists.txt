@@ -1,4 +1,4 @@
-# component/amebad/mbedtls — AmebaD KM4 port of the upstream Mbed TLS v3.6.4 build.
+# component/amebad/mbedtls_port — AmebaD KM4 port of the upstream Mbed TLS v3.6.4 build.
 #
 # The upstream mbedcrypto/mbedx509/mbedtls targets themselves are built by
 # component/mbedtls_config (add_subdirectory'd from component/CMakeLists.txt's AmebaD branch,
@@ -23,6 +23,15 @@ target_compile_definitions(amebad_mbedtls_cfg INTERFACE
     MBEDTLS_USER_CONFIG_FILE="mbedtls_amebad_user_config.h")
 target_include_directories(amebad_mbedtls_cfg SYSTEM INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
 
+# Opt-in: route AES-GCM to the RTL8721D IPSEC HW engine (MBEDTLS_GCM_ALT -> gcm_alt.{h,c},
+# NS ROM rtl_crypto_aes_gcm_*) — ~115x the software GCM; the QUIC AES-GCM bottleneck. The
+# AMEBAD_MBEDTLS_HW_GCM define rides amebad_mbedtls_cfg so it reaches BOTH the mbedcrypto
+# gcm.c compile (drops the SW impl via MBEDTLS_GCM_ALT in the user config) AND gcm_alt.c.
+option(AMEBAD_MBEDTLS_HW_GCM "Route mbedTLS AES-GCM to the RTL8721D IPSEC HW engine" OFF)
+if(AMEBAD_MBEDTLS_HW_GCM)
+    target_compile_definitions(amebad_mbedtls_cfg INTERFACE AMEBAD_MBEDTLS_HW_GCM)
+endif()
+
 # Attach the config to the upstream targets (defined earlier by component/mbedtls_config).
 # PUBLIC so it reaches both the targets' own sources AND every consumer (corePKCS11, picotls).
 # Usage requirements resolve at generate, so attaching here (after the targets exist) is fine.
@@ -34,7 +43,13 @@ foreach(_t mbedcrypto mbedx509 mbedtls p256m everest)
 endforeach()
 
 # Runtime glue: FreeRTOS threading-alt callbacks (amebad_mbedtls_port_init) + entropy poll.
-add_library(amebad_mbedtls_port STATIC EXCLUDE_FROM_ALL mbedtls_amebad_port.c)
+# + gcm_alt.c (the MBEDTLS_GCM_ALT HW backend) when AMEBAD_MBEDTLS_HW_GCM is on — it provides
+# the mbedtls_gcm_* symbols that gcm.c then omits, so it MUST be in the linked image.
+set(_amebad_mbedtls_port_srcs mbedtls_amebad_port.c)
+if(AMEBAD_MBEDTLS_HW_GCM)
+    list(APPEND _amebad_mbedtls_port_srcs gcm_alt.c)
+endif()
+add_library(amebad_mbedtls_port STATIC EXCLUDE_FROM_ALL ${_amebad_mbedtls_port_srcs})
 target_link_libraries(amebad_mbedtls_port PUBLIC amebad_mbedtls_cfg mbedcrypto FreeRTOS freertos_config)
 
 # Umbrella (伞形): consumers link `amebad_mbedtls` for crypto + x509 + the glue.
