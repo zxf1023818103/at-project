@@ -67,11 +67,11 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
          * are not linked in this image). */
         extern void quic_test_start( void );
         quic_test_start();
-#elif !defined(AT_PROJECT_PKCS11) && !defined(AT_PROJECT_CRYPTOBENCH)
+#elif !defined(AT_PROJECT_PKCS11) && !defined(AT_PROJECT_CRYPTOBENCH) && !defined(AT_PROJECT_MINIMAL)
         /* Default = TCP TX (device -> WSL `iperf -s`); also exercises the
          * rewritten FreeRTOS+TCP RX bridge via the ACK path. The UDP TX/RX and
          * TCP-sink probes are kept available for throughput diagnostics.
-         * The PKCS11 / crypto-bench images drop the iperf TUs (focused tests). */
+         * The PKCS11 / crypto-bench / minimal images drop the iperf TUs. */
         iperf_client_start();
         ( void ) iperf_udp_client_start;
         ( void ) iperf_udp_server_start;
@@ -265,11 +265,15 @@ static void wifi_bringup_thread( void *param )
     /* LittleFS bring-up + self-test: mount the on-flash FS (auto-formats if the
      * region is blank) and exercise read of the prefilled lfs.bin + a write/
      * read-back round trip. Runs here (scheduler up — the flash device lock and
-     * the LFS mutex need FreeRTOS) before WiFi, independent of the link. */
+     * the LFS mutex need FreeRTOS) before WiFi, independent of the link.
+     * Dropped from the minimal image (WiFi-connect only); the LFS .text stays
+     * linked (XIP-tail pinned), only the self-test call is skipped. */
+#ifndef AT_PROJECT_MINIMAL
     {
         extern void lfs_selftest( void );
         lfs_selftest();
     }
+#endif
 
 #ifdef AT_PROJECT_PKCS11
     /* corePKCS11 token self-test: needs LittleFS mounted (above) for the PAL + the scheduler
@@ -496,10 +500,10 @@ static void wifi_bringup_thread( void *param )
         extern void mbedtls_bench( void );
         mbedtls_bench();
     }
-#elif !defined(AT_PROJECT_QUIC) && !defined(AT_PROJECT_PKCS11)
+#elif !defined(AT_PROJECT_QUIC) && !defined(AT_PROJECT_PKCS11) && !defined(AT_PROJECT_MINIMAL)
     /* ROM mbedTLS KAT (pure software crypto, independent of the link). Skipped in the
-     * QUIC/PKCS11 images (their diagnostic TUs aren't linked). The wolfCrypt benchmarks
-     * were removed with the wolfSSL retirement (crypto is now mbedTLS/picotls). */
+     * QUIC/PKCS11/minimal images (their diagnostic TUs aren't linked). The wolfCrypt
+     * benchmarks were removed with the wolfSSL retirement (crypto is now mbedTLS/picotls). */
     {
         extern void rom_mbedtls_kat( void );
         rom_mbedtls_kat();

@@ -88,7 +88,17 @@ option(AMEBAD_ENABLE_PKCS11 "Build the corePKCS11 token self-test (upstream mbed
 # The crypto microbenchmark (make BENCH=ON) links the SAME upstream mbedTLS as QUIC/PKCS11, so
 # it likewise drops the ROM-mbedTLS diag TUs (a second, ABI-incompatible mbedTLS world).
 option(AMEBAD_ENABLE_CRYPTOBENCH "Build the upstream Mbed TLS v3.6.4 microbenchmark ([MCB] scores)" OFF)
-if(NOT AMEBAD_ENABLE_QUIC AND NOT AMEBAD_ENABLE_PKCS11 AND NOT AMEBAD_ENABLE_CRYPTOBENCH)
+# Minimal image (make MINIMAL=ON): WiFi connect (+ optional TF-M) only. Drops the diagnostic
+# TUs below AND, via AT_PROJECT_MINIMAL on main.c / tfm_psa_selftest.c, the matching calls
+# (iperf, LFS self-test, ROM-mbedTLS KAT, the TF-M HW-crypto KAT/GCM bench). The TF-M PSA
+# ping + eFuse-HUK probe stay (they ARE the "TF-M is alive" proof).
+option(AMEBAD_ENABLE_MINIMAL "Strip diagnostics: WiFi-connect-only image (pairs with TFM)" OFF)
+if(AMEBAD_ENABLE_MINIMAL)
+    set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
+                 APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_MINIMAL)
+endif()
+if(NOT AMEBAD_ENABLE_QUIC AND NOT AMEBAD_ENABLE_PKCS11 AND NOT AMEBAD_ENABLE_CRYPTOBENCH
+   AND NOT AMEBAD_ENABLE_MINIMAL)
     target_sources(target_img2_km4 PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/iperf_client.c"        # iperf2 TCP client (TX throughput to WSL iperf -s)
         "${CMAKE_CURRENT_SOURCE_DIR}/iperf_server.c"        # iperf2 TCP sink (RX throughput from WSL iperf -c)
@@ -285,6 +295,12 @@ if(AMEBAD_TFM_BOOT)
         "${_tfm_src}/interface/src/tfm_platform_api.c"
         "${_tfm_src}/interface/src/tfm_tz_psa_ns_api.c"
         "${_tfm_src}/interface/src/os_wrapper/tfm_ns_interface_bare_metal.c")
+    # Minimal image: keep the PSA ping + eFuse-HUK probe (the TF-M liveness proof),
+    # drop the HW-crypto KAT/GCM throughput bench inside tfm_psa_selftest.c.
+    if(AMEBAD_ENABLE_MINIMAL)
+        set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/tfm_psa_selftest.c"
+                     APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_MINIMAL)
+    endif()
     target_include_directories(target_img2_km4 PRIVATE
         "${_tfm_export}/interface/include"
         "${_tfm_src}/interface/include")

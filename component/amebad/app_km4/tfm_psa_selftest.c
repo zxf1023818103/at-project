@@ -57,6 +57,11 @@ void amebad_tfm_psa_selftest(void)
                    (int)r2, (int)info[0], info[1]);
     }
 
+#ifndef AT_PROJECT_MINIMAL
+    /* The HW-crypto KAT/GCM throughput bench below is a TF-M diagnostic, not part
+     * of the WiFi-connect proof — dropped from the minimal image. The PSA ping +
+     * eFuse-HUK probe above stay (they are the "TF-M is alive" evidence). */
+
     /* HW-crypto KAT from the SECURE side: the IPSEC AES engine is secure-only
      * attributed (NS SecureFaults on it). Drive the AES-128-ECB KAT one step at a
      * time so we see exactly where it dies if the engine hangs/faults in the SPE.
@@ -178,4 +183,5 @@ void amebad_tfm_psa_selftest(void)
                    r, hw[0], hw[1],
                    memcmp(hw, exp, 16) == 0 ? "MATCH (NSPE CAN call HW crypto directly!)" : "mismatch");
     }
+#endif /* !AT_PROJECT_MINIMAL */
 }
