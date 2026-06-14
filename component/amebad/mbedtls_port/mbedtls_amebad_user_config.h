@@ -43,11 +43,34 @@
  * uses separate buffers. */
 #define MBEDTLS_PSA_ASSUME_EXCLUSIVE_BUFFERS
 
-/* ---- HW AES-GCM (opt-in via the AMEBAD_MBEDTLS_HW_GCM build option) ----------------- *
- * Route the whole GCM module to the RTL8721D IPSEC engine (gcm_alt.{h,c}) instead of the
- * software GHASH — measured ~4 cyc/B / 48 MB/s vs 465 cyc/B / 419 KB/s, the QUIC AES-GCM
- * bottleneck. NSPE-direct works under TF-M's SAU (reference_amebad_hw_crypto). Off by
- * default so the software bench / non-QUIC images are unaffected; enable per build. */
+/* ---- HW crypto *_ALT survey (opt-in via the AMEBAD_MBEDTLS_HW_GCM build option) ----- *
+ * Which mbedTLS *_ALT modules the RTL8721D IPSEC engine can usefully back. Enabling one
+ * means mbedcrypto drops that module's software impl and links our gcm_alt.c-style HW
+ * version. After surveying the engine (ROM symbol table + fwlib/crypto), GCM is the only
+ * one that maps cleanly; the rest are deliberately left software:
+ *
+ *   MBEDTLS_GCM_ALT       ENABLED. The HW one-shot rtl_crypto_aes_gcm_{init,encrypt,
+ *                         decrypt} are in ROM (clean addresses, no SDK source, no engine-
+ *                         struct access). ~4 cyc/B / 48 MB/s vs 465 cyc/B / 419 KB/s SW —
+ *                         the QUIC AES-GCM record-cipher bottleneck. gcm_alt.{h,c}.
+ *   MBEDTLS_CHACHAPOLY_ALT  skipped. No one-shot wrapper in ROM (only CRYPTO_chacha_20 /
+ *                         CRYPTO_poly1305_* primitives); rtl_crypto_chacha_poly1305_* lives
+ *                         in fwlib/crypto/rtl8721dhp_chacha_poly1305.c, which pulls ameba_soc.h
+ *                         + touches crypto_engine internals -> reintroduces SDK-source coupling
+ *                         (against the decoupling goal). And with HW AES-GCM we PREFER GCM in
+ *                         cipher negotiation, so ChaCha is the cold path. Revisit only if a
+ *                         ChaCha-only peer matters.
+ *   MBEDTLS_SHA256/512_ALT  skipped. HW SHA shares the single-context engine, but mbedTLS
+ *                         clones / keeps multiple concurrent SHA contexts alive (the TLS
+ *                         transcript hash), which one HW context cannot hold; and SW SHA-256
+ *                         is already ~50 cyc/B (~ the Thumb2 asm). Net loss.
+ *   MBEDTLS_AES_ALT       skipped. That replaces the 16-byte BLOCK cipher; a DMA setup per
+ *                         block is an anti-pattern. The HW win is at the mode/AEAD level
+ *                         (GCM), not the block level.
+ *   CCM / DES / MD5 *_ALT  n/a. Not in ROM and/or not used by TLS 1.3 / QUIC.
+ *
+ * NSPE-direct works under TF-M's SAU (reference_amebad_hw_crypto). Off by default so the
+ * software [MCB] bench and non-QUIC images are unaffected. */
 #if defined(AMEBAD_MBEDTLS_HW_GCM)
 #define MBEDTLS_GCM_ALT
 #endif
