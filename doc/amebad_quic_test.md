@@ -35,6 +35,22 @@ protocol against a host QUIC server and measures bidirectional LAN throughput.
 > GCM — but the C# Schannel host can't negotiate ChaCha; would need a native ChaCha-capable QUIC server).
 > Repro: `make QUIC=ON TFM=ON`; numbers stable across rounds, clean `[ok]` teardown.
 
+> **Update (2026-06-14): HW AES-GCM offload — regression recovered AND past the wolfSSL baseline.**
+> `make QUIC=ON TFM=ON HWGCM=ON` routes mbedTLS GCM to the RTL8721D IPSEC engine
+> (`MBEDTLS_GCM_ALT`, NSPE-direct, ~48 MB/s vs 419 KB/s software — see
+> [amebad_crypto_mbedtls_vs_wolfssl.md](amebad_crypto_mbedtls_vs_wolfssl.md) /
+> reference_amebad_hw_crypto). Same host/cipher/protocol. Result:
+>
+> | Direction | wolfSSL (asm GCM) | mbedTLS SW GCM | **mbedTLS + HW GCM** |
+> |---|---:|---:|---:|
+> | **Download** (RX) | ~4.53 Mbps | ~1.72 Mbps | **~6.8 Mbps** (6778–6813 kbps) |
+> | **Upload** (TX)   | ~2.42 Mbps | ~1.29 Mbps | **~2.95 Mbps** (2949–2950 kbps) |
+>
+> Download ~4× the software regression and **~1.5× over the wolfSSL baseline**, approaching the
+> iperf WiFi ceiling (~9 Mbps): **crypto is no longer the QUIC bottleneck — it's WiFi/protocol-bound.**
+> Stable across rounds. (Upload gains less — bounded more by the single-task send path / ngtcp2
+> pacing than by crypto.) HWGCM=ON requires TFM=ON (NS-direct needs the SAU; the Makefile enforces it).
+
 ## Results & performance analysis (2026-06-09)
 
 **Topology.** chip on WiFi `Zeng` (DHCP `192.168.4.244`) ↔ Windows host
