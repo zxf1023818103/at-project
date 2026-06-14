@@ -37,6 +37,23 @@ add_subdirectory(mbedtls "${CMAKE_BINARY_DIR}/at_mbedtls_build" EXCLUDE_FROM_ALL
 set(MBEDTLS_CONFIG_DIR "${CMAKE_CURRENT_SOURCE_DIR}" CACHE INTERNAL
     "component/mbedtls_config source dir (threading_alt.h / mbedtls_threading_alt.c / user config)")
 
+# The MBEDTLS_USER_CONFIG_FILE selection lives here, next to the file it names. AmebaD compiles
+# upstream mbedTLS with the DEFAULT mbedtls_config.h + these deltas (mbedtls_amebad_user_config.h:
+# disable net/fs/time, enable threading + no-platform-entropy). Attached PUBLIC onto the upstream
+# targets so (a) their own sources compile with the deltas and (b) every consumer inherits them.
+# AmebaD-only: Bouffalo replaces the whole config via MBEDTLS_CONFIG_FILE=config-tls-generic.h
+# (set in component/bouffalo_sdk), so a USER_CONFIG_FILE pointing at AmebaD deltas must not leak
+# there. The HW-specific *_ALT flags + gcm_alt.h stay in component/amebad/mbedtls_port.
+if("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
+    foreach(_t mbedcrypto mbedx509 mbedtls p256m everest)
+        if(TARGET ${_t})
+            target_compile_definitions(${_t} PUBLIC
+                MBEDTLS_USER_CONFIG_FILE="mbedtls_amebad_user_config.h")
+            target_include_directories(${_t} SYSTEM PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+        endif()
+    endforeach()
+endif()
+
 # `mbedtls_config` — the umbrella consumers link to pull the WHOLE upstream mbedTLS stack with one
 # target. It compiles the FreeRTOS threading-alt and re-exports the three upstream archives, so a
 # consumer just `target_link_libraries(<x> mbedtls_config)` and gets crypto + x509 + TLS without
