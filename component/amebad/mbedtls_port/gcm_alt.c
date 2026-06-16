@@ -34,13 +34,19 @@ typedef int (*amebad_gcm_op_fn)(const unsigned char *msg, unsigned int msglen,
  * regardless of a concurrent WiFi user. CRYPTO_Init(NULL) returns 0 (reference_amebad_hw_crypto).
  *
  * This CRYPTO_Init omission was a real HW-GCM bug (every op failed init); it is fixed here. But it is
- * NOT sufficient: the HW AES-GCM op itself hard-hangs a live AWS TLS handshake. Confirmed with both
- * confounds controlled — CRYPTO_Init fixed AND the mbedTLS VARIABLE_BUFFER_LENGTH race fixed (so the
- * software-GCM build connects reliably) — the HWGCM=ON build still hangs silently right after
- * "Established TCP", 3/3 boots, while the otherwise-identical software build connects. The shared
- * IPSEC engine AHB-stalls when driven from NS concurrently with the WiFi driver's own IPSEC use +
- * XIP/SPIC fetches under live load. So HW-GCM cannot serve a live AWS session; the Makefile forces
- * HWGCM=OFF for AWS. HW-GCM stays verified only for offline/standalone KATs and benchmarks. */
+ * NOT sufficient: the HW AES-GCM op driven through this mbedTLS/PSA path hard-hangs the FIRST op of a
+ * live session. Confirmed in TWO independent stacks, with confounds controlled:
+ *   - AWS TLS (mbedtls_ssl, CRYPTO_Init + VARIABLE_BUFFER_LENGTH both fixed): HWGCM=ON hangs silently
+ *     right after "Established TCP" 3/3 while the software build connects.
+ *   - QUIC (picotls/ngtcp2 -> PSA AEAD): HWGCM=ON hangs in client_flush encrypting the FIRST Initial
+ *     packet (no heartbeat ever prints), seconds after boot with ~no concurrent load, while the
+ *     otherwise-identical software-GCM build is fully alive (heartbeats, handshake retries, round loop).
+ * So it is NOT a "live-load AHB-stall" (the QUIC hang is the first GCM op, near-isolated). The
+ * standalone/SPE direct-ROM KAT (rom_hwcrypto_test.c / tfm_platform_system.c) — direct rtl_crypto with
+ * hand-placed SRAM key+buffers — PASSES. So the fault is specific to the mbedTLS/PSA -> gcm_alt -> IPSEC
+ * path: most likely the IPSEC engine's DMA buffer constraints (key/in/out must be DMA-readable SRAM,
+ * not flash/cache) that the KAT satisfies but the PSA/SSL-supplied buffers don't. HW-GCM is kept OFF
+ * for AWS and QUIC (Makefile); it stays verified only for the offline/standalone direct-ROM KATs. */
 typedef int (*amebad_crypto_init_fn)(void *);
 #define AMEBAD_ROM_CRYPTO_INIT  ((amebad_crypto_init_fn)0x10104a49u)
 
