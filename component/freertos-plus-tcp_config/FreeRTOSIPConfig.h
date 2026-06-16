@@ -60,7 +60,14 @@
 /* Network buffer descriptors (BufferAllocation_2 = heap, each ~MTU+pad ~1.6 KB). 40 for TCP
  * throughput; 14 is plenty for the low-rate MQTT client and saves ~42 KB of NS heap. */
 #if defined( AMEBAD_NET_LOW_MEM )
-    #define ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS  14
+    #define ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS  24   /* was 14: too tight for the TLS handshake's
+                                                          * bursty bidirectional flight (server ~6KB in +
+                                                          * client flight out + ACKs + concurrent WiFi RX)
+                                                          * -> transient pool exhaustion surfaced as a
+                                                          * FreeRTOS_recv ENOMEM = MBEDTLS_ERR_SSL_INTERNAL
+                                                          * handshake failure. BufferAllocation_2 is
+                                                          * heap-on-demand, so the extra 10 only cost during
+                                                          * a burst. Steady MQTT still uses only a few. */
 #else
     #define ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS  40
 #endif
