@@ -41,12 +41,19 @@ typedef int (*amebad_gcm_op_fn)(const unsigned char *msg, unsigned int msglen,
  *   - QUIC (picotls/ngtcp2 -> PSA AEAD): HWGCM=ON hangs in client_flush encrypting the FIRST Initial
  *     packet (no heartbeat ever prints), seconds after boot with ~no concurrent load, while the
  *     otherwise-identical software-GCM build is fully alive (heartbeats, handshake retries, round loop).
- * So it is NOT a "live-load AHB-stall" (the QUIC hang is the first GCM op, near-isolated). The
+ * It is NOT a "live-load AHB-stall" (the QUIC hang is the first GCM op, near-isolated). The
  * standalone/SPE direct-ROM KAT (rom_hwcrypto_test.c / tfm_platform_system.c) — direct rtl_crypto with
- * hand-placed SRAM key+buffers — PASSES. So the fault is specific to the mbedTLS/PSA -> gcm_alt -> IPSEC
- * path: most likely the IPSEC engine's DMA buffer constraints (key/in/out must be DMA-readable SRAM,
- * not flash/cache) that the KAT satisfies but the PSA/SSL-supplied buffers don't. HW-GCM is kept OFF
- * for AWS and QUIC (Makefile); it stays verified only for the offline/standalone direct-ROM KATs. */
+ * hand-placed SRAM key+buffers — PASSES. Three targeted fixes were tried here and RULED OUT (so don't
+ * re-try them): (a) bounce key/iv/aad/in/out/tag through .bss (the KAT's region) — still hangs; (b)
+ * DCache maintenance — moot, the AmebaD DCache is write-through (rtl8721d_cache.h), so CPU writes are
+ * already in RAM for the engine's DMA; (c) drop the AAD (the KAT uses none) — still hangs. With (a)+(c)
+ * gcm_alt does EXACTLY what the KAT does (.bss buffers, no AAD) and STILL hangs. So it is not a
+ * buffer/cache/AAD bug in this code — the remaining difference is the execution CONTEXT: this runs NS
+ * in a live session (the SPE KAT runs secure, isolated). Likely the engine is left in a WiFi-owned
+ * state the per-op CRYPTO_Init doesn't fully reclaim, and/or the NS-driven engine DMA can't reach the
+ * NS buffers under TF-M's security attribution. A real fix needs the GCM run in the SPE (a TF-M secure
+ * crypto service the NS calls via PSA) or an engine/SAU/MPC dig (OpenOCD on the hung ROM op). HW-GCM
+ * is kept OFF for AWS and QUIC (Makefile); it stays verified only for the offline direct-ROM KATs. */
 typedef int (*amebad_crypto_init_fn)(void *);
 #define AMEBAD_ROM_CRYPTO_INIT  ((amebad_crypto_init_fn)0x10104a49u)
 
