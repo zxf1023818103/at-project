@@ -20,7 +20,11 @@
 
 /* ---- No host OS facilities on this target ------------------------------------------- */
 #undef MBEDTLS_NET_C                /* no BSD sockets (net_sockets.c) */
-#undef MBEDTLS_FS_IO                /* no filesystem */
+/* MBEDTLS_FS_IO stays ENABLED (default): mbedtls_x509_crt_parse_file loads the AWS client cert
+ * from a plain LittleFS DER file (the path is env var "cert"; the key stays in TF-M ITS). fopen/
+ * opendir route through the newlib VFS (component/syscall_config) onto LittleFS, and that
+ * component supplies the <dirent.h> x509_crt.c needs under FS_IO (newlib's is a `#error` stub) —
+ * its dir is added to the mbedtls include path in this component's CMakeLists. */
 #undef MBEDTLS_TIMING_C             /* no gettimeofday/select timing */
 #undef MBEDTLS_HAVE_TIME            /* _gettimeofday is a stub here; skip wall-clock */
 #undef MBEDTLS_HAVE_TIME_DATE       /* requires HAVE_TIME */
@@ -52,11 +56,35 @@
  * engine) are NOT defined here — they are gated -D defs in the port CMakeLists (make HWGCM=ON),
  * which also documents why the other *_ALT modules (SHA/AES/CCM) are deliberately left software. */
 
-/* ---- TLS record buffers: the default is 16 KB IN + 16 KB OUT, malloc'd per connection during
- *      the handshake — too much for the KM4 FreeRTOS heap shared with WiFi + FreeRTOS-Plus-TCP
- *      (an AWS IoT TLS connect hit vApplicationMallocFailedHook at ~12 KB free). 8 KB in holds
- *      the AWS IoT server Certificate record; 2 KB out holds the client Certificate (~1.3 KB). */
-#define MBEDTLS_SSL_IN_CONTENT_LEN   8192
-#define MBEDTLS_SSL_OUT_CONTENT_LEN  4096   /* >= MBEDTLS_SSL_MAX_FRAG_LEN_4096 the transport requests */
+/* ---- TLS record buffers + handshake-RAM reclaim. The KM4 NS heap is tight (shared with WiFi +
+ *      FreeRTOS-Plus-TCP) and the AWS handshake peak runs it to the edge — an AWS IoT TLS connect
+ *      hit vApplicationMallocFailedHook (see the project_amebad_aws_iot memory). The default 16 KB
+ *      IN + 16 KB OUT is far too much; trim + reclaim:
+ *   - IN 8 KB: holds the AWS IoT server Certificate record (server-controlled; keep generous).
+ *   - OUT 2 KB: the client Certificate (~1.3 KB) is the largest record we SEND. Paired with a 2 KB
+ *     max-fragment request (transport_mbedtls.c) so 2 KB is self-consistent. Saves 2 KB at the
+ *     handshake peak vs the old 4 KB — which is what closed the last malloc-fail gap.
+ *   - VARIABLE_BUFFER_LENGTH: after the handshake, realloc IN/OUT down to the negotiated 2 KB
+ *     fragment, freeing ~6 KB of IN slack for steady-state MQTT (which sends only small records). */
+/* IN buffer = the dominant per-connection cost. AWS IoT does NOT honor the max_fragment_length
+ * extension (verified: with VARIABLE_BUFFER_LENGTH on, min-ever == steady free, i.e. no post-
+ * handshake shrink), so mbedTLS HOLDS this fixed buffer for the whole connection — unlike wolfSSL's
+ * dynamic input buffer that shrinks after the cert (~10 KB/conn there vs ~16 KB here). It must hold
+ * AWS's largest incoming record, the TLS 1.3 server cert+certverify flight (~6 KB). Probed the floor
+ * on HW: 4096 -> handshake "Bad input parameters"; 6144 -> FLAKY (intermittent "Internal error" then
+ * success, the flight sits right at the edge) for only ~1.3 KB saved; 8192 -> reliable. Keep 8192. */
+#define MBEDTLS_SSL_IN_CONTENT_LEN       8192
+#define MBEDTLS_SSL_OUT_CONTENT_LEN      2048   /* == MBEDTLS_SSL_MAX_FRAG_LEN_2048 the transport requests */
+#define MBEDTLS_SSL_VARIABLE_BUFFER_LENGTH
+
+/* (Dropping MBEDTLS_SSL_KEEP_PEER_CERTIFICATE would free the server cert chain post-handshake, but
+ * the base config enables MBEDTLS_SSL_PROTO_TLS1_3 which requires it — check_config.h errors. Left
+ * on; the VARIABLE_BUFFER_LENGTH reclaim above already recovers the bulk of the handshake slack.) */
+
+/* ECP RAM: the AWS suite is ECDHE_RSA (P-256). Shrink the multiplication window and drop the
+ * fixed-point base-point precompute table — the one-shot handshake ECDHE then uses less RAM (a
+ * little slower, fine here). Defaults (window 4, optim on) are heavier than this part can spare. */
+#define MBEDTLS_ECP_WINDOW_SIZE          2
+#define MBEDTLS_ECP_FIXED_POINT_OPTIM    0
 
 #endif /* MBEDTLS_AMEBAD_USER_CONFIG_H */

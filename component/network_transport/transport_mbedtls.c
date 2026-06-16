@@ -163,6 +163,21 @@ static int32_t setClientCertificate( SSLContext_t * pSslContext,
                                      const uint8_t * pClientCert,
                                      size_t clientCertSize );
 
+#if defined( MBEDTLS_FS_IO )
+
+/**
+ * @brief Load the client certificate from a filesystem path (PEM or DER).
+ *
+ * @param[out] pSslContext SSL context to which the client certificate is to be set.
+ * @param[in] pCertPath Filesystem path of the client certificate.
+ *
+ * @return 0 on success; otherwise, failure;
+ */
+static int32_t setClientCertificateFromFile( SSLContext_t * pSslContext,
+                                             const char * pCertPath );
+
+#endif /* MBEDTLS_FS_IO */
+
 /**
  * @brief Set private key for the client's certificate.
  *
@@ -346,6 +361,34 @@ static int32_t setClientCertificate( SSLContext_t * pSslContext,
 }
 /*-----------------------------------------------------------*/
 
+#if defined( MBEDTLS_FS_IO )
+
+static int32_t setClientCertificateFromFile( SSLContext_t * pSslContext,
+                                             const char * pCertPath )
+{
+    int32_t mbedtlsError = -1;
+
+    configASSERT( pSslContext != NULL );
+    configASSERT( pCertPath != NULL );
+
+    /* mbedtls_x509_crt_parse_file reads the file (PEM or DER, auto-detected) and parses it
+     * into the client-cert chain. The file I/O routes through the newlib VFS onto LittleFS. */
+    mbedtlsError = mbedtls_x509_crt_parse_file( &( pSslContext->clientCert ), pCertPath );
+
+    if( mbedtlsError != 0 )
+    {
+        LogError( ( "Failed to parse the client certificate file %s: mbedTLSError= %s : %s.",
+                    pCertPath,
+                    mbedtlsHighLevelCodeOrDefault( mbedtlsError ),
+                    mbedtlsLowLevelCodeOrDefault( mbedtlsError ) ) );
+    }
+
+    return mbedtlsError;
+}
+/*-----------------------------------------------------------*/
+
+#endif /* MBEDTLS_FS_IO */
+
 static int32_t setPrivateKey( SSLContext_t * pSslContext,
                               const uint8_t * pPrivateKey,
                               size_t privateKeySize )
@@ -404,14 +447,29 @@ static int32_t setCredentials( SSLContext_t * pSslContext,
                               pNetworkCredentials->pRootCa,
                               pNetworkCredentials->rootCaSize );
 
-    if( ( pNetworkCredentials->pClientCert != NULL ) &&
+    if( ( ( pNetworkCredentials->pClientCert != NULL )
+        #if defined( MBEDTLS_FS_IO )
+              || ( pNetworkCredentials->pClientCertPath != NULL )
+        #endif
+        ) &&
         ( pNetworkCredentials->pPrivateKey != NULL ) )
     {
         if( mbedtlsError == 0 )
         {
-            mbedtlsError = setClientCertificate( pSslContext,
-                                                 pNetworkCredentials->pClientCert,
-                                                 pNetworkCredentials->clientCertSize );
+            /* Prefer an in-memory cert buffer; otherwise load it from a file path (FS_IO). */
+            if( pNetworkCredentials->pClientCert != NULL )
+            {
+                mbedtlsError = setClientCertificate( pSslContext,
+                                                     pNetworkCredentials->pClientCert,
+                                                     pNetworkCredentials->clientCertSize );
+            }
+        #if defined( MBEDTLS_FS_IO )
+            else
+            {
+                mbedtlsError = setClientCertificateFromFile( pSslContext,
+                                                             pNetworkCredentials->pClientCertPath );
+            }
+        #endif
         }
 
         if( mbedtlsError == 0 )
@@ -481,12 +539,13 @@ static void setOptionalConfigurations( SSLContext_t * pSslContext,
     /* Set Maximum Fragment Length if enabled. */
     #ifdef MBEDTLS_SSL_MAX_FRAGMENT_LENGTH
 
-        /* Enable the max fragment extension. 4096 bytes is currently the largest fragment size permitted.
-         * See RFC 8449 https://tools.ietf.org/html/rfc8449 for more information.
-         *
-         * Smaller values can be found in "mbedtls/include/ssl.h".
+        /* Enable the max fragment extension. AmebaD KM4: 2048 (not 4096) — it must match
+         * MBEDTLS_SSL_OUT_CONTENT_LEN (mbedtls_amebad_user_config.h, trimmed to 2 KB to fit the NS
+         * heap), and 2 KB holds the largest record we send (the ~1.3 KB client Certificate). With
+         * MBEDTLS_SSL_VARIABLE_BUFFER_LENGTH this also lets IN/OUT realloc down to 2 KB after the
+         * handshake. See RFC 8449; smaller values are in "mbedtls/include/ssl.h".
          */
-        mbedtlsError = mbedtls_ssl_conf_max_frag_len( &( pSslContext->config ), MBEDTLS_SSL_MAX_FRAG_LEN_4096 );
+        mbedtlsError = mbedtls_ssl_conf_max_frag_len( &( pSslContext->config ), MBEDTLS_SSL_MAX_FRAG_LEN_2048 );
 
         if( mbedtlsError != 0 )
         {

@@ -569,6 +569,19 @@ int main(void)
 #ifndef AT_PROJECT_QUIC
     amebad_monitor_start();
 #ifdef AT_PROJECT_AWS_IOT
+    /* Mount LittleFS + load the persisted environment. The non-secret creds live in plain
+     * LFS: the AWS endpoint is an env var (KV/endpoint) and the client cert is a plain DER
+     * file (aws_cert.der) whose path is an env var (KV/cert); only the private key needs the
+     * encrypted / TrustZone-protected TF-M ITS. env_init() loads every KV/ file into newlib's
+     * environ (a --wrap=setenv hook then auto-persists any runtime setenv back to KV/). */
+    {
+        extern void *amebad_lfs_mount(void);
+        extern void  env_init(void);
+        void *lfs = amebad_lfs_mount();
+        DiagPrintf("[AWS] LittleFS mount %s\n\r", lfs ? "OK" : "FAILED");
+        if (lfs)
+            env_init();
+    }
     /* Create the PSA-access mutex (pre-scheduler) + register the `set` / `blemac`
      * provisioning commands into the CLI list. */
     {

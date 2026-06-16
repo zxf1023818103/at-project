@@ -5,7 +5,9 @@
  * (component/network_transport/transport_mbedtls.c -> TLS_FreeRTOS_*) on
  * FreeRTOS-Plus-TCP. Mutual TLS to AWS IoT Core port 8883:
  *   - server trust  : Amazon Root CA 1 (embedded, aws_iot_config.h)
- *   - endpoint/cert/key : from TF-M PS (provisioned via `set ...`, encrypted at rest)
+ *   - endpoint       : env var "endpoint" (plain LittleFS KV/endpoint)
+ *   - client cert    : plain LittleFS DER file, path = env var "cert" (parse_file)
+ *   - private key    : TF-M ITS (the only secret; provisioned via `set key`, encrypted at rest)
  *   - client id      : the module BLE MAC = AWS Thing name (efuse 0x190)
  *
  * Started from main()'s network-up hook (vApplicationIPNetworkEventHook). If the
@@ -17,6 +19,7 @@
  */
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>     /* getenv (endpoint + cert-path env vars) */
 #include <string.h>
 
 #include "FreeRTOS.h"
@@ -27,7 +30,6 @@
 #include "backoff_algorithm.h"
 
 #include "aws_iot_config.h"
-#include "aws_iot_creds.h"
 #include "aws_provision.h"
 
 
@@ -51,7 +53,10 @@ struct NetworkContext
     TlsTransportParams_t * pParams;
 };
 
-#define AWS_NET_BUFFER_SZ      2048
+#define AWS_NET_BUFFER_SZ      1024   /* coreMQTT fixed buffer (.bss). The demo's packets are tiny
+                                        * (CONNECT ~30 B, SUBSCRIBE, telemetry PUBLISH ~160 B), so 1 KB
+                                        * is ample; trimmed from 2 KB to hand the byte back to the
+                                        * NS FreeRTOS heap, which the TLS handshake runs to the edge. */
 #define AWS_TLS_RECV_TMO_MS    3000
 #define AWS_TLS_SEND_TMO_MS    3000
 #define AWS_CONNECT_TMO_MS     8000
@@ -153,10 +158,19 @@ static void aws_mqtt_task(void *param)
     NetworkCredentials_t creds;
     char mac[16];
     char topic_tele[96], topic_cmd[96];
-    /* Only the PRIVATE KEY comes from TF-M secure storage; the endpoint + client cert are
-     * embedded (non-secret, aws_iot_creds.h). Static (.bss) key buffer, NOT pvPortMalloc:
-     * psa_its_get writes into it across the NS->SPE boundary and the SPM whitelists NS SRAM
-     * (.bss), not a PSRAM-backed heap. Only this task uses it. */
+    /* Credentials are split by secrecy (provisioned at runtime via `set ...`, aws_cli.c):
+     *  - endpoint    : env var "endpoint" (plain LittleFS KV/endpoint)        -> getenv
+     *  - client cert : a plain LittleFS DER file, path = env var "cert"       -> mbedtls_x509_crt_parse_file
+     *  - private key : TF-M ITS (the only secret)                             -> aws_load_key (DER into .bss)
+     * There is NO embedded fallback: an unprovisioned device idle-retries instead of connecting, so
+     * the firmware carries no client identity. Only the public Amazon Root CA 1 stays embedded
+     * (aws_iot_config.h). The key DER lands in a static (.bss) buffer, NOT pvPortMalloc: psa_its_get
+     * marshals into it across the NS->SPE boundary and the SPM whitelists NS SRAM (.bss), not a
+     * PSRAM-backed heap. endpoint/certPath are copied into static buffers so they stay valid if the
+     * operator re-runs `set ...` (which would realloc the environ string).
+     * (See the project_amebad_aws_iot memory + doc/amebad_km0_scheduler_and_runtime_flash.md.) */
+    static char endpoint[AWS_ENDPOINT_MAX];
+    static char certPath[64];
     static char key[AWS_KEY_MAX];
     size_t keyLen = 0;
     (void)param;
@@ -174,49 +188,36 @@ static void aws_mqtt_task(void *param)
     snprintf(topic_tele, sizeof(topic_tele), AWS_TOPIC_TELEMETRY_FMT, mac);
     snprintf(topic_cmd,  sizeof(topic_cmd),  AWS_TOPIC_CMD_FMT,  mac);
 
-    /* Private key: prefer the one provisioned into TF-M secure storage (`set key`); fall back
-     * to the embedded key so the demo connects out of the box.
-     *
-     * The full runtime chain WORKS end-to-end (2026-06-16): `set key <base64>` stores the RSA-2048
-     * DER into ITS, a reboot loads it from secure storage, and TLS/MQTT connect to AWS with it.
-     * Getting here took fixing four independent bugs (all documented in the
-     * project_amebad_aws_iot memory + doc/amebad_km0_scheduler_and_runtime_flash.md):
-     *   1. NS HardFault on `set key`: the storage layer touched the KM0 LOG UART (DiagPrintf,
-     *      UART2 @ 0x48012000) right after the secure SPIC flash write -> imprecise BusFault before
-     *      the SPIC settled. Fixed by deferring the verdict to the FreeRTOS+CLI `out` buffer.
-     *   2. KM0 boot-hang (layer 1): the KM0 FreeRTOS scheduler ran from XIP and was corrupted by a
-     *      concurrent KM4-SPE flash op on the shared SPIC. Fixed by pinning the scheduler hot path
-     *      to KM0 SRAM (app_km0/rlx8721d_img2.ld).
-     *   3. KM0 boot-hang (layer 2): mbedTLS rewrote the CRYPTO_NV_SEED in ITS on every boot, whose
-     *      block GC copied a persistent key as long 256 B page programs -> wide SPIC window -> KM0
-     *      XIP corruption. Fixed by making the NV-seed UPDATE a no-op (crypto_nv_seed.c).
-     *   4. Corrupt large key in ITS: the ROM FLASH_TxData256B overran the SPIC TX FIFO on a 256 B
-     *      page program, and flash_write_barrier's cache CLEAN wrote stale 0xFF back over flash.
-     *      Fixed in the SPE Driver_Flash.c (<=12 B FLASH_TxData12B chunks + MVA-invalidate). */
-    {
-        const char *pkey;
-        if (aws_is_provisioned() && aws_load_key(key, AWS_KEY_MAX, &keyLen) == 0) {
-            pkey = key;
-            printf("[AWS] private key from TF-M secure storage (%uB)\n\r", (unsigned)keyLen);
-        } else {
-            pkey = AWS_PRIVATE_KEY_PEM;
-            keyLen = sizeof(AWS_PRIVATE_KEY_PEM);
-            printf("[AWS] private key embedded fallback (%uB) - `set key` not yet provisioned\n\r",
-                       (unsigned)keyLen);
+    /* Idle-retry until the endpoint env var, the cert-path env var, and the ITS key are all present,
+     * so the operator can provision live over the console (it then connects without a reboot). Copy
+     * the two env strings into stable static buffers; the key comes back as raw DER. */
+    for (;;) {
+        const char *ep = getenv("endpoint");
+        const char *cp = getenv("cert");
+        int rk = aws_load_key(key, sizeof(key), &keyLen);
+        if (ep != NULL && cp != NULL && rk == 0) {
+            strncpy(endpoint, ep, sizeof(endpoint) - 1);
+            endpoint[sizeof(endpoint) - 1] = '\0';
+            strncpy(certPath, cp, sizeof(certPath) - 1);
+            certPath[sizeof(certPath) - 1] = '\0';
+            break;
         }
-
-        memset(&creds, 0, sizeof(creds));
-        creds.pRootCa = (const uint8_t *)AWS_ROOT_CA_PEM;            /* embedded (aws_iot_config.h) */
-        creds.rootCaSize = sizeof(AWS_ROOT_CA_PEM);                 /* literal: includes NUL */
-        creds.pClientCert = (const uint8_t *)AWS_CLIENT_CERT_PEM;   /* embedded (aws_iot_creds.h) */
-        creds.clientCertSize = sizeof(AWS_CLIENT_CERT_PEM);         /* literal: includes NUL */
-        creds.pPrivateKey = (const uint8_t *)pkey;
-        creds.privateKeySize = keyLen;                             /* includes NUL */
-        creds.disableSni = 0;
+        printf("[AWS] NOT provisioned (endpoint:%s cert:%s key:%s) - run: set endpoint <ep> / set cert <b64> / set key <b64>\n\r",
+               ep ? "ok" : "MISSING", cp ? "ok" : "MISSING", rk ? "MISSING" : "ok");
+        vTaskDelay(pdMS_TO_TICKS(5000));
     }
+    printf("[AWS] provisioned: endpoint=%s certPath=%s key=%uB (free heap %u)\n\r",
+           endpoint, certPath, (unsigned)keyLen, (unsigned)xPortGetFreeHeapSize());
 
-    printf("[AWS] endpoint=%s cert=%uB\n\r",
-               AWS_IOT_ENDPOINT, (unsigned)sizeof(AWS_CLIENT_CERT_PEM));
+    memset(&creds, 0, sizeof(creds));
+    creds.pRootCa = (const uint8_t *)AWS_ROOT_CA_PEM;   /* public Amazon Root CA 1 (embedded) */
+    creds.rootCaSize = sizeof(AWS_ROOT_CA_PEM);         /* literal: includes NUL */
+    creds.pClientCert = NULL;                           /* cert loaded from a file (pClientCertPath) */
+    creds.clientCertSize = 0;
+    creds.pClientCertPath = certPath;                   /* plain LittleFS DER -> mbedtls_x509_crt_parse_file */
+    creds.pPrivateKey = (const uint8_t *)key;           /* DER from TF-M ITS */
+    creds.privateKeySize = keyLen;
+    creds.disableSni = 0;
 
     /* Reconnect loop with exponential backoff. */
     for (;;) {
@@ -227,7 +228,7 @@ static void aws_mqtt_task(void *param)
         BackoffAlgorithm_InitializeParams(&backoff, AWS_BACKOFF_BASE_MS,
                                           AWS_BACKOFF_MAX_MS, AWS_BACKOFF_MAX_TRIES);
 
-        while (prvConnect(&mqtt, &net, AWS_IOT_ENDPOINT, mac, &creds) != 0) {
+        while (prvConnect(&mqtt, &net, endpoint, mac, &creds) != 0) {
             uint32_t rnd = prvGetTimeMs();
             bs = BackoffAlgorithm_GetNextBackoff(&backoff, rnd, &nextBackoff);
             if (bs != BackoffAlgorithmSuccess) {

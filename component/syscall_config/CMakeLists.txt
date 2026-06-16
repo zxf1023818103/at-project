@@ -24,9 +24,12 @@
 # Built where its deps exist (FreeRTOS heap + littlefs + FreeRTOS+TCP), so it is
 # add_subdirectory'd by the consuming platform (AmebaD KM4), not at the repo root —
 # freertos-plus-tcp_config is KM4-gated. lfs.h (littlefs) is the only universally-present dep.
-add_library(syscall_config OBJECT newlib_syscalls.c)
+add_library(syscall_config OBJECT newlib_syscalls.c env.c)
 
-# PUBLIC: syscalls.h (vfs_lfs_mount / fd_open_socket hooks).
+# PUBLIC: syscalls.h (vfs_lfs_mount / fd_open_socket / env_init hooks) AND our
+# self-contained <dirent.h> (newlib's <sys/dirent.h> is a `#error` stub) — placed
+# on the include path AHEAD of the sysroot so `#include <dirent.h>` resolves here
+# for env.c, the dir VFS, and any consumer (e.g. mbedTLS x509_crt.c under FS_IO).
 target_include_directories(syscall_config PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 
 # Header-only borrows (OBJECT lib -> compile-time include paths only; the real

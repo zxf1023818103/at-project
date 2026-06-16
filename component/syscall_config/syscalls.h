@@ -29,6 +29,14 @@ struct lfs *vfs_lfs_mount(void);
  * handle (FreeRTOS+TCP Socket_t), opaque here. Returns the fd (>=3), or -1/errno. */
 int fd_open_socket(void *socket);
 
+/* KV-file-backed environment (env.c). env_init() loads every regular file under KV/
+ * into newlib's environ — call once, right after the platform's LittleFS mount.
+ * env_save() persists one variable. The consuming image MUST link with
+ * -Wl,--wrap=setenv so every setenv() auto-persists KV/<name> (and __real_setenv
+ * resolves). */
+void env_init(void);
+int  env_save(const char *name);
+
 #ifdef __cplusplus
 }
 #endif

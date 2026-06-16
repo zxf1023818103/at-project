@@ -1,16 +1,16 @@
 #requires -version 5
 <#
 aws_provision.ps1 — drive the AmebaD AWS=ON `set` console commands over the LOGUART
-to provision AWS IoT credentials at runtime:
+to provision AWS IoT credentials at runtime, each to its storage by secrecy:
 
-  set endpoint <ats-endpoint>   -> TF-M Protected Storage
-  set cert      (streams a PEM) -> TF-M Protected Storage
-  set key       (streams a PEM) -> TF-M Protected Storage   (the secret)
+  set endpoint <ats-endpoint>  -> env var "endpoint" (plain LittleFS KV/endpoint)
+  set cert <base64-body>       -> plain LittleFS DER file (aws_cert.der); path = env var "cert"
+  set key  <base64-body>       -> TF-M Internal Trusted Storage (the only secret)
 
-The `set cert` / `set key` handlers (component/amebad/app_km4/aws_cli.c) switch to RAW
-byte streaming because the CLI line editor caps at 80 bytes — far short of a ~1.7 KB PEM.
-This script mirrors that: send `set key`, wait for the `>>> paste ...` prompt, stream the
-PEM lines, then a lone `EOF`, then read back the `set key: N bytes -> PS OK` result.
+The host strips the PEM armor + newlines (Send-Pem) and sends the bare base64 body as ONE
+ordinary CLI line (`set cert <b64>` / `set key <b64>`); the device parses it with
+FreeRTOS_CLIGetParameter + mbedtls_base64_decode. The write is paced at 16 B / 6 ms so the
+polled LOGUART RX FIFO doesn't overrun (a dropped char would fail the base64 decode).
 
 Usage (from WSL):
   pwsh project/amebad/aws_provision.ps1 -Port COM3 -Key build/aws-bw20/key.pem
@@ -36,24 +36,32 @@ function Read-Drain([System.IO.Ports.SerialPort]$sp, [int]$sec, [switch]$Echo) {
     }
 }
 
+# Pace EVERY console write at 16 B / 6 ms. The device CLI POLLS the LOGUART RX (no RX IRQ), so a
+# full-rate blast at 1.5 Mbps overruns the small RX FIFO and drops chars — which silently corrupts
+# whatever was sent (a mangled endpoint, or a base64 body that then fails to decode). This applies
+# to the short `set endpoint <host>` line too, not just the ~1.6 KB cert/key bodies.
+function Send-Paced([System.IO.Ports.SerialPort]$sp, [string]$line) {
+    $sp.DiscardInBuffer()
+    $bytes = [System.Text.Encoding]::ASCII.GetBytes("$line`r")
+    for ($i = 0; $i -lt $bytes.Length; $i += 16) {
+        $n = [Math]::Min(16, $bytes.Length - $i)
+        $sp.Write($bytes, $i, $n)
+        Start-Sleep -Milliseconds 6
+    }
+    return $bytes.Length
+}
+
 function Send-Pem([System.IO.Ports.SerialPort]$sp, [string]$sub, [string]$file) {
     if (-not (Test-Path $file)) { throw "PEM not found: $file" }
     # Strip the PEM armor (the BEGIN/END lines have spaces -> the CLI would split them) + all
     # newlines, leaving the bare base64 body, and send it as ONE ordinary CLI line:
     #   set <sub> <base64>
     # The device parses it with FreeRTOS_CLIGetParameter and mbedtls_base64_decode (no custom
-    # streaming/ACK). Pace the write: the CLI line editor polls the LOGUART, so a full-rate blast
-    # would overrun the small RX FIFO and drop chars (-> the base64 decode fails, visibly).
+    # streaming/ACK).
     $b64 = (Get-Content $file | Where-Object { $_ -notmatch '^\s*-----' -and $_.Trim() -ne '' }) -join ''
     Write-Host "[prov] set $sub  ($($b64.Length) base64 chars from $file)"
-    $sp.DiscardInBuffer()
-    $bytes = [System.Text.Encoding]::ASCII.GetBytes("set $sub $b64`r")
-    for ($i = 0; $i -lt $bytes.Length; $i += 16) {
-        $n = [Math]::Min(16, $bytes.Length - $i)
-        $sp.Write($bytes, $i, $n)
-        Start-Sleep -Milliseconds 6
-    }
-    Write-Host "[prov] sent $($bytes.Length) B; awaiting result ..."
+    $sent = Send-Paced $sp "set $sub $b64"
+    Write-Host "[prov] sent $sent B; awaiting result ..."
     Read-Drain $sp 12 -Echo
 }
 
@@ -71,7 +79,7 @@ try {
 
     if ($Endpoint) {
         Write-Host "[prov] set endpoint $Endpoint"
-        $sp.WriteLine("set endpoint $Endpoint")
+        [void](Send-Paced $sp "set endpoint $Endpoint")   # paced: a full-rate line corrupts on the polled RX
         Read-Drain $sp 4 -Echo
     }
     if ($Cert) { Send-Pem $sp 'cert' (Resolve-Path $Cert) }

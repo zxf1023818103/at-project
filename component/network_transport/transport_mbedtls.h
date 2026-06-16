@@ -144,6 +144,13 @@ typedef struct NetworkCredentials
     size_t clientCertSize;       /**< @brief Size associated with #NetworkCredentials.pClientCert. */
     const uint8_t * pPrivateKey; /**< @brief String representing the client certificate's private key. */
     size_t privateKeySize;       /**< @brief Size associated with #NetworkCredentials.pPrivateKey. */
+
+    /**
+     * @brief Filesystem path of the client certificate (PEM or DER), loaded with
+     * mbedtls_x509_crt_parse_file when #pClientCert is NULL. Requires MBEDTLS_FS_IO.
+     * Lets a non-secret cert live as a plain file while the key stays in secure storage.
+     */
+    const char * pClientCertPath;
 } NetworkCredentials_t;
 
 /**

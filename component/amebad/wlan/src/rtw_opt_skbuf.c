@@ -3,7 +3,14 @@
 #include <skbuff.h>
 
 #define MAX_SKB_BUF_SIZE     1658	// should >= the size in wlan driver
+/* skb pool depth. 16 deepens the TX/RX pipeline for throughput (iperf/QUIC); the AWS/MINIMAL
+ * connect-only images (AMEBAD_NET_LOW_MEM, set per-target in app_km4/CMakeLists) are low-rate, so
+ * 10 is ample and gives back ~10 KB of NS heap (each skb is ~1658 B). */
+#if defined( AMEBAD_NET_LOW_MEM )
+#define MAX_SKB_BUF_NUM      10
+#else
 #define MAX_SKB_BUF_NUM      16   /* was 8 — deeper TX/RX pipeline for throughput */
+#endif
 #define MAX_LOCAL_SKB_NUM    (MAX_SKB_BUF_NUM + 2)
 
 /* DO NOT modify skb_buf and skb_data structure */

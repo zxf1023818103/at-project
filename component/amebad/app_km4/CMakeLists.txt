@@ -103,6 +103,20 @@ endif()
 # AWS=ON implies STORAGE=ON (the private key lives in TF-M Protected Storage). Declared here
 # so the diag gate below can see it.
 option(AMEBAD_ENABLE_AWS_IOT "Build the AWS IoT Core MQTT/TLS demo (coreMQTT + mbedTLS; key in TF-M PS)" OFF)
+
+# Low-memory network profile for the connect-only images (AWS / MINIMAL): shrink the
+# FreeRTOS-Plus-TCP per-socket + descriptor buffers (FreeRTOSIPConfig.h) and the WiFi skb pool
+# (rtw_opt_skbuf.c) — they are sized for the iperf/QUIC throughput tests and waste ~100 KB of the
+# tight NS heap on a low-rate MQTT client. Define on the two shared targets that own those configs
+# (they exist by now — added under component/ before app_km4). Throughput images keep the big sizes.
+if(AMEBAD_ENABLE_AWS_IOT OR AMEBAD_ENABLE_MINIMAL)
+    foreach(_net_tgt freertos_plus_tcp amebad_wlan_glue)
+        if(TARGET ${_net_tgt})
+            target_compile_definitions(${_net_tgt} PRIVATE AMEBAD_NET_LOW_MEM)
+        endif()
+    endforeach()
+endif()
+
 if(NOT AMEBAD_ENABLE_QUIC AND NOT AMEBAD_ENABLE_PKCS11 AND NOT AMEBAD_ENABLE_CRYPTOBENCH
    AND NOT AMEBAD_ENABLE_MINIMAL AND NOT AMEBAD_ENABLE_AWS_IOT)
     target_sources(target_img2_km4 PRIVATE
@@ -258,13 +272,18 @@ if(AMEBAD_ENABLE_AWS_IOT)
     # archive is already in the link group via _diag_grp.
     target_include_directories(target_img2_km4 PRIVATE
         "${CMAKE_SOURCE_DIR}/component/freertos-cli_config/freertos-cli")
+    # KV-file-backed environment (syscall_config/env.c): wrap setenv() so every set auto-persists
+    # to KV/<name>. The endpoint (KV/endpoint) and the client-cert path (KV/cert) are env vars;
+    # env_init() reloads them after the LittleFS mount. __real_setenv resolves to libc's setenv.
+    target_link_options(target_img2_km4 PRIVATE "-Wl,--wrap=setenv")
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_AWS_IOT)
     # AWS is a connect-and-run image: strip the boot diagnostics like MINIMAL — iperf / LFS
     # self-test / ROM-mbedTLS KAT and the TF-M HW-crypto KAT/GCM throughput bench (~40 s before
-    # WiFi). Credentials live in TF-M PS (not LittleFS — see aws_provision.c), so skipping
-    # lfs_selftest is REQUIRED here: it is the only caller of the LittleFS mount, whose XIP-pinned
-    # .text hangs in this image's layout. Skipping it means the LFS code is never executed.
+    # WiFi). The endpoint + client cert live in LittleFS (env var + plain file); only the private
+    # key is in TF-M ITS (see aws_provision.c). main.c mounts LittleFS directly in the AWS arm
+    # (verified not to hang in this image's layout), so AT_PROJECT_MINIMAL here only strips the
+    # heavy diagnostics — lfs_selftest is skipped (the LFS mount is done by the AWS block instead).
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_MINIMAL)
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/tfm_psa_selftest.c"
@@ -321,6 +340,12 @@ target_link_options(target_img2_km4 PRIVATE
     "-Wl,--no-enum-size-warning"
     "-Wl,--warn-common"
     "-Wl,-Map=$<TARGET_FILE_DIR:target_img2_km4>/target_img2.map"
+    # Resolve memcpy to the ROM _memcpy (0x10110d2d, string_rom_km4.ld) instead of newlib's XIP
+    # copy. The console RX ISR's StreamBuffer path (RAM-resident, rlx8721d_img2_is.ld) calls memcpy
+    # and can fire while the SPE programs flash (XIP unavailable); the ROM copy is always reachable.
+    # A strong --defsym also stops newlib's memcpy from being pulled (image shrinks). Matches the
+    # KM0 romalias (memcpy=_memcpy).
+    "-Wl,--defsym=memcpy=_memcpy"
 )
 
 # Secure-world (TF-M): when AMEBAD_TFM_BOOT is on, app_km4 IS TF-M's Non-Secure

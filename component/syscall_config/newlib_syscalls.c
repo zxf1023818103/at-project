@@ -41,8 +41,9 @@
 #include <stdint.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <sys/stat.h>
+#include <sys/stat.h>       /* struct stat + mkdir() prototype */
 
+#include "dirent.h"         /* DIR / struct dirent / DT_* (this component's POSIX dirent) */
 #include "FreeRTOS.h"        /* pvPortMalloc / vPortFree (heap) + the mutex */
 #include "semphr.h"
 #include "FreeRTOS_IP.h"     /* FreeRTOS_htonl / FreeRTOS_htons (network byte order) */
@@ -519,6 +520,113 @@ int _stat(const char *path, struct stat *st)
 }
 
 int _unlink(const char *path)
+{
+    int rc = lfs_remove(vfs_lfs_mount(), path);
+    return (rc < 0) ? (errno = lfs_to_errno(rc), -1) : 0;
+}
+
+/* ---- POSIX <dirent.h> directory enumeration over LittleFS ----------------
+ * newlib's <sys/dirent.h> is a `#error` stub, so this component ships its own
+ * <dirent.h> and the strong opendir/readdir/closedir/rewinddir here (libc.a has
+ * none). DIR wraps an lfs_dir_t + a scratch dirent; readdir maps struct lfs_info
+ * -> struct dirent and hides "."/"..". Paths pass verbatim to lfs (like _open).
+ * mkdir()/rmdir() complete the directory API (lfs_mkdir / lfs_remove). */
+struct __dirstream {
+    lfs_dir_t     dir;
+    struct dirent de;        /* returned by readdir, valid until the next readdir/closedir */
+};
+
+DIR *opendir(const char *path)
+{
+    lfs_t *lfs = vfs_lfs_mount();
+    DIR   *d;
+    int    rc;
+
+    if (lfs == NULL) {
+        errno = ENODEV;
+        return NULL;
+    }
+    d = (DIR *)malloc(sizeof(*d));
+    if (d == NULL) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    rc = lfs_dir_open(lfs, &d->dir, path);
+    if (rc < 0) {
+        free(d);
+        errno = lfs_to_errno(rc);
+        return NULL;
+    }
+    return d;
+}
+
+struct dirent *readdir(DIR *d)
+{
+    struct lfs_info info;
+    int rc;
+
+    if (d == NULL) {
+        errno = EBADF;
+        return NULL;
+    }
+    /* Skip the "." and ".." entries littlefs returns first — POSIX readdir may omit
+     * them and the env loader wants regular files only. */
+    do {
+        rc = lfs_dir_read(vfs_lfs_mount(), &d->dir, &info);
+        if (rc < 0) {
+            errno = lfs_to_errno(rc);
+            return NULL;
+        }
+        if (rc == 0) {
+            return NULL;                 /* end of directory (errno unchanged) */
+        }
+    } while (info.name[0] == '.' &&
+             (info.name[1] == '\0' ||
+              (info.name[1] == '.' && info.name[2] == '\0')));
+
+    d->de.d_ino  = 0;
+    d->de.d_type = (info.type == LFS_TYPE_DIR) ? DT_DIR : DT_REG;
+    strncpy(d->de.d_name, info.name, sizeof(d->de.d_name) - 1);
+    d->de.d_name[sizeof(d->de.d_name) - 1] = '\0';
+    return &d->de;
+}
+
+int closedir(DIR *d)
+{
+    int rc;
+
+    if (d == NULL) {
+        errno = EBADF;
+        return -1;
+    }
+    rc = lfs_dir_close(vfs_lfs_mount(), &d->dir);
+    free(d);
+    return (rc < 0) ? (errno = lfs_to_errno(rc), -1) : 0;
+}
+
+void rewinddir(DIR *d)
+{
+    if (d != NULL) {
+        (void)lfs_dir_rewind(vfs_lfs_mount(), &d->dir);
+    }
+}
+
+/* mkdir() is prototyped by <sys/stat.h> (included above); rmdir() lives in
+ * <unistd.h> which we don't pull in — declare it here next to the definition.
+ * lfs_remove() unlinks a file OR an empty directory (-> ENOTEMPTY if non-empty),
+ * which matches rmdir() semantics. */
+int rmdir(const char *path);
+
+int mkdir(const char *path, mode_t mode)
+{
+    int rc;
+
+    (void)mode;
+    rc = lfs_mkdir(vfs_lfs_mount(), path);
+    return (rc < 0) ? (errno = lfs_to_errno(rc), -1) : 0;
+}
+
+int rmdir(const char *path)
 {
     int rc = lfs_remove(vfs_lfs_mount(), path);
     return (rc < 0) ? (errno = lfs_to_errno(rc), -1) : 0;

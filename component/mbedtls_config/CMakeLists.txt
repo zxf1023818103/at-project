@@ -56,6 +56,12 @@ if("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
                 MBEDTLS_USER_CONFIG_FILE="mbedtls_amebad_user_config.h"
                 MBEDTLS_THREADING_ALT)
             target_include_directories(${_t} SYSTEM PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+            # MBEDTLS_FS_IO is on (user config) -> x509_crt.c #include <dirent.h>, which newlib
+            # ships as a `#error` stub. component/syscall_config supplies a real <dirent.h> (+ the
+            # opendir/readdir defs); put its dir on the include path AHEAD of the sysroot so the
+            # mbedtls FS_IO sources (parse_file/parse_path) compile on this bare-metal target.
+            target_include_directories(${_t} BEFORE PRIVATE
+                "${CMAKE_SOURCE_DIR}/component/syscall_config")
         endif()
     endforeach()
 endif()

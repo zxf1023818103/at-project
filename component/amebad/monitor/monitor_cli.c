@@ -2,15 +2,21 @@
  * monitor_cli.c — the AmebaD console: FreeRTOS-Plus-CLI over the LOGUART, on BOTH cores,
  * with a KM0<->KM4 console hand-off. Replaces the legacy ROM/RAM AT-monitor shell.
  *
- * Input is POLLED (LOGUART_Readable + LOGUART_GetChar) from the console task — the LOGUART RX
- * IRQ is never enabled, which is what avoids the ROM "Irq 3 Fun Not Assign" storm an
- * enabled-but-unhandled RX line causes (memory amebad-loguart-irq-storm). Output + the input
- * echo go out the same LOGUART via DiagPutChar (the device DiagPrintf/printf already use).
+ * RX (KM4): IRQ-driven via a FreeRTOS StreamBuffer. The LOGUART RX interrupt (UART_LOG_IRQ) ISR
+ * drains the HW RX FIFO into s_rx_stream and the console task blocks on xStreamBufferReceive. This
+ * keeps the small HW FIFO empty even when a higher-priority task (WiFi) preempts the console task,
+ * so a fast `set key`/`set cert` paste no longer overruns the FIFO and drops bytes (the old 10 ms
+ * poll did). The LOGUART IMR is left as the ROM configured it (RX already enabled — that is why the
+ * old code MASKED the line at the NVIC); registering a handler is what makes enabling the NVIC line
+ * safe — the enabled-but-unhandled line is what hit the ROM "Irq 3 Fun Not Assign" storm
+ * (memory amebad-loguart-irq-storm). RX (KM0): stays POLLED — its LOGUART RX IRQ (UART_LOG_IRQ_LP,
+ * a separate NVIC) is the tickless wake source and its console is low-rate. Output + input echo go
+ * out the same LOGUART via DiagPutChar (the device DiagPrintf/printf already use).
  *
- * Switch model (polling-safe): there is no RX IRQ to hand off, so we hand off a logical
- * "console owner" token. Only the OWNING core's task reads the LOGUART; the other core's task
- * just waits. Each core has its OWN g_owner (separate SRAM); the only cross-core signal is IPC
- * channel 0 (IPC_INT_CHAN_SHELL_SWITCH). KM4 boots owner, KM0 boots waiting. `>>` toggles to
+ * Switch model: a logical "console owner" token. Only the OWNING core's task reads the LOGUART; on
+ * KM4 it also OWNS the RX IRQ (enabled on acquire, masked on release), so the IRQ path composes
+ * with the hand-off. Each core has its OWN g_owner (separate SRAM); the only cross-core signal is
+ * IPC channel 0 (IPC_INT_CHAN_SHELL_SWITCH). KM4 boots owner, KM0 boots waiting. `>>` toggles to
  * the other core; `km0`/`km4` jump to a named core (no-op if already there).
  */
 #include <string.h>
@@ -18,6 +24,7 @@
 
 #include "FreeRTOS.h"
 #include "task.h"
+#include "stream_buffer.h"
 #include "FreeRTOS_CLI.h"
 
 #include "ameba_soc.h"   /* LOGUART_Readable/GetChar, DiagPutChar, WDG_*, ipc_send_message,
@@ -228,6 +235,71 @@ static const CLI_Command_Definition_t kCmds[] = {
     { "km4",     "km4:\r\n switch the console to KM4\r\n",                        cmd_sw_km4,    0 },
 };
 
+/* ---- LOGUART RX: IRQ + StreamBuffer (KM4) / polling (KM0) ----------------- *
+ * cli_rx_enable()/disable() follow console ownership; cli_rx_get() fetches the next byte. */
+#if defined(__ARM_ARCH_8M_MAIN__)
+
+#define CLI_RX_STREAM_SZ   1024     /* SW FIFO (heap); absorbs a paced `set key` line under WiFi
+                                     * preemption. 1 KB: the host paces 16 B/6 ms and the cli task
+                                     * drains fast, and the NS heap is tight for the TLS handshake. */
+static StreamBufferHandle_t s_rx_stream;
+
+/* LOGUART RX ISR: drain the whole HW FIFO into the StreamBuffer (reading it deasserts the
+ * level-triggered RX-data/timeout interrupt). Priority 5 == configLIBRARY_MAX_SYSCALL_INTERRUPT_
+ * PRIORITY on KM4 — the most urgent level still allowed to call ...FromISR.
+ *
+ * RAM-resident (AN0400 §18.2): this ISR can fire while the SPE is programming flash (SPIC in user
+ * mode), when XIP instruction fetch is unavailable — running it (and the StreamBuffer functions it
+ * calls) from XIP would fault. IMAGE2_RAM_TEXT_SECTION pins this function in SRAM; the StreamBuffer
+ * + FromISR-critical functions are pulled into .ram_image2.text by the ld (rlx8721d_img2_is.ld),
+ * and memcpy is aliased to the ROM _memcpy (app_km4/CMakeLists.txt --defsym). */
+IMAGE2_RAM_TEXT_SECTION
+static u32 cli_loguart_rx_isr( void *data )
+{
+    BaseType_t woken = pdFALSE;
+    ( void ) data;
+    while( LOGUART_Readable() )
+    {
+        u8 c = LOGUART_GetChar( _FALSE );
+        ( void ) xStreamBufferSendFromISR( s_rx_stream, &c, 1, &woken );
+    }
+    portYIELD_FROM_ISR( woken );
+    return 0;
+}
+
+/* Claim the RX IRQ (this core just became console owner): drop bytes the FIFO/stream collected
+ * for the previous owner (clean line start), then unmask the NVIC line. */
+static void cli_rx_enable( void )
+{
+    while( LOGUART_Readable() ) { ( void ) LOGUART_GetChar( _FALSE ); }
+    if( s_rx_stream != NULL ) { ( void ) xStreamBufferReset( s_rx_stream ); }
+    InterruptEn( UART_LOG_IRQ, 5 );
+}
+
+static void cli_rx_disable( void )      /* release the RX IRQ (mask at the NVIC) */
+{
+    InterruptDis( UART_LOG_IRQ );
+}
+
+/* Block for the next RX byte; 1 if read, 0 on timeout (lets the loop re-check g_owner). */
+static int cli_rx_get( u8 *c )
+{
+    return ( xStreamBufferReceive( s_rx_stream, c, 1, pdMS_TO_TICKS( 100 ) ) == 1 ) ? 1 : 0;
+}
+
+#else  /* KM0: polling (the LP LOGUART RX IRQ is the tickless wake source — leave it alone) */
+
+static void cli_rx_enable( void )  { }
+static void cli_rx_disable( void ) { InterruptDis( UART_LOG_IRQ ); }
+static int cli_rx_get( u8 *c )
+{
+    if( !LOGUART_Readable() ) { vTaskDelay( pdMS_TO_TICKS( 10 ) ); return 0; }
+    *c = LOGUART_GetChar( _TRUE );
+    return 1;
+}
+
+#endif
+
 /* ---- line processing + input loop --------------------------------------- */
 
 static void cli_run_line( char *line )
@@ -249,19 +321,26 @@ static void cli_task( void *arg )
     int idx = 0;
     ( void ) arg;
 
+    if( g_owner )
+    {
+        cli_rx_enable();        /* initial owner (KM4): take the RX IRQ now the scheduler runs */
+    }
+
     for( ;; )
     {
         u8 c;
 
         if( !g_owner )
         {
-            /* Not the console owner: stay off the shared LOGUART and wait for the IPC
+            /* Not the console owner: release the RX IRQ to the other core and wait for the IPC
              * hand-off (g_owner set by shell_switch_ipc_int on this core). */
+            cli_rx_disable();
             idx = 0;
             while( !g_owner )
             {
                 vTaskDelay( pdMS_TO_TICKS( 50 ) );
             }
+            cli_rx_enable();    /* claim the console RX now we own it */
             cli_puts( "\r\n[" );
             cli_puts( amebad_monitor_core_name() );
             cli_puts( "] console - type 'help'.\r\n" );
@@ -269,12 +348,10 @@ static void cli_task( void *arg )
             continue;
         }
 
-        if( !LOGUART_Readable() )       /* poll: never enables the RX IRQ */
+        if( !cli_rx_get( &c ) )         /* no byte before the timeout: re-check g_owner */
         {
-            vTaskDelay( pdMS_TO_TICKS( 10 ) );
             continue;
         }
-        c = LOGUART_GetChar( _TRUE );
 
         if( c == '\r' || c == '\n' )
         {
@@ -290,6 +367,7 @@ static void cli_task( void *arg )
             {
                 /* Give up the console, then signal the other core to take over. */
                 g_want_switch = 0;
+                cli_rx_disable();       /* stop taking RX before handing the console off */
                 g_owner = 0;
                 ipc_send_message( IPC_INT_CHAN_SHELL_SWITCH, ( u32 ) NULL );
                 continue;               /* -> top of loop -> wait for hand-back */
@@ -332,11 +410,27 @@ void amebad_monitor_start( void )
 {
     unsigned i;
 
-    /* We POLL the LOGUART RX (LOGUART_Readable). Mask the LOGUART RX IRQ (IRQ 3) on THIS core so
-     * the ROM boot-console ISR doesn't drain the RX FIFO out from under the poll (and so an
-     * unhandled-but-enabled line can't trigger the ROM "Irq 3 Fun Not Assign" storm). The RX
-     * hardware keeps filling the FIFO with the IRQ masked, so LOGUART_Readable() still sees bytes.
-     * UART_LOG_IRQ == UART_LOG_IRQ_LP == 3; InterruptDis acts on the current core's NVIC. */
+#if defined(__ARM_ARCH_8M_MAIN__)
+    /* KM4: IRQ-driven console RX. Create the SW FIFO + install the LOGUART RX ISR; the line stays
+     * masked here and cli_task's cli_rx_enable() unmasks it once it owns the console (and the
+     * scheduler is running). Registering a handler is what makes enabling the line safe — without
+     * one the enabled RX line hits the ROM "Irq 3 Fun Not Assign" storm (see the file header). */
+    s_rx_stream = xStreamBufferCreate( CLI_RX_STREAM_SZ, 1 );   /* trigger level 1 byte */
+    if( s_rx_stream == NULL )
+    {
+        DiagPrintf( "[%s] cli RX StreamBuffer alloc failed\n\r", amebad_monitor_core_name() );
+    }
+    else
+    {
+        InterruptRegister( cli_loguart_rx_isr, UART_LOG_IRQ, 0, 5 );
+    }
+#endif
+
+    /* Mask the LOGUART RX IRQ (IRQ 3) on THIS core to start: cli_rx_enable() unmasks it for the
+     * owner (KM4 IRQ path); on KM0 it stays masked the whole run (polling). Masked, the RX
+     * hardware still fills the FIFO, so KM0's LOGUART_Readable() poll still sees bytes. Also keeps
+     * an enabled-but-unhandled line from triggering the ROM "Irq 3 Fun Not Assign" storm before
+     * the owner is set up. UART_LOG_IRQ == UART_LOG_IRQ_LP == 3; InterruptDis is per-core NVIC. */
     InterruptDis( UART_LOG_IRQ );
 
     /* KM4 owns the console at boot; KM0 waits for the user to hand it over. */
