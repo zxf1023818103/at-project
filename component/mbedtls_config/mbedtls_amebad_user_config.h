@@ -56,16 +56,12 @@
  * engine) are NOT defined here — they are gated -D defs in the port CMakeLists (make HWGCM=ON),
  * which also documents why the other *_ALT modules (SHA/AES/CCM) are deliberately left software. */
 
-/* ---- TLS record buffers + handshake-RAM reclaim. The KM4 NS heap is tight (shared with WiFi +
- *      FreeRTOS-Plus-TCP) and the AWS handshake peak runs it to the edge — an AWS IoT TLS connect
- *      hit vApplicationMallocFailedHook (see the project_amebad_aws_iot memory). The default 16 KB
- *      IN + 16 KB OUT is far too much; trim + reclaim:
+/* ---- TLS record buffers. The KM4 NS heap is tight (shared with WiFi + FreeRTOS-Plus-TCP) and the
+ *      AWS handshake peak runs it close to the edge. The default 16 KB IN + 16 KB OUT is far too
+ *      much; trim to fixed full-size buffers (NOT variable — see below):
  *   - IN 8 KB: holds the AWS IoT server Certificate record (server-controlled; keep generous).
  *   - OUT 2 KB: the client Certificate (~1.3 KB) is the largest record we SEND. Paired with a 2 KB
- *     max-fragment request (transport_mbedtls.c) so 2 KB is self-consistent. Saves 2 KB at the
- *     handshake peak vs the old 4 KB — which is what closed the last malloc-fail gap.
- *   - VARIABLE_BUFFER_LENGTH: after the handshake, realloc IN/OUT down to the negotiated 2 KB
- *     fragment, freeing ~6 KB of IN slack for steady-state MQTT (which sends only small records). */
+ *     max-fragment request (transport_mbedtls.c) so 2 KB is self-consistent. */
 /* IN buffer = the dominant per-connection cost. AWS IoT does NOT honor the max_fragment_length
  * extension (verified: with VARIABLE_BUFFER_LENGTH on, min-ever == steady free, i.e. no post-
  * handshake shrink), so mbedTLS HOLDS this fixed buffer for the whole connection — unlike wolfSSL's
@@ -75,11 +71,16 @@
  * success, the flight sits right at the edge) for only ~1.3 KB saved; 8192 -> reliable. Keep 8192. */
 #define MBEDTLS_SSL_IN_CONTENT_LEN       8192
 #define MBEDTLS_SSL_OUT_CONTENT_LEN      2048   /* == MBEDTLS_SSL_MAX_FRAG_LEN_2048 the transport requests */
-#define MBEDTLS_SSL_VARIABLE_BUFFER_LENGTH
+/* MBEDTLS_SSL_VARIABLE_BUFFER_LENGTH intentionally OFF. It would let IN/OUT realloc down to the
+ * negotiated fragment AFTER the handshake, but AWS IoT does NOT honor max_fragment_length (verified:
+ * min-ever == steady, no shrink), so it buys nothing here. What it DOES add is a realloc-and-reassemble
+ * of the IN buffer DURING the handshake (growing 2 KB -> 8 KB to take AWS's ~6 KB TLS1.3 cert flight),
+ * and that mid-handshake grow — split across TCP segment boundaries — was the source of an intermittent
+ * "SSL - Internal error" / hang at the handshake (extremely layout/timing sensitive). Allocating IN at
+ * the full 8 KB up front (this macro off) removes that path with zero steady-state heap cost. */
 
 /* (Dropping MBEDTLS_SSL_KEEP_PEER_CERTIFICATE would free the server cert chain post-handshake, but
- * the base config enables MBEDTLS_SSL_PROTO_TLS1_3 which requires it — check_config.h errors. Left
- * on; the VARIABLE_BUFFER_LENGTH reclaim above already recovers the bulk of the handshake slack.) */
+ * the base config enables MBEDTLS_SSL_PROTO_TLS1_3 which requires it — check_config.h errors. Left on.) */
 
 /* ECP RAM: the AWS suite is ECDHE_RSA (P-256). Shrink the multiplication window and drop the
  * fixed-point base-point precompute table — the one-shot handshake ECDHE then uses less RAM (a

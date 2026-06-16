@@ -27,6 +27,21 @@ typedef int (*amebad_gcm_op_fn)(const unsigned char *msg, unsigned int msglen,
 #define AMEBAD_ROM_GCM_ENC   ((amebad_gcm_op_fn)0x1010e0b9u)
 #define AMEBAD_ROM_GCM_DEC   ((amebad_gcm_op_fn)0x1010e131u)
 
+/* One-time IPSEC engine bring-up (clock/reset/IO setup). rtl_crypto_aes_gcm_init() returns
+ * "io driver parameters error" (ROM line 398) if the engine was never CRYPTO_Init'd OR the WiFi
+ * driver reconfigured it for its own WPA crypto. The working HW KAT (rom_hwcrypto_test.c) calls
+ * this first; do the same here, per op, under RT_DEV_LOCK_CRYPTO, so the engine is in our state
+ * regardless of a concurrent WiFi user. CRYPTO_Init(NULL) returns 0 (reference_amebad_hw_crypto).
+ *
+ * This CRYPTO_Init omission was a real HW-GCM bug (every op failed init). It is fixed here. Note: an
+ * earlier "HW-GCM hangs the AWS handshake" conclusion was a MISATTRIBUTION — that hang was actually
+ * the mbedTLS MBEDTLS_SSL_VARIABLE_BUFFER_LENGTH realloc-during-handshake race (since fixed by
+ * disabling that macro), which was present in the software-GCM build too. Whether HW-GCM serves a
+ * live AWS TLS session cleanly is therefore UNTESTED post-fix; the Makefile keeps HWGCM=OFF for AWS
+ * pending a clean re-test. HW-GCM remains verified for offline/standalone KATs and benchmarks. */
+typedef int (*amebad_crypto_init_fn)(void *);
+#define AMEBAD_ROM_CRYPTO_INIT  ((amebad_crypto_init_fn)0x10104a49u)
+
 /* The IPSEC engine is ONE shared resource — the WiFi driver and ROM crypto use it
  * too. Serialize with the AmebaD device lock RT_DEV_LOCK_CRYPTO so a concurrent WiFi
  * crypto op can't clobber the engine mid-GCM (key/descriptors). Forward-declared
@@ -78,6 +93,10 @@ static int amebad_hw_gcm(mbedtls_gcm_context *ctx, int encrypt, size_t length,
     /* Hold RT_DEV_LOCK_CRYPTO across init+op so the loaded key survives the op
      * against a concurrent WiFi/ROM crypto user of the same engine. */
     device_mutex_lock(RT_DEV_LOCK_CRYPTO);
+    if (AMEBAD_ROM_CRYPTO_INIT(0) != 0) {           /* bring up / reclaim the IPSEC engine */
+        device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
+        return MBEDTLS_ERR_GCM_BAD_INPUT;
+    }
     if (AMEBAD_ROM_GCM_INIT(ctx->key, ctx->keybits / 8u) != 0) {
         device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
         return MBEDTLS_ERR_GCM_BAD_INPUT;

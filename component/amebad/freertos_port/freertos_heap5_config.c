@@ -194,7 +194,12 @@ __WEAK BaseType_t xTaskResumeAll( void )
 
 void vApplicationMallocFailedHook( void )
 {
-    printf( "Malloc failed [free secure heap size: %d]\r\n", xPortGetFreeHeapSize() );
+    /* Use ROM DiagPrintf (polling, no malloc): the prior printf() mallocs its own buffer, so under
+     * the very heap exhaustion that triggers this hook the message never transmitted -> the device
+     * appeared to hang silently. DiagPrintf always gets the line out. */
+    extern void DiagPrintf( const char *, ... );
+    DiagPrintf( "Malloc failed [free heap %d, min-ever %d]\r\n",
+                ( int ) xPortGetFreeHeapSize(), ( int ) xPortGetMinimumEverFreeHeapSize() );
     __disable_irq();
     for( ;; );
 }
