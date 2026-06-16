@@ -178,17 +178,22 @@ static void aws_mqtt_task(void *param)
     /* Private key: prefer the one provisioned into TF-M secure storage (`set key`); fall back
      * to the embedded key so the demo connects out of the box.
      *
-     * STATUS (2026-06-16): the runtime `set key` WRITE path now works — a full RSA-2048 key DER
-     * stores into ITS and `set key: <n> b64 -> OK` is reported. (The earlier NS HardFault was
-     * b64_store/its_store touching the KM0 LOG UART via DiagPrintf immediately after the secure
-     * SPIC flash write, which takes an imprecise BusFault before the SPIC settles; fixed by
-     * dropping the post-flash DiagPrintf and letting the FreeRTOS+CLI framework print the result.)
-     *
-     * REMAINING BLOCKER to the full chain: leaving a persistent key object in ITS makes the device
-     * boot-HANG (~100% vs ~50% on a clean FS) — an intermittent ROM HardFault very early in the KM0
-     * image2 XIP (PC in the 0x0C000000 window). This is the SPE<->KM0 cross-CPU flash-arbitration
-     * gap (the SDK's FLASH_Write_Lock / IPC-sleep-KM0 is an IMAGE2-RAM/NS function the bare SPE
-     * can't reach). Until that's solved the embedded fallback is what's used in practice. */
+     * The full runtime chain WORKS end-to-end (2026-06-16): `set key <base64>` stores the RSA-2048
+     * DER into ITS, a reboot loads it from secure storage, and TLS/MQTT connect to AWS with it.
+     * Getting here took fixing four independent bugs (all documented in the
+     * project_amebad_aws_iot memory + doc/amebad_km0_scheduler_and_runtime_flash.md):
+     *   1. NS HardFault on `set key`: the storage layer touched the KM0 LOG UART (DiagPrintf,
+     *      UART2 @ 0x48012000) right after the secure SPIC flash write -> imprecise BusFault before
+     *      the SPIC settled. Fixed by deferring the verdict to the FreeRTOS+CLI `out` buffer.
+     *   2. KM0 boot-hang (layer 1): the KM0 FreeRTOS scheduler ran from XIP and was corrupted by a
+     *      concurrent KM4-SPE flash op on the shared SPIC. Fixed by pinning the scheduler hot path
+     *      to KM0 SRAM (app_km0/rlx8721d_img2.ld).
+     *   3. KM0 boot-hang (layer 2): mbedTLS rewrote the CRYPTO_NV_SEED in ITS on every boot, whose
+     *      block GC copied a persistent key as long 256 B page programs -> wide SPIC window -> KM0
+     *      XIP corruption. Fixed by making the NV-seed UPDATE a no-op (crypto_nv_seed.c).
+     *   4. Corrupt large key in ITS: the ROM FLASH_TxData256B overran the SPIC TX FIFO on a 256 B
+     *      page program, and flash_write_barrier's cache CLEAN wrote stale 0xFF back over flash.
+     *      Fixed in the SPE Driver_Flash.c (<=12 B FLASH_TxData12B chunks + MVA-invalidate). */
     {
         const char *pkey;
         if (aws_is_provisioned() && aws_load_key(key, AWS_KEY_MAX, &keyLen) == 0) {

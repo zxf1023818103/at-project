@@ -48,6 +48,15 @@
  * which is the secure bootloader's ROM symbol table.) */
 #define ROM_FLASH_ERASE_S       0x1010170dU   /* void FLASH_Erase(u32 type, u32 addr)            */
 #define ROM_FLASH_TXDATA256B_S  0x1010151dU   /* void FLASH_TxData256B(u32 addr, u32 len, u8 *d) */
+#define ROM_FLASH_TXDATA12B_S   0x1010160dU   /* void FLASH_TxData12B(u32 addr, u32 len<=12, u8 *d) */
+
+/* SPIC TX-FIFO hazard: FLASH_TxData256B (0x1010151c) streams all len/4 words into the SPIC TX FIFO
+ * (str -> SPIC+0x60) in a tight loop WITHOUT checking the FIFO level (TXFLR @ SPIC+0x20). For a long
+ * (256-byte = 64-word) page program the CPU outruns the SPIC drain, the TX FIFO overruns, and whole
+ * words are dropped — leaving periodic 12-byte (3-word) 0xFF holes in a large ITS object (a >~1 KB
+ * cert/key DER the FS GC copies via 256 B page programs). FLASH_TxData12B programs <=12 bytes (3
+ * words), which always fits the FIFO, so it can't overrun. We program in <=12-byte chunks. */
+#define FLASH_PROG_CHUNK        12U
 
 #define SPI_FLASH_BASE          0x08000000U   /* memory-mapped flash (auto/XIP read path) */
 #define ERASE_SECTOR            2U            /* EraseSector (rtl8721d_flash.h) */
@@ -69,6 +78,10 @@ ALWAYS_INLINE void rom_flash_tx256(uint32_t addr, uint32_t len, uint8_t *data)
 {
     ((void (*)(uint32_t, uint32_t, uint8_t *))ROM_FLASH_TXDATA256B_S)(addr, len, data);
 }
+ALWAYS_INLINE void rom_flash_tx12(uint32_t addr, uint32_t len, uint8_t *data)
+{
+    ((void (*)(uint32_t, uint32_t, uint8_t *))ROM_FLASH_TXDATA12B_S)(addr, len, data);
+}
 
 /* Post-write cache maintenance — the missing half of what the SDK's flash path does via
  * Cache_Flush() after every program/erase. Two distinct hazards, both fatal at runtime:
@@ -84,31 +97,26 @@ ALWAYS_INLINE void rom_flash_tx256(uint32_t addr, uint32_t len, uint8_t *data)
  *      the SPE build, so the canonical set/way (DCISW) + ICIALLU sequences are inlined via raw
  *      SCB registers. The KM4 D-cache only covers (read-only) flash, so the invalidate has no
  *      dirty SRAM lines to lose. */
-#define SCB_CSSELR   (*(volatile uint32_t *)0xE000ED84U)   /* cache size selection                 */
-#define SCB_CCSIDR   (*(volatile uint32_t *)0xE000ED80U)   /* cache size id (sets/ways)            */
 #define SCB_ICIALLU  (*(volatile uint32_t *)0xE000EF50U)   /* I-cache invalidate all               */
-#define SCB_DCCISW   (*(volatile uint32_t *)0xE000EF74U)   /* D-cache CLEAN+invalidate by set/way  */
+#define SCB_DCIMVAC  (*(volatile uint32_t *)0xE000EF5CU)   /* D-cache invalidate by MVA to PoC     */
 
-ALWAYS_INLINE void flash_write_barrier(void)
+ALWAYS_INLINE void flash_write_barrier(uint32_t addr, uint32_t len)
 {
-    uint32_t ccsidr, sets, ways;
+    uint32_t a, end;
 
     __DSB();
 
-    /* D-cache clean+invalidate all by set/way (canonical CMSIS sequence; SET_Pos=5, WAY_Pos=30).
-     * CLEAN+invalidate (DCCISW), NOT plain invalidate (DCISW): this KM4 caches SRAM too, so the
-     * SPE's own dirty stack/data lines must be written back before being dropped, or the SPE
-     * corrupts itself (a plain invalidate-all crashed the boot self-test write). */
-    SCB_CSSELR = 0U;
-    __DSB();
-    ccsidr = SCB_CCSIDR;
-    sets = (ccsidr >> 13) & 0x7FFFU;          /* CCSIDR.NumSets        (bits 27:13) */
-    do {
-        ways = (ccsidr >> 3) & 0x3FFU;        /* CCSIDR.Associativity  (bits 12:3)  */
-        do {
-            SCB_DCCISW = ((sets & 0x1FFU) << 5) | ((ways & 0x3U) << 30);
-        } while (ways-- != 0U);
-    } while (sets-- != 0U);
+    /* Invalidate ONLY the just-written flash region (read alias SPI_FLASH_BASE+addr) by MVA, so the
+     * next read of it comes fresh from the device. Do NOT clean+invalidate-all by set/way: a "clean"
+     * writes every dirty cache line back to its backing address, and a flash-region line that went
+     * stale (0xFF, cached when the page was still erased) then gets written back AS 0xFF over the
+     * bytes we just programmed — dropping them (this was the residual non-deterministic 12-byte 0xFF
+     * corruption of a large ITS object, on top of the FLASH_TxData256B FIFO overrun). MVA-invalidate
+     * touches only the flash region (32-byte lines), never SRAM, so it can't lose the SPE's own dirty
+     * SRAM lines (the reason the set/way path had to clean) and can't write anything back to flash. */
+    a   = (SPI_FLASH_BASE + addr) & ~31U;
+    end = SPI_FLASH_BASE + addr + len;
+    while (a < end) { SCB_DCIMVAC = a; a += 32U; }
 
     /* I-cache invalidate all. */
     SCB_ICIALLU = 0U;
@@ -171,7 +179,13 @@ RAMFUNC static int32_t ARM_Flash_ProgramData(uint32_t addr, const void *data, ui
         uint32_t page_room = FLASH_PAGE_SIZE - (addr & (FLASH_PAGE_SIZE - 1U));
         uint32_t chunk = (remaining < page_room) ? remaining : page_room;
         const uint8_t *src = p;
-        uint32_t prog = chunk;
+        uint32_t prog;
+
+        /* Program <=12 bytes per ROM call (FLASH_TxData12B) so the SPIC TX FIFO can't overrun
+         * (see FLASH_PROG_CHUNK note above). */
+        if (chunk > FLASH_PROG_CHUNK)
+            chunk = FLASH_PROG_CHUNK;
+        prog = chunk;
 
         /* The ROM FLASH_TxData256B asserts (io_assert_failed) on a non-word-aligned length — the
          * SPIC programs in 32-bit words. The ITS flash FS hands us odd lengths (e.g. a 1193-byte
@@ -193,8 +207,8 @@ RAMFUNC static int32_t ARM_Flash_ProgramData(uint32_t addr, const void *data, ui
 
         primask = __get_PRIMASK();
         __disable_irq();
-        rom_flash_tx256(addr, prog, (uint8_t *)(uintptr_t)src);
-        flash_write_barrier();
+        rom_flash_tx12(addr, prog, (uint8_t *)(uintptr_t)src);
+        flash_write_barrier(addr, prog);
         __set_PRIMASK(primask);
 
         addr      += chunk;
@@ -209,7 +223,7 @@ RAMFUNC static int32_t ARM_Flash_EraseSector(uint32_t addr)
     uint32_t primask = __get_PRIMASK();
     __disable_irq();
     rom_flash_erase(ERASE_SECTOR, addr);
-    flash_write_barrier();
+    flash_write_barrier(addr, FLASH_AREA_IMAGE_SECTOR_SIZE);
     __set_PRIMASK(primask);
     return ARM_DRIVER_OK;
 }

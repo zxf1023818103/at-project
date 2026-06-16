@@ -95,6 +95,19 @@ if(EXISTS "${_cc3xx_patch}")
     file(RENAME "${_cc3xx_patch}" "${_cc3xx_patch}.skip-rtl8721d-sw")
 endif()
 
+# RTL8721D: override TF-M's default NV-seed write. mbedTLS rewrites the CRYPTO_NV_SEED in ITS on
+# every boot (forward-secrecy seed update); that write triggers an ITS block GC which copies any
+# large co-located object (a provisioned AWS key/cert) as long 256-byte SPIC page programs, whose
+# wide user-mode window corrupts KM0's concurrent XIP fetches -> KM0 boot HardFault (AN0400 §18.1).
+# Our version persists only the FIRST (provisioning) write and skips the per-boot update. Copied
+# from our tracked source over the upstream template at configure time so it survives a
+# `git submodule update` (same reproducible pattern as the CC3XX rename above). See the
+# project_amebad_aws_iot memory + doc/amebad_km0_scheduler_and_runtime_flash.md.
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/platform/rtl8721d/crypto_nv_seed.c"
+    "${_tfm_src}/platform/ext/common/template/crypto_nv_seed.c"
+    COPYONLY)
+
 # Wrap the nested CMake invocations so the toolchain bin dir is on PATH.
 set(_env "${CMAKE_COMMAND}" -E env "PATH=${_tc_bin}:$ENV{PATH}")
 

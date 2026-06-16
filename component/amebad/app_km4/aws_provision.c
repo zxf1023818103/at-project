@@ -87,21 +87,39 @@ int aws_get_ble_mac(char *out, size_t out_len)
 /* ----------------------------------------------------------- ITS helpers ---- */
 static int its_store(psa_storage_uid_t uid, const char *data, size_t len, size_t cap)
 {
+    /* Read-back verify buffer in .bss (not heap/stack — SPM whitelists NS SRAM, and a 2.5 KB
+     * stack buffer would blow the CLI task). */
+    static unsigned char vbuf[AWS_KEY_MAX];
     psa_status_t s;
+    int try;
 
-    if (data == NULL || len == 0 || len > cap)
+    if (data == NULL || len == 0 || len > cap || len > sizeof(vbuf))
         return -1;
+
+    /* Write + read-back verify, retrying on a content mismatch — belt-and-suspenders for a large
+     * multi-page object (a ~1.2 KB cert / DER key). No DiagPrintf here: a LOG UART access right
+     * after a secure SPIC flash write takes an imprecise BusFault (UART2 @ 0x48012000); the caller
+     * reports the OK/FAIL verdict via the FreeRTOS+CLI `out` buffer, deferred past the transient. */
+    for (try = 0; try < 3; try++) {
+        size_t got = 0;
+        psa_status_t g;
+        ps_lock();
+        s = psa_its_set(uid, len, data, PSA_STORAGE_FLAG_NONE);   /* stored without trailing NUL */
+        if (s != PSA_SUCCESS) {
+            ps_unlock();
+            return -2;
+        }
+        g = psa_its_get(uid, 0, len, vbuf, &got);                /* read-back (memory-mapped) */
+        ps_unlock();
+        if (g == PSA_SUCCESS && got == len && memcmp(vbuf, data, len) == 0)
+            return 0;                                            /* verified good */
+        /* mismatch: the next psa_its_set overwrites; on final failure remove so we don't leave a
+         * corrupt object behind (the loader would then use the embedded-key fallback). */
+    }
     ps_lock();
-    s = psa_its_set(uid, len, data, PSA_STORAGE_FLAG_NONE);  /* stored without trailing NUL */
+    (void)psa_its_remove(uid);
     ps_unlock();
-    /* IMPORTANT: do NOT touch the LOG UART (DiagPrintf) here. Immediately after a secure SPIC
-     * flash-program, a KM4 access to the KM0 LOG UART (UART2 @ 0x48012000) takes an imprecise
-     * BusFault — the SPIC/clock domain has not settled. The caller reports status via the
-     * FreeRTOS+CLI `out` buffer, which the framework prints later (after the transient clears),
-     * exactly like the `pstest` command. */
-    if (s != PSA_SUCCESS)
-        return -2;
-    return 0;
+    return -3;   /* persistent verify failure */
 }
 
 /* Reads the ITS object into buf, NUL-terminates, sets *out_len to bytes INCLUDING NUL. */
