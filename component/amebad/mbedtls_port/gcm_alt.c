@@ -33,12 +33,14 @@ typedef int (*amebad_gcm_op_fn)(const unsigned char *msg, unsigned int msglen,
  * this first; do the same here, per op, under RT_DEV_LOCK_CRYPTO, so the engine is in our state
  * regardless of a concurrent WiFi user. CRYPTO_Init(NULL) returns 0 (reference_amebad_hw_crypto).
  *
- * This CRYPTO_Init omission was a real HW-GCM bug (every op failed init). It is fixed here. Note: an
- * earlier "HW-GCM hangs the AWS handshake" conclusion was a MISATTRIBUTION — that hang was actually
- * the mbedTLS MBEDTLS_SSL_VARIABLE_BUFFER_LENGTH realloc-during-handshake race (since fixed by
- * disabling that macro), which was present in the software-GCM build too. Whether HW-GCM serves a
- * live AWS TLS session cleanly is therefore UNTESTED post-fix; the Makefile keeps HWGCM=OFF for AWS
- * pending a clean re-test. HW-GCM remains verified for offline/standalone KATs and benchmarks. */
+ * This CRYPTO_Init omission was a real HW-GCM bug (every op failed init); it is fixed here. But it is
+ * NOT sufficient: the HW AES-GCM op itself hard-hangs a live AWS TLS handshake. Confirmed with both
+ * confounds controlled — CRYPTO_Init fixed AND the mbedTLS VARIABLE_BUFFER_LENGTH race fixed (so the
+ * software-GCM build connects reliably) — the HWGCM=ON build still hangs silently right after
+ * "Established TCP", 3/3 boots, while the otherwise-identical software build connects. The shared
+ * IPSEC engine AHB-stalls when driven from NS concurrently with the WiFi driver's own IPSEC use +
+ * XIP/SPIC fetches under live load. So HW-GCM cannot serve a live AWS session; the Makefile forces
+ * HWGCM=OFF for AWS. HW-GCM stays verified only for offline/standalone KATs and benchmarks. */
 typedef int (*amebad_crypto_init_fn)(void *);
 #define AMEBAD_ROM_CRYPTO_INIT  ((amebad_crypto_init_fn)0x10104a49u)
 

@@ -43,12 +43,13 @@ ifeq ($(AWS),ON)
 # AWS=ON: the MQTT client private key lives in TF-M secure storage (implies STORAGE/TFM).
 # NOTE: no trailing comment on the assignment — a trailing-space value breaks the STORAGE ifeq below.
 STORAGE    := ON
-# Force software AES-GCM for AWS. History: gcm_alt omitted the one-time CRYPTO_Init the HW KAT does,
-# so the ROM rtl_crypto_aes_gcm_init returned "io driver parameters error" (now fixed in gcm_alt.c).
-# A follow-on "HW-GCM hangs the AWS handshake" symptom turned out to be a MISATTRIBUTION — it was the
-# mbedTLS VARIABLE_BUFFER_LENGTH realloc-during-handshake race (present in the software build too;
-# fixed by disabling that macro), not the GCM op. So HW-GCM for a live AWS session is currently
-# UNTESTED post-fix; keep it OFF for AWS until a clean re-test (software GCM is plenty for MQTT).
+# Force software AES-GCM for AWS — the HW IPSEC AES-GCM op hard-hangs a live AWS TLS handshake.
+# Two distinct issues were found, in order: (1) gcm_alt omitted the one-time CRYPTO_Init the HW KAT
+# does, so the ROM rtl_crypto_aes_gcm_init returned "io driver parameters error" (fixed in gcm_alt.c);
+# (2) with that fixed AND the mbedTLS VARIABLE_BUFFER_LENGTH race fixed (so the software build connects
+# reliably), an HWGCM=ON build STILL hangs silently after "Established TCP" 3/3 boots while the
+# otherwise-identical software build connects — the shared IPSEC engine AHB-stalls when driven from NS
+# under concurrent WiFi + XIP/SPIC load. So HW-GCM stays OFF for AWS (software GCM is plenty for MQTT).
 # `:=` overrides the lazy `HWGCM ?= $(TFM)` default below (which would expand to ON once TFM:=ON).
 HWGCM      := OFF
 endif
