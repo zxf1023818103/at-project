@@ -8,7 +8,7 @@ metadata:
 
 AmebaD KM4 上用 **FreeRTOS-Plus-TCP V4.0.0**(`component/thirdparty/freertos-plus-tcp`,
 配 freertos-kernel V10.6.2)替代 lwip 做 IP 层,实机拿到 DHCP IP 跑通(commit 981dba0)。
-组件 `component/amebad/freertos_tcp/`。验收:连 AIoT(WPA2-PSK)→ DHCP → 192.168.2.145。
+组件 `component/freertos_tcp_config` + `component/amebad/freertos_tcp_port`。验收:连 AIoT(WPA2-PSK)→ DHCP → 192.168.2.145。
 
 **架构(Realtek 驱动 ↔ FreeRTOS+TCP 桥)**:
 - 驱动收发 seam 全在我们 vendored 的 `wlan/src/lwip_intf.c`:驱动调 `netif_rx(idx,len)`

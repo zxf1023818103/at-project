@@ -104,6 +104,7 @@ if(AMEBAD_CHIP MATCHES "^amebad-km[04]$")
     add_subdirectory(freertos-plus-tcp_config)  # FreeRTOS-Plus-TCP V4.0.0 core stack + FreeRTOSIPConfig.h (freertos_plus_tcp / freertos-plus-tcp_config)
     add_subdirectory(ngtcp2_config)             # ngtcp2 QUIC + the picotls crypto binding (built only when AMEBAD_ENABLE_QUIC)
     add_subdirectory(coremqtt_config)           # coreMQTT v5.0.2 static lib + core_mqtt_config.h
+    add_subdirectory(backoffalgorithm_config)   # backoffAlgorithm v1.4.2 (reconnect backoff-with-jitter) — coreMQTT companion
     add_subdirectory(corehttp_config)           # coreHTTP v3.1.3 static lib + core_http_config.h
     add_subdirectory(freertos-cli_config)       # FreeRTOS-Plus-CLI V202212.00 static lib (config via FreeRTOSConfig.h)
     add_subdirectory(nimble_config)             # INTERFACE: NimBLE syscfg + upstream include surface
@@ -115,6 +116,7 @@ if(AMEBAD_CHIP MATCHES "^amebad-km[04]$")
     add_subdirectory(mbedtls_config)            # -> mbedcrypto / mbedx509 / mbedtls (EXCLUDE_FROM_ALL)
     add_subdirectory(corepkcs11_config)         # PKCS#11 software token over mbedcrypto/mbedx509 (PAL is consumer-supplied)
     add_subdirectory(picotls_config)            # TLS 1.3 core + mbedTLS/PSA backend (picotls_mbedtls) — wolfSSL replacement for ngtcp2 QUIC
+    add_subdirectory(network_transport)         # TransportInterface_t impls (network_transport_mbedtls/_bio/_sockets) over mbedtls_config + freertos-plus-tcp_config — coreMQTT TLS transport
 
     # The AmebaD subtree itself (fwlib + per-core HAL + FreeRTOS port + wifi/BT + bootloaders
     # + image2 apps). Its in-tree ports (freertos_tcp_port / nimble_port / syscall_port / ...)

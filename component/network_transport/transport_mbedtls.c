@@ -47,6 +47,7 @@
 
 /* FreeRTOS includes. */
 #include "FreeRTOS.h"
+#include "task.h"    /* TimeOut_t / vTaskSetTimeOutState / xTaskCheckForTimeOut (TLS handshake timeout) */
 
 /* MBedTLS Includes */
 #if !defined( MBEDTLS_CONFIG_FILE )

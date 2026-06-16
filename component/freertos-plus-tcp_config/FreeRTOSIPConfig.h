@@ -30,7 +30,7 @@
 #define ipconfigTCP_TIME_TO_LIVE                128
 #define ipconfigIGNORE_UNKNOWN_PACKETS          0
 #define ipconfigDHCP_REGISTER_HOSTNAME          0
-#define ipconfigUSE_DNS                         0
+#define ipconfigUSE_DNS                         1       /* FreeRTOS_gethostbyname: resolve the AWS IoT endpoint (tcp_sockets_wrapper) */
 #define ipconfigUSE_LLMNR                       0
 #define ipconfigUSE_NBNS                        0
 

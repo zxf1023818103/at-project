@@ -15,6 +15,7 @@
 #   make MINIMAL=ON      # strip diagnostics (iperf / LFS+ROM-mbedTLS KAT / HW-crypto bench): WiFi connect only
 #   make TFM=ON          # in-tree TF-M secure world (SPE via ExternalProject; app_km4 = NSPE)
 #   make STORAGE=ON      # TF-M PSA secure storage (ITS + PS) + NS storage self-test (implies TFM=ON)
+#   make AWS=ON          # AWS IoT Core MQTT/TLS demo (coreMQTT + mbedTLS; cert/endpoint->LFS, key->TF-M PS; implies STORAGE=ON)
 #   make clean           # ninja clean both cores
 #   make distclean       # delete build/km0 build/km4 build/amebad
 #
@@ -37,6 +38,16 @@ MINIMAL    ?= OFF          # ON -> strip diagnostics (iperf / KAT / HW-crypto be
 TFM        ?= OFF          # ON -> build + boot in-tree TF-M SPE (app_km4 becomes the NS side)
 HWGCM      ?= $(TFM)       # default = TFM: route mbedTLS AES-GCM + ChaCha20-Poly1305 to the RTL8721D IPSEC HW engine (needs TFM=ON's SAU, so on iff TFM is on)
 STORAGE    ?= OFF          # ON -> TF-M PSA secure storage (ITS + PS) + NS storage self-test; implies TFM=ON
+AWS        ?= OFF          # ON -> AWS IoT Core MQTT/TLS demo (coreMQTT + mbedTLS); cert/endpoint->LFS, private key->TF-M PS
+ifeq ($(AWS),ON)
+# AWS=ON: the MQTT client private key lives in TF-M secure storage (implies STORAGE/TFM).
+# NOTE: no trailing comment on the assignment — a trailing-space value breaks the STORAGE ifeq below.
+STORAGE    := ON
+# Force software AES-GCM: the RTL8721D IPSEC HW-GCM engine (MBEDTLS_GCM_ALT) makes the AWS IoT
+# TLS handshake fail (mbedTLS "internal error" from the GCM lower-level module). `:=` overrides
+# the lazy `HWGCM ?= $(TFM)` default below (which would otherwise expand to ON once TFM:=ON).
+HWGCM      := OFF
+endif
 ifeq ($(STORAGE),ON)
 TFM        := ON           # secure storage lives in the TF-M SPE
 endif
@@ -71,6 +82,7 @@ configure:
 	  -DAMEBAD_ENABLE_NIMBLE=$(NIMBLE) -DAMEBAD_ENABLE_HCI=$(HCI) \
 	  -DAMEBAD_ENABLE_QUIC=$(QUIC) -DAMEBAD_ENABLE_PKCS11=$(PKCS11) \
 	  -DAMEBAD_ENABLE_CRYPTOBENCH=$(BENCH) -DAMEBAD_ENABLE_MINIMAL=$(MINIMAL) \
+	  -DAMEBAD_ENABLE_AWS_IOT=$(AWS) \
 	  -DAMEBAD_MBEDTLS_HW_GCM=$(HWGCM) \
 	  -DAMEBAD_TFM_BOOT=$(TFM) \
 	  -DAMEBAD_TFM_STORAGE=$(STORAGE) \

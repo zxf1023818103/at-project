@@ -15,7 +15,9 @@ param(
     [int]   $Baudrate  = 1500000,
     [string]$Image,
     [string]$ToolDir,
-    [switch]$SkipModeCheck
+    [switch]$SkipModeCheck,
+    [switch]$Erase          # -e true: full chip erase before write (wipes TF-M ITS/PS at 0x3F0000,
+                            # which sits above the image so a normal flash leaves it stale/corrupt)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -155,10 +157,13 @@ Enter-DownloadMode -Port $BootPort
 Write-Host "[flash] launching ImageTool ..."
 Push-Location $ToolDir
 try {
+    $eraseArg = if ($Erase) { 'true' } else { 'false' }
+    if ($Erase) { Write-Host "[flash] CHIP ERASE enabled (-e true): wipes whole flash incl. ITS/PS" }
     $toolOut = & .\Ameba_1-N_MP_ImageTool.exe `
         -c $Chip `
         -i $Image `
         -b $Baudrate `
+        -e $eraseArg `
         -g false `
         -v true `
         -s true `

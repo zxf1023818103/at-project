@@ -52,4 +52,11 @@
  * engine) are NOT defined here — they are gated -D defs in the port CMakeLists (make HWGCM=ON),
  * which also documents why the other *_ALT modules (SHA/AES/CCM) are deliberately left software. */
 
+/* ---- TLS record buffers: the default is 16 KB IN + 16 KB OUT, malloc'd per connection during
+ *      the handshake — too much for the KM4 FreeRTOS heap shared with WiFi + FreeRTOS-Plus-TCP
+ *      (an AWS IoT TLS connect hit vApplicationMallocFailedHook at ~12 KB free). 8 KB in holds
+ *      the AWS IoT server Certificate record; 2 KB out holds the client Certificate (~1.3 KB). */
+#define MBEDTLS_SSL_IN_CONTENT_LEN   8192
+#define MBEDTLS_SSL_OUT_CONTENT_LEN  4096   /* >= MBEDTLS_SSL_MAX_FRAG_LEN_4096 the transport requests */
+
 #endif /* MBEDTLS_AMEBAD_USER_CONFIG_H */

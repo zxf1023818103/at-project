@@ -67,6 +67,12 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
          * are not linked in this image). */
         extern void quic_test_start( void );
         quic_test_start();
+#elif defined(AT_PROJECT_AWS_IOT)
+        /* AWS IoT Core MQTT/TLS demo: connect to AWS IoT over mutually-authenticated
+         * TLS and publish telemetry. Credentials: endpoint+cert from LittleFS, the
+         * private key from TF-M Protected Storage (provisioned via `set ...`). */
+        extern void aws_iot_demo_start( void );
+        aws_iot_demo_start();
 #elif !defined(AT_PROJECT_PKCS11) && !defined(AT_PROJECT_CRYPTOBENCH) && !defined(AT_PROJECT_MINIMAL)
         /* Default = TCP TX (device -> WSL `iperf -s`); also exercises the
          * rewritten FreeRTOS+TCP RX bridge via the ACK path. The UDP TX/RX and
@@ -274,6 +280,7 @@ static void wifi_bringup_thread( void *param )
         lfs_selftest();
     }
 #endif
+
 
 #ifdef AT_PROJECT_PKCS11
     /* corePKCS11 token self-test: needs LittleFS mounted (above) for the PAL + the scheduler
@@ -500,9 +507,9 @@ static void wifi_bringup_thread( void *param )
         extern void mbedtls_bench( void );
         mbedtls_bench();
     }
-#elif !defined(AT_PROJECT_QUIC) && !defined(AT_PROJECT_PKCS11) && !defined(AT_PROJECT_MINIMAL)
+#elif !defined(AT_PROJECT_QUIC) && !defined(AT_PROJECT_PKCS11) && !defined(AT_PROJECT_MINIMAL) && !defined(AT_PROJECT_AWS_IOT)
     /* ROM mbedTLS KAT (pure software crypto, independent of the link). Skipped in the
-     * QUIC/PKCS11/minimal images (their diagnostic TUs aren't linked). The wolfCrypt
+     * QUIC/PKCS11/minimal/AWS images (their diagnostic TUs aren't linked). The wolfCrypt
      * benchmarks were removed with the wolfSSL retirement (crypto is now mbedTLS/picotls). */
     {
         extern void rom_mbedtls_kat( void );
@@ -528,9 +535,14 @@ int main(void)
     DiagPrintf("[KM4] FreeRTOS kernel %s\n\r", tskKERNEL_VERSION_NUMBER);
 
 #ifdef AMEBAD_TFM_BOOT
-    /* app_km4 is TF-M's Non-Secure world: exercise a real PSA service call.
-     * Done here (pre-scheduler, single-threaded) so the bare-metal NS dispatch
-     * is safe. See tfm_psa_selftest.c. */
+    /* Serialize every NS->SPE PSA call: tfm_ns_interface_rtos.c takes this mutex around each
+     * dispatch so two NS tasks can't be inside a secure call at once (the SFN partitions share a
+     * secure stack — concurrent callers corrupt it). Created here, pre-scheduler. */
+    {
+        extern uint32_t tfm_ns_interface_init(void);
+        tfm_ns_interface_init();
+    }
+    /* app_km4 is TF-M's Non-Secure world: exercise a real PSA service call. */
     {
         extern void amebad_tfm_psa_selftest(void);
         amebad_tfm_psa_selftest();
@@ -553,6 +565,16 @@ int main(void)
      * console stays output-only (DiagPrintf TX is unaffected). */
 #ifndef AT_PROJECT_QUIC
     amebad_monitor_start();
+#ifdef AT_PROJECT_AWS_IOT
+    /* Create the PSA-access mutex (pre-scheduler) + register the `set` / `blemac`
+     * provisioning commands into the CLI list. */
+    {
+        extern void aws_provision_init(void);
+        extern void aws_cli_register(void);
+        aws_provision_init();
+        aws_cli_register();
+    }
+#endif
 #endif
 
     /* WiFi+DHCP bring-up runs as its own task (wifi_connect blocks). */

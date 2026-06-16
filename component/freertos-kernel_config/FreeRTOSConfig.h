@@ -126,8 +126,13 @@ extern uint32_t SystemCoreClock;
 
 #else
 /* ----------------- KM0 (Cortex-M23, LP) ----------------- */
+/* (Software timers are ON, via the common section. They used to crash KM0's scheduler start, but
+ * the real cause was heap exhaustion — the 20 KB ucHeap couldn't fit the timer task+queue, so
+ * xTimerCreateTimerTask's malloc returned NULL, vTaskStartScheduler returned, and KM0 unwound
+ * all the way out to the boot ROM (0x49a2 dead-loop). Fixed by raising configTOTAL_HEAP_SIZE to
+ * 28 KB above. See doc/amebad_km0_scheduler_and_runtime_flash.md.) */
 #define configENABLE_FPU                                0
-#define configTOTAL_HEAP_SIZE                           ( ( size_t ) ( 20 * 1024 ) ) /* max 42K */
+#define configTOTAL_HEAP_SIZE                           ( ( size_t ) ( 28 * 1024 ) ) /* was 20K: too small once the software-timer task is created -> xTimerCreateTimerTask malloc fails -> vTaskStartScheduler returns -> KM0 unwinds to boot ROM (0x49a2). ucHeap@~0x87460, BD_RAM ends 0x8F000 -> ~31K ceiling. */
 #define configUSE_APPLICATION_TASK_TAG                  0
 #define configUSE_IDLE_HOOK                             1
 #define configUSE_MALLOC_FAILED_HOOK                    0

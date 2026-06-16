@@ -62,6 +62,10 @@
  * (cmsis_drivers/Driver_Flash.c) calls the ROM FLASH_* primitives with raw
  * offsets. SECTORS_PER_BLOCK = area_size / 4 KB sector. */
 #define TFM_HAL_ITS_FLASH_DRIVER        Driver_FLASH0
+/* Stays 1: the FS's metadata layout assumes a 1-byte program unit (raising it to 4 corrupts the
+ * FS and wedges even aligned writes). The ROM-SPIC word-alignment requirement (it asserts on odd
+ * lengths) is handled in the driver instead — Driver_Flash.c ARM_Flash_ProgramData pads each
+ * program chunk up to 4 bytes. */
 #define TFM_HAL_ITS_PROGRAM_UNIT        (0x1)
 #define TFM_HAL_ITS_FLASH_AREA_ADDR     (FLASH_ITS_AREA_OFFSET)
 #define TFM_HAL_ITS_FLASH_AREA_SIZE     (FLASH_ITS_AREA_SIZE)

@@ -97,8 +97,14 @@ if(AMEBAD_ENABLE_MINIMAL)
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_MINIMAL)
 endif()
+# AWS IoT Core MQTT/TLS demo (make AWS=ON): replaces the iperf diagnostics with an MQTT
+# client (coreMQTT over the mbedTLS TLS transport). Like QUIC/PKCS11 it drops the iperf +
+# ROM-mbedTLS KAT TUs (it links the upstream mbedTLS, ABI-incompatible with the ROM one).
+# AWS=ON implies STORAGE=ON (the private key lives in TF-M Protected Storage). Declared here
+# so the diag gate below can see it.
+option(AMEBAD_ENABLE_AWS_IOT "Build the AWS IoT Core MQTT/TLS demo (coreMQTT + mbedTLS; key in TF-M PS)" OFF)
 if(NOT AMEBAD_ENABLE_QUIC AND NOT AMEBAD_ENABLE_PKCS11 AND NOT AMEBAD_ENABLE_CRYPTOBENCH
-   AND NOT AMEBAD_ENABLE_MINIMAL)
+   AND NOT AMEBAD_ENABLE_MINIMAL AND NOT AMEBAD_ENABLE_AWS_IOT)
     target_sources(target_img2_km4 PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/iperf_client.c"        # iperf2 TCP client (TX throughput to WSL iperf -s)
         "${CMAKE_CURRENT_SOURCE_DIR}/iperf_server.c"        # iperf2 TCP sink (RX throughput from WSL iperf -c)
@@ -221,6 +227,50 @@ if(AMEBAD_ENABLE_CRYPTOBENCH)
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_CRYPTOBENCH)
 endif()
 
+# AWS IoT Core MQTT/TLS demo (AMEBAD_ENABLE_AWS_IOT): coreMQTT v5.0.2 over the FreeRTOS
+# reference mbedTLS TLS transport (component/network_transport) on FreeRTOS-Plus-TCP, with
+# backoffAlgorithm reconnect. The endpoint + client cert are provisioned to LittleFS, the
+# private key to TF-M Protected Storage (AWS=ON implies STORAGE=ON). core_mqtt +
+# backoff_algorithm + the network_transport_mbedtls stack + mbedcrypto/x509/tls + the mbedTLS
+# FreeRTOS-threading/entropy glue join the cross_refs group (real archive names; the _config
+# umbrellas don't expand inside LINK_GROUP). efuse_api.c (not in amebad_mbed) is added for the
+# BLE-MAC read (efuse_logical_read 0x190); the device name = BLE MAC = MQTT client id.
+set(_aws_grp "")
+if(AMEBAD_ENABLE_AWS_IOT)
+    # Only the mutually-circular mbedTLS archives need the --start-group (cross_refs). core_mqtt
+    # (leaf — coreMQTT reaches the network only through TransportInterface_t function pointers) +
+    # backoff_algorithm + the network_transport_* stack are one-directional (they call mbedTLS /
+    # FreeRTOS-Plus-TCP, nothing calls back), so they link as ordinary libs below; CMake topo-sorts
+    # them ahead of the group. Putting them IN the group instead drags their coremqtt_config /
+    # freertos-plus-tcp_config / freertos_config umbrellas back into it -> a CMake dependency cycle.
+    set(_aws_grp ",mbedcrypto,mbedx509,mbedtls,mbedtls_port,mbedtls_config")
+    target_link_libraries(target_img2_km4 PRIVATE
+        core_mqtt backoff_algorithm
+        network_transport_mbedtls network_transport_mbedtls_bio network_transport_sockets)
+    target_sources(target_img2_km4 PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/aws_iot_demo.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/aws_provision.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/aws_cli.c"                    # `set` / `blemac` console commands
+        "${CMAKE_SOURCE_DIR}/component/amebad/mbed/efuse_api.c")   # efuse_logical_read (BLE MAC @ 0x190); not built into amebad_mbed
+    set_source_files_properties("${CMAKE_SOURCE_DIR}/component/amebad/mbed/efuse_api.c"
+        PROPERTIES COMPILE_OPTIONS "-w")
+    # FreeRTOS-Plus-CLI header for aws_cli.c (FreeRTOS_CLIRegisterCommand); the freertos_cli
+    # archive is already in the link group via _diag_grp.
+    target_include_directories(target_img2_km4 PRIVATE
+        "${CMAKE_SOURCE_DIR}/component/freertos-cli_config/freertos-cli")
+    set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
+                 APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_AWS_IOT)
+    # AWS is a connect-and-run image: strip the boot diagnostics like MINIMAL — iperf / LFS
+    # self-test / ROM-mbedTLS KAT and the TF-M HW-crypto KAT/GCM throughput bench (~40 s before
+    # WiFi). Credentials live in TF-M PS (not LittleFS — see aws_provision.c), so skipping
+    # lfs_selftest is REQUIRED here: it is the only caller of the LittleFS mount, whose XIP-pinned
+    # .text hangs in this image's layout. Skipping it means the LFS code is never executed.
+    set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
+                 APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_MINIMAL)
+    set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/tfm_psa_selftest.c"
+                 APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_MINIMAL)
+endif()
+
 # POSIX-fd VFS self-test (vfs_selftest, gated by the option in component/amebad/CMakeLists.txt).
 # main.c calls it; the impl is in the shared lfs_config's lfs_selftest.c (#ifdef AMEBAD_VFS_SELFTEST).
 # app_km4 is the consumer that owns the option, so per littlefs_config's design it enables the impl
@@ -258,7 +308,7 @@ target_link_libraries(target_img2_km4 PRIVATE
     # EXCLUDE_FROM_ALL lib CMake would otherwise sink it past -lc/-lgcc and leave
     # those undefined. amebad_mbed (flash_api) is lfs_port's backend. (The upstream
     # mbedcrypto/mbedx509 + picotls/ngtcp2 crypto join per-feature via the _grp vars.)
-    "$<LINK_GROUP:cross_refs,FreeRTOS,freertos_port,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,freertos_plus_tcp,freertos_plus_tcp_port,amebad_wlan,amebad_wps,amebad_lfs_port,amebad_mbed,lfs_config,littlefs${_diag_grp}${_hci_grp}${_quic_grp}${_pk11_grp}${_bench_grp}>"
+    "$<LINK_GROUP:cross_refs,FreeRTOS,freertos_port,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,freertos_plus_tcp,freertos_plus_tcp_port,amebad_wlan,amebad_wps,amebad_lfs_port,amebad_mbed,lfs_config,littlefs${_diag_grp}${_hci_grp}${_quic_grp}${_pk11_grp}${_bench_grp}${_aws_grp}>"
     m
     stdc++
     c
@@ -294,7 +344,10 @@ if(AMEBAD_TFM_BOOT)
         "${CMAKE_CURRENT_SOURCE_DIR}/tfm_psa_selftest.c"
         "${_tfm_src}/interface/src/tfm_platform_api.c"
         "${_tfm_src}/interface/src/tfm_tz_psa_ns_api.c"
-        "${_tfm_src}/interface/src/os_wrapper/tfm_ns_interface_bare_metal.c")
+        # Serialized NS interface (mutex per PSA dispatch) + its FreeRTOS os_wrapper backend,
+        # replacing the bare-metal (unserialized) dispatch. See tfm_os_wrapper_freertos.c.
+        "${_tfm_src}/interface/src/os_wrapper/tfm_ns_interface_rtos.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tfm_os_wrapper_freertos.c")
     # Minimal image: keep the PSA ping + eFuse-HUK probe (the TF-M liveness proof),
     # drop the HW-crypto KAT/GCM throughput bench inside tfm_psa_selftest.c.
     if(AMEBAD_ENABLE_MINIMAL)
@@ -325,12 +378,19 @@ if(AMEBAD_TFM_BOOT)
     if(AMEBAD_TFM_STORAGE)
         target_sources(target_img2_km4 PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/tfm_storage_selftest.c"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tfm_storage_lock.c"   # NS RT_DEV_LOCK_FLASH/CRYPTO around secure-storage writes
             "${_tfm_src}/interface/src/tfm_its_api.c"
             "${_tfm_src}/interface/src/tfm_ps_api.c")   # Protected Storage NS client
         target_compile_definitions(target_img2_km4 PRIVATE
             AMEBAD_TFM_STORAGE=1 AMEBAD_TFM_STORAGE_PS=1)
         set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
                      APPEND PROPERTY COMPILE_DEFINITIONS AMEBAD_TFM_STORAGE)
+        # --wrap every NS PSA-storage WRITE so tfm_storage_lock.c brackets it with the NS
+        # flash/crypto device mutexes (waits out any in-progress NS SPIC op before the SPE
+        # programs flash). Covers all callers without editing the TF-M submodule's *_api.c.
+        target_link_options(target_img2_km4 PRIVATE
+            "-Wl,--wrap=psa_its_set" "-Wl,--wrap=psa_its_remove"
+            "-Wl,--wrap=psa_ps_set"  "-Wl,--wrap=psa_ps_remove")
     endif()
 endif()
 

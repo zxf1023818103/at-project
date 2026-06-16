@@ -31,8 +31,17 @@
 
 /* ---- Secure RAM (high) : TF-M SPE data ---- */
 #define S_DATA_START            (0x10060000)
-#define S_DATA_SIZE             (0x00020000)   /* 128 KB */
+#define S_DATA_SIZE             (0x0001E000)   /* 120 KB (top 8 KB carved for S_RAM_CODE below) */
 #define S_DATA_LIMIT            (S_DATA_START + S_DATA_SIZE - 1)
+
+/* ---- Secure RAM code (CODE_RAM) : SPIC-operating flash driver copied here at boot ----
+ * AN0400 §18.2: code that drives the SPIC (program/erase, mode switch) must run from RAM, not
+ * flash, because while a flash op holds the SPIC in user mode the device can't serve XIP fetches.
+ * Our Driver_Flash.c functions tagged .ramfunc land here; TF-M's tfm_common_s.ld .ER_CODE_SRAM
+ * section (gated on S_RAM_CODE_START) places them in CODE_RAM with LMA in flash, and the CMSIS
+ * startup copy-table copies them at reset. Sits at the very top of the 128 KB secure SRAM. */
+#define S_RAM_CODE_SIZE         (0x00002000)   /* 8 KB */
+#define S_RAM_CODE_START        (S_DATA_START + S_DATA_SIZE)   /* 0x1007E000 */
 
 /* ---- Non-secure RAM (low) : driver-only app + QUIC ---- */
 #define NS_DATA_START           (0x10005000)

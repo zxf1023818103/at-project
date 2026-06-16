@@ -22,9 +22,23 @@ SECTIONS
 	.ram_image2.text :
 	{
 		*(.image2.ram.text*)
+
+		/* KM0 boot-hang fix: pull the SysTick/tick + delayed-list scheduler hot path out of XIP into
+		 * SRAM so its instruction fetches can't be corrupted by a KM4-SPE flash op holding the shared
+		 * SPIC in user mode (AN0400 §18.1: auto/XIP and user/program-erase modes are mutually exclusive).
+		 * Symptom without this: KM0 takes an early ROM HardFault in xTaskIncrementTick (delayed-list
+		 * deref hits a 0xa5a5a5a5 fill value), ~50% recovered / ~50% hangs at "RRAM:". With the hot path
+		 * in SRAM the clean-FS boot is 100% reliable (22/22, HardFault gone). NOTE: this does NOT cover
+		 * the heavier-boot-flash case (a persistent TF-M ITS object, e.g. a `set key` cert/key): that
+		 * makes the SPE do more boot-time flash and corrupts other/earlier KM0 XIP code — the complete
+		 * fix is KM0 IPC-quiesce during SPE flash (FLASH_Write_Lock, unavailable to the bare SPE here). */
+		*list.c.obj(.text*)
+		*port.c.obj(.text*)
+		*tasks.c.obj(.text.xTaskIncrementTick .text.xTaskResumeAll .text.vTaskSwitchContext)
+		*tasks.c.obj(.text.prvAddCurrentTaskToDelayedList .text.prvResetNextTaskUnblockTime .text.vTaskDelay)
 	} > BD_RAM
 
-	.ram_image2.data : 
+	.ram_image2.data :
 	{
 		__data_start__ = .;
 		*(.data*)

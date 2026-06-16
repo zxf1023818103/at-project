@@ -24,8 +24,16 @@
                           * IPC_INT_CHAN_SHELL_SWITCH, shell_switch_ipc_int decl (shell.h) */
 #include "monitor.h"
 
+/* `set key`/`set cert` pass a credential's ~1.6 KB base64 body as one CLI argument, so KM4's line
+ * buffer must hold it. KM0 keeps 80: its SRAM is tiny (~14 KB free) and a 2.5 KB static line buffer
+ * overflows it, corrupting shared state — symptom was KM4's runtime ITS flash write hitting a ROM
+ * io_assert. KM4 = Cortex-M33 (ARMv8-M Mainline); KM0 = Cortex-M23 (Baseline). */
+#if defined(__ARM_ARCH_8M_MAIN__)
+#define CLI_MAX_INPUT   2560
+#else
 #define CLI_MAX_INPUT   80
-#define CLI_TASK_STACK  1024                    /* words */
+#endif
+#define CLI_TASK_STACK  2048                    /* words (LFS file I/O in `set cert/key` needs headroom) */
 #define CLI_TASK_PRIO   ( tskIDLE_PRIORITY + 2 )
 
 /* Console-owner token (per core; KM4 = 1 at boot, KM0 = 0). Set to 1 by the IPC handler on the
