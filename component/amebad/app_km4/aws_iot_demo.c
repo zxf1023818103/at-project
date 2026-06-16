@@ -1,5 +1,5 @@
 /*
- * aws_iot_demo.c — AmebaD KM4 AWS IoT Core MQTT/TLS client (make AWS=ON).
+ * aws_iot_demo.c - AmebaD KM4 AWS IoT Core MQTT/TLS client (make AWS=ON).
  *
  * coreMQTT over the FreeRTOS reference mbedTLS TLS transport
  * (component/network_transport/transport_mbedtls.c -> TLS_FreeRTOS_*) on
@@ -30,9 +30,8 @@
 #include "aws_iot_creds.h"
 #include "aws_provision.h"
 
-extern int DiagPrintf(const char *fmt, ...);
 
-/* mbedTLS FreeRTOS threading shim — must be registered once before any mbedTLS use
+/* mbedTLS FreeRTOS threading shim - must be registered once before any mbedTLS use
  * (component/mbedtls_config/mbedtls_threading_alt.c). It only calls mbedtls_threading_set_alt()
  * (function-pointer registration), so it is idempotent / safe to call repeatedly. */
 extern void mbedtls_threading_freertos_init(void);
@@ -82,12 +81,12 @@ static bool prvEventCallback(MQTTContext_t *pContext,
     if ((pPacketInfo->type & 0xF0U) == MQTT_PACKET_TYPE_PUBLISH) {
         MQTTPublishInfo_t *pub = pDeserializedInfo->pPublishInfo;
         if (pub != NULL) {
-            DiagPrintf("[AWS] RX publish topic=%.*s payload=%.*s\n\r",
+            printf("[AWS] RX publish topic=%.*s payload=%.*s\n\r",
                        (int)pub->topicNameLength, pub->pTopicName,
                        (int)pub->payloadLength, (const char *)pub->pPayload);
         }
     } else {
-        DiagPrintf("[AWS] MQTT ctrl packet 0x%02x id=%u\n\r",
+        printf("[AWS] MQTT ctrl packet 0x%02x id=%u\n\r",
                    pPacketInfo->type, (unsigned)pDeserializedInfo->packetIdentifier);
     }
     return true;
@@ -106,11 +105,11 @@ static int prvConnect(MQTTContext_t *pMqtt, NetworkContext_t *pNet,
     TlsTransportStatus_t ts;
     bool sessionPresent = false;
 
-    DiagPrintf("[AWS] connecting TLS to %s:%d ...\n\r", endpoint, AWS_MQTT_PORT);
+    printf("[AWS] connecting TLS to %s:%d ...\n\r", endpoint, AWS_MQTT_PORT);
     ts = TLS_FreeRTOS_Connect(pNet, endpoint, AWS_MQTT_PORT, creds,
                               AWS_TLS_RECV_TMO_MS, AWS_TLS_SEND_TMO_MS);
     if (ts != TLS_TRANSPORT_SUCCESS) {
-        DiagPrintf("[AWS] TLS connect FAIL (%d)\n\r", (int)ts);
+        printf("[AWS] TLS connect FAIL (%d)\n\r", (int)ts);
         return -1;
     }
 
@@ -121,7 +120,7 @@ static int prvConnect(MQTTContext_t *pMqtt, NetworkContext_t *pNet,
 
     st = MQTT_Init(pMqtt, &transport, prvGetTimeMs, prvEventCallback, &fixedBuffer);
     if (st != MQTTSuccess) {
-        DiagPrintf("[AWS] MQTT_Init FAIL (%d)\n\r", (int)st);
+        printf("[AWS] MQTT_Init FAIL (%d)\n\r", (int)st);
         TLS_FreeRTOS_Disconnect(pNet);
         return -2;
     }
@@ -136,12 +135,12 @@ static int prvConnect(MQTTContext_t *pMqtt, NetworkContext_t *pNet,
     st = MQTT_Connect(pMqtt, &connectInfo, NULL, AWS_CONNECT_TMO_MS,
                       &sessionPresent, NULL, NULL);
     if (st != MQTTSuccess) {
-        DiagPrintf("[AWS] MQTT_Connect FAIL (%d)\n\r", (int)st);
+        printf("[AWS] MQTT_Connect FAIL (%d)\n\r", (int)st);
         TLS_FreeRTOS_Disconnect(pNet);
         return -3;
     }
 
-    DiagPrintf("[AWS] MQTT connected to %s as '%s'\n\r", endpoint, clientId);
+    printf("[AWS] MQTT connected to %s as '%s'\n\r", endpoint, clientId);
     return 0;
 }
 
@@ -167,11 +166,11 @@ static void aws_mqtt_task(void *param)
     mbedtls_threading_freertos_init();
 
     if (aws_get_ble_mac(mac, sizeof(mac)) != 0) {
-        DiagPrintf("[AWS] efuse BLE MAC read FAIL — task exiting\n\r");
+        printf("[AWS] efuse BLE MAC read FAIL - task exiting\n\r");
         vTaskDelete(NULL);
         return;
     }
-    DiagPrintf("[AWS] device (BLE MAC / Thing) = %s\n\r", mac);
+    printf("[AWS] device (BLE MAC / Thing) = %s\n\r", mac);
     snprintf(topic_tele, sizeof(topic_tele), AWS_TOPIC_TELEMETRY_FMT, mac);
     snprintf(topic_cmd,  sizeof(topic_cmd),  AWS_TOPIC_CMD_FMT,  mac);
 
@@ -198,11 +197,11 @@ static void aws_mqtt_task(void *param)
         const char *pkey;
         if (aws_is_provisioned() && aws_load_key(key, AWS_KEY_MAX, &keyLen) == 0) {
             pkey = key;
-            DiagPrintf("[AWS] private key from TF-M secure storage (%uB)\n\r", (unsigned)keyLen);
+            printf("[AWS] private key from TF-M secure storage (%uB)\n\r", (unsigned)keyLen);
         } else {
             pkey = AWS_PRIVATE_KEY_PEM;
             keyLen = sizeof(AWS_PRIVATE_KEY_PEM);
-            DiagPrintf("[AWS] private key embedded fallback (%uB) — `set key` not yet provisioned\n\r",
+            printf("[AWS] private key embedded fallback (%uB) - `set key` not yet provisioned\n\r",
                        (unsigned)keyLen);
         }
 
@@ -216,7 +215,7 @@ static void aws_mqtt_task(void *param)
         creds.disableSni = 0;
     }
 
-    DiagPrintf("[AWS] endpoint=%s cert=%uB\n\r",
+    printf("[AWS] endpoint=%s cert=%uB\n\r",
                AWS_IOT_ENDPOINT, (unsigned)sizeof(AWS_CLIENT_CERT_PEM));
 
     /* Reconnect loop with exponential backoff. */
@@ -232,10 +231,10 @@ static void aws_mqtt_task(void *param)
             uint32_t rnd = prvGetTimeMs();
             bs = BackoffAlgorithm_GetNextBackoff(&backoff, rnd, &nextBackoff);
             if (bs != BackoffAlgorithmSuccess) {
-                DiagPrintf("[AWS] backoff exhausted — retrying in %u ms\n\r", AWS_BACKOFF_MAX_MS);
+                printf("[AWS] backoff exhausted - retrying in %u ms\n\r", AWS_BACKOFF_MAX_MS);
                 nextBackoff = AWS_BACKOFF_MAX_MS;
             }
-            DiagPrintf("[AWS] reconnect in %u ms\n\r", (unsigned)nextBackoff);
+            printf("[AWS] reconnect in %u ms\n\r", (unsigned)nextBackoff);
             vTaskDelay(pdMS_TO_TICKS(nextBackoff));
         }
 
@@ -247,9 +246,9 @@ static void aws_mqtt_task(void *param)
             sub.pTopicFilter = topic_cmd;
             sub.topicFilterLength = (uint16_t)strlen(topic_cmd);
             if (MQTT_Subscribe(&mqtt, &sub, 1, MQTT_GetPacketId(&mqtt), NULL) != MQTTSuccess)
-                DiagPrintf("[AWS] subscribe '%s' FAIL\n\r", topic_cmd);
+                printf("[AWS] subscribe '%s' FAIL\n\r", topic_cmd);
             else
-                DiagPrintf("[AWS] subscribed '%s'\n\r", topic_cmd);
+                printf("[AWS] subscribed '%s'\n\r", topic_cmd);
         }
 
         /* Publish telemetry every AWS_TELEMETRY_PERIOD_MS; pump the loop in between. */
@@ -276,17 +275,17 @@ static void aws_mqtt_task(void *param)
 
                     st = MQTT_Publish(&mqtt, &pub, MQTT_GetPacketId(&mqtt), NULL);
                     if (st != MQTTSuccess) {
-                        DiagPrintf("[AWS] publish FAIL (%d) — reconnecting\n\r", (int)st);
+                        printf("[AWS] publish FAIL (%d) - reconnecting\n\r", (int)st);
                         break;
                     }
-                    DiagPrintf("[AWS] TX %s %s\n\r", topic_tele, payload);
+                    printf("[AWS] TX %s %s\n\r", topic_tele, payload);
                     seq++;
                     nextPub = xTaskGetTickCount() + pdMS_TO_TICKS(AWS_TELEMETRY_PERIOD_MS);
                 }
 
                 st = MQTT_ProcessLoop(&mqtt);
                 if (st != MQTTSuccess && st != MQTTNeedMoreBytes) {
-                    DiagPrintf("[AWS] ProcessLoop status %d — reconnecting\n\r", (int)st);
+                    printf("[AWS] ProcessLoop status %d - reconnecting\n\r", (int)st);
                     break;
                 }
                 vTaskDelay(pdMS_TO_TICKS(50));
@@ -295,7 +294,7 @@ static void aws_mqtt_task(void *param)
 
         MQTT_Disconnect(&mqtt, NULL, 0);
         TLS_FreeRTOS_Disconnect(&net);
-        DiagPrintf("[AWS] disconnected; will reconnect\n\r");
+        printf("[AWS] disconnected; will reconnect\n\r");
         vTaskDelay(pdMS_TO_TICKS(AWS_BACKOFF_BASE_MS));
     }
 }
@@ -307,5 +306,5 @@ void aws_iot_demo_start(void)
      * heap -> vApplicationMallocFailedHook during the handshake). */
     if (xTaskCreate(aws_mqtt_task, "aws_mqtt", 8192, NULL,
                     tskIDLE_PRIORITY + 2, NULL) != pdPASS)
-        DiagPrintf("[AWS] xTaskCreate(aws_mqtt) FAILED\n\r");
+        printf("[AWS] xTaskCreate(aws_mqtt) FAILED\n\r");
 }

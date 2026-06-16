@@ -1,5 +1,5 @@
 /*
- * aws_cli.c — `set` / `blemac` console commands for AWS IoT provisioning (AWS=ON).
+ * aws_cli.c - `set` / `blemac` console commands for AWS IoT provisioning (AWS=ON).
  *
  * Registered into the running FreeRTOS-Plus-CLI list (the same one the monitor uses)
  * from main() after amebad_monitor_start(), so no edit to the shared monitor_cli.c.
@@ -30,7 +30,7 @@
 #include "section_config.h"     /* IMAGE2_RAM_TEXT_SECTION (place the SPIC probe in RAM) */
 
 /* `set cert`/`set key` take the credential's base64 BODY as one ordinary CLI argument (the
- * standard FreeRTOS+CLI path — FreeRTOS_CLIGetParameter, no raw LOGUART streaming). The host strips
+ * standard FreeRTOS+CLI path - FreeRTOS_CLIGetParameter, no raw LOGUART streaming). The host strips
  * the PEM armor (the "-----BEGIN ... PRIVATE KEY-----" lines contain spaces, which the CLI splits
  * on) and all newlines, so the body is a single space-free token; the device base64-decodes it to
  * DER. This needs the CLI line buffer big enough for a ~1.6 KB base64 body: monitor_cli.c raises
@@ -79,7 +79,7 @@ static BaseType_t cmd_set(char *out, size_t outlen, const char *cmd)
         int is_key = (sub[0] == 'k');
         int rc;
         /* val/l2 = parameter 2 = the credential's base64 body (one space-free CLI token; the host
-         * stripped the armor + newlines). Standard FreeRTOS+CLI — no raw LOGUART streaming. */
+         * stripped the armor + newlines). Standard FreeRTOS+CLI - no raw LOGUART streaming. */
         if (val == NULL || l2 == 0) {
             snprintf(out, outlen, "usage: set %s <base64-body>\r\n", is_key ? "key" : "cert");
             return pdFALSE;
@@ -99,7 +99,7 @@ static BaseType_t cmd_set(char *out, size_t outlen, const char *cmd)
  * <retries> times, and report whether/when it succeeds + status + elapsed ms. This probes
  * the runtime PS-write blocker (SPE flash program vs KM0 XIP contention): does a 32 B write
  * succeed (experiment 2), and does retrying let a large write through (experiment 1, NS-layer
- * retry — no SPE change needed if it works)?  Usage: `pstest [size] [retries]`. */
+ * retry - no SPE change needed if it works)?  Usage: `pstest [size] [retries]`. */
 static long parse_arg(const char *cmd, UBaseType_t idx, long dflt)
 {
     BaseType_t l = 0;
@@ -155,7 +155,7 @@ static BaseType_t cmd_pstest(char *out, size_t outlen, const char *cmd)
  * not XIP). FNV-hash the NS XIP code region as DATA before and after a runtime psa_its_set, plus
  * sample a 256 B window around the address that faulted earlier (wifi_connect, 0x0E0096xx).
  * CHANGED => the runtime secure flash write corrupts the NS XIP read path (the SPIC returns
- * different content) — proves it's a SPIC/XIP problem, not generic RAM corruption. The probe runs
+ * different content) - proves it's a SPIC/XIP problem, not generic RAM corruption. The probe runs
  * from RAM so it stays alive even if XIP execution is unreliable after the write; output goes via
  * DiagPrintf (ROM), not snprintf (XIP). The SPE Driver_Flash.c Cache_Flush already invalidated the
  * cache, so the 'after' read comes fresh from the SPIC, not a stale cache line. */
@@ -203,7 +203,7 @@ static BaseType_t cmd_xiptest(char *out, size_t outlen, const char *cmd)
     r[5] = (uint32_t)diff;
     r[6] = (diff >= 0) ? (((uint32_t)w0[diff] << 8) | w1[diff]) : 0xFFFFFFFFu;
     r[7] = 0xC0DEFFFFu; __DSB();                          /* end sentinel = complete */
-    /* Print the verdict NOW (DiagPrintf is ROM) — before any further XIP call (psa_its_remove). */
+    /* Print the verdict NOW (DiagPrintf is ROM) - before any further XIP call (psa_its_remove). */
     DiagPrintf("[XIP] c1=%08x %s\n\r", (unsigned)c1, (c0 == c1) ? "SAME" : "CHANGED");
     if (diff >= 0)
         DiagPrintf("[XIP] win 0x%08x +%d: %02x -> %02x\n\r",

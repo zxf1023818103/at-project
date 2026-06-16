@@ -1,5 +1,5 @@
 /*
- * AmebaD KM4 (HP) image2 — WiFi + FreeRTOS-Plus-TCP DHCP bring-up.
+ * AmebaD KM4 (HP) image2 - WiFi + FreeRTOS-Plus-TCP DHCP bring-up.
  *
  * Goal of this slice: associate to an AP (WPA2-PSK) and obtain an IP via
  * FreeRTOS-Plus-TCP's DHCP client, proving the FreeRTOS+TCP stack runs on
@@ -20,6 +20,9 @@
 
 /* console: FreeRTOS-Plus-CLI over the LOGUART (component/amebad/monitor) */
 extern void amebad_monitor_start(void);
+
+/* ROM/fwlib CPU clock select (rtl8721d_system.h; CLK_KM4_200M comes in via ameba_soc.h). */
+extern void SystemSetCpuClk(unsigned char CpuClk);
 
 /* FreeRTOS+TCP Realtek glue (component/amebad/freertos_tcp_port) */
 extern NetworkInterface_t *pxRealtek_FillInterfaceDescriptor(BaseType_t xEMACIndex,
@@ -115,7 +118,7 @@ static unsigned char prvHexByte( const char * p )
  * purpose-built path is an "extended country info" scan: with it enabled the
  * driver parses each AP's beacon Country IE and appends the 2-byte country code
  * into every scan-buffer record (at offset 14, right before the SSID). This
- * probe runs that scan and prints the RAW per-AP country field — unlike
+ * probe runs that scan and prints the RAW per-AP country field - unlike
  * wifi_get_country_code(), which hides "no AP advertised one" behind a "US"
  * default when fewer than 3 APs agree.
  *
@@ -185,7 +188,7 @@ typedef struct {
  *   [0]=len [1..6]=bssid [7..10]=rssi(int) [11]=enc_alg [12]=wps [13]=channel
  *   [14..]=ssid (len-14 bytes)
  * Prints every AP, and records the target SSID's real channel + security so the
- * connect uses a concrete security type (never RTW_SECURITY_UNKNOWN) — the bug in
+ * connect uses a concrete security type (never RTW_SECURITY_UNKNOWN) - the bug in
  * wifi_connect_simple was leaving security unknown / pscan-restricting the scan.
  */
 static int scan_print_handler( char *buf, int buflen, char *target_ssid, void *user_data )
@@ -222,7 +225,7 @@ static int scan_print_handler( char *buf, int buflen, char *target_ssid, void *u
              * the RTL8721D intermittently loses the 4-way EAPOL frames (M3/M4) so
              * the handshake stalls after the pairwise key (the AP completes + even
              * assigns DHCP, but the chip never signals FOURWAY_HANDSHAKE_DONE so
-             * wifi_connect blocks) — measured ~1/5 connects on 2.4 GHz vs 5/5 on a
+             * wifi_connect blocks) - measured ~1/5 connects on 2.4 GHz vs 5/5 on a
              * clean 5 GHz channel. (The old 2.4-GHz preference was a workaround for
              * a band-steering status-30 reject; the AP no longer steers, so 5 GHz
              * associates fine.) */
@@ -261,7 +264,7 @@ static void wifi_bringup_thread( void *param )
      * before WiFi. The WiFi driver self-registers its own data IPC channel (so
      * scan/wifi_on basically work without this), but the GENERAL IPC dispatch
      * (ipc_table_init + the IPC_IRQ handler) is what services KM0-side
-     * coordination — including the inter-core RESET handshake (0x480003f8 bit25)
+     * coordination - including the inter-core RESET handshake (0x480003f8 bit25)
      * that the channel-plan reboot waits on. Without this, that reboot spins in
      * ROM forever. See memory reference-amebad-chplan-reboot-handshake. */
     InterruptRegister( (IRQ_FUN)IPC_INTHandler, IPC_IRQ, (u32)IPCM0_DEV, 5 );
@@ -270,7 +273,7 @@ static void wifi_bringup_thread( void *param )
 
     /* LittleFS bring-up + self-test: mount the on-flash FS (auto-formats if the
      * region is blank) and exercise read of the prefilled lfs.bin + a write/
-     * read-back round trip. Runs here (scheduler up — the flash device lock and
+     * read-back round trip. Runs here (scheduler up - the flash device lock and
      * the LFS mutex need FreeRTOS) before WiFi, independent of the link.
      * Dropped from the minimal image (WiFi-connect only); the LFS .text stays
      * linked (XIP-tail pinned), only the self-test call is skipped. */
@@ -330,20 +333,20 @@ static void wifi_bringup_thread( void *param )
 #ifdef AT_PROJECT_HCI
     /* BLE DTM image: WiFi is on (DTM needs that for coex), so bring up the BT
      * controller (gnt_bt + bte_init = HCI patch download + reset), then optionally
-     * open the HCI bridge. Skip wifi_connect/iperf — DTM only needs WiFi on. */
+     * open the HCI bridge. Skip wifi_connect/iperf - DTM only needs WiFi on. */
     {
         extern void bt_dtm_bringup( void );
         extern void bt_dtm_enter_bridge( uint32_t, uint8_t );
         ( void ) bt_dtm_enter_bridge;
         /* Bring up the BT controller: gnt_bt + bte_init downloads the firmware
          * patch over HCI-UART and runs the HCI init sequence (read version / read
-         * ROM / set baud / download patch / HCI reset) — i.e. it exercises real
+         * ROM / set baud / download patch / HCI reset) - i.e. it exercises real
          * HCI command/event round-trips, visible on the console. */
         bt_dtm_bringup();
         /* Hand the console to a host BT-test tool: open the transparent HCI bridge.
          * This takes over COM29 as a raw HCI pipe (the RAM shell is gone until
          * reset). The host syncs on the "entering HCI bridge" marker printed by
-         * bt_dtm_enter_bridge() and then drives raw HCI — see project/amebad/hci_test.ps1.
+         * bt_dtm_enter_bridge() and then drives raw HCI - see project/amebad/hci_test.ps1.
          * host_baud = 1500000 keeps the current console rate so COM29 doesn't re-rate. */
         bt_dtm_enter_bridge( 1500000, 0 );
         vTaskDelete( NULL );
@@ -355,7 +358,7 @@ static void wifi_bringup_thread( void *param )
     /* NimBLE host image: start the Apache NimBLE host (controller bring-up + host +
      * advertising) on top of our HCI transport (component/amebad/nimble_port). Then FALL THROUGH
      * to the normal WiFi connect + FreeRTOS+TCP + iperf path so WiFi traffic and BLE
-     * run concurrently — exercising WiFi/BT coex (P5). amebad_nimble_start() spawns
+     * run concurrently - exercising WiFi/BT coex (P5). amebad_nimble_start() spawns
      * its own host/RX tasks and returns. */
     {
         extern void amebad_nimble_start( void );
@@ -444,7 +447,7 @@ static void wifi_bringup_thread( void *param )
         }
         if( !fa.found )
         {
-            DiagPrintf( "[KM4] '%s' not found in scan — abort\n\r", kSsid );
+            DiagPrintf( "[KM4] '%s' not found in scan - abort\n\r", kSsid );
             vTaskDelete( NULL );
             return;
         }
@@ -453,7 +456,7 @@ static void wifi_bringup_thread( void *param )
         ch = fa.channel;
         /* This AP (MikroTik) intermittently answers the first assoc with status
          * 30 = "rejected temporarily; try again later". It's transient, so retry
-         * a handful of times (re-arming pscan each attempt — the driver consumes
+         * a handful of times (re-arming pscan each attempt - the driver consumes
          * the pscan channel list on each connect) before giving up. */
         {
             int attempt, ok = 0;
@@ -461,7 +464,7 @@ static void wifi_bringup_thread( void *param )
              * this MAC's stale station entry (the driver-only chip never sent a
              * deauth on reset, so the AP keeps the old session across our reboot).
              * Sending a broadcast deauth before each attempt flushes that entry, so
-             * the assoc is accepted on the first try — verified 3/3 (no status 30,
+             * the assoc is accepted on the first try - verified 3/3 (no status 30,
              * no retry needed). b_broadcast=1, key_type=0. The 8-try loop below now
              * just covers the rare genuinely-transient reject. */
             extern void rltk_wlan_tx_deauth( unsigned char b_broadcast, unsigned char key_type );
@@ -498,7 +501,7 @@ static void wifi_bringup_thread( void *param )
         DiagPrintf( "[KM4] associated; power-save off; RSSI %d dBm; waiting for DHCP...\n\r", rssi );
     }
 
-    /* Upstream Mbed TLS v3.6.4 microbenchmark ([MCB] scores) — the apples-to-apples
+    /* Upstream Mbed TLS v3.6.4 microbenchmark ([MCB] scores) - the apples-to-apples
      * successor to the removed wolfCrypt [WCB] bench. Runs here at 200 MHz, after
      * associate, so the timebase matches the old wolfCrypt run. Replaces the ROM-mbedTLS
      * KAT in this image (the ROM mbedTLS 2.4.0 TU is not linked alongside upstream). */
@@ -515,7 +518,7 @@ static void wifi_bringup_thread( void *param )
         extern void rom_mbedtls_kat( void );
         rom_mbedtls_kat();
     }
-    /* HW IPSEC engine compare is gated off: CRYPTO_Init faults (SecureFault) — the
+    /* HW IPSEC engine compare is gated off: CRYPTO_Init faults (SecureFault) - the
      * crypto peripheral (~0x48012000) is secure-attributed and unreachable from
      * this NS driver-only image. Re-enable to retest. */
 #if 0
@@ -531,13 +534,13 @@ static void wifi_bringup_thread( void *param )
 
 int main(void)
 {
-    DiagPrintf("\n\r[KM4] at-project image2 — FreeRTOS+TCP DHCP bring-up\n\r");
+    DiagPrintf("\n\r[KM4] at-project image2 - FreeRTOS+TCP DHCP bring-up\n\r");
     DiagPrintf("[KM4] FreeRTOS kernel %s\n\r", tskKERNEL_VERSION_NUMBER);
 
 #ifdef AMEBAD_TFM_BOOT
     /* Serialize every NS->SPE PSA call: tfm_ns_interface_rtos.c takes this mutex around each
      * dispatch so two NS tasks can't be inside a secure call at once (the SFN partitions share a
-     * secure stack — concurrent callers corrupt it). Created here, pre-scheduler. */
+     * secure stack - concurrent callers corrupt it). Created here, pre-scheduler. */
     {
         extern uint32_t tfm_ns_interface_init(void);
         tfm_ns_interface_init();

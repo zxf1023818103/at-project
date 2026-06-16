@@ -1,5 +1,5 @@
 /*
- * aws_iot_config.h — non-secret build-time constants for the AmebaD KM4 AWS IoT
+ * aws_iot_config.h - non-secret build-time constants for the AmebaD KM4 AWS IoT
  * Core MQTT/TLS demo (make AWS=ON). The broker endpoint, client certificate and
  * private key are NOT here: the endpoint + cert are provisioned to LittleFS and
  * the private key to TF-M Protected Storage via the `set` console command

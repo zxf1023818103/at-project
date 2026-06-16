@@ -1,14 +1,14 @@
 /*
- * aws_provision.c — credential storage for the AmebaD KM4 AWS IoT demo.
+ * aws_provision.c - credential storage for the AmebaD KM4 AWS IoT demo.
  *
  * All three credentials live in TF-M Internal Trusted Storage (ITS).
  *
  * NOTE on the storage choice:
  *  - LittleFS is not usable: the AWS image's larger .text (coreMQTT + mbedTLS) shifts the
  *    XIP-tail-pinned LittleFS .text onto the layout-sensitive address that hangs the KM4 at
- *    the first LittleFS mount (the QUIC-image XIP boot-hang class — doc/amebad_xip_layout_boot_hang.md).
+ *    the first LittleFS mount (the QUIC-image XIP boot-hang class - doc/amebad_xip_layout_boot_hang.md).
  *  - Protected Storage (PS, encrypted) is too constrained on this part: a psa_ps_set above
- *    ~256 B (or the 3rd object) fails with GENERIC_ERROR — the CCM staging + the SFN
+ *    ~256 B (or the 3rd object) fails with GENERIC_ERROR - the CCM staging + the SFN
  *    shared-stack budget in the ~128 KB secure RAM.
  *  - ITS has no AEAD, so it stores each PEM (~1.2 KB cert / ~1.7 KB key) as one object once
  *    ITS_MAX_ASSET_SIZE is raised (config.cmake). ITS is TrustZone-protected from NS software
@@ -28,7 +28,6 @@
 #include "mbedtls/base64.h"
 #include "aws_provision.h"
 
-extern int DiagPrintf(const char *fmt, ...);
 
 /* Extra PSA serialization on top of the TF-M NS interface. The NS dispatch is now serialized
  * (tfm_ns_interface_rtos.c), but this mutex is kept as belt-and-suspenders so the CLI task
@@ -42,7 +41,7 @@ void aws_provision_init(void)
         s_ps_lock = xSemaphoreCreateMutex();
 }
 
-/* TEST (clean FS): s_ps_lock neutralized — last remaining difference vs the working pstest path. */
+/* TEST (clean FS): s_ps_lock neutralized - last remaining difference vs the working pstest path. */
 static void ps_lock(void)   { (void)s_ps_lock; }
 static void ps_unlock(void) { }
 
@@ -87,7 +86,7 @@ int aws_get_ble_mac(char *out, size_t out_len)
 /* ----------------------------------------------------------- ITS helpers ---- */
 static int its_store(psa_storage_uid_t uid, const char *data, size_t len, size_t cap)
 {
-    /* Read-back verify buffer in .bss (not heap/stack — SPM whitelists NS SRAM, and a 2.5 KB
+    /* Read-back verify buffer in .bss (not heap/stack - SPM whitelists NS SRAM, and a 2.5 KB
      * stack buffer would blow the CLI task). */
     static unsigned char vbuf[AWS_KEY_MAX];
     psa_status_t s;
@@ -96,7 +95,7 @@ static int its_store(psa_storage_uid_t uid, const char *data, size_t len, size_t
     if (data == NULL || len == 0 || len > cap || len > sizeof(vbuf))
         return -1;
 
-    /* Write + read-back verify, retrying on a content mismatch — belt-and-suspenders for a large
+    /* Write + read-back verify, retrying on a content mismatch - belt-and-suspenders for a large
      * multi-page object (a ~1.2 KB cert / DER key). No DiagPrintf here: a LOG UART access right
      * after a secure SPIC flash write takes an imprecise BusFault (UART2 @ 0x48012000); the caller
      * reports the OK/FAIL verdict via the FreeRTOS+CLI `out` buffer, deferred past the transient. */
