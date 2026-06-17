@@ -43,24 +43,13 @@ ifeq ($(AWS),ON)
 # AWS=ON: the MQTT client private key lives in TF-M secure storage (implies STORAGE/TFM).
 # NOTE: no trailing comment on the assignment — a trailing-space value breaks the STORAGE ifeq below.
 STORAGE    := ON
-# Force software AES-GCM for AWS — the HW IPSEC AES-GCM op hard-hangs a live AWS TLS handshake.
-# Two distinct issues were found, in order: (1) gcm_alt omitted the one-time CRYPTO_Init the HW KAT
-# does, so the ROM rtl_crypto_aes_gcm_init returned "io driver parameters error" (fixed in gcm_alt.c);
-# (2) with that fixed AND the mbedTLS VARIABLE_BUFFER_LENGTH race fixed (so the software build connects
-# reliably), an HWGCM=ON build STILL hangs at the FIRST GCM op of the live session (AWS: silent right
-# after "Established TCP" 3/3; QUIC isolated it further — hangs encrypting the first Initial packet,
-# near-isolated seconds after boot, while software-GCM is fully alive). NOT a live-load AHB-stall: the
-# standalone direct-ROM KAT passes; the fault is the mbedTLS/PSA -> gcm_alt -> IPSEC DMA path (see
-# gcm_alt.c). So HW-GCM stays OFF for AWS (software GCM is plenty for MQTT).
-# `:=` overrides the lazy `HWGCM ?= $(TFM)` default below (which would expand to ON once TFM:=ON).
-HWGCM      := OFF
 endif
-ifeq ($(QUIC),ON)
-# QUIC=ON: same finding as AWS — HW-GCM hangs the first Initial-packet GCM op (picotls/ngtcp2 -> PSA
-# AEAD), while software GCM runs. Default to software (`:=` beats the `?= $(TFM)` above); a command-line
-# HWGCM=ON still wins, to re-test the HW path.
-HWGCM      := OFF
-endif
+# HW-GCM (HWGCM follows TFM above, so ON for these TF-M images) is verified end-to-end for BOTH QUIC
+# (picotls/PSA AEAD: ~7.1 Mbps DL / 2.9 UL, vs 1.7 / 1.2 with software GCM) and AWS IoT (mbedTLS
+# TLS1.3 handshake + MQTT telemetry). gcm_alt.c brings the IPSEC engine up itself, once, via the NS
+# rtl_cryptoEngine_init alias 0x1010ea49. The long-misdiagnosed "HW-GCM hangs the first op" was
+# gcm_alt calling the SECURE CRYPTO_Init alias (0x10104a49) from NS, which dead-spins in ROM
+# BOOT_ROM_ResetVsr (reset handshake). Pass HWGCM=OFF to force software GCM.
 ifeq ($(STORAGE),ON)
 TFM        := ON           # secure storage lives in the TF-M SPE
 endif

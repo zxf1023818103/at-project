@@ -27,35 +27,22 @@ typedef int (*amebad_gcm_op_fn)(const unsigned char *msg, unsigned int msglen,
 #define AMEBAD_ROM_GCM_ENC   ((amebad_gcm_op_fn)0x1010e0b9u)
 #define AMEBAD_ROM_GCM_DEC   ((amebad_gcm_op_fn)0x1010e131u)
 
-/* One-time IPSEC engine bring-up (clock/reset/IO setup). rtl_crypto_aes_gcm_init() returns
- * "io driver parameters error" (ROM line 398) if the engine was never CRYPTO_Init'd OR the WiFi
- * driver reconfigured it for its own WPA crypto. The working HW KAT (rom_hwcrypto_test.c) calls
- * this first; do the same here, per op, under RT_DEV_LOCK_CRYPTO, so the engine is in our state
- * regardless of a concurrent WiFi user. CRYPTO_Init(NULL) returns 0 (reference_amebad_hw_crypto).
+/* One-time IPSEC engine bring-up. rtl_crypto_aes_gcm_init() returns "io driver parameters error"
+ * (ROM rtl_crypto_aes_gcm_init line 398) until the engine has been CRYPTO_Init'd (clock/reset/IO).
+ * Bring it up ONCE (engine_ready, under the device lock) via rtl_cryptoEngine_init = CRYPTO_Init(NULL),
+ * exactly as chachapoly_alt.c does — not per op.
  *
- * This CRYPTO_Init omission was a real HW-GCM bug (every op failed init); it is fixed here. But it is
- * NOT sufficient: the HW AES-GCM op driven through this mbedTLS/PSA path hard-hangs the FIRST op of a
- * live session. Confirmed in TWO independent stacks, with confounds controlled:
- *   - AWS TLS (mbedtls_ssl, CRYPTO_Init + VARIABLE_BUFFER_LENGTH both fixed): HWGCM=ON hangs silently
- *     right after "Established TCP" 3/3 while the software build connects.
- *   - QUIC (picotls/ngtcp2 -> PSA AEAD): HWGCM=ON hangs in client_flush encrypting the FIRST Initial
- *     packet (no heartbeat ever prints), seconds after boot with ~no concurrent load, while the
- *     otherwise-identical software-GCM build is fully alive (heartbeats, handshake retries, round loop).
- * It is NOT a "live-load AHB-stall" (the QUIC hang is the first GCM op, near-isolated). The
- * standalone/SPE direct-ROM KAT (rom_hwcrypto_test.c / tfm_platform_system.c) — direct rtl_crypto with
- * hand-placed SRAM key+buffers — PASSES. Three targeted fixes were tried here and RULED OUT (so don't
- * re-try them): (a) bounce key/iv/aad/in/out/tag through .bss (the KAT's region) — still hangs; (b)
- * DCache maintenance — moot, the AmebaD DCache is write-through (rtl8721d_cache.h), so CPU writes are
- * already in RAM for the engine's DMA; (c) drop the AAD (the KAT uses none) — still hangs. With (a)+(c)
- * gcm_alt does EXACTLY what the KAT does (.bss buffers, no AAD) and STILL hangs. So it is not a
- * buffer/cache/AAD bug in this code — the remaining difference is the execution CONTEXT: this runs NS
- * in a live session (the SPE KAT runs secure, isolated). Likely the engine is left in a WiFi-owned
- * state the per-op CRYPTO_Init doesn't fully reclaim, and/or the NS-driven engine DMA can't reach the
- * NS buffers under TF-M's security attribution. A real fix needs the GCM run in the SPE (a TF-M secure
- * crypto service the NS calls via PSA) or an engine/SAU/MPC dig (OpenOCD on the hung ROM op). HW-GCM
- * is kept OFF for AWS and QUIC (Makefile); it stays verified only for the offline direct-ROM KATs. */
-typedef int (*amebad_crypto_init_fn)(void *);
-#define AMEBAD_ROM_CRYPTO_INIT  ((amebad_crypto_init_fn)0x10104a49u)
+ * Use the NS alias 0x1010ea49 (rom_symbol_ns.txt), NOT the secure alias 0x10104a49. Calling the
+ * SECURE CRYPTO_Init from this NS code was the real cause of the long-misdiagnosed "HW-GCM hangs the
+ * first op": it drops into the ROM reset path BOOT_ROM_ResetVsr (0x10104468), which busy-waits for the
+ * KM0 reset handshake (bit25 of 0x480003f8) that never completes here, so it dead-spins forever
+ * (OpenOCD caught the halted PC at exactly 0x10104468, bit25 clear, no fault). The NS alias is the one
+ * the NS PSA selftest calls and survives, and it sits in the same 0x1010exxx NS window as the GCM
+ * aliases above. (An interim "skip CRYPTO_Init, lean on the boot selftest" worked for QUIC only because
+ * that build runs amebad_tfm_psa_selftest() which NS-inits the engine; the AWS image's first GCM op
+ * hit "io driver parameters error" because nothing had inited it — so gcm_alt brings it up itself.) */
+typedef int (*amebad_engine_init_fn)(void);
+#define AMEBAD_ROM_ENGINE_INIT  ((amebad_engine_init_fn)0x1010ea49u)  /* rtl_cryptoEngine_init (NS) */
 
 /* The IPSEC engine is ONE shared resource — the WiFi driver and ROM crypto use it
  * too. Serialize with the AmebaD device lock RT_DEV_LOCK_CRYPTO so a concurrent WiFi
@@ -101,16 +88,17 @@ static int amebad_hw_gcm(mbedtls_gcm_context *ctx, int encrypt, size_t length,
                          const unsigned char *input, unsigned char *output,
                          unsigned char tag[16])
 {
+    static int engine_ready;                  /* one-time engine bring-up (under lock) */
     int r;
     if (iv_len != 12u || ctx->keybits == 0u) {
         return MBEDTLS_ERR_GCM_BAD_INPUT;     /* HW = 96-bit IV (TLS/QUIC) */
     }
-    /* Hold RT_DEV_LOCK_CRYPTO across init+op so the loaded key survives the op
-     * against a concurrent WiFi/ROM crypto user of the same engine. */
+    /* Hold RT_DEV_LOCK_CRYPTO across (engine init +) GCM init + op so a concurrent WiFi/ROM crypto
+     * user of the same engine can't clobber the loaded key/descriptors mid-op. */
     device_mutex_lock(RT_DEV_LOCK_CRYPTO);
-    if (AMEBAD_ROM_CRYPTO_INIT(0) != 0) {           /* bring up / reclaim the IPSEC engine */
-        device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
-        return MBEDTLS_ERR_GCM_BAD_INPUT;
+    if (!engine_ready) {
+        AMEBAD_ROM_ENGINE_INIT();             /* NS CRYPTO_Init(NULL) — see note above */
+        engine_ready = 1;
     }
     if (AMEBAD_ROM_GCM_INIT(ctx->key, ctx->keybits / 8u) != 0) {
         device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
