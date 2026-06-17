@@ -262,10 +262,22 @@ if(AMEBAD_ENABLE_AWS_IOT)
     # FreeRTOS-Plus-TCP, nothing calls back), so they link as ordinary libs below; CMake topo-sorts
     # them ahead of the group. Putting them IN the group instead drags their coremqtt_config /
     # freertos-plus-tcp_config / freertos_config umbrellas back into it -> a CMake dependency cycle.
-    set(_aws_grp ",mbedcrypto,mbedx509,mbedtls,mbedtls_port,mbedtls_config")
-    target_link_libraries(target_img2_km4 PRIVATE
-        core_mqtt backoff_algorithm
-        network_transport_mbedtls network_transport_mbedtls_bio network_transport_sockets)
+    # TLS backend is switchable (TLS_BACKEND=mbedtls|picotls, threaded from the Makefile as
+    # AMEBAD_TLS_BACKEND; default mbedtls). Both transports export the same TLS_FreeRTOS_* API and
+    # NetworkCredentials_t, so aws_iot_demo.c (via transport_tls.h) is identical either way. picotls's
+    # picotls_core + picotls_mbedtls join the circular mbedTLS archives in the group (its crypto rides
+    # PSA/mbedcrypto); the network_transport_* libs are one-directional so they link as ordinary libs.
+    if(AMEBAD_TLS_BACKEND STREQUAL "picotls")
+        set(_aws_grp ",picotls_core,picotls_mbedtls,mbedcrypto,mbedx509,mbedtls,mbedtls_port,mbedtls_config")
+        target_link_libraries(target_img2_km4 PRIVATE
+            core_mqtt backoff_algorithm
+            network_transport_picotls network_transport_sockets)
+    else()
+        set(_aws_grp ",mbedcrypto,mbedx509,mbedtls,mbedtls_port,mbedtls_config")
+        target_link_libraries(target_img2_km4 PRIVATE
+            core_mqtt backoff_algorithm
+            network_transport_mbedtls network_transport_mbedtls_bio network_transport_sockets)
+    endif()
     target_sources(target_img2_km4 PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/aws_iot_demo.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/aws_provision.c"

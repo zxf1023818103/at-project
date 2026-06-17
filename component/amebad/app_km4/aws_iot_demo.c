@@ -27,7 +27,7 @@
 #include "task.h"
 
 #include "core_mqtt.h"
-#include "transport_mbedtls.h"      /* TLS_FreeRTOS_*, NetworkCredentials_t, TlsTransportParams_t */
+#include "transport_tls.h"          /* TLS_FreeRTOS_*, NetworkCredentials_t, TlsTransportParams_t (backend via TLS_BACKEND) */
 #include "backoff_algorithm.h"
 
 #include "aws_iot_config.h"

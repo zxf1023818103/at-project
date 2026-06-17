@@ -88,3 +88,18 @@ target_include_directories(network_transport_mbedtls_pkcs11 SYSTEM PRIVATE
 target_link_libraries(network_transport_mbedtls_pkcs11 PUBLIC
     network_transport_mbedtls_bio network_transport_sockets mbedtls_config corepkcs11_config coremqtt_config)
 target_compile_options(network_transport_mbedtls_pkcs11 PRIVATE -w)
+
+# --- TLS transport via picotls (TLS 1.3 on the mbedTLS/PSA crypto backend) -------------------
+# Alternative to network_transport_mbedtls; exports the SAME TLS_FreeRTOS_* API (transport_tls.h
+# selects the backend). picotls is buffer-based, so it sits directly on network_transport_sockets
+# (no mbedTLS BIO). mbedtls_config is linked for the X.509 server-cert verifier + the software
+# client-key signer in transport_picotls.c; picotls_config brings picotls_core + picotls_mbedtls.
+add_library(network_transport_picotls STATIC EXCLUDE_FROM_ALL
+    transport_picotls.c
+)
+target_include_directories(network_transport_picotls SYSTEM PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(network_transport_picotls PUBLIC
+    picotls_config network_transport_sockets mbedtls_config coremqtt_config)
+target_compile_options(network_transport_picotls PRIVATE -w)
+# Make transport_tls.h resolve to transport_picotls.h for any TU that links this target.
+target_compile_definitions(network_transport_picotls PUBLIC TLS_BACKEND_PICOTLS)

@@ -16,6 +16,7 @@
 #   make TFM=ON          # in-tree TF-M secure world (SPE via ExternalProject; app_km4 = NSPE)
 #   make STORAGE=ON      # TF-M PSA secure storage (ITS + PS) + NS storage self-test (implies TFM=ON)
 #   make AWS=ON          # AWS IoT Core MQTT/TLS demo (coreMQTT + mbedTLS; cert/endpoint->LFS, key->TF-M PS; implies STORAGE=ON)
+#   make AWS=ON TLS_BACKEND=picotls   # ...same demo over the picotls TLS 1.3 transport instead of mbedTLS (switchable)
 #   make clean           # ninja clean both cores
 #   make distclean       # delete build/km0 build/km4 build/amebad
 #
@@ -36,7 +37,19 @@ PKCS11     ?= OFF          # ON -> corePKCS11 token self-test (upstream mbedTLS 
 BENCH      ?= OFF          # ON -> upstream Mbed TLS v3.6.4 crypto microbenchmark ([MCB] scores)
 MINIMAL    ?= OFF          # ON -> strip diagnostics (iperf / KAT / HW-crypto bench); WiFi-connect only (pairs with TFM=ON)
 TFM        ?= OFF          # ON -> build + boot in-tree TF-M SPE (app_km4 becomes the NS side)
+TLS_BACKEND ?= mbedtls     # AWS IoT TLS transport backend: mbedtls | picotls (switchable; component/network_transport, transport_tls.h)
+ifeq ($(filter $(TLS_BACKEND),mbedtls picotls),)
+$(error TLS_BACKEND must be 'mbedtls' or 'picotls')
+endif
+# HWGCM default depends on the TLS backend. picotls drives AEAD through the PSA *multi-part* API
+# (psa_aead_update), which the RTL8721D gcm_alt HW engine doesn't implement (-> PSA_ERROR_NOT_SUPPORTED),
+# so the picotls backend must use software GCM. The mbedTLS backend uses the classic one-shot path and
+# keeps the HW engine.
+ifeq ($(TLS_BACKEND),picotls)
+HWGCM      ?= OFF
+else
 HWGCM      ?= $(TFM)       # default = TFM: route mbedTLS AES-GCM + ChaCha20-Poly1305 to the RTL8721D IPSEC HW engine (needs TFM=ON's SAU, so on iff TFM is on)
+endif
 STORAGE    ?= OFF          # ON -> TF-M PSA secure storage (ITS + PS) + NS storage self-test; implies TFM=ON
 AWS        ?= OFF          # ON -> AWS IoT Core MQTT/TLS demo (coreMQTT + mbedTLS); cert/endpoint->LFS, private key->TF-M PS
 SNTP       ?= OFF          # ON -> coreSNTP UTC sync -> newlib _gettimeofday (time_base.c) -> [TIME] date/time self-test
@@ -58,6 +71,13 @@ endif
 # image has configured the SAU (target_cfg). Without TF-M there is no SAU -> the first HW
 # crypto op hangs on the secure-attributed peripheral. Fail the build rather than hang.
 ifeq ($(HWGCM),ON)
+# picotls can't use the HW crypto engine: its PSA multi-part AEAD (psa_aead_update) is unsupported by
+# the RTL8721D gcm_alt engine (-> PSA_ERROR_NOT_SUPPORTED). Reject an explicit HWGCM=ON with it
+# (checked first, so the message is specific) rather than build an image that fails at runtime.
+# HW-GCM is verified end-to-end on the mbedTLS backend only.
+ifeq ($(TLS_BACKEND),picotls)
+$(error TLS_BACKEND=picotls cannot use HWGCM=ON: picotls's PSA multi-part AEAD is unsupported by the RTL8721D gcm_alt engine. Use HWGCM=OFF (the default for picotls).)
+endif
 ifneq ($(TFM),ON)
 $(error HWGCM=ON requires TFM=ON (NS-direct HW crypto needs TF-M's SAU; a non-TF-M image hangs))
 endif
@@ -86,6 +106,7 @@ configure:
 	  -DAMEBAD_ENABLE_QUIC=$(QUIC) -DAMEBAD_ENABLE_PKCS11=$(PKCS11) \
 	  -DAMEBAD_ENABLE_CRYPTOBENCH=$(BENCH) -DAMEBAD_ENABLE_MINIMAL=$(MINIMAL) \
 	  -DAMEBAD_ENABLE_AWS_IOT=$(AWS) \
+	  -DAMEBAD_TLS_BACKEND=$(TLS_BACKEND) \
 	  -DAMEBAD_ENABLE_SNTP=$(SNTP) \
 	  -DAMEBAD_MBEDTLS_HW_GCM=$(HWGCM) \
 	  -DAMEBAD_TFM_BOOT=$(TFM) \
