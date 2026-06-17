@@ -33,6 +33,73 @@ static void test_tz( const char * tz )
             tz, buf, _timezone, _daylight, _tzname[ 0 ], _tzname[ 1 ] );
 }
 
+/* Build a UTC instant from a calendar date: mktime() under TZ=UTC0 treats the struct tm as UTC,
+ * so the result is the true epoch — a portable timegm() without depending on the live clock. */
+static time_t utc_epoch( int year, int mon, int day, int hour )
+{
+    struct tm tm;
+
+    memset( &tm, 0, sizeof( tm ) );
+    tm.tm_year = year - 1900;
+    tm.tm_mon  = mon - 1;
+    tm.tm_mday = day;
+    tm.tm_hour = hour;
+    setenv( "TZ", "UTC0", 1 );
+    tzset();
+    return mktime( &tm );
+}
+
+/* One DST probe: print the UTC ground-truth + the local rendering under `tz`, and flag if newlib's
+ * tm_isdst disagrees with what's expected (0 = standard/winter time, 1 = DST/summer time). */
+static void check_dst( const char * tz, time_t t, int expect_isdst )
+{
+    struct tm lt, ut;
+    char lb[ 40 ], ub[ 24 ];
+
+    setenv( "TZ", tz, 1 );
+    tzset();
+    localtime_r( &t, &lt );
+    gmtime_r( &t, &ut );
+    strftime( ub, sizeof( ub ), "%m-%d %H:%M", &ut );
+    strftime( lb, sizeof( lb ), "%m-%d %H:%M %Z", &lt );
+    printf( "[DST] %-26s UTC %s -> local %s isdst=%d %s\n\r",
+            tz, ub, lb, lt.tm_isdst,
+            ( lt.tm_isdst == expect_isdst ) ? "ok" : "*** isdst MISMATCH ***" );
+}
+
+/* Does this newlib correctly drop to standard (winter) time outside the DST window, and apply the
+ * DST rules at the right boundaries? Checks deep winter/summer + both 2026 US transitions, under
+ * implicit-US (PST8PDT), explicit-EU (CET-1CEST,...) and no-DST (CST-8) zones. Pure libc — no clock. */
+static void dst_selftest( void )
+{
+    time_t jan = utc_epoch( 2026, 1, 15, 12 );    /* deep winter */
+    time_t jul = utc_epoch( 2026, 7, 15, 12 );    /* deep summer */
+
+    printf( "[DST] ==== newlib DST / standard-time (winter) test ====\n\r" );
+
+    /* US Pacific, implicit POSIX (US) rules: winter -> PST (std), summer -> PDT. */
+    check_dst( "PST8PDT", jan, 0 );
+    check_dst( "PST8PDT", jul, 1 );
+
+    /* EU Central, explicit rules (last-Sun-Mar .. last-Sun-Oct): winter -> CET, summer -> CEST. */
+    check_dst( "CET-1CEST,M3.5.0,M10.5.0/3", jan, 0 );
+    check_dst( "CET-1CEST,M3.5.0,M10.5.0/3", jul, 1 );
+
+    /* China: no DST -> standard all year. */
+    check_dst( "CST-8", jan, 0 );
+    check_dst( "CST-8", jul, 0 );
+
+    /* US fall-back into winter time: 2026-11-01, 02:00 PDT -> 01:00 PST (switch @ 09:00 UTC). */
+    check_dst( "PST8PDT", utc_epoch( 2026, 11, 1, 8  ), 1 );   /* 01:00 PDT, before */
+    check_dst( "PST8PDT", utc_epoch( 2026, 11, 1, 10 ), 0 );   /* 02:00 PST, after  */
+
+    /* US spring-forward out of winter time: 2026-03-08, 02:00 PST -> 03:00 PDT (switch @ 10:00 UTC). */
+    check_dst( "PST8PDT", utc_epoch( 2026, 3, 8, 9  ), 0 );    /* 01:00 PST, before */
+    check_dst( "PST8PDT", utc_epoch( 2026, 3, 8, 11 ), 1 );    /* 03:00 PDT, after  */
+
+    printf( "[DST] ==== DST test done ====\n\r" );
+}
+
 void time_selftest_run( void )
 {
     time_t t;
@@ -90,6 +157,9 @@ void time_selftest_run( void )
     r = clock_gettime( CLOCK_REALTIME, &ts );
     printf( "[TIME] clock_gettime(REALTIME) r=%d  %ld.%09ld\n\r",
             r, ( long ) ts.tv_sec, ts.tv_nsec );
+
+    /* 8. DST / standard-time (winter) handling — independent of the live clock. */
+    dst_selftest();
 
     /* The TZ probes above left TZ=UTC0; restore the boot default (CST-8) so normal
      * logs read local time again. */

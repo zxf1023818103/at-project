@@ -86,25 +86,23 @@ static int now_unix( uint32_t * out_sec, uint32_t * out_usec )
 
 /* ---- per-line log timestamp (strong override of the weak stub in console.c) ------------- */
 
-/* newlib's tzset()-maintained offset: seconds WEST of UTC (0 = UTC until `TZ` is set).
- * Underscored spelling is this newlib's exported global (see time_selftest.c). */
-extern long _timezone;
-
 /* at_console_write() prepends this to every log line. Once the clock is SNTP-synced it reads
- * "[HH:MM:SS.mmm] " in local time (honors TZ if set, else UTC); before the first sync there is
- * no real wall clock, so it falls back to "[+<sec>.<mmm>] " uptime from the FreeRTOS tick. */
+ * "[HH:MM:SS.mmm] " in local time via localtime_r (honors TZ + DST per the active rules; UTC
+ * until `TZ` is set). Before the first sync there is no real wall clock, so it falls back to
+ * "[+<sec>.<mmm>] " uptime from the FreeRTOS tick. */
 int at_console_timestamp( char * buf, int cap )
 {
     uint32_t sec, usec;
 
     if( now_unix( &sec, &usec ) )                       /* synced -> wall clock */
     {
-        long     local = ( long ) sec - _timezone;      /* UTC + TZ offset (DST ignored) */
-        unsigned day   = ( unsigned ) ( ( ( local % 86400L ) + 86400L ) % 86400L );
+        time_t    t = ( time_t ) sec;
+        struct tm lt;
 
+        localtime_r( &t, &lt );                         /* applies TZ offset + DST */
         return snprintf( buf, ( size_t ) cap, "[%02u:%02u:%02u.%03u] ",
-                         day / 3600u, ( day % 3600u ) / 60u, day % 60u,
-                         ( unsigned ) ( usec / 1000u ) );
+                         ( unsigned ) lt.tm_hour, ( unsigned ) lt.tm_min,
+                         ( unsigned ) lt.tm_sec, ( unsigned ) ( usec / 1000u ) );
     }
     else                                                /* pre-sync -> uptime since boot */
     {
