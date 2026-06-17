@@ -50,7 +50,7 @@ mm_unlock_restore → … → xTaskCreate → vTaskStartScheduler(0xc000654..672
   是 main 的真实返回地址,一直都对,不是被写坏的垃圾）。
 - crash 在 `vTaskStartScheduler` **内**、`xPortStartScheduler` **之前** —— 因为它压根没走到
   启动调度器那步,在 timer 任务创建失败后就 return 了。
-- 端口没问题（`GCC_ARM_CM0` 正确）；不是中断（`cpsid i` 屏中断后照崩）；不是 bflb_mm 腐败。
+- 端口没问题（`GCC_ARM_CM0` 正确）；不是中断（`cpsid i` 屏中断后照崩）；不是 tlsf_config 腐败。
 
 ### 修复（真·治本，KM0-only）
 `component/freertos-kernel_config/FreeRTOSConfig.h` KM0 块,把堆从 20 KB 提到 **28 KB**：
@@ -61,7 +61,7 @@ ucHeap @ ~`0x87440`,BD_RAM 到 `0x8F000` → 约 31 KB 天花板,28 KB 安全。
 KM0 `xSchedulerRunning=1`、PC 在自家代码跑、用 PSP；整机 KM4 AWS 照常连+发 telemetry。** 软件
 定时器恢复可用（不再需要 `configUSE_TIMERS=0` 治标）。
 
-> **走过的弯路（留个记录）**：先误以为是 bflb_mm/TLSF 直接写坏 MSP 返回槽 `0x8ffc0`,试过 KM0
+> **走过的弯路（留个记录）**：先误以为是 tlsf_config/TLSF 直接写坏 MSP 返回槽 `0x8ffc0`,试过 KM0
 > 换 heap_5（idle 就 HardFault）、删 ROM-BSS 复用堆区（没用）、`cpsid i` 屏中断（没用）、
 > `configUSE_TIMERS=0`（治标能跑）。直到把整段退栈打出来才看清是 `vTaskStartScheduler` return
 > = malloc 失败 = 堆耗尽。**教训：scheduler-start 崩 + 一路退到 boot ROM,先查 heap free,别一头扎进"返回地址被写坏"。** `scripts/km0_trace.tcl` 的 server-side 单步追踪是钉死它的关键工具。

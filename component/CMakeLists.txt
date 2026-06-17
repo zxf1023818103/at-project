@@ -8,7 +8,7 @@
 # now live in the AmebaD branch here as proper children of component/.
 #
 # The universal *_config components that EVERY build needs (zlib, cjson, littlefs, console,
-# bflb_mm, freertos-kernel, freertos-posix) are added one level up in the root
+# tlsf_config, freertos-kernel, freertos-posix) are added one level up in the root
 # CMakeLists.txt, before src/. By the time we get here `FreeRTOS` / `freertos_config` /
 # `at_console` / `littlefs` already exist, so the AmebaD config dirs below can link them.
 

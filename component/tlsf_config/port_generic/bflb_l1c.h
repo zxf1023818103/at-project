@@ -2,7 +2,7 @@
 #define BFLB_MM_PORT_BFLB_L1C_H
 /*
  * Portable shim of the Bouffalo SDK's <bflb_l1c.h> for non-Bouffalo builds of the
- * shared bflb_mm. mm.h reads only BFLB_CACHE_LINE_SIZE (to size MM_FLAG_ALIGN_CACHE
+ * shared tlsf_config. mm.h reads only BFLB_CACHE_LINE_SIZE (to size MM_FLAG_ALIGN_CACHE
  * for DMA-coherent allocations). 32 is correct for AmebaD KM4 (Cortex-M33) and
  * harmless for KM0 (no data cache).
  *

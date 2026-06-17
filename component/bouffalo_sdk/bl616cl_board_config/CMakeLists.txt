@@ -34,7 +34,7 @@ target_compile_definitions(bl616cl_board_config PUBLIC
 # board.c / board_gpio.c / board_flash_psram.c #include lhal headers
 # (bflb_uart.h, bflb_gpio.h, bflb_clock.h, …). PUBLIC so consumers that
 # pull in this OBJECT lib also see lhal.
-target_link_libraries(bl616cl_board_config PUBLIC bflb_lhal bflb_mm)
+target_link_libraries(bl616cl_board_config PUBLIC bflb_lhal tlsf_config)
 
 set(_ld_in "${CMAKE_CURRENT_LIST_DIR}/bl616cl_common.ld.in")
 set(_ld    "${CMAKE_CURRENT_BINARY_DIR}/linker.ld")

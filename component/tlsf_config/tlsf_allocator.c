@@ -240,7 +240,23 @@ static size_t tlsf_allocator_get_block_size(struct mm_heap *heap, void *ptr)
 }
 
 /**
- * @brief Query total free payload bytes tracked by TLSF.
+ * @brief Sum free-block payloads during a pool walk.
+ */
+static void tlsf_free_size_walker(void *ptr, size_t size, int used, void *user)
+{
+    (void)ptr;
+    if (!used) {
+        *(size_t *)user += size;
+    }
+}
+
+/**
+ * @brief Query total free payload bytes in the TLSF pool.
+ *
+ * The upstream mattconte/tlsf has no O(1) free-size counter (that was a local
+ * addition in the old vendored copy). Recover it with the public tlsf_walk_pool
+ * API so the submodule stays pristine. O(n) in block count, but this is a
+ * diagnostic path (xPortGetFreeHeapSize), not the alloc/free hot path.
  *
  * @param heap Pointer to heap.
  * @return Free payload bytes, 0 on failure.
@@ -248,6 +264,8 @@ static size_t tlsf_allocator_get_block_size(struct mm_heap *heap, void *ptr)
 static size_t tlsf_allocator_get_free_size(struct mm_heap *heap)
 {
     tlsf_t tlsf_handle;
+    pool_t pool;
+    size_t free_size = 0;
 
     if (!heap) {
         return 0;
@@ -258,7 +276,13 @@ static size_t tlsf_allocator_get_free_size(struct mm_heap *heap)
         return 0;
     }
 
-    return tlsf_free_size(tlsf_handle);
+    pool = tlsf_get_pool(tlsf_handle);
+    if (pool) {
+        uintptr_t flags = mm_lock_save();
+        tlsf_walk_pool(pool, tlsf_free_size_walker, &free_size);
+        mm_unlock_restore(flags);
+    }
+    return free_size;
 }
 
 /**

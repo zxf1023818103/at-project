@@ -2,7 +2,7 @@
 #define BFLB_MM_PORT_LOG_H
 /*
  * Portable shim of the Bouffalo SDK's <log.h> for non-Bouffalo builds of the
- * shared bflb_mm. The allocator only logs on error/diagnostic paths; keep it free
+ * shared tlsf_config. The allocator only logs on error/diagnostic paths; keep it free
  * of printf/format dependencies (callers check return values). No-op everything.
  */
 #define LOG_E(...) ((void)0)

@@ -98,3 +98,6 @@
 [submodule "component/corejson_config/corejson"]
 	path = component/corejson_config/corejson
 	url = https://github.com/FreeRTOS/coreJSON.git
+[submodule "component/tlsf_config/tlsf"]
+	path = component/tlsf_config/tlsf
+	url = https://github.com/mattconte/tlsf

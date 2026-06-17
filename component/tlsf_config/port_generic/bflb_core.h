@@ -1,7 +1,7 @@
 #ifndef BFLB_MM_PORT_BFLB_CORE_H
 #define BFLB_MM_PORT_BFLB_CORE_H
 /*
- * Portable shim of the Bouffalo SDK's <bflb_core.h>, used when the shared bflb_mm
+ * Portable shim of the Bouffalo SDK's <bflb_core.h>, used when the shared tlsf_config
  * component is built for a non-Bouffalo platform (the real header is on the path
  * only when bflb_lhal is linked). mm.c uses exactly two things from bflb_core.h:
  *

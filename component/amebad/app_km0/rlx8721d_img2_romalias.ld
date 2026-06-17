@@ -15,11 +15,11 @@
  */
 PROVIDE(memcpy = _memcpy);
 PROVIDE(memset = _memset);
-/* bflb_mm TLSF (now the shared heap on KM0 too) calls strncpy + printf, which the
+/* tlsf_config TLSF (now the shared heap on KM0 too) calls strncpy + printf, which the
  * LP core's -nostdlib link has no libc for. Alias to the ROM routines: _strncpy =
  * 0x7019 (string_rom_km0.ld); DiagPrintfD = 0x4b9, a printf-style logger to LOGUART.
  * (The libgcc intrinsics TLSF also needs — __clzsi2/__ffssi2, since armv8-m.base has
- * no CLZ — come from libgcc, which component/bflb_mm links on KM0.) */
+ * no CLZ — come from libgcc, which component/tlsf_config links on KM0.) */
 PROVIDE(strncpy = _strncpy);
 PROVIDE(printf  = DiagPrintfD);
 

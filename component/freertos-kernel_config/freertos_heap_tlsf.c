@@ -1,17 +1,17 @@
 /*
- * freertos_heap_bflb_mm.c — AmebaD FreeRTOS heap backed by the shared bflb_mm
- * allocator (component/bflb_mm, TLSF), replacing the kernel's heap_5.c.
+ * freertos_heap_tlsf.c — AmebaD FreeRTOS heap backed by the shared tlsf_config
+ * allocator (component/tlsf_config, TLSF), replacing the kernel's heap_5.c.
  *
  * The kernel's heap source is disabled (FREERTOS_HEAP points at the empty
  * freertos_heap_none.c), so this file provides the FreeRTOS heap surface
  * (pvPortMalloc/vPortFree/...) over kmalloc/kfree. The existing
  * freertos_heap5_config.c is kept UNCHANGED: its os_heap_init() still computes the
  * per-core AmebaD heap region table and calls vPortDefineHeapRegions() — which we
- * reimplement here to register each region as a bflb_mm TLSF heap. So the
+ * reimplement here to register each region as a tlsf_config TLSF heap. So the
  * battle-tested per-core region math (KM4 dynamic SRAM; KM0 static/ROM-BSS) is
  * reused verbatim, and only the allocator underneath changes.
  *
- * Also provides a STRONG mm_lock_save/mm_unlock_restore (bflb_mm's are weak): a
+ * Also provides a STRONG mm_lock_save/mm_unlock_restore (tlsf_config's are weak): a
  * pre-scheduler-safe critical section via the Cortex-M PRIMASK.
  */
 #include <stdint.h>
@@ -19,9 +19,9 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include <string.h>
-#include "mm.h"          /* shared bflb_mm: mem_manager_init / mm_register_heap / kmalloc / ... */
+#include "mm.h"          /* shared tlsf_config: mem_manager_init / mm_register_heap / kmalloc / ... */
 
-/* ---- bflb_mm critical section (strong override of the weak defaults) ---- *
+/* ---- tlsf_config critical section (strong override of the weak defaults) ---- *
  * Used before the scheduler starts (first allocations are C ctors / stdio), so it
  * uses the FreeRTOS interrupt-mask save/restore (safe in task + ISR + pre-scheduler
  * context) rather than a mutex. No CMSIS include needed. */
@@ -35,7 +35,7 @@ void mm_unlock_restore(uintptr_t flags)
     portCLEAR_INTERRUPT_MASK_FROM_ISR((UBaseType_t)flags);
 }
 
-/* ---- region registration: vPortDefineHeapRegions() over bflb_mm ---- *
+/* ---- region registration: vPortDefineHeapRegions() over tlsf_config ---- *
  * Each non-zero HeapRegion_t becomes a TLSF heap (ids 1..N). kmalloc(...,
  * MM_FLAG_HEAP_ANY) then spans them via the auto-list. Terminator = size 0
  * (matches heap_5 semantics). */
@@ -66,7 +66,7 @@ void vPortDefineHeapRegions(const HeapRegion_t * const pxHeapRegions)
     }
 }
 
-/* ---- FreeRTOS heap surface over bflb_mm ---- */
+/* ---- FreeRTOS heap surface over tlsf_config ---- */
 #if defined(configUSE_MALLOC_FAILED_HOOK) && (configUSE_MALLOC_FAILED_HOOK == 1)
 extern void vApplicationMallocFailedHook(void);
 #define MM_FAIL_HOOK()  vApplicationMallocFailedHook()
@@ -109,7 +109,7 @@ size_t xPortGetFreeHeapSize(void)
 
 size_t xPortGetMinimumEverFreeHeapSize(void)
 {
-    /* bflb_mm min-free tracking is off by default; report current free. */
+    /* tlsf_config min-free tracking is off by default; report current free. */
     return kfree_size(0);
 }
 

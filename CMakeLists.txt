@@ -35,7 +35,7 @@ add_subdirectory(component/console)
 # links the real bflb_lhal/bflb_log; other platforms use port_generic shims. After
 # the chip vars are known (BOUFFALO_CHIP gates the SDK deps) but it's header/dep
 # choice only, resolved at generate — safe to add here with the other shared libs.
-add_subdirectory(component/bflb_mm)
+add_subdirectory(component/tlsf_config)
 
 # Cross-platform FreeRTOS config base — the settings common to AmebaD KM0/KM4 and
 # Bouffalo; each platform's FreeRTOSConfig.h includes it (freertos_config_common.h).

@@ -34,7 +34,7 @@ target_compile_definitions(bl602_board_config PRIVATE
 
 # board.c / board_gpio.c #include lhal headers (bflb_uart.h, bflb_gpio.h, …).
 # PUBLIC so consumers that pull in this OBJECT lib also see lhal.
-target_link_libraries(bl602_board_config PUBLIC bflb_lhal bflb_mm)
+target_link_libraries(bl602_board_config PUBLIC bflb_lhal tlsf_config)
 
 set(_ld "${CMAKE_CURRENT_LIST_DIR}/bl602_flash.ld")
 
