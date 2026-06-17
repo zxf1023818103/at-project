@@ -12,11 +12,11 @@
  * dispatch to tfm_ns_interface_rtos.c + a FreeRTOS os_wrapper.
  */
 #include <stdint.h>
+#include "at_log.h"
 
 #include "psa/client.h"
 #include "tfm_platform_api.h"
 
-extern int DiagPrintf(const char *fmt, ...);
 
 /* Demo IOCTL contract — must match the secure HAL in
  * component/amebad/app_km4_secure/platform/rtl8721d/services/src/tfm_platform_system.c */
@@ -37,11 +37,11 @@ void amebad_tfm_psa_selftest(void)
     psa_invec  in = { .base = &nonce, .len = sizeof(nonce) };
     psa_outvec ov = { .base = &out,   .len = sizeof(out)   };
 
-    DiagPrintf("[KM4] PSA: framework_version=0x%x\n\r", psa_framework_version());
+    log_info("[KM4] PSA: framework_version=0x%x", psa_framework_version());
 
     r = tfm_platform_ioctl(AMEBAD_IOCTL_PING, &in, &ov);
 
-    DiagPrintf("[KM4] PSA: ioctl PING ret=%d out=0x%x expect=0x%x -> %s\n\r",
+    log_info("[KM4] PSA: ioctl PING ret=%d out=0x%x expect=0x%x -> %s",
                (int)r, out, expect,
                (r == TFM_PLATFORM_ERR_SUCCESS && out == expect) ? "PASS" : "FAIL");
 
@@ -53,7 +53,7 @@ void amebad_tfm_psa_selftest(void)
         psa_outvec ov2 = { .base = info, .len = sizeof(info) };
         enum tfm_platform_err_t r2 =
             tfm_platform_ioctl(AMEBAD_IOCTL_EFUSE_HUK_INFO, NULL, &ov2);
-        DiagPrintf("[KM4] eFuse HUK(0x150,32B): ret=%d blank=%d fingerprint=0x%08x\n\r",
+        log_info("[KM4] eFuse HUK(0x150,32B): ret=%d blank=%d fingerprint=0x%08x",
                    (int)r2, (int)info[0], info[1]);
     }
 
@@ -69,7 +69,7 @@ void amebad_tfm_psa_selftest(void)
     {
         const char *name[4] = { "CRYPTO_Init", "aes_ecb_init", "aes_ecb_encrypt", "compare" };
         uint32_t s;
-        DiagPrintf("[HWKAT] secure-side IPSEC AES-128-ECB KAT (FIPS-197)...\n\r");
+        log_info("[HWKAT] secure-side IPSEC AES-128-ECB KAT (FIPS-197)...");
         for (s = 0; s < 4; s++) {
             uint32_t in = s, res = 0;
             psa_invec  iv = { .base = &in,  .len = sizeof(in)  };
@@ -77,10 +77,10 @@ void amebad_tfm_psa_selftest(void)
             enum tfm_platform_err_t rk =
                 tfm_platform_ioctl(AMEBAD_IOCTL_HWCRYPTO_KAT, &iv, &ov);
             if (s < 3) {
-                DiagPrintf("[HWKAT] step %d %s: ioctl=%d ret=%d\n\r",
+                log_info("[HWKAT] step %d %s: ioctl=%d ret=%d",
                            (int)s, name[s], (int)rk, (int)res);
             } else {
-                DiagPrintf("[HWKAT] step %d %s: ioctl=%d %s (hw[0..1]=%02x %02x)\n\r",
+                log_info("[HWKAT] step %d %s: ioctl=%d %s (hw[0..1]=%02x %02x)",
                            (int)s, name[s], (int)rk,
                            (res & 1u) ? "MATCH-FIPS197 -> HW CRYPTO WORKS IN SPE" : "mismatch",
                            (unsigned)((res >> 8) & 0xff), (unsigned)((res >> 16) & 0xff));
@@ -96,16 +96,16 @@ void amebad_tfm_psa_selftest(void)
         psa_outvec ov = { .base = g, .len = sizeof(g) };
         enum tfm_platform_err_t rg =
             tfm_platform_ioctl(AMEBAD_IOCTL_HWCRYPTO_GCM, NULL, &ov);
-        DiagPrintf("[HWGCM] AES-128-GCM KAT(NIST): ioctl=%d %s (ct0=%02x tag0=%02x)\n\r",
+        log_info("[HWGCM] AES-128-GCM KAT(NIST): ioctl=%d %s (ct0=%02x tag0=%02x)",
                    (int)rg, (g[0] & 1u) ? "MATCH" : "MISMATCH",
                    (unsigned)((g[3] >> 24) & 0xff), (unsigned)((g[3] >> 8) & 0xff));
         if (g[2] > 0) {
-            DiagPrintf("[HWGCM] HW throughput: %d.%02d cyc/B, %d KB/s   (SW [MCB]=465.59 cyc/B, 419 KB/s)\n\r",
+            log_info("[HWGCM] HW throughput: %d.%02d cyc/B, %d KB/s   (SW [MCB]=465.59 cyc/B, 419 KB/s)",
                        (int)(g[1] / 100), (int)(g[1] % 100), (int)g[2]);
-            DiagPrintf("[HWGCM] HW vs SW speedup: ~%d.%01dx\n\r",
+            log_info("[HWGCM] HW vs SW speedup: ~%d.%01dx",
                        (int)(g[2] * 10 / 419 / 10), (int)(g[2] * 10 / 419 % 10));
         } else {
-            DiagPrintf("[HWGCM] throughput timer dead (cyc=0); DWT_CTRL=0x%08x (bit25=NOCYCCNT)\n\r", g[3]);
+            log_info("[HWGCM] throughput timer dead (cyc=0); DWT_CTRL=0x%08x (bit25=NOCYCCNT)", g[3]);
         }
     }
 
@@ -140,11 +140,11 @@ void amebad_tfm_psa_selftest(void)
         {
             uint32_t ns_per = ns_total / M;                 /* cyc per packet (round-trip) */
             uint32_t boundary = (ns_per > spe_last) ? (ns_per - spe_last) : 0u;
-            DiagPrintf("[GCM1200] SPE-internal 1200B op : %d cyc (%d.%02d cyc/B)\n\r",
+            log_info("[GCM1200] SPE-internal 1200B op : %d cyc (%d.%02d cyc/B)",
                        (int)spe_last, (int)(spe_last / PKT), (int)((spe_last * 100u / PKT) % 100));
-            DiagPrintf("[GCM1200] NS->SPE round-trip/pkt: %d cyc (%d.%02d cyc/B); PSA boundary=%d cyc\n\r",
+            log_info("[GCM1200] NS->SPE round-trip/pkt: %d cyc (%d.%02d cyc/B); PSA boundary=%d cyc",
                        (int)ns_per, (int)(ns_per / PKT), (int)((ns_per * 100u / PKT) % 100), (int)boundary);
-            DiagPrintf("[GCM1200] per-packet HW-GCM throughput: %d KB/s   (SW [MCB]=419 KB/s)\n\r",
+            log_info("[GCM1200] per-packet HW-GCM throughput: %d KB/s   (SW [MCB]=419 KB/s)",
                        (int)(ns_per ? ((unsigned long long)PKT * HZ / ns_per / 1024u) : 0u));
         }
     }
@@ -170,16 +170,16 @@ void amebad_tfm_psa_selftest(void)
             0xd8,0xcd,0xb7,0x80,0x70,0xb4,0xc5,0x5a };
         int r; uint32_t i;
         for (i = 0; i < 16; i++) { k[i] = (unsigned char)i; pt[i] = (unsigned char)((i << 4) | i); }
-        DiagPrintf("[HWNS] NSPE-direct HW crypto via NS ROM aliases (no SPE/PSA)...\n\r");
-        DiagPrintf("[HWNS] CRYPTO_Init...\n\r");
+        log_info("[HWNS] NSPE-direct HW crypto via NS ROM aliases (no SPE/PSA)...");
+        log_info("[HWNS] CRYPTO_Init...");
         r = NS_CRYPTO_Init(0);
-        DiagPrintf("[HWNS]   CRYPTO_Init=%d (survived)\n\r", r);
-        DiagPrintf("[HWNS] aes_ecb_init...\n\r");
+        log_info("[HWNS]   CRYPTO_Init=%d (survived)", r);
+        log_info("[HWNS] aes_ecb_init...");
         r = NS_aes_ecb_init(k, 16);
-        DiagPrintf("[HWNS]   aes_ecb_init=%d (survived)\n\r", r);
-        DiagPrintf("[HWNS] aes_ecb_encrypt... (prior NS death point)\n\r");
+        log_info("[HWNS]   aes_ecb_init=%d (survived)", r);
+        log_info("[HWNS] aes_ecb_encrypt... (prior NS death point)");
         r = NS_aes_ecb_encrypt(pt, 16, 0, 0, hw);
-        DiagPrintf("[HWNS]   aes_ecb_encrypt=%d (SURVIVED) hw[0..1]=%02x %02x -> %s\n\r",
+        log_info("[HWNS]   aes_ecb_encrypt=%d (SURVIVED) hw[0..1]=%02x %02x -> %s",
                    r, hw[0], hw[1],
                    memcmp(hw, exp, 16) == 0 ? "MATCH (NSPE CAN call HW crypto directly!)" : "mismatch");
     }

@@ -8,6 +8,7 @@
  * crypto path + the PAL storage end to end.
  */
 #include <string.h>
+#include "at_log.h"
 
 #include "core_pkcs11.h"
 #include "core_pkcs11_config.h"
@@ -23,7 +24,7 @@ extern void mbedtls_threading_freertos_init( void );   /* component/amebad/mbedt
     do {                                                                    \
         CK_RV _rv = ( call );                                               \
         if( _rv != CKR_OK ) {                                               \
-            DiagPrintf( "[PK11] FAIL %s -> 0x%x\n\r", #call, (unsigned int) _rv ); \
+            log_error( "[PK11] FAIL %s -> 0x%x", #call, (unsigned int) _rv ); \
             return;                                                         \
         }                                                                   \
     } while( 0 )
@@ -62,13 +63,13 @@ void amebad_pkcs11_selftest( void )
         { CKA_LABEL,       privLabel,   sizeof( privLabel ) - 1 },
     };
 
-    DiagPrintf( "\n\r[PK11] ===== corePKCS11 token self-test (mbedTLS backend) =====\n\r" );
+    log_info( "[PK11] ===== corePKCS11 token self-test (mbedTLS backend) =====" );
 
     /* mbedTLS runtime: FreeRTOS threading callbacks + PSA. */
     mbedtls_threading_freertos_init();
     if( psa_crypto_init() != PSA_SUCCESS )
     {
-        DiagPrintf( "[PK11] FAIL psa_crypto_init\n\r" );
+        log_error( "[PK11] FAIL psa_crypto_init" );
         return;
     }
 
@@ -76,12 +77,12 @@ void amebad_pkcs11_selftest( void )
     PK_OK( pFn->C_Initialize( NULL ) );
     PK_OK( pFn->C_OpenSession( 0, CKF_SERIAL_SESSION | CKF_RW_SESSION, NULL, NULL, &xSession ) );
 
-    DiagPrintf( "[PK11] generating EC P-256 key pair...\n\r" );
+    log_info( "[PK11] generating EC P-256 key pair..." );
     PK_OK( pFn->C_GenerateKeyPair( xSession, &xGen,
                                    pubTmpl,  sizeof( pubTmpl ) / sizeof( pubTmpl[ 0 ] ),
                                    privTmpl, sizeof( privTmpl ) / sizeof( privTmpl[ 0 ] ),
                                    &xPub, &xPriv ) );
-    DiagPrintf( "[PK11] key pair OK (priv=%d pub=%d)\n\r",
+    log_info( "[PK11] key pair OK (priv=%d pub=%d)",
                 (int) xPriv, (int) xPub );
 
     for( i = 0; i < (int) sizeof( xDigest ); i++ )
@@ -90,13 +91,13 @@ void amebad_pkcs11_selftest( void )
     }
     PK_OK( pFn->C_SignInit( xSession, &xSign, xPriv ) );
     PK_OK( pFn->C_Sign( xSession, xDigest, sizeof( xDigest ), xSig, &xSigLen ) );
-    DiagPrintf( "[PK11] sign OK (%d-byte signature)\n\r", (int) xSigLen );
+    log_info( "[PK11] sign OK (%d-byte signature)", (int) xSigLen );
 
     PK_OK( pFn->C_VerifyInit( xSession, &xSign, xPub ) );
     PK_OK( pFn->C_Verify( xSession, xDigest, sizeof( xDigest ), xSig, xSigLen ) );
-    DiagPrintf( "[PK11] verify OK\n\r" );
+    log_info( "[PK11] verify OK" );
 
     pFn->C_CloseSession( xSession );
     pFn->C_Finalize( NULL );
-    DiagPrintf( "[PK11] ===== PASS (keys persisted to LittleFS) =====\n\r" );
+    log_info( "[PK11] ===== PASS (keys persisted to LittleFS) =====" );
 }

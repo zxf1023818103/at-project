@@ -10,6 +10,7 @@
  * one, but mbedTLS lives in XIP flash like wolfCrypt's portable build.
  */
 #include "FreeRTOS.h"
+#include "at_log.h"
 #include "task.h"
 #include <string.h>
 
@@ -24,7 +25,6 @@
 #include "mbedtls/rsa.h"
 #include "mbedtls/bignum.h"
 
-extern void DiagPrintf(const char *fmt, ...);
 extern void mbedtls_threading_freertos_init(void);                          /* threading-alt */
 extern int  mbedtls_hardware_poll(void *, unsigned char *, size_t, size_t *);
 
@@ -48,7 +48,7 @@ static void report_tp(const char *name, unsigned long long cyc, unsigned int byt
 {
     unsigned int cpb = (unsigned int) (cyc * 100u / bytes);
     unsigned int kBps = (unsigned int) ((unsigned long long) bytes * g_hz / cyc / 1024u);
-    DiagPrintf("[MCB] %s: %d.%d%d cyc/B, %d KB/s\n\r",
+    log_info("[MCB] %s: %d.%d%d cyc/B, %d KB/s",
                name, cpb / 100, (cpb % 100) / 10, cpb % 10, kBps);
 }
 static void report_pk(const char *name, unsigned long long cyc, unsigned int it)
@@ -56,7 +56,7 @@ static void report_pk(const char *name, unsigned long long cyc, unsigned int it)
     unsigned int cpo = (unsigned int) (cyc / it);
     unsigned int us  = (unsigned int) (cyc * 1000000ull / it / g_hz);
     unsigned int ops = (unsigned int) ((unsigned long long) it * g_hz / cyc);
-    DiagPrintf("[MCB] %s: %d cyc/op, %d us/op, %d op/s\n\r", name, cpo, us, ops);
+    log_info("[MCB] %s: %d cyc/op, %d us/op, %d op/s", name, cpo, us, ops);
 }
 
 static int bench_rng(void *c, unsigned char *o, size_t l)
@@ -75,8 +75,8 @@ void mbedtls_bench(void)
 
     mbedtls_threading_freertos_init();
     cyc_init();
-    DiagPrintf("\n\r[MCB] ===== Mbed TLS v3.6.4 benchmark — KM4 Cortex-M33 @200MHz =====\n\r");
-    DiagPrintf("[MCB] SysTick clock: %d Hz\n\r", g_hz);
+    log_info("[MCB] ===== Mbed TLS v3.6.4 benchmark — KM4 Cortex-M33 @200MHz =====");
+    log_info("[MCB] SysTick clock: %d Hz", g_hz);
 
     /* ---- one-shot AEAD known-answer tests (crypt_and_tag — the path picotls/QUIC
      *      uses). Verifies correctness of the SOFTWARE path, or of GCM_ALT /
@@ -92,7 +92,7 @@ void mbedtls_bench(void)
         mbedtls_gcm_setkey(&gc, MBEDTLS_CIPHER_ID_AES, gk, 128);
         mbedtls_gcm_crypt_and_tag(&gc, MBEDTLS_GCM_ENCRYPT, 16, giv, 12, NULL, 0, gpt, go, 16, gt);
         ok = (memcmp(go, g_ct, 16) == 0 && memcmp(gt, g_tag, 16) == 0);
-        DiagPrintf("[MCB-KAT] AES-128-GCM crypt_and_tag: %s\n\r", ok ? "MATCH" : "FAIL");
+        log_info("[MCB-KAT] AES-128-GCM crypt_and_tag: %s", ok ? "MATCH" : "FAIL");
         mbedtls_gcm_free(&gc);
     }
     {
@@ -122,14 +122,14 @@ void mbedtls_bench(void)
             mbedtls_chachapoly_setkey(&cc, ck);
             mbedtls_chachapoly_encrypt_and_tag(&cc, 114, cn, ca, 12, cpt, co, ct_buf);
             ok = (memcmp(co, cp_ct, 114) == 0 && memcmp(ct_buf, cp_tag, 16) == 0);
-            DiagPrintf("[MCB-KAT] ChaCha20-Poly1305 encrypt_and_tag: %s\n\r", ok ? "MATCH" : "FAIL");
+            log_info("[MCB-KAT] ChaCha20-Poly1305 encrypt_and_tag: %s", ok ? "MATCH" : "FAIL");
             mbedtls_chachapoly_free(&cc);
             vPortFree(cpt);
         }
     }
 
     buf = (unsigned char *) pvPortMalloc(BUF);
-    if (buf == NULL) { DiagPrintf("[MCB] OOM\n\r"); return; }
+    if (buf == NULL) { log_info("[MCB] OOM"); return; }
     for (i = 0; i < BUF; i++) { buf[i] = (unsigned char) i; }
 
     /* ---- hashes ---- */
@@ -242,7 +242,7 @@ void mbedtls_bench(void)
         for (i = 0; i < 32; i++) { h[i] = (unsigned char) i; }
         mbedtls_rsa_init(&rsa);
         mbedtls_rsa_set_padding(&rsa, MBEDTLS_RSA_PKCS_V15, MBEDTLS_MD_SHA256);
-        DiagPrintf("[MCB] RSA-2048 keygen (one-time, slow)...\n\r");
+        log_info("[MCB] RSA-2048 keygen (one-time, slow)...");
         if (mbedtls_rsa_gen_key(&rsa, bench_rng, 0, 2048, 65537) == 0) {
             t0 = cyc_now();
             for (i = 0; i < IT; i++) {
@@ -255,11 +255,11 @@ void mbedtls_bench(void)
             }
             report_pk("RSA-2048 verify(pub)", cyc_now() - t0, IT);
         } else {
-            DiagPrintf("[MCB] RSA-2048 keygen FAILED\n\r");
+            log_error("[MCB] RSA-2048 keygen FAILED");
         }
         mbedtls_rsa_free(&rsa);
     }
 
-    DiagPrintf("[MCB] ===== benchmark done =====\n\r");
+    log_info("[MCB] ===== benchmark done =====");
     vPortFree(buf);
 }

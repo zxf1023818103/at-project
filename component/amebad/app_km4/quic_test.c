@@ -26,6 +26,7 @@
  * the placeholder xorshift (see component/amebad/mbedtls_port) — a real TRNG is a follow-up.
  */
 #include <string.h>
+#include "at_log.h"
 #include <stdint.h>
 
 #include "FreeRTOS.h"
@@ -51,7 +52,6 @@
 #include "psa/crypto.h"           /* psa_crypto_init — PSA backs ptls_mbedtls_random_bytes */
 #include "mbedtls/build_info.h"   /* MBEDTLS_SHA384_C — gates the AES-256-GCM-SHA384 suite */
 
-extern void DiagPrintf(const char *, ...);
 extern void mbedtls_threading_freertos_init(void);   /* MBEDTLS_THREADING_ALT callbacks */
 /* The libc/POSIX bits picotls pulls (posix_memalign / aligned_alloc / inet_pton) live in the
  * newlib retarget — component/syscall_config/newlib_syscalls.c — with the malloc family. */
@@ -215,7 +215,7 @@ static int client_ssl_init(struct quic_client *c)
         s_ptls_ctx.key_exchanges = ptls_mbedtls_key_exchanges;
         s_ptls_ctx.cipher_suites = s_cipher_suites;   /* AES-GCM-first (HW); see s_cipher_suites */
         if (ngtcp2_crypto_picotls_configure_client_context(&s_ptls_ctx) != 0) {
-            DiagPrintf("[QUIC] configure_client_context failed\n\r");
+            log_error("[QUIC] configure_client_context failed");
             return -1;
         }
     }
@@ -223,7 +223,7 @@ static int client_ssl_init(struct quic_client *c)
     ngtcp2_crypto_picotls_ctx_init(&c->cptls);
     c->cptls.ptls = ptls_client_new(&s_ptls_ctx);
     if (c->cptls.ptls == NULL) {
-        DiagPrintf("[QUIC] ptls_client_new failed\n\r");
+        log_error("[QUIC] ptls_client_new failed");
         return -1;
     }
 
@@ -301,13 +301,13 @@ static int client_quic_init(struct quic_client *c)
     rv = ngtcp2_conn_client_new(&c->conn, &dcid, &scid, &path, NGTCP2_PROTO_VER_V1,
                                 &callbacks, &settings, &params, NULL, c);
     if (rv != 0) {
-        DiagPrintf("[QUIC] conn_client_new: %s\n\r", ngtcp2_strerror(rv));
+        log_info("[QUIC] conn_client_new: %s", ngtcp2_strerror(rv));
         return -1;
     }
 
     ngtcp2_conn_set_tls_native_handle(c->conn, &c->cptls);
     if (ngtcp2_crypto_picotls_configure_client_session(&c->cptls, c->conn) != 0) {
-        DiagPrintf("[QUIC] configure_client_session failed\n\r");
+        log_error("[QUIC] configure_client_session failed");
         return -1;
     }
     return 0;
@@ -355,7 +355,7 @@ static int client_flush(struct quic_client *c)
                                       c->stream_id, &v, 1, quic_timestamp());
         if (n < 0) {
             if (n != NGTCP2_ERR_STREAM_DATA_BLOCKED) {
-                DiagPrintf("[QUIC] hdr writev: %s\n\r", ngtcp2_strerror((int)n));
+                log_info("[QUIC] hdr writev: %s", ngtcp2_strerror((int)n));
                 ngtcp2_ccerr_set_liberr(&c->last_error, (int)n, NULL, 0);
                 return -1;
             }
@@ -406,7 +406,7 @@ static int client_flush(struct quic_client *c)
                 if (m > 0 && client_send_packet(c, buf, (size_t)m) != 0) return -1;
                 return 0;
             }
-            DiagPrintf("[QUIC] writev_stream: %s (tls_alert=%d)\n\r",
+            log_info("[QUIC] writev_stream: %s (tls_alert=%d)",
                        ngtcp2_strerror((int)nwrite),
                        (int)ngtcp2_conn_get_tls_alert2(c->conn));
             ngtcp2_ccerr_set_liberr(&c->last_error, (int)nwrite, NULL, 0);
@@ -432,7 +432,7 @@ static int client_read(struct quic_client *c, const uint8_t *data, size_t datale
     ngtcp2_pkt_info pi = {0};
     int rv = ngtcp2_conn_read_pkt(c->conn, &path, &pi, data, datalen, quic_timestamp());
     if (rv != 0) {
-        DiagPrintf("[QUIC] read_pkt: %s\n\r", ngtcp2_strerror(rv));
+        log_info("[QUIC] read_pkt: %s", ngtcp2_strerror(rv));
         if (!c->last_error.error_code) {
             if (rv == NGTCP2_ERR_CRYPTO) {
                 ngtcp2_ccerr_set_tls_alert(&c->last_error,
@@ -452,7 +452,7 @@ static int client_socket_init(struct quic_client *c)
 
     c->sock = FreeRTOS_socket(FREERTOS_AF_INET, FREERTOS_SOCK_DGRAM, FREERTOS_IPPROTO_UDP);
     if (c->sock == FREERTOS_INVALID_SOCKET || c->sock == NULL) {
-        DiagPrintf("[QUIC] socket() failed\n\r");
+        log_error("[QUIC] socket() failed");
         return -1;
     }
 
@@ -462,7 +462,7 @@ static int client_socket_init(struct quic_client *c)
     bind_addr.sin_family = FREERTOS_AF_INET;
     bind_addr.sin_port = 0;
     if (FreeRTOS_bind(c->sock, &bind_addr, sizeof(bind_addr)) != 0) {
-        DiagPrintf("[QUIC] bind() failed\n\r");
+        log_error("[QUIC] bind() failed");
         return -1;
     }
 
@@ -520,7 +520,7 @@ static int perf_connection(uint64_t dl, uint64_t ul, uint32_t *kbps_out)
 
     if (client_socket_init(c) != 0 || client_ssl_init(c) != 0 ||
         client_quic_init(c) != 0) {
-        DiagPrintf("[QUIC] init failed\n\r");
+        log_error("[QUIC] init failed");
         failed = 1;
         goto cleanup;
     }
@@ -539,18 +539,18 @@ static int perf_connection(uint64_t dl, uint64_t ul, uint32_t *kbps_out)
         socklen_t fromlen = sizeof(from);
 
         if ((int32_t)(now - hb_next) >= 0) {
-            DiagPrintf("[QUIC] .hb so=%d rx=%d ack=%d sr=%d fin=%d\n\r",
+            log_info("[QUIC] .hb so=%d rx=%d ack=%d sr=%d fin=%d",
                        stream_open, (int)c->recv_total, (int)c->acked_total,
                        (int)c->send_remaining, c->send_fin_done);
             hb_next = now + pdMS_TO_TICKS(1000);
         }
 
         if (!stream_open && (int32_t)(now - hs_deadline) >= 0) {
-            DiagPrintf("[QUIC] handshake TIMEOUT\n\r");
+            log_info("[QUIC] handshake TIMEOUT");
             failed = 1; break;
         }
         if ((int32_t)(now - xfer_deadline) >= 0) {
-            DiagPrintf("[QUIC] transfer TIMEOUT (rx=%d tx-acked=%d)\n\r",
+            log_info("[QUIC] transfer TIMEOUT (rx=%d tx-acked=%d)",
                        (unsigned)c->recv_total, (unsigned)c->acked_total);
             failed = 1; break;
         }
@@ -583,7 +583,7 @@ static int perf_connection(uint64_t dl, uint64_t ul, uint32_t *kbps_out)
         } else {
             int rv = ngtcp2_conn_handle_expiry(c->conn, quic_timestamp());
             if (rv != 0) {
-                DiagPrintf("[QUIC] handle_expiry: %s\n\r", ngtcp2_strerror(rv));
+                log_info("[QUIC] handle_expiry: %s", ngtcp2_strerror(rv));
                 failed = 1; break;
             }
         }
@@ -656,7 +656,7 @@ static void quic_client_task(void *arg)
     }
     vTaskDelay(pdMS_TO_TICKS(200));
 
-    DiagPrintf("[QUIC] ngtcp2 %s + picotls/mbedTLS TLS1.3 perf -> %d.%d.%d.%d:%d (ALPN %s)\n\r",
+    log_info("[QUIC] ngtcp2 %s + picotls/mbedTLS TLS1.3 perf -> %d.%d.%d.%d:%d (ALPN %s)",
                ngtcp2_version(0)->version_str,
                QUIC_SERVER_A0, QUIC_SERVER_A1, QUIC_SERVER_A2, QUIC_SERVER_A3,
                QUIC_SERVER_PORT, QUIC_ALPN);
@@ -665,7 +665,7 @@ static void quic_client_task(void *arg)
      * and the whole picotls mbedTLS backend run on PSA). */
     mbedtls_threading_freertos_init();
     if (psa_crypto_init() != PSA_SUCCESS) {   /* PSA backs ptls_mbedtls_* + the whole handshake */
-        DiagPrintf("[QUIC] psa_crypto_init failed\n\r");
+        log_error("[QUIC] psa_crypto_init failed");
         vTaskDelete(NULL);
         return;
     }
@@ -673,34 +673,34 @@ static void quic_client_task(void *arg)
     /* Loop the test so the host server can be started at any time and a fresh
      * round will pick it up; also lets the console be read on demand. */
     for (int round = 1; ; round++) {
-        DiagPrintf("[QUIC] ---- round %d ----\n\r", round);
+        log_info("[QUIC] ---- round %d ----", round);
 
         /* Phase 1: DOWNLOAD (chip RX). */
-        DiagPrintf("[QUIC] download phase: requesting %d bytes...\n\r",
+        log_info("[QUIC] download phase: requesting %d bytes...",
                    (int)QUIC_PERF_XFER_BYTES);
         rx_ok = (perf_connection(QUIC_PERF_XFER_BYTES, 0, &rx_kbps) == 0);
 
         vTaskDelay(pdMS_TO_TICKS(300));
 
         /* Phase 2: UPLOAD (chip TX). */
-        DiagPrintf("[QUIC] upload phase: sending %d bytes...\n\r",
+        log_info("[QUIC] upload phase: sending %d bytes...",
                    (int)QUIC_PERF_XFER_BYTES);
         tx_ok = (perf_connection(0, QUIC_PERF_XFER_BYTES, &tx_kbps) == 0);
 
-        DiagPrintf("[QUIC] ============ LAN speed test (round %d) ============\n\r", round);
+        log_info("[QUIC] ============ LAN speed test (round %d) ============", round);
         if (rx_ok) {
-            DiagPrintf("[QUIC]   DOWNLOAD (RX): %d kbps  (~%d Mbps)\n\r",
+            log_info("[QUIC]   DOWNLOAD (RX): %d kbps  (~%d Mbps)",
                        (int)rx_kbps, (int)(rx_kbps / 1000));
         } else {
-            DiagPrintf("[QUIC]   DOWNLOAD (RX): FAILED\n\r");
+            log_error("[QUIC]   DOWNLOAD (RX): FAILED");
         }
         if (tx_ok) {
-            DiagPrintf("[QUIC]   UPLOAD   (TX): %d kbps  (~%d Mbps)\n\r",
+            log_info("[QUIC]   UPLOAD   (TX): %d kbps  (~%d Mbps)",
                        (int)tx_kbps, (int)(tx_kbps / 1000));
         } else {
-            DiagPrintf("[QUIC]   UPLOAD   (TX): FAILED\n\r");
+            log_error("[QUIC]   UPLOAD   (TX): FAILED");
         }
-        DiagPrintf("[QUIC] =================================================\n\r");
+        log_info("[QUIC] =================================================");
 
         vTaskDelay(pdMS_TO_TICKS(8000));   /* pause between rounds */
     }

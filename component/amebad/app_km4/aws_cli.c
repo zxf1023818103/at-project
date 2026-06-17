@@ -18,6 +18,7 @@
  * the only UART reader) and accumulates lines until a line containing only "EOF".
  */
 #include <stdint.h>
+#include "at_log.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -276,10 +277,10 @@ static BaseType_t cmd_xiptest(char *out, size_t outlen, const char *cmd)
     for (i = 0; i < 256; i++) buf[i] = (uint8_t)i;
     c0 = xip_csum(base, len, w0, winoff, 256);
     r[1] = c0; __DSB();
-    DiagPrintf("[XIP] c0=%08x, writing...\n\r", (unsigned)c0);
+    log_info("[XIP] c0=%08x, writing...", (unsigned)c0);
     s  = psa_its_set(uid, 256, buf, PSA_STORAGE_FLAG_NONE);
     r[2] = (uint32_t)s; __DSB();
-    DiagPrintf("[XIP] set=%d, re-reading...\n\r", (int)s);
+    log_info("[XIP] set=%d, re-reading...", (int)s);
     c1 = xip_csum(base, len, w1, winoff, 256);
     for (i = 0; i < 256; i++) if (w0[i] != w1[i]) { diff = i; break; }
     r[3] = c1;
@@ -288,12 +289,12 @@ static BaseType_t cmd_xiptest(char *out, size_t outlen, const char *cmd)
     r[6] = (diff >= 0) ? (((uint32_t)w0[diff] << 8) | w1[diff]) : 0xFFFFFFFFu;
     r[7] = 0xC0DEFFFFu; __DSB();                          /* end sentinel = complete */
     /* Print the verdict NOW (DiagPrintf is ROM) - before any further XIP call (psa_its_remove). */
-    DiagPrintf("[XIP] c1=%08x %s\n\r", (unsigned)c1, (c0 == c1) ? "SAME" : "CHANGED");
+    log_info("[XIP] c1=%08x %s", (unsigned)c1, (c0 == c1) ? "SAME" : "CHANGED");
     if (diff >= 0)
-        DiagPrintf("[XIP] win 0x%08x +%d: %02x -> %02x\n\r",
+        log_info("[XIP] win 0x%08x +%d: %02x -> %02x",
                    (unsigned)(base + winoff), diff, w0[diff], w1[diff]);
     (void)psa_its_remove(uid);
-    DiagPrintf("[XIP] done (survived)\n\r");
+    log_info("[XIP] done (survived)");
     out[0] = '\0';
     return pdFALSE;
 }

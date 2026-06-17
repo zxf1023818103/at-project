@@ -14,10 +14,10 @@
  * _Static_asserts the sizes.
  */
 #include <string.h>
+#include "at_log.h"
 #include "rom_mbedtls_crypto.h"
 #include "rom_mbedtls.h"
 
-extern int DiagPrintf(const char *fmt, ...);
 /* ROM mbedTLS shares the crypto engine / ROM ssl-ram-map with the WiFi driver,
  * so serialize all ROM-mbedTLS use under RT_DEV_LOCK_CRYPTO. */
 extern void device_mutex_lock(int device);
@@ -33,21 +33,21 @@ static void kat_report(const char *name, const unsigned char *got,
     int i;
     if (memcmp(got, want, n) == 0) {
         g_pass++;
-        DiagPrintf("[KAT] %s  PASS\r\n", name);
+        log_info("[KAT] %s  PASS", name);
         return;
     }
     g_fail++;
-    DiagPrintf("[KAT] %s  *** FAIL ***\r\n", name);
-    DiagPrintf("[KAT]   got  ");
-    for (i = 0; i < n; i++) DiagPrintf("%02x", got[i]);
-    DiagPrintf("\r\n[KAT]   want ");
-    for (i = 0; i < n; i++) DiagPrintf("%02x", want[i]);
-    DiagPrintf("\r\n");
+    log_error("[KAT] %s  *** FAIL ***", name);
+    log_info("[KAT]   got  ");
+    for (i = 0; i < n; i++) log_info("%02x", got[i]);
+    log_info("[KAT]   want ");
+    for (i = 0; i < n; i++) log_info("%02x", want[i]);
+    log_info("");
 }
 
 void rom_mbedtls_kat(void)
 {
-    DiagPrintf("\r\n[KAT] ===== ROM mbedTLS 2.4.0 software crypto KAT =====\r\n");
+    log_info("[KAT] ===== ROM mbedTLS 2.4.0 software crypto KAT =====");
     device_mutex_lock(RT_DEV_LOCK_CRYPTO);   /* ROM ram-map shared with WiFi driver */
     rom_mbedtls_init();   /* force software path + wire ram-map calloc/free */
 
@@ -182,5 +182,5 @@ void rom_mbedtls_kat(void)
     }
 
     device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
-    DiagPrintf("[KAT] ===== result: %d passed, %d failed =====\r\n", g_pass, g_fail);
+    log_error("[KAT] ===== result: %d passed, %d failed =====", g_pass, g_fail);
 }

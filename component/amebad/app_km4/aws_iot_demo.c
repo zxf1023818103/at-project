@@ -18,6 +18,7 @@
  * verified. Acceptable for the demo.
  */
 #include <stdint.h>
+#include "at_log.h"
 #include <stdio.h>
 #include <stdlib.h>     /* getenv (endpoint + cert-path env vars) */
 #include <string.h>
@@ -86,12 +87,12 @@ static bool prvEventCallback(MQTTContext_t *pContext,
     if ((pPacketInfo->type & 0xF0U) == MQTT_PACKET_TYPE_PUBLISH) {
         MQTTPublishInfo_t *pub = pDeserializedInfo->pPublishInfo;
         if (pub != NULL) {
-            printf("[AWS] RX publish topic=%.*s payload=%.*s\n\r",
+            log_info("[AWS] RX publish topic=%.*s payload=%.*s",
                        (int)pub->topicNameLength, pub->pTopicName,
                        (int)pub->payloadLength, (const char *)pub->pPayload);
         }
     } else {
-        printf("[AWS] MQTT ctrl packet 0x%02x id=%u\n\r",
+        log_info("[AWS] MQTT ctrl packet 0x%02x id=%u",
                    pPacketInfo->type, (unsigned)pDeserializedInfo->packetIdentifier);
     }
     return true;
@@ -110,11 +111,11 @@ static int prvConnect(MQTTContext_t *pMqtt, NetworkContext_t *pNet,
     TlsTransportStatus_t ts;
     bool sessionPresent = false;
 
-    printf("[AWS] connecting TLS to %s:%d ...\n\r", endpoint, AWS_MQTT_PORT);
+    log_info("[AWS] connecting TLS to %s:%d ...", endpoint, AWS_MQTT_PORT);
     ts = TLS_FreeRTOS_Connect(pNet, endpoint, AWS_MQTT_PORT, creds,
                               AWS_TLS_RECV_TMO_MS, AWS_TLS_SEND_TMO_MS);
     if (ts != TLS_TRANSPORT_SUCCESS) {
-        printf("[AWS] TLS connect FAIL (%d)\n\r", (int)ts);
+        log_error("[AWS] TLS connect FAIL (%d)", (int)ts);
         return -1;
     }
 
@@ -125,7 +126,7 @@ static int prvConnect(MQTTContext_t *pMqtt, NetworkContext_t *pNet,
 
     st = MQTT_Init(pMqtt, &transport, prvGetTimeMs, prvEventCallback, &fixedBuffer);
     if (st != MQTTSuccess) {
-        printf("[AWS] MQTT_Init FAIL (%d)\n\r", (int)st);
+        log_error("[AWS] MQTT_Init FAIL (%d)", (int)st);
         TLS_FreeRTOS_Disconnect(pNet);
         return -2;
     }
@@ -140,12 +141,12 @@ static int prvConnect(MQTTContext_t *pMqtt, NetworkContext_t *pNet,
     st = MQTT_Connect(pMqtt, &connectInfo, NULL, AWS_CONNECT_TMO_MS,
                       &sessionPresent, NULL, NULL);
     if (st != MQTTSuccess) {
-        printf("[AWS] MQTT_Connect FAIL (%d)\n\r", (int)st);
+        log_error("[AWS] MQTT_Connect FAIL (%d)", (int)st);
         TLS_FreeRTOS_Disconnect(pNet);
         return -3;
     }
 
-    printf("[AWS] MQTT connected to %s as '%s'\n\r", endpoint, clientId);
+    log_info("[AWS] MQTT connected to %s as '%s'", endpoint, clientId);
     return 0;
 }
 
@@ -180,11 +181,11 @@ static void aws_mqtt_task(void *param)
     mbedtls_threading_freertos_init();
 
     if (aws_get_ble_mac(mac, sizeof(mac)) != 0) {
-        printf("[AWS] efuse BLE MAC read FAIL - task exiting\n\r");
+        log_error("[AWS] efuse BLE MAC read FAIL - task exiting");
         vTaskDelete(NULL);
         return;
     }
-    printf("[AWS] device (BLE MAC / Thing) = %s\n\r", mac);
+    log_info("[AWS] device (BLE MAC / Thing) = %s", mac);
     snprintf(topic_tele, sizeof(topic_tele), AWS_TOPIC_TELEMETRY_FMT, mac);
     snprintf(topic_cmd,  sizeof(topic_cmd),  AWS_TOPIC_CMD_FMT,  mac);
 
@@ -202,11 +203,11 @@ static void aws_mqtt_task(void *param)
             certPath[sizeof(certPath) - 1] = '\0';
             break;
         }
-        printf("[AWS] NOT provisioned (endpoint:%s cert:%s key:%s) - run: set endpoint <ep> / set cert <b64> / set key <b64>\n\r",
+        log_info("[AWS] NOT provisioned (endpoint:%s cert:%s key:%s) - run: set endpoint <ep> / set cert <b64> / set key <b64>",
                ep ? "ok" : "MISSING", cp ? "ok" : "MISSING", rk ? "MISSING" : "ok");
         vTaskDelay(pdMS_TO_TICKS(5000));
     }
-    printf("[AWS] provisioned: endpoint=%s certPath=%s key=%uB (free heap %u)\n\r",
+    log_info("[AWS] provisioned: endpoint=%s certPath=%s key=%uB (free heap %u)",
            endpoint, certPath, (unsigned)keyLen, (unsigned)xPortGetFreeHeapSize());
 
     memset(&creds, 0, sizeof(creds));
@@ -232,10 +233,10 @@ static void aws_mqtt_task(void *param)
             uint32_t rnd = prvGetTimeMs();
             bs = BackoffAlgorithm_GetNextBackoff(&backoff, rnd, &nextBackoff);
             if (bs != BackoffAlgorithmSuccess) {
-                printf("[AWS] backoff exhausted - retrying in %u ms\n\r", AWS_BACKOFF_MAX_MS);
+                log_info("[AWS] backoff exhausted - retrying in %u ms", AWS_BACKOFF_MAX_MS);
                 nextBackoff = AWS_BACKOFF_MAX_MS;
             }
-            printf("[AWS] reconnect in %u ms\n\r", (unsigned)nextBackoff);
+            log_info("[AWS] reconnect in %u ms", (unsigned)nextBackoff);
             vTaskDelay(pdMS_TO_TICKS(nextBackoff));
         }
 
@@ -247,9 +248,9 @@ static void aws_mqtt_task(void *param)
             sub.pTopicFilter = topic_cmd;
             sub.topicFilterLength = (uint16_t)strlen(topic_cmd);
             if (MQTT_Subscribe(&mqtt, &sub, 1, MQTT_GetPacketId(&mqtt), NULL) != MQTTSuccess)
-                printf("[AWS] subscribe '%s' FAIL\n\r", topic_cmd);
+                log_error("[AWS] subscribe '%s' FAIL", topic_cmd);
             else
-                printf("[AWS] subscribed '%s'\n\r", topic_cmd);
+                log_info("[AWS] subscribed '%s'", topic_cmd);
         }
 
         /* Publish telemetry every AWS_TELEMETRY_PERIOD_MS; pump the loop in between. */
@@ -276,17 +277,17 @@ static void aws_mqtt_task(void *param)
 
                     st = MQTT_Publish(&mqtt, &pub, MQTT_GetPacketId(&mqtt), NULL);
                     if (st != MQTTSuccess) {
-                        printf("[AWS] publish FAIL (%d) - reconnecting\n\r", (int)st);
+                        log_error("[AWS] publish FAIL (%d) - reconnecting", (int)st);
                         break;
                     }
-                    printf("[AWS] TX %s %s\n\r", topic_tele, payload);
+                    log_info("[AWS] TX %s %s", topic_tele, payload);
                     seq++;
                     nextPub = xTaskGetTickCount() + pdMS_TO_TICKS(AWS_TELEMETRY_PERIOD_MS);
                 }
 
                 st = MQTT_ProcessLoop(&mqtt);
                 if (st != MQTTSuccess && st != MQTTNeedMoreBytes) {
-                    printf("[AWS] ProcessLoop status %d - reconnecting\n\r", (int)st);
+                    log_info("[AWS] ProcessLoop status %d - reconnecting", (int)st);
                     break;
                 }
                 vTaskDelay(pdMS_TO_TICKS(50));
@@ -295,7 +296,7 @@ static void aws_mqtt_task(void *param)
 
         MQTT_Disconnect(&mqtt, NULL, 0);
         TLS_FreeRTOS_Disconnect(&net);
-        printf("[AWS] disconnected; will reconnect\n\r");
+        log_info("[AWS] disconnected; will reconnect");
         vTaskDelay(pdMS_TO_TICKS(AWS_BACKOFF_BASE_MS));
     }
 }
@@ -307,5 +308,5 @@ void aws_iot_demo_start(void)
      * heap -> vApplicationMallocFailedHook during the handshake). */
     if (xTaskCreate(aws_mqtt_task, "aws_mqtt", 8192, NULL,
                     tskIDLE_PRIORITY + 2, NULL) != pdPASS)
-        printf("[AWS] xTaskCreate(aws_mqtt) FAILED\n\r");
+        log_error("[AWS] xTaskCreate(aws_mqtt) FAILED");
 }
