@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(at_project C CXX ASM)
 
-# Per-line log basename: rxi/log.c (component/log_config) prints __FILE__ in its "file:line" tag.
+# Per-line log basename: rxi/log.c (component/rxi_log_config) prints __FILE__ in its "file:line" tag.
 # Rewrite __FILE__ at preprocess time so it shows just the basename (e.g. "main.c:69") instead of
 # the full build path — compile-time, no runtime strchr (GCC 10 here has no __FILE_NAME__). Strip
 # the dirs that hold log_*-using app code: src/ (cross-platform app) + the AmebaD KM4 app. Common

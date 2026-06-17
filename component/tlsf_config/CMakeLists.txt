@@ -30,7 +30,7 @@ target_include_directories(tlsf_config PRIVATE
 # mm.h includes bflb_l1c.h; mm.c/mm_debug.c/tlsf_allocator.c also log. On Bouffalo the logging
 # comes from bflb_lhal/bflb_log's <log.h> (MM_USE_BFLB_LOG); elsewhere the port_generic shims supply
 # portable equivalents (bflb_l1c/bflb_irq/IS_ENABLED). The logging shim is NOT a "log.h" — that name
-# shadows other components' log.h (e.g. rxi log_config's) on the shared include path — it's the
+# shadows other components' log.h (e.g. rxi_log_config's) on the shared include path — it's the
 # uniquely-named mm_log_stub.h, selected by the consumers when MM_USE_BFLB_LOG is unset.
 if(BOUFFALO_CHIP)
     target_link_libraries(tlsf_config PUBLIC bflb_lhal bflb_log)

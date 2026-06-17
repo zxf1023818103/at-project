@@ -110,7 +110,7 @@ if(AMEBAD_CHIP MATCHES "^amebad-km[04]$")
     add_subdirectory(freertos-cli_config)       # FreeRTOS-Plus-CLI V202212.00 static lib (config via FreeRTOSConfig.h)
     add_subdirectory(nimble_config)             # INTERFACE: NimBLE syscfg + upstream include surface
     add_subdirectory(syscall_config)            # newlib retarget OBJECT lib (VFS + malloc + byte-order); PRIVATE-links freertos-plus-tcp_config + at_console
-    add_subdirectory(log_config)                # rxi log.c (leveled logger, default fprintf->stderr) + FreeRTOS-mutex lock via log_set_lock (log_lock_init)
+    add_subdirectory(rxi_log_config)            # rxi log.c (leveled logger, default fprintf->stderr) + FreeRTOS-mutex lock via log_set_lock (log_lock_init)
     # Upstream Mbed TLS v3.6.4 software crypto (the AmebaD config/threading/entropy port lives
     # in component/amebad/mbedtls_port, added with the amebad subtree below; it attaches the config
     # onto these targets at generate). Modern backend for corePKCS11 (and the planned

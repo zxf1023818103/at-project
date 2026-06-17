@@ -5,7 +5,7 @@
  * error/diagnostic paths (callers check return values), so keep it printf/format-free. Bouffalo
  * uses bflb_log's real <log.h> instead — see the MM_USE_BFLB_LOG guard in mm_debug.c /
  * tlsf_allocator.c. Named uniquely (NOT "log.h") so it can't shadow other components' log.h
- * (e.g. rxi log_config's) on the shared include path.
+ * (e.g. rxi_log_config's) on the shared include path.
  */
 #define LOG_E(...) ((void)0)
 #define LOG_W(...) ((void)0)

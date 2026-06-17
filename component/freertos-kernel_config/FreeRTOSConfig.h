@@ -39,7 +39,7 @@ extern uint32_t SystemCoreClock;
 #define configUSE_RECURSIVE_MUTEXES             1
 #define configUSE_COUNTING_SEMAPHORES           1
 #define configSUPPORT_STATIC_ALLOCATION         1   /* always on, all platforms: static FreeRTOS objects
-                                                     * (e.g. log_config's lock mutex). Requires the app to
+                                                     * (e.g. rxi_log_config's lock mutex). Requires the app to
                                                      * supply vApplicationGetIdle/TimerTaskMemory — AmebaD's
                                                      * are in component/amebad/freertos_port. */
 #define configUSE_TIMERS                        1
