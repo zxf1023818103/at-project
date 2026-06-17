@@ -13,6 +13,7 @@
  */
 
 #include <stddef.h>
+#include <time.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,6 +37,12 @@ int fd_open_socket(void *socket);
  * resolves). */
 void env_init(void);
 int  env_save(const char *name);
+
+/* RAM Unix-time base (time_base.c) behind newlib's _gettimeofday/time()/clock_gettime
+ * (CLOCK_REALTIME). Call from a time source (SNTP setTime / RTC) to set the wall clock;
+ * `usec` is the sub-second part (0 if unknown). Before the first call, time() returns
+ * 1970 + uptime. The base advances on the FreeRTOS tick (SysTick, 1 ms). */
+void amebad_set_unix_time(time_t secs, unsigned int usec);
 
 #ifdef __cplusplus
 }

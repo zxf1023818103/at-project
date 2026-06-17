@@ -34,6 +34,14 @@ const at_console_backend_t *at_console_default_backend(void);
 int at_console_read(char *buf, int len);                /* fd 0: canonical line  */
 int at_console_write(int fd, const char *buf, int len); /* fd 0/1->putc, 2->err  */
 
+/* Per-line log timestamp prefix. at_console_write() calls this at the start of
+ * every output line and emits the returned bytes before the line's content, so
+ * all printf-routed logs are timestamped with no call-site changes. Writes the
+ * prefix (e.g. "[12:34:56.789] ") into buf and returns its length (0 = none).
+ * A weak no-op lives in console.c; the platform's time module overrides it with
+ * a strong definition that has the clock (e.g. syscall_config/time_base.c). */
+int at_console_timestamp(char *buf, int cap);
+
 #ifdef __cplusplus
 }
 #endif

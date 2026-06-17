@@ -650,19 +650,16 @@ int  _getpid(void)                   { return 1; }
 void _exit(int code)                 { (void)code; for (;;) { } }
 
 /* ---------------------------------------------------------------------------
- * Remaining newlib syscall surface — inert. No current image references these;
- * un-#if-0 + implement when a consumer pulls one (e.g. SNTP would make
- * _gettimeofday return real time instead of -1).
+ * Remaining newlib syscall surface — genuinely inert (nothing references them).
+ * The time syscalls (_gettimeofday/_times, plus settimeofday/clock_gettime) now
+ * live in time_base.c over a real UTC base; environ is provided by env.c. Implement
+ * the rest only if a consumer ever pulls one.
  * ------------------------------------------------------------------------- */
 #if 0
 int    _link(const char *a, const char *b)          { (void)a; (void)b; return -1; }
-int    _times(void *buf)                            { (void)buf; return -1; }
-int    _gettimeofday(void *tv, void *tz)            { (void)tv; (void)tz; return -1; }
 int    _fork(void)                                  { return -1; }
 int    _execve(const char *p, char *const a[], char *const e[]) { (void)p; (void)a; (void)e; return -1; }
 int    _wait(int *status)                           { (void)status; return -1; }
-char  *__env[1] = { 0 };
-char **environ  = __env;
 #endif
 
 /* ===== 3. malloc family over the FreeRTOS heap =========================== *

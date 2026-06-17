@@ -11,12 +11,22 @@
  *   -> FreeRTOS+TCP: fill interface + endpoint(DHCP) -> FreeRTOS_IPInit_Multi
  *   -> DHCP -> vApplicationIPNetworkEventHook(eNetworkUp) prints the IP.
  */
+#include <stdio.h>                /* printf (timestamped [KM4] logs, replacing DiagPrintf) */
+#include <stdlib.h>               /* setenv (default TZ) */
+#include <time.h>                 /* tzset */
 #include "ameba_soc.h"
 #include "FreeRTOS.h"
 #include "task.h"
 #include "wifi_conf.h"            /* wifi_on / wifi_connect / wifi_get_mac_address */
 #include "FreeRTOS_IP.h"
 #include "FreeRTOS_Routing.h"     /* NetworkInterface_t / NetworkEndPoint_t / FillEndPoint */
+
+/* ameba_soc.h -> platform_stdlib_rtl8721d.h does `#define printf _rtl_printf` (unless STD_PRINTF),
+ * which writes straight to the LOGUART and bypasses the newlib console — so it gets no per-line
+ * timestamp. Undo it so our printf logs flow through _write -> at_console_write and pick up the
+ * [HH:MM:SS] prefix (like the [SNTP]/[TIME]/[RTC] logs do). The explicit DiagPrintf calls below
+ * (pre-scheduler banner, AWS mount) are unaffected; snprintf/sprintf keep the _rtl_ versions. */
+#undef printf
 
 /* console: FreeRTOS-Plus-CLI over the LOGUART (component/amebad/monitor) */
 extern void amebad_monitor_start(void);
@@ -54,14 +64,14 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
         uint32_t ulIP = 0, ulMask = 0, ulGW = 0, ulDNS = 0;
         FreeRTOS_GetAddressConfiguration( &ulIP, &ulMask, &ulGW, &ulDNS );
         /* IPs are in network byte order; byte 0 = first octet. */
-        DiagPrintf( "[KM4] ==== network UP ====\n\r" );
-        DiagPrintf( "[KM4] DHCP IP   %d.%d.%d.%d\n\r",
+        printf( "[KM4] ==== network UP ====\n\r" );
+        printf( "[KM4] DHCP IP   %d.%d.%d.%d\n\r",
                     (int)( ulIP & 0xff ), (int)( ( ulIP >> 8 ) & 0xff ),
                     (int)( ( ulIP >> 16 ) & 0xff ), (int)( ( ulIP >> 24 ) & 0xff ) );
-        DiagPrintf( "[KM4] netmask   %d.%d.%d.%d\n\r",
+        printf( "[KM4] netmask   %d.%d.%d.%d\n\r",
                     (int)( ulMask & 0xff ), (int)( ( ulMask >> 8 ) & 0xff ),
                     (int)( ( ulMask >> 16 ) & 0xff ), (int)( ( ulMask >> 24 ) & 0xff ) );
-        DiagPrintf( "[KM4] gateway   %d.%d.%d.%d\n\r",
+        printf( "[KM4] gateway   %d.%d.%d.%d\n\r",
                     (int)( ulGW & 0xff ), (int)( ( ulGW >> 8 ) & 0xff ),
                     (int)( ( ulGW >> 16 ) & 0xff ), (int)( ( ulGW >> 24 ) & 0xff ) );
 #ifdef AT_PROJECT_QUIC
@@ -76,6 +86,11 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
          * private key from TF-M Protected Storage (provisioned via `set ...`). */
         extern void aws_iot_demo_start( void );
         aws_iot_demo_start();
+#elif defined(AT_PROJECT_SNTP)
+        /* coreSNTP UTC time-sync -> newlib _gettimeofday (time_base.c) -> the [TIME]
+         * date/time self-test runs once the first sync lands. */
+        extern void sntp_sync_start( void );
+        sntp_sync_start();
 #elif !defined(AT_PROJECT_PKCS11) && !defined(AT_PROJECT_CRYPTOBENCH) && !defined(AT_PROJECT_MINIMAL)
         /* Default = TCP TX (device -> WSL `iperf -s`); also exercises the
          * rewritten FreeRTOS+TCP RX bridge via the ACK path. The UDP TX/RX and
@@ -89,7 +104,7 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
     }
     else
     {
-        DiagPrintf( "[KM4] ==== network DOWN ====\n\r" );
+        printf( "[KM4] ==== network DOWN ====\n\r" );
     }
 }
 
@@ -135,20 +150,20 @@ static void dump_surrounding_country_codes( void )
 
     sb.buf_len = 25 * 50;                            /* 25 B/record * up to 50 APs */
     sb.buf = (char *) pvPortMalloc( sb.buf_len );
-    if( !sb.buf ) { DiagPrintf( "[CC] malloc %d failed\n\r", sb.buf_len ); return; }
+    if( !sb.buf ) { printf( "[CC] malloc %d failed\n\r", sb.buf_len ); return; }
     memset( sb.buf, 0, sb.buf_len );
 
     rltk_wlan_enable_scan_with_extended_countryinfo( 1 );
     if( wifi_scan( RTW_SCAN_TYPE_ACTIVE, RTW_BSS_TYPE_ANY, &sb ) < 0 )
     {
-        DiagPrintf( "[CC] scan FAILED\n\r" );
+        printf( "[CC] scan FAILED\n\r" );
         rltk_wlan_enable_scan_with_extended_countryinfo( 0 );
         vPortFree( sb.buf );
         return;
     }
     rltk_wlan_enable_scan_with_extended_countryinfo( 0 );
 
-    DiagPrintf( "\n\r[CC] ==== surrounding-AP country codes (beacon Country IE) ====\n\r" );
+    printf( "\n\r[CC] ==== surrounding-AP country codes (beacon Country IE) ====\n\r" );
     while( plen < sb.buf_len )
     {
         int len = ( unsigned char ) sb.buf[ plen ];
@@ -161,15 +176,15 @@ static void dump_surrounding_country_codes( void )
         ssid_len = len - HDR - CC;
         aps++;
         if( c0 && c1 ) with_cc++;
-        DiagPrintf( "[CC] %02x:%02x:%02x:%02x:%02x:%02x ch=%d cc=%c%c ssid=",
+        printf( "[CC] %02x:%02x:%02x:%02x:%02x:%02x ch=%d cc=%c%c ssid=",
                     r[1], r[2], r[3], r[4], r[5], r[6], ch,
                     ( c0 >= 0x20 && c0 < 0x7f ) ? c0 : '-',
                     ( c1 >= 0x20 && c1 < 0x7f ) ? c1 : '-' );
-        for( i = 0; i < ssid_len; i++ ) DiagPrintf( "%c", sb.buf[ plen + HDR + CC + i ] );
-        DiagPrintf( "\n\r" );
+        for( i = 0; i < ssid_len; i++ ) printf( "%c", sb.buf[ plen + HDR + CC + i ] );
+        printf( "\n\r" );
         plen += len;
     }
-    DiagPrintf( "[CC] ==== %d APs scanned, %d advertised a country code ====\n\r",
+    printf( "[CC] ==== %d APs scanned, %d advertised a country code ====\n\r",
                 aps, with_cc );
     vPortFree( sb.buf );
 }
@@ -196,7 +211,7 @@ static int scan_print_handler( char *buf, int buflen, char *target_ssid, void *u
     found_ap_t *fa = (found_ap_t *) user_data;
     int plen = 0;
 
-    DiagPrintf( "[SCAN] ==== APs (probing SSID '%s') ====\n\r", target_ssid );
+    printf( "[SCAN] ==== APs (probing SSID '%s') ====\n\r", target_ssid );
     while( plen < buflen )
     {
         unsigned char *r = (unsigned char *)( buf + plen );
@@ -212,7 +227,7 @@ static int scan_print_handler( char *buf, int buflen, char *target_ssid, void *u
         n = ( ssid_len > 32 ) ? 32 : ( ssid_len < 0 ? 0 : ssid_len );
         memcpy( ssidbuf, buf + plen + 14, n );
         ssidbuf[ n ] = 0;
-        DiagPrintf( "[SCAN] %02x:%02x:%02x:%02x:%02x:%02x ch=%d rssi=%d enc=%d ssid=%s\n\r",
+        printf( "[SCAN] %02x:%02x:%02x:%02x:%02x:%02x ch=%d rssi=%d enc=%d ssid=%s\n\r",
                     r[1], r[2], r[3], r[4], r[5], r[6], ch, rssi, enc, ssidbuf );
         if( ssid_len == (int) strlen( target_ssid )
             && memcmp( buf + plen + 14, target_ssid, ssid_len ) == 0 )
@@ -246,7 +261,7 @@ static int scan_print_handler( char *buf, int buflen, char *target_ssid, void *u
         }
         plen += len;
     }
-    DiagPrintf( "[SCAN] ==== end ====\n\r" );
+    printf( "[SCAN] ==== end ====\n\r" );
     return 0;
 }
 
@@ -259,6 +274,17 @@ static void wifi_bringup_thread( void *param )
 
     /* Throughput: run KM4 at max clock (default may be lower for power). */
     SystemSetCpuClk( CLK_KM4_200M );
+
+#ifdef AT_PROJECT_SNTP
+    /* Seed the wall clock from the hardware RTC: if a prior SNTP sync wrote it and
+     * the RTC survived (warm reset / deep sleep), time() reads real local time from
+     * here on, so the [KM4] WiFi logs below are already timestamped with wall-clock
+     * before SNTP re-syncs. A cold boot leaves the RTC at ~1970 -> seed is skipped. */
+    {
+        extern int rtc_time_seed( void );
+        rtc_time_seed();
+    }
+#endif
 
     /* Set up the KM4 side of the KM4<->KM0 IPC, exactly as the SDK's main() does
      * before WiFi. The WiFi driver self-registers its own data IPC channel (so
@@ -322,10 +348,10 @@ static void wifi_bringup_thread( void *param )
         rtw_efuse_boot_write();
     }
 
-    DiagPrintf( "[KM4] wifi_on(RTW_MODE_STA)...\n\r" );
+    printf( "[KM4] wifi_on(RTW_MODE_STA)...\n\r" );
     if( wifi_on( RTW_MODE_STA ) < 0 )
     {
-        DiagPrintf( "[KM4] wifi_on FAILED\n\r" );
+        printf( "[KM4] wifi_on FAILED\n\r" );
         vTaskDelete( NULL );
         return;
     }
@@ -382,7 +408,7 @@ static void wifi_bringup_thread( void *param )
     {
         mac[ i ] = prvHexByte( &mac_str[ i * 3 ] );
     }
-    DiagPrintf( "[KM4] MAC %s -> %02x:%02x:%02x:%02x:%02x:%02x\n\r",
+    printf( "[KM4] MAC %s -> %02x:%02x:%02x:%02x:%02x:%02x\n\r",
                 mac_str, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5] );
 
     /* Register netif + MAC with the driver (so RX delivers and LwIP_GetMAC
@@ -392,7 +418,7 @@ static void wifi_bringup_thread( void *param )
     FreeRTOS_FillEndPoint( &xInterface, &xEndPoint, ucIPAddress, ucNetMask,
                            ucGatewayAddress, ucDNSServer, mac );
     xEndPoint.bits.bWantDHCP = pdTRUE;
-    DiagPrintf( "[KM4] FreeRTOS_IPInit_Multi...\n\r" );
+    printf( "[KM4] FreeRTOS_IPInit_Multi...\n\r" );
     FreeRTOS_IPInit_Multi();
     amebad_freertos_tcp_set_ready();
 
@@ -437,7 +463,7 @@ static void wifi_bringup_thread( void *param )
             int scan_try;
             for( scan_try = 0; scan_try < 6; scan_try++ )
             {
-                DiagPrintf( "[KM4] scan for '%s' (prefer 5 GHz, try %d)...\n\r",
+                printf( "[KM4] scan for '%s' (prefer 5 GHz, try %d)...\n\r",
                             kSsid, scan_try + 1 );
                 wifi_scan_networks_with_ssid( scan_print_handler, &fa, 1000,
                                               (char *) kSsid, strlen( kSsid ) );
@@ -447,11 +473,11 @@ static void wifi_bringup_thread( void *param )
         }
         if( !fa.found )
         {
-            DiagPrintf( "[KM4] '%s' not found in scan - abort\n\r", kSsid );
+            printf( "[KM4] '%s' not found in scan - abort\n\r", kSsid );
             vTaskDelete( NULL );
             return;
         }
-        DiagPrintf( "[KM4] found '%s' ch=%d rssi=%d sec=0x%x; pscan + connect...\n\r",
+        printf( "[KM4] found '%s' ch=%d rssi=%d sec=0x%x; pscan + connect...\n\r",
                     kSsid, fa.channel, fa.rssi, (unsigned) fa.security );
         ch = fa.channel;
         /* This AP (MikroTik) intermittently answers the first assoc with status
@@ -471,7 +497,7 @@ static void wifi_bringup_thread( void *param )
             for( attempt = 1; attempt <= 8; attempt++ )
             {
                 u8 c = ch, ps = PSCAN_ENABLE;
-                DiagPrintf( "[KM4] tx_deauth(broadcast) before attempt %d\n\r", attempt );
+                printf( "[KM4] tx_deauth(broadcast) before attempt %d\n\r", attempt );
                 rltk_wlan_tx_deauth( 1, 0 );
                 vTaskDelay( pdMS_TO_TICKS( 80 ) );
                 wifi_set_pscan_chan( &c, &ps, 1 );
@@ -481,12 +507,12 @@ static void wifi_bringup_thread( void *param )
                     ok = 1;
                     break;
                 }
-                DiagPrintf( "[KM4] wifi_connect attempt %d FAILED, retrying...\n\r", attempt );
+                printf( "[KM4] wifi_connect attempt %d FAILED, retrying...\n\r", attempt );
                 vTaskDelay( pdMS_TO_TICKS( 800 ) );
             }
             if( !ok )
             {
-                DiagPrintf( "[KM4] wifi_connect FAILED (gave up)\n\r" );
+                printf( "[KM4] wifi_connect FAILED (gave up)\n\r" );
                 vTaskDelete( NULL );
                 return;
             }
@@ -498,7 +524,7 @@ static void wifi_bringup_thread( void *param )
     {
         int rssi = 0;
         wifi_get_rssi( &rssi );
-        DiagPrintf( "[KM4] associated; power-save off; RSSI %d dBm; waiting for DHCP...\n\r", rssi );
+        printf( "[KM4] associated; power-save off; RSSI %d dBm; waiting for DHCP...\n\r", rssi );
     }
 
     /* Upstream Mbed TLS v3.6.4 microbenchmark ([MCB] scores) - the apples-to-apples
@@ -592,6 +618,16 @@ int main(void)
     }
 #endif
 #endif
+
+    /* Default the wall clock + log timestamps to China Standard Time (UTC+8) so printf logs read
+     * local time. Only set it when TZ is unset/empty (a persisted/user TZ is kept); tzset() then
+     * loads it into newlib's _timezone (read by at_console_timestamp). */
+    {
+        const char *tz = getenv("TZ");
+        if ((tz == NULL) || (tz[0] == '\0'))
+            setenv("TZ", "CST-8", 1);
+    }
+    tzset();
 
     /* WiFi+DHCP bring-up runs as its own task (wifi_connect blocks). */
     if (xTaskCreate(wifi_bringup_thread, "wifi_bringup", 4096, NULL,

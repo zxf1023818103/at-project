@@ -39,6 +39,7 @@ TFM        ?= OFF          # ON -> build + boot in-tree TF-M SPE (app_km4 become
 HWGCM      ?= $(TFM)       # default = TFM: route mbedTLS AES-GCM + ChaCha20-Poly1305 to the RTL8721D IPSEC HW engine (needs TFM=ON's SAU, so on iff TFM is on)
 STORAGE    ?= OFF          # ON -> TF-M PSA secure storage (ITS + PS) + NS storage self-test; implies TFM=ON
 AWS        ?= OFF          # ON -> AWS IoT Core MQTT/TLS demo (coreMQTT + mbedTLS); cert/endpoint->LFS, private key->TF-M PS
+SNTP       ?= OFF          # ON -> coreSNTP UTC sync -> newlib _gettimeofday (time_base.c) -> [TIME] date/time self-test
 ifeq ($(AWS),ON)
 # AWS=ON: the MQTT client private key lives in TF-M secure storage (implies STORAGE/TFM).
 # NOTE: no trailing comment on the assignment — a trailing-space value breaks the STORAGE ifeq below.
@@ -85,6 +86,7 @@ configure:
 	  -DAMEBAD_ENABLE_QUIC=$(QUIC) -DAMEBAD_ENABLE_PKCS11=$(PKCS11) \
 	  -DAMEBAD_ENABLE_CRYPTOBENCH=$(BENCH) -DAMEBAD_ENABLE_MINIMAL=$(MINIMAL) \
 	  -DAMEBAD_ENABLE_AWS_IOT=$(AWS) \
+	  -DAMEBAD_ENABLE_SNTP=$(SNTP) \
 	  -DAMEBAD_MBEDTLS_HW_GCM=$(HWGCM) \
 	  -DAMEBAD_TFM_BOOT=$(TFM) \
 	  -DAMEBAD_TFM_STORAGE=$(STORAGE) \

@@ -106,6 +106,7 @@ if(AMEBAD_CHIP MATCHES "^amebad-km[04]$")
     add_subdirectory(coremqtt_config)           # coreMQTT v5.0.2 static lib + core_mqtt_config.h
     add_subdirectory(backoffalgorithm_config)   # backoffAlgorithm v1.4.2 (reconnect backoff-with-jitter) — coreMQTT companion
     add_subdirectory(corehttp_config)           # coreHTTP v3.1.3 static lib + core_http_config.h
+    add_subdirectory(coresntp_config)           # coreSNTP SNTPv4 client static lib + core_sntp_config.h (built only when AMEBAD_ENABLE_SNTP)
     add_subdirectory(freertos-cli_config)       # FreeRTOS-Plus-CLI V202212.00 static lib (config via FreeRTOSConfig.h)
     add_subdirectory(nimble_config)             # INTERFACE: NimBLE syscfg + upstream include surface
     add_subdirectory(syscall_config)            # newlib retarget OBJECT lib (VFS + malloc + byte-order); PRIVATE-links freertos-plus-tcp_config + at_console

@@ -104,6 +104,11 @@ endif()
 # so the diag gate below can see it.
 option(AMEBAD_ENABLE_AWS_IOT "Build the AWS IoT Core MQTT/TLS demo (coreMQTT + mbedTLS; key in TF-M PS)" OFF)
 
+# coreSNTP UTC time-sync + newlib date/time self-test (make SNTP=ON): a focused connect-only image
+# that fetches UTC over SNTP, backs newlib's _gettimeofday with it (time_base.c), and runs the
+# [TIME] self-test. Declared here so the diag gate below drops the iperf TUs for it.
+option(AMEBAD_ENABLE_SNTP "Build the coreSNTP UTC sync + newlib date/time self-test" OFF)
+
 # Low-memory network profile for the connect-only images (AWS / MINIMAL): shrink the
 # FreeRTOS-Plus-TCP per-socket + descriptor buffers (FreeRTOSIPConfig.h) and the WiFi skb pool
 # (rtw_opt_skbuf.c) — they are sized for the iperf/QUIC throughput tests and waste ~100 KB of the
@@ -118,7 +123,7 @@ if(AMEBAD_ENABLE_AWS_IOT OR AMEBAD_ENABLE_MINIMAL)
 endif()
 
 if(NOT AMEBAD_ENABLE_QUIC AND NOT AMEBAD_ENABLE_PKCS11 AND NOT AMEBAD_ENABLE_CRYPTOBENCH
-   AND NOT AMEBAD_ENABLE_MINIMAL AND NOT AMEBAD_ENABLE_AWS_IOT)
+   AND NOT AMEBAD_ENABLE_MINIMAL AND NOT AMEBAD_ENABLE_AWS_IOT AND NOT AMEBAD_ENABLE_SNTP)
     target_sources(target_img2_km4 PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/iperf_client.c"        # iperf2 TCP client (TX throughput to WSL iperf -s)
         "${CMAKE_CURRENT_SOURCE_DIR}/iperf_server.c"        # iperf2 TCP sink (RX throughput from WSL iperf -c)
@@ -288,6 +293,24 @@ if(AMEBAD_ENABLE_AWS_IOT)
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_MINIMAL)
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/tfm_psa_selftest.c"
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_MINIMAL)
+endif()
+
+# coreSNTP UTC time-sync (AMEBAD_ENABLE_SNTP): plain SNTPv4 over UDP/FreeRTOS-Plus-TCP feeding
+# newlib's wall clock (time_base.c via amebad_set_unix_time), then the newlib date/time self-test.
+# coreSNTP is a leaf — it reaches the network only through the UdpTransportInterface_t callbacks —
+# so it links as an ordinary lib (no --start-group). No TLS / TF-M needed (auth-less SNTP).
+if(AMEBAD_ENABLE_SNTP)
+    target_link_libraries(target_img2_km4 PRIVATE coresntp_config)
+    target_sources(target_img2_km4 PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/sntp_time.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/time_selftest.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/rtc_time.c")   # mirror SNTP UTC into the HW RTC + seed at boot (rtc_api in amebad_mbed)
+    # SNTP is a connect-and-run image: strip the boot diagnostics like AWS/MINIMAL (iperf / LFS
+    # self-test / ROM-mbedTLS KAT) — their TUs are dropped by the diag gate above, so main.c must
+    # not reference them. Reuse AT_PROJECT_MINIMAL for that strip; AT_PROJECT_SNTP drives the
+    # network-up arm that starts the SNTP client.
+    set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
+                 APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_SNTP AT_PROJECT_MINIMAL)
 endif()
 
 # POSIX-fd VFS self-test (vfs_selftest, gated by the option in component/amebad/CMakeLists.txt).

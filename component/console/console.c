@@ -19,6 +19,18 @@ const at_console_backend_t *at_console_default_backend(void)
 
 static const at_console_backend_t *s_be;
 
+/* Weak no-op: platforms without a clock get untimestamped logs (unchanged). The
+ * time module (e.g. syscall_config/time_base.c) provides a strong override. */
+#if defined(__GNUC__)
+__attribute__((weak))
+#endif
+int at_console_timestamp(char *buf, int cap)
+{
+    (void) buf;
+    (void) cap;
+    return 0;
+}
+
 void at_console_set_backend(const at_console_backend_t *be)
 {
     s_be = be;
@@ -35,18 +47,38 @@ static const at_console_backend_t *cur(void)
 
 int at_console_write(int fd, const char *buf, int len)
 {
+    /* Next byte begins a fresh line -> prepend the timestamp. Static so it
+     * survives the fragmentation of one logical line across many _write calls
+     * (newlib often emits a printf char-by-char). */
+    static int at_line_start = 1;
     const at_console_backend_t *be = cur();
+    void (*put)(char);
     int i;
 
-    if (be == 0 || be->putc == 0) {
+    if (be == 0) {
         return len;                 /* no console wired: sink the bytes */
+    }
+    /* stderr -> dedicated device when provided, else fall back to putc. */
+    put = (fd == 2 && be->errputc != 0) ? be->errputc : be->putc;
+    if (put == 0) {
+        return len;
     }
     for (i = 0; i < len; i++) {
         char c = buf[i];
-        if (fd == 2 && be->errputc != 0) {
-            be->errputc(c);         /* stderr -> dedicated device */
-        } else {
-            be->putc(c);            /* stdout/stdin echo -> main device */
+        /* Stamp at the first real character of a line (not on a leading CR/LF,
+         * so blank lines stay blank). */
+        if (at_line_start && c != '\n' && c != '\r') {
+            char ts[32];
+            int n = at_console_timestamp(ts, (int) sizeof ts);
+            int k;
+            for (k = 0; k < n && k < (int) sizeof ts; k++) {
+                put(ts[k]);
+            }
+            at_line_start = 0;
+        }
+        put(c);
+        if (c == '\n') {
+            at_line_start = 1;
         }
     }
     return len;
