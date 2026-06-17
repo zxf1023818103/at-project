@@ -118,6 +118,13 @@ void time_selftest_run( void )
 
     printf( "[TIME] ==== newlib date/time self-test ====\n\r" );
 
+    /* 0. stderr path: fprintf(stderr) must route fd 2 -> at_console_write's errputc -> LOGUART,
+     *    format correctly, and pick up the per-line timestamp like stdout. (fprintf is NOT caught
+     *    by platform_stdlib's printf->_rtl_printf macro, so it uses the real newlib stdio path.) */
+    fprintf( stderr, "[STDERR] fprintf(stderr) ok: fileno=%d int=%d str=%s hex=0x%x\n\r",
+             fileno( stderr ), 42, "hi", 0xBEEF );
+    fflush( stderr );
+
     /* 1. time() / gettimeofday() -> _gettimeofday (time_base.c) */
     t = time( NULL );
     gettimeofday( &tv, NULL );
