@@ -21,6 +21,7 @@
 
 #include "rtc_api.h"      /* rtc_init / rtc_isenabled / rtc_read / rtc_write (mbed HAL) */
 #include "syscalls.h"     /* amebad_set_unix_time (time_base.c) */
+#include "at_log.h"          /* rxi log.c: log_info / log_error */
 
 /* Declared in rtc_api.c but not in rtc_api.h: persist tm_year + valid bit to RRAM. */
 extern void rtc_backup_timeinfo( void );
@@ -50,10 +51,10 @@ int rtc_time_seed( void )
     if( t >= RTC_TIME_VALID_MIN )
     {
         amebad_set_unix_time( t, 0 );
-        printf( "[RTC] seeded wall clock from RTC: unix=%lld\n\r", ( long long ) t );
+        log_info( "[RTC] seeded wall clock from RTC: unix=%lld", ( long long ) t );
         return 1;
     }
 
-    printf( "[RTC] no valid time in RTC (unix=%lld); waiting for SNTP\n\r", ( long long ) t );
+    log_info( "[RTC] no valid time in RTC (unix=%lld); waiting for SNTP", ( long long ) t );
     return 0;
 }

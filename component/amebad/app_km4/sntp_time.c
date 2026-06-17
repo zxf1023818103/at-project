@@ -27,6 +27,7 @@
 #include "core_sntp_client.h"
 #include "core_sntp_serializer.h"
 #include "syscalls.h"         /* amebad_set_unix_time */
+#include "at_log.h"              /* rxi log.c: log_info / log_error */
 
 /* coreSNTP's opaque transport context: our bound UDP socket. */
 struct NetworkContext
@@ -82,7 +83,7 @@ static void sntp_set_time( const SntpServerInfo_t * srv,
     ( void ) leap;
     if( Sntp_ConvertToUnixTime( st, &secs, &usec ) != SntpSuccess )
     {
-        printf( "[SNTP] convert-to-unix failed\n\r" );
+        log_error( "[SNTP] convert-to-unix failed" );
         return;
     }
 
@@ -95,7 +96,7 @@ static void sntp_set_time( const SntpServerInfo_t * srv,
         rtc_time_store( ( time_t ) secs );
     }
 
-    printf( "[SNTP] sync ok: unix=%lu off=%lds via %s\n\r",
+    log_info( "[SNTP] sync ok: unix=%lu off=%lds via %s",
             ( unsigned long ) secs, ( long ) ( offMs / 1000 ), srv->pServerName );
 
     if( !s_first_sync_done )
@@ -170,14 +171,14 @@ static void sntp_task( void * arg )
         s_env_server[ 0 ].port = SNTP_DEFAULT_SERVER_PORT;
         servers = s_env_server;
         num_servers = 1;
-        printf( "[SNTP] using NTP_SERVER=%s\n\r", s_env_server_name );
+        log_info( "[SNTP] using NTP_SERVER=%s", s_env_server_name );
     }
 
     /* One persistent, ephemeral-bound UDP socket for the task lifetime. */
     s_netctx.sock = FreeRTOS_socket( FREERTOS_AF_INET, FREERTOS_SOCK_DGRAM, FREERTOS_IPPROTO_UDP );
     if( s_netctx.sock == FREERTOS_INVALID_SOCKET )
     {
-        printf( "[SNTP] socket FAILED\n\r" );
+        log_error( "[SNTP] socket FAILED" );
         vTaskDelete( NULL );
         return;
     }
@@ -196,13 +197,13 @@ static void sntp_task( void * arg )
                     sntp_resolve_dns, sntp_get_time, sntp_set_time, &udp, NULL );
     if( st != SntpSuccess )
     {
-        printf( "[SNTP] Sntp_Init failed (%d)\n\r", ( int ) st );
+        log_error( "[SNTP] Sntp_Init failed (%d)", ( int ) st );
         FreeRTOS_closesocket( s_netctx.sock );
         vTaskDelete( NULL );
         return;
     }
 
-    printf( "[SNTP] client up; %u server(s)\n\r", ( unsigned ) num_servers );
+    log_info( "[SNTP] client up; %u server(s)", ( unsigned ) num_servers );
 
     for( ; ; )
     {
@@ -218,7 +219,7 @@ static void sntp_task( void * arg )
         }
         else
         {
-            printf( "[SNTP] round failed (%d); retry in %us\n\r", ( int ) st, SNTP_RETRY_MS / 1000U );
+            log_error( "[SNTP] round failed (%d); retry in %us", ( int ) st, SNTP_RETRY_MS / 1000U );
             vTaskDelay( pdMS_TO_TICKS( SNTP_RETRY_MS ) );
         }
     }
@@ -237,15 +238,15 @@ static void sntp_selftest_task( void * arg )
 
 void sntp_sync_start( void )
 {
-    /* Create the self-test waiter first so its handle is set before any sync notify. */
-    if( xTaskCreate( sntp_selftest_task, "time_test", 2048, NULL,
-                     tskIDLE_PRIORITY + 1, &s_selftest_task ) != pdPASS )
-    {
-        printf( "[SNTP] xTaskCreate(time_test) FAILED\n\r" );
-    }
+    /* The [TIME]/[DST] newlib date-time self-test demo (time_selftest_run via sntp_selftest_task)
+     * is disabled: it repeatedly switches TZ (CST/PST/UTC/...), which makes the per-line log
+     * timestamp jump around and clutters the operational log. Re-enable by restoring the
+     * xTaskCreate(sntp_selftest_task, ...) call (the notify in sntp_set_time is gated on
+     * s_selftest_task, so it stays a no-op while this is off). */
+    ( void ) sntp_selftest_task;
     if( xTaskCreate( sntp_task, "sntp", 4096, NULL,
                      tskIDLE_PRIORITY + 2, NULL ) != pdPASS )
     {
-        printf( "[SNTP] xTaskCreate(sntp) FAILED\n\r" );
+        log_error( "[SNTP] xTaskCreate(sntp) FAILED" );
     }
 }

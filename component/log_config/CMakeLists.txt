@@ -14,10 +14,12 @@ add_library(rxi_log STATIC EXCLUDE_FROM_ALL
     "${_log}/log.c"                          # upstream logger (default fprintf->stderr output)
     "${CMAKE_CURRENT_SOURCE_DIR}/log_lock.c" # FreeRTOS-mutex lock installed via log_set_lock()
 )
-# PUBLIC (SYSTEM): log.h (the log_* macros / log_set_lock) + this dir for log_lock.h.
-target_include_directories(rxi_log SYSTEM PUBLIC
-    "${_log}"
-    "${CMAKE_CURRENT_SOURCE_DIR}"
+# PUBLIC (SYSTEM): only this dir — at_log.h (the consumer entry point) + log_lock.h. log/src is
+# PRIVATE on purpose: its header is the generic "log.h", which collides with other components'
+# log.h (tlsf_config/port_generic/log.h, ...). Consumers include "at_log.h", not "log.h".
+target_include_directories(rxi_log SYSTEM
+    PUBLIC  "${CMAKE_CURRENT_SOURCE_DIR}"
+    PRIVATE "${_log}"
 )
 target_link_libraries(rxi_log PUBLIC freertos_config)
 target_compile_options(rxi_log PRIVATE -w)   # vendor source: silence warnings under -Werror

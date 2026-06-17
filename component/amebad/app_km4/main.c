@@ -20,6 +20,8 @@
 #include "wifi_conf.h"            /* wifi_on / wifi_connect / wifi_get_mac_address */
 #include "FreeRTOS_IP.h"
 #include "FreeRTOS_Routing.h"     /* NetworkInterface_t / NetworkEndPoint_t / FillEndPoint */
+#include "at_log.h"                  /* rxi log.c: log_info / log_error (replaces printf / DiagPrintf) */
+#include "log_lock.h"             /* log_lock_init: FreeRTOS-mutex thread-safety for the logger */
 
 /* ameba_soc.h -> platform_stdlib_rtl8721d.h does `#define printf _rtl_printf` (unless STD_PRINTF),
  * which writes straight to the LOGUART and bypasses the newlib console — so it gets no per-line
@@ -64,14 +66,14 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
         uint32_t ulIP = 0, ulMask = 0, ulGW = 0, ulDNS = 0;
         FreeRTOS_GetAddressConfiguration( &ulIP, &ulMask, &ulGW, &ulDNS );
         /* IPs are in network byte order; byte 0 = first octet. */
-        printf( "[KM4] ==== network UP ====\n\r" );
-        printf( "[KM4] DHCP IP   %d.%d.%d.%d\n\r",
+        log_info( "[KM4] ==== network UP ====" );
+        log_info( "[KM4] DHCP IP   %d.%d.%d.%d",
                     (int)( ulIP & 0xff ), (int)( ( ulIP >> 8 ) & 0xff ),
                     (int)( ( ulIP >> 16 ) & 0xff ), (int)( ( ulIP >> 24 ) & 0xff ) );
-        printf( "[KM4] netmask   %d.%d.%d.%d\n\r",
+        log_info( "[KM4] netmask   %d.%d.%d.%d",
                     (int)( ulMask & 0xff ), (int)( ( ulMask >> 8 ) & 0xff ),
                     (int)( ( ulMask >> 16 ) & 0xff ), (int)( ( ulMask >> 24 ) & 0xff ) );
-        printf( "[KM4] gateway   %d.%d.%d.%d\n\r",
+        log_info( "[KM4] gateway   %d.%d.%d.%d",
                     (int)( ulGW & 0xff ), (int)( ( ulGW >> 8 ) & 0xff ),
                     (int)( ( ulGW >> 16 ) & 0xff ), (int)( ( ulGW >> 24 ) & 0xff ) );
 #ifdef AT_PROJECT_QUIC
@@ -104,7 +106,7 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
     }
     else
     {
-        printf( "[KM4] ==== network DOWN ====\n\r" );
+        log_info( "[KM4] ==== network DOWN ====" );
     }
 }
 
@@ -150,20 +152,20 @@ static void dump_surrounding_country_codes( void )
 
     sb.buf_len = 25 * 50;                            /* 25 B/record * up to 50 APs */
     sb.buf = (char *) pvPortMalloc( sb.buf_len );
-    if( !sb.buf ) { printf( "[CC] malloc %d failed\n\r", sb.buf_len ); return; }
+    if( !sb.buf ) { log_error( "[CC] malloc %d failed", sb.buf_len ); return; }
     memset( sb.buf, 0, sb.buf_len );
 
     rltk_wlan_enable_scan_with_extended_countryinfo( 1 );
     if( wifi_scan( RTW_SCAN_TYPE_ACTIVE, RTW_BSS_TYPE_ANY, &sb ) < 0 )
     {
-        printf( "[CC] scan FAILED\n\r" );
+        log_error( "[CC] scan FAILED" );
         rltk_wlan_enable_scan_with_extended_countryinfo( 0 );
         vPortFree( sb.buf );
         return;
     }
     rltk_wlan_enable_scan_with_extended_countryinfo( 0 );
 
-    printf( "\n\r[CC] ==== surrounding-AP country codes (beacon Country IE) ====\n\r" );
+    log_info( "[CC] ==== surrounding-AP country codes (beacon Country IE) ====" );
     while( plen < sb.buf_len )
     {
         int len = ( unsigned char ) sb.buf[ plen ];
@@ -176,15 +178,15 @@ static void dump_surrounding_country_codes( void )
         ssid_len = len - HDR - CC;
         aps++;
         if( c0 && c1 ) with_cc++;
-        printf( "[CC] %02x:%02x:%02x:%02x:%02x:%02x ch=%d cc=%c%c ssid=",
+        log_info( "[CC] %02x:%02x:%02x:%02x:%02x:%02x ch=%d cc=%c%c ssid=",
                     r[1], r[2], r[3], r[4], r[5], r[6], ch,
                     ( c0 >= 0x20 && c0 < 0x7f ) ? c0 : '-',
                     ( c1 >= 0x20 && c1 < 0x7f ) ? c1 : '-' );
-        for( i = 0; i < ssid_len; i++ ) printf( "%c", sb.buf[ plen + HDR + CC + i ] );
-        printf( "\n\r" );
+        for( i = 0; i < ssid_len; i++ ) log_info( "%c", sb.buf[ plen + HDR + CC + i ] );
+        log_info( "" );
         plen += len;
     }
-    printf( "[CC] ==== %d APs scanned, %d advertised a country code ====\n\r",
+    log_info( "[CC] ==== %d APs scanned, %d advertised a country code ====",
                 aps, with_cc );
     vPortFree( sb.buf );
 }
@@ -211,7 +213,7 @@ static int scan_print_handler( char *buf, int buflen, char *target_ssid, void *u
     found_ap_t *fa = (found_ap_t *) user_data;
     int plen = 0;
 
-    printf( "[SCAN] ==== APs (probing SSID '%s') ====\n\r", target_ssid );
+    log_info( "[SCAN] ==== APs (probing SSID '%s') ====", target_ssid );
     while( plen < buflen )
     {
         unsigned char *r = (unsigned char *)( buf + plen );
@@ -227,7 +229,7 @@ static int scan_print_handler( char *buf, int buflen, char *target_ssid, void *u
         n = ( ssid_len > 32 ) ? 32 : ( ssid_len < 0 ? 0 : ssid_len );
         memcpy( ssidbuf, buf + plen + 14, n );
         ssidbuf[ n ] = 0;
-        printf( "[SCAN] %02x:%02x:%02x:%02x:%02x:%02x ch=%d rssi=%d enc=%d ssid=%s\n\r",
+        log_info( "[SCAN] %02x:%02x:%02x:%02x:%02x:%02x ch=%d rssi=%d enc=%d ssid=%s",
                     r[1], r[2], r[3], r[4], r[5], r[6], ch, rssi, enc, ssidbuf );
         if( ssid_len == (int) strlen( target_ssid )
             && memcmp( buf + plen + 14, target_ssid, ssid_len ) == 0 )
@@ -261,7 +263,7 @@ static int scan_print_handler( char *buf, int buflen, char *target_ssid, void *u
         }
         plen += len;
     }
-    printf( "[SCAN] ==== end ====\n\r" );
+    log_info( "[SCAN] ==== end ====" );
     return 0;
 }
 
@@ -348,10 +350,10 @@ static void wifi_bringup_thread( void *param )
         rtw_efuse_boot_write();
     }
 
-    printf( "[KM4] wifi_on(RTW_MODE_STA)...\n\r" );
+    log_info( "[KM4] wifi_on(RTW_MODE_STA)..." );
     if( wifi_on( RTW_MODE_STA ) < 0 )
     {
-        printf( "[KM4] wifi_on FAILED\n\r" );
+        log_error( "[KM4] wifi_on FAILED" );
         vTaskDelete( NULL );
         return;
     }
@@ -408,7 +410,7 @@ static void wifi_bringup_thread( void *param )
     {
         mac[ i ] = prvHexByte( &mac_str[ i * 3 ] );
     }
-    printf( "[KM4] MAC %s -> %02x:%02x:%02x:%02x:%02x:%02x\n\r",
+    log_info( "[KM4] MAC %s -> %02x:%02x:%02x:%02x:%02x:%02x",
                 mac_str, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5] );
 
     /* Register netif + MAC with the driver (so RX delivers and LwIP_GetMAC
@@ -418,7 +420,7 @@ static void wifi_bringup_thread( void *param )
     FreeRTOS_FillEndPoint( &xInterface, &xEndPoint, ucIPAddress, ucNetMask,
                            ucGatewayAddress, ucDNSServer, mac );
     xEndPoint.bits.bWantDHCP = pdTRUE;
-    printf( "[KM4] FreeRTOS_IPInit_Multi...\n\r" );
+    log_info( "[KM4] FreeRTOS_IPInit_Multi..." );
     FreeRTOS_IPInit_Multi();
     amebad_freertos_tcp_set_ready();
 
@@ -463,7 +465,7 @@ static void wifi_bringup_thread( void *param )
             int scan_try;
             for( scan_try = 0; scan_try < 6; scan_try++ )
             {
-                printf( "[KM4] scan for '%s' (prefer 5 GHz, try %d)...\n\r",
+                log_info( "[KM4] scan for '%s' (prefer 5 GHz, try %d)...",
                             kSsid, scan_try + 1 );
                 wifi_scan_networks_with_ssid( scan_print_handler, &fa, 1000,
                                               (char *) kSsid, strlen( kSsid ) );
@@ -473,11 +475,11 @@ static void wifi_bringup_thread( void *param )
         }
         if( !fa.found )
         {
-            printf( "[KM4] '%s' not found in scan - abort\n\r", kSsid );
+            log_error( "[KM4] '%s' not found in scan - abort", kSsid );
             vTaskDelete( NULL );
             return;
         }
-        printf( "[KM4] found '%s' ch=%d rssi=%d sec=0x%x; pscan + connect...\n\r",
+        log_info( "[KM4] found '%s' ch=%d rssi=%d sec=0x%x; pscan + connect...",
                     kSsid, fa.channel, fa.rssi, (unsigned) fa.security );
         ch = fa.channel;
         /* This AP (MikroTik) intermittently answers the first assoc with status
@@ -497,7 +499,7 @@ static void wifi_bringup_thread( void *param )
             for( attempt = 1; attempt <= 8; attempt++ )
             {
                 u8 c = ch, ps = PSCAN_ENABLE;
-                printf( "[KM4] tx_deauth(broadcast) before attempt %d\n\r", attempt );
+                log_info( "[KM4] tx_deauth(broadcast) before attempt %d", attempt );
                 rltk_wlan_tx_deauth( 1, 0 );
                 vTaskDelay( pdMS_TO_TICKS( 80 ) );
                 wifi_set_pscan_chan( &c, &ps, 1 );
@@ -507,12 +509,12 @@ static void wifi_bringup_thread( void *param )
                     ok = 1;
                     break;
                 }
-                printf( "[KM4] wifi_connect attempt %d FAILED, retrying...\n\r", attempt );
+                log_error( "[KM4] wifi_connect attempt %d FAILED, retrying...", attempt );
                 vTaskDelay( pdMS_TO_TICKS( 800 ) );
             }
             if( !ok )
             {
-                printf( "[KM4] wifi_connect FAILED (gave up)\n\r" );
+                log_error( "[KM4] wifi_connect FAILED (gave up)" );
                 vTaskDelete( NULL );
                 return;
             }
@@ -524,7 +526,7 @@ static void wifi_bringup_thread( void *param )
     {
         int rssi = 0;
         wifi_get_rssi( &rssi );
-        printf( "[KM4] associated; power-save off; RSSI %d dBm; waiting for DHCP...\n\r", rssi );
+        log_info( "[KM4] associated; power-save off; RSSI %d dBm; waiting for DHCP...", rssi );
     }
 
     /* Upstream Mbed TLS v3.6.4 microbenchmark ([MCB] scores) - the apples-to-apples
@@ -560,8 +562,9 @@ static void wifi_bringup_thread( void *param )
 
 int main(void)
 {
-    DiagPrintf("\n\r[KM4] at-project image2 - FreeRTOS+TCP DHCP bring-up\n\r");
-    DiagPrintf("[KM4] FreeRTOS kernel %s\n\r", tskKERNEL_VERSION_NUMBER);
+    log_lock_init();   /* install the FreeRTOS-mutex lock before any log_* (pre-scheduler is fine) */
+    log_info("[KM4] at-project image2 - FreeRTOS+TCP DHCP bring-up");
+    log_info("[KM4] FreeRTOS kernel %s", tskKERNEL_VERSION_NUMBER);
 
 #ifdef AMEBAD_TFM_BOOT
     /* Serialize every NS->SPE PSA call: tfm_ns_interface_rtos.c takes this mutex around each
@@ -604,7 +607,7 @@ int main(void)
         extern void *amebad_lfs_mount(void);
         extern void  env_init(void);
         void *lfs = amebad_lfs_mount();
-        DiagPrintf("[AWS] LittleFS mount %s\n\r", lfs ? "OK" : "FAILED");
+        log_info("[AWS] LittleFS mount %s", lfs ? "OK" : "FAILED");
         if (lfs)
             env_init();
     }
@@ -632,7 +635,7 @@ int main(void)
     /* WiFi+DHCP bring-up runs as its own task (wifi_connect blocks). */
     if (xTaskCreate(wifi_bringup_thread, "wifi_bringup", 4096, NULL,
                     tskIDLE_PRIORITY + 3, NULL) != pdPASS)
-        DiagPrintf("[KM4] xTaskCreate(wifi_bringup) failed\n\r");
+        log_error("[KM4] xTaskCreate(wifi_bringup) failed");
 
     vTaskStartScheduler();
 

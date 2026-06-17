@@ -1,6 +1,17 @@
 cmake_minimum_required(VERSION 3.20)
 project(at_project C CXX ASM)
 
+# Per-line log basename: rxi/log.c (component/log_config) prints __FILE__ in its "file:line" tag.
+# Rewrite __FILE__ at preprocess time so it shows just the basename (e.g. "main.c:69") instead of
+# the full build path — compile-time, no runtime strchr (GCC 10 here has no __FILE_NAME__). Strip
+# the dirs that hold log_*-using app code: src/ (cross-platform app) + the AmebaD KM4 app. Common
+# to every build that enters here — the AmebaD build (cmake -S here) and the Bouffalo build (which
+# add_subdirectory()s this root). Other dirs' __FILE__ are unaffected (they don't match the maps).
+add_compile_options(
+    "-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/src/="
+    "-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/component/amebad/app_km4/="
+)
+
 # Root entry for the at_project unified build. Used both:
 #   - directly:  AmebaD SDK's library/Makefile runs `cmake -S <at-project-root>`
 #                to produce build/amebad_user/user_link.list, which the SDK

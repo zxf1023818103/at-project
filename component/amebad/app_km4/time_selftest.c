@@ -11,6 +11,7 @@
 #include <string.h>
 #include <time.h>            /* time/gmtime_r/localtime_r/mktime/strftime/ctime/tzset + _timezone... */
 #include <sys/time.h>        /* gettimeofday, struct timeval, struct timespec */
+#include "at_log.h"             /* rxi log.c: log_info / log_error */
 
 /* <time.h> gates clock_gettime behind _POSIX_TIMERS (off in this newlib); time_base.c defines it,
  * so declare it ourselves to call it. CLOCK_REALTIME is unguarded in <time.h>. */
@@ -29,7 +30,7 @@ static void test_tz( const char * tz )
     tzset();
     localtime_r( &t, &lt );
     strftime( buf, sizeof( buf ), "%Y-%m-%d %H:%M:%S %Z", &lt );
-    printf( "[TIME] TZ=%-8s local=%s  (_timezone=%ld _daylight=%d tzname=%s/%s)\n\r",
+    log_info( "[TIME] TZ=%-8s local=%s  (_timezone=%ld _daylight=%d tzname=%s/%s)",
             tz, buf, _timezone, _daylight, _tzname[ 0 ], _tzname[ 1 ] );
 }
 
@@ -62,7 +63,7 @@ static void check_dst( const char * tz, time_t t, int expect_isdst )
     gmtime_r( &t, &ut );
     strftime( ub, sizeof( ub ), "%m-%d %H:%M", &ut );
     strftime( lb, sizeof( lb ), "%m-%d %H:%M %Z", &lt );
-    printf( "[DST] %-26s UTC %s -> local %s isdst=%d %s\n\r",
+    log_info( "[DST] %-26s UTC %s -> local %s isdst=%d %s",
             tz, ub, lb, lt.tm_isdst,
             ( lt.tm_isdst == expect_isdst ) ? "ok" : "*** isdst MISMATCH ***" );
 }
@@ -75,7 +76,7 @@ static void dst_selftest( void )
     time_t jan = utc_epoch( 2026, 1, 15, 12 );    /* deep winter */
     time_t jul = utc_epoch( 2026, 7, 15, 12 );    /* deep summer */
 
-    printf( "[DST] ==== newlib DST / standard-time (winter) test ====\n\r" );
+    log_info( "[DST] ==== newlib DST / standard-time (winter) test ====" );
 
     /* US Pacific, implicit POSIX (US) rules: winter -> PST (std), summer -> PDT. */
     check_dst( "PST8PDT", jan, 0 );
@@ -97,7 +98,7 @@ static void dst_selftest( void )
     check_dst( "PST8PDT", utc_epoch( 2026, 3, 8, 9  ), 0 );    /* 01:00 PST, before */
     check_dst( "PST8PDT", utc_epoch( 2026, 3, 8, 11 ), 1 );    /* 03:00 PDT, after  */
 
-    printf( "[DST] ==== DST test done ====\n\r" );
+    log_info( "[DST] ==== DST test done ====" );
 }
 
 void time_selftest_run( void )
@@ -116,7 +117,7 @@ void time_selftest_run( void )
         strncpy( saved_tz, tz0, sizeof( saved_tz ) - 1 );
     }
 
-    printf( "[TIME] ==== newlib date/time self-test ====\n\r" );
+    log_info( "[TIME] ==== newlib date/time self-test ====" );
 
     /* 0. stderr path: fprintf(stderr) must route fd 2 -> at_console_write's errputc -> LOGUART,
      *    format correctly, and pick up the per-line timestamp like stdout. (fprintf is NOT caught
@@ -128,13 +129,13 @@ void time_selftest_run( void )
     /* 1. time() / gettimeofday() -> _gettimeofday (time_base.c) */
     t = time( NULL );
     gettimeofday( &tv, NULL );
-    printf( "[TIME] time()=%ld  gettimeofday=%ld.%06ld\n\r",
+    log_info( "[TIME] time()=%ld  gettimeofday=%ld.%06ld",
             ( long ) t, ( long ) tv.tv_sec, ( long ) tv.tv_usec );
 
     /* 2. gmtime_r + strftime (UTC; pure libc over time_t) */
     gmtime_r( &t, &utc );
     strftime( buf, sizeof( buf ), "%Y-%m-%d %H:%M:%S UTC", &utc );
-    printf( "[TIME] gmtime/strftime = %s\n\r", buf );
+    log_info( "[TIME] gmtime/strftime = %s", buf );
 
     /* 3. localtime/tzset over the TZ env var */
     test_tz( "CST-8" );          /* China = UTC+8, expect "CST" */
@@ -145,24 +146,24 @@ void time_selftest_run( void )
     {
         struct tm m = utc;
         time_t back = mktime( &m );
-        printf( "[TIME] mktime(gmtime(t))=%ld  (delta vs t = %ld)\n\r",
+        log_info( "[TIME] mktime(gmtime(t))=%ld  (delta vs t = %ld)",
                 ( long ) back, ( long ) ( back - t ) );
     }
 
     /* 5. ctime + difftime (pure libc; difftime printed as int to avoid float-printf dep) */
-    printf( "[TIME] ctime = %s", ctime( &t ) );        /* ctime() already appends '\n' */
-    printf( "[TIME] difftime(t+3600,t) = %ld (expect 3600)\n\r", ( long ) difftime( t + 3600, t ) );
+    log_info( "[TIME] ctime = %s", ctime( &t ) );        /* ctime() already appends '\n' */
+    log_info( "[TIME] difftime(t+3600,t) = %ld (expect 3600)", ( long ) difftime( t + 3600, t ) );
 
     /* 6. clock() over _times; CLOCKS_PER_SEC=100 on this ARM newlib -> seconds = clock()/CLOCKS_PER_SEC */
     {
         clock_t c = clock();
-        printf( "[TIME] clock()=%ld  (CLOCKS_PER_SEC=%ld -> %ld s uptime)\n\r",
+        log_info( "[TIME] clock()=%ld  (CLOCKS_PER_SEC=%ld -> %ld s uptime)",
                 ( long ) c, ( long ) CLOCKS_PER_SEC, ( long ) ( c / CLOCKS_PER_SEC ) );
     }
 
     /* 7. clock_gettime(CLOCK_REALTIME) — supplemented in time_base.c */
     r = clock_gettime( CLOCK_REALTIME, &ts );
-    printf( "[TIME] clock_gettime(REALTIME) r=%d  %ld.%09ld\n\r",
+    log_info( "[TIME] clock_gettime(REALTIME) r=%d  %ld.%09ld",
             r, ( long ) ts.tv_sec, ts.tv_nsec );
 
     /* 8. DST / standard-time (winter) handling — independent of the live clock. */
@@ -180,5 +181,5 @@ void time_selftest_run( void )
     }
     tzset();
 
-    printf( "[TIME] ==== self-test done ====\n\r" );
+    log_info( "[TIME] ==== self-test done ====" );
 }

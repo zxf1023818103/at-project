@@ -17,7 +17,9 @@
 #include "log.h"          /* log_set_lock / log_LockFn */
 #include "log_lock.h"
 
-/* Static (no heap): configSUPPORT_STATIC_ALLOCATION == 1 on this platform. */
+/* Static (no heap): configSUPPORT_STATIC_ALLOCATION == 1 (enabled for all platforms in
+ * FreeRTOSConfig.h). FreeRTOS objects can be created before the scheduler, so log_lock_init()
+ * at main() start is fine. */
 static StaticSemaphore_t s_log_mutex_buf;
 static SemaphoreHandle_t s_log_mutex;
 

@@ -38,6 +38,10 @@ extern uint32_t SystemCoreClock;
 #define configUSE_MUTEXES                       1
 #define configUSE_RECURSIVE_MUTEXES             1
 #define configUSE_COUNTING_SEMAPHORES           1
+#define configSUPPORT_STATIC_ALLOCATION         1   /* always on, all platforms: static FreeRTOS objects
+                                                     * (e.g. log_config's lock mutex). Requires the app to
+                                                     * supply vApplicationGetIdle/TimerTaskMemory — AmebaD's
+                                                     * are in component/amebad/freertos_port. */
 #define configUSE_TIMERS                        1
 #define configMAX_CO_ROUTINE_PRIORITIES         ( 2 )
 #define configUSE_TRACE_FACILITY                1
@@ -129,10 +133,12 @@ extern uint32_t SystemCoreClock;
 /* (Software timers are ON, via the common section. They used to crash KM0's scheduler start, but
  * the real cause was heap exhaustion — the 20 KB ucHeap couldn't fit the timer task+queue, so
  * xTimerCreateTimerTask's malloc returned NULL, vTaskStartScheduler returned, and KM0 unwound
- * all the way out to the boot ROM (0x49a2 dead-loop). Fixed by raising configTOTAL_HEAP_SIZE to
- * 28 KB above. See doc/amebad_km0_scheduler_and_runtime_flash.md.) */
+ * all the way out to the boot ROM (0x49a2 dead-loop). See doc/amebad_km0_scheduler_and_runtime_flash.md.
+ * Now configSUPPORT_STATIC_ALLOCATION is on (common): the idle + timer TASKS are static (.bss, via
+ * freertos_port/freertos_static_mem.c), off-heap — so the heap no longer needs the ~1.7 KB those
+ * tasks took, and it's trimmed to 24 KB to make BD_RAM room for the new static .bss.) */
 #define configENABLE_FPU                                0
-#define configTOTAL_HEAP_SIZE                           ( ( size_t ) ( 28 * 1024 ) ) /* was 20K: too small once the software-timer task is created -> xTimerCreateTimerTask malloc fails -> vTaskStartScheduler returns -> KM0 unwinds to boot ROM (0x49a2). ucHeap@~0x87460, BD_RAM ends 0x8F000 -> ~31K ceiling. */
+#define configTOTAL_HEAP_SIZE                           ( ( size_t ) ( 24 * 1024 ) ) /* idle/timer tasks now static (.bss), off-heap; BD_RAM ceiling ~31K from ucHeap@~0x87460. */
 #define configUSE_APPLICATION_TASK_TAG                  0
 #define configUSE_IDLE_HOOK                             1
 #define configUSE_MALLOC_FAILED_HOOK                    0
@@ -210,7 +216,7 @@ extern int  freertos_ready_to_sleep(void);
 #endif
 #endif
 
-#define configSUPPORT_STATIC_ALLOCATION         1
+/* configSUPPORT_STATIC_ALLOCATION moved to the common section (always on, all platforms). */
 #define configUSE_IDLE_HOOK                      0
 #define configCPU_CLOCK_HZ                       ((uint32_t)(1 * 1000 * 1000))
 #define configMAX_PRIORITIES                     (32)

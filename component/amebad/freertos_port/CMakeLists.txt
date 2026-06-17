@@ -9,6 +9,6 @@
 #     component/amebad/sdk_headers, the owner of the AmebaD SDK include bundle.
 # One target name on both cores: KM0 and KM4 configure into separate build trees with different
 # toolchains, so `freertos_port` never collides — no per-core suffix needed.
-add_library(freertos_port STATIC freertos_heap5_config.c)
+add_library(freertos_port STATIC freertos_heap5_config.c freertos_static_mem.c)
 target_include_directories(freertos_port PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(freertos_port FreeRTOS)
