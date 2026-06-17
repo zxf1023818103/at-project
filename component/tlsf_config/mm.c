@@ -23,7 +23,11 @@
 #ifdef CONFIG_MM_LOG_LEVEL
 #define CONFIG_LOG_LEVEL CONFIG_MM_LOG_LEVEL
 #endif
-#include "log.h"
+#ifdef MM_USE_BFLB_LOG
+#include "log.h"            /* Bouffalo: bflb_log's real LOG_* */
+#else
+#include "mm_log_stub.h"    /* portable no-op LOG_* (avoids a shadowing "log.h") */
+#endif
 
 /* Global manager instance - the only global variable */
 mem_manager_t g_mem_manager;

@@ -6,15 +6,16 @@
  * callback list). log.c exposes log_set_lock(fn, udata): it calls fn(true, udata) to acquire and
  * fn(false, udata) to release around each log operation. We back that with a FreeRTOS mutex.
  *
- * The default output (fprintf -> stderr) is intentionally left unchanged; this file only adds the
- * lock. Call log_lock_init() once at startup, before a second task can log. Task context only —
- * the mutex take/give must not run from an ISR.
+ * Output stays fprintf -> stderr, but log_lock_init() reformats it: log.c's built-in line carries
+ * its own "HH:MM:SS", which doubles up with the console's "[HH:MM:SS.mmm]" prefix, so we drop
+ * log.c's timestamp (see log_cb_notime). Call log_lock_init() once at startup, before a second
+ * task can log. Task context only — the mutex take/give must not run from an ISR.
  */
 #include <stdbool.h>
 
 #include "FreeRTOS.h"
 #include "semphr.h"
-#include "log.h"          /* log_set_lock / log_LockFn */
+#include "log.h"          /* log_set_lock / log_LockFn / log_add_callback / log_Event */
 #include "log_lock.h"
 
 /* Static (no heap): configSUPPORT_STATIC_ALLOCATION == 1 (enabled for all platforms in
@@ -38,11 +39,29 @@ static void log_lock_cb( bool lock, void * udata )
     }
 }
 
+/* log.c output callback WITHOUT its "HH:MM:SS" — prints "LEVEL file:line: msg" (log.c's default
+ * minus the leading timestamp). See log_lock_init. */
+static void log_cb_notime( log_Event * ev )
+{
+    FILE * fp = ( FILE * ) ev->udata;
+
+    fprintf( fp, "%-5s %s:%d: ", log_level_string( ev->level ), ev->file, ev->line );
+    vfprintf( fp, ev->fmt, ev->ap );
+    fprintf( fp, "\n" );
+}
+
 void log_lock_init( void )
 {
     if( s_log_mutex == NULL )
     {
         s_log_mutex = xSemaphoreCreateMutexStatic( &s_log_mutex_buf );
         log_set_lock( log_lock_cb, s_log_mutex );
+
+        /* Drop log.c's own "HH:MM:SS": the cross-platform console (at_console_write) already
+         * prefixes every line with "[HH:MM:SS.mmm]" (ms, plus an uptime "[+s.mmm]" fallback before
+         * SNTP sync) — log.c's date-less clock would just be a redundant second timestamp. Silence
+         * the built-in stderr sink and re-add one that emits only "LEVEL file:line: msg". */
+        log_set_quiet( true );
+        ( void ) log_add_callback( log_cb_notime, stderr, LOG_TRACE );
     }
 }

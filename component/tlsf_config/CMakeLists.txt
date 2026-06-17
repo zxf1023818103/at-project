@@ -27,12 +27,14 @@ target_include_directories(tlsf_config PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/tlsf"
 )
 
-# mm.h includes bflb_l1c.h; mm.c/mm_debug.c/tlsf_allocator.c include bflb_core.h +
-# log.h. On Bouffalo those come from bflb_lhal/bflb_log; elsewhere the port_generic
-# shims supply portable equivalents (kept off the PUBLIC path so they don't shadow
-# the real SDK headers when this is built for Bouffalo).
+# mm.h includes bflb_l1c.h; mm.c/mm_debug.c/tlsf_allocator.c also log. On Bouffalo the logging
+# comes from bflb_lhal/bflb_log's <log.h> (MM_USE_BFLB_LOG); elsewhere the port_generic shims supply
+# portable equivalents (bflb_l1c/bflb_irq/IS_ENABLED). The logging shim is NOT a "log.h" — that name
+# shadows other components' log.h (e.g. rxi log_config's) on the shared include path — it's the
+# uniquely-named mm_log_stub.h, selected by the consumers when MM_USE_BFLB_LOG is unset.
 if(BOUFFALO_CHIP)
     target_link_libraries(tlsf_config PUBLIC bflb_lhal bflb_log)
+    target_compile_definitions(tlsf_config PRIVATE MM_USE_BFLB_LOG)
 else()
     # PUBLIC: mm.h (a public header) #includes <bflb_l1c.h>, so consumers of tlsf_config
     # need the shims on their path too — not just tlsf_config's own sources.
