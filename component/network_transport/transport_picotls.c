@@ -97,16 +97,140 @@ static uint64_t picotls_now( ptls_get_time_t * self )
 }
 static ptls_get_time_t s_ptlsGetTime = { picotls_now };
 
-/* Cipher-suite preference: AES-128-GCM first (HW-accelerated on the RTL8721D IPSEC engine),
- * then AES-256-GCM, ChaCha20-Poly1305 last as a fallback — same order as the QUIC client. */
-static ptls_cipher_suite_t * s_cipherSuites[] = {
-    &ptls_mbedtls_aes128gcmsha256,
+/* ---- HW-AEAD compatibility shim ---------------------------------------------------------------
+ * picotls's aead_encrypt_v (lib/mbedtls.c) drives the PSA *multi-part* AEAD: one psa_aead_update
+ * per input segment. The RTL8721D gcm_alt / chachapoly_alt HW engines are one-shot (a single
+ * update only — the IPSEC ROM exposes only one-shot CipherEncryptAD, not gcm_update/final), so a
+ * TLS record's 2-segment input (payload + the TLS 1.3 content-type byte) fails the 2nd update with
+ * PSA_ERROR_NOT_SUPPORTED. We wrap the AEAD so the encrypt path COALESCES the input vector into one
+ * buffer and re-enters picotls's own encrypt_v with incnt==1 -- exactly one update -> the HW
+ * one-shot path. (Decrypt is already one-shot in picotls: psa_aead_decrypt.) Only built when the HW
+ * engine is compiled in (MBEDTLS_GCM_ALT); software builds keep the native multi-part path (no
+ * coalesce copy). The picotls submodule stays pristine -- only public st_ptls_aead_context_t /
+ * algorithm / cipher-suite fields are touched. */
+#if defined( MBEDTLS_GCM_ALT )
+
+typedef void ( * aead_encrypt_v_fn )( struct st_ptls_aead_context_t *, void *, ptls_iovec_t *, size_t,
+                                      uint64_t, const void *, size_t );
+typedef int  ( * aead_setup_fn )( ptls_aead_context_t *, int, const void *, const void * );
+
+static aead_encrypt_v_fn s_origEncryptV;   /* picotls's aead_encrypt_v (same for every AEAD algo) */
+
+static void aead_coalesce_encrypt_v( struct st_ptls_aead_context_t * ctx, void * output,
+                                     ptls_iovec_t * input, size_t incnt, uint64_t seq,
+                                     const void * aad, size_t aadlen )
+{
+    uint8_t stackbuf[ 2048 ];   /* TLS records are tiny here (MQTT publishes / handshake flights) */
+    uint8_t * buf = stackbuf;
+    ptls_iovec_t one;
+    size_t total = 0, off = 0, i;
+
+    if( incnt <= 1 )   /* already single-segment -> one update -> the HW one-shot path is happy */
+    {
+        s_origEncryptV( ctx, output, input, incnt, seq, aad, aadlen );
+        return;
+    }
+
+    for( i = 0; i < incnt; i++ )
+    {
+        total += input[ i ].len;
+    }
+    if( total > sizeof( stackbuf ) )
+    {
+        buf = pvPortMalloc( total );
+        if( buf == NULL )   /* OOM: fall back to the native path (fails on HW, but never crashes) */
+        {
+            s_origEncryptV( ctx, output, input, incnt, seq, aad, aadlen );
+            return;
+        }
+    }
+    for( i = 0; i < incnt; i++ )
+    {
+        memcpy( buf + off, input[ i ].base, input[ i ].len );
+        off += input[ i ].len;
+    }
+    one.base = buf;
+    one.len = total;
+    s_origEncryptV( ctx, output, &one, 1, seq, aad, aadlen );
+    if( buf != stackbuf )
+    {
+        vPortFree( buf );
+    }
+}
+
+/* Per-algorithm setup thunks: run picotls's real setup (imports the key, sets do_encrypt_v =
+ * aead_encrypt_v), then swap in the coalescing encrypt_v on the encrypt context. */
+static aead_setup_fn s_origSetup128, s_origSetup256, s_origSetupCP;
+
+static int aead_wrap_setup( aead_setup_fn orig, ptls_aead_context_t * ctx, int is_enc,
+                            const void * key, const void * iv )
+{
+    int ret = orig( ctx, is_enc, key, iv );
+    if( ( ret == 0 ) && is_enc )
+    {
+        if( s_origEncryptV == NULL )
+        {
+            s_origEncryptV = ctx->do_encrypt_v;
+        }
+        ctx->do_encrypt_v = aead_coalesce_encrypt_v;
+    }
+    return ret;
+}
+static int aead_wrap_setup_128( ptls_aead_context_t * c, int e, const void * k, const void * iv )
+{ return aead_wrap_setup( s_origSetup128, c, e, k, iv ); }
+static int aead_wrap_setup_256( ptls_aead_context_t * c, int e, const void * k, const void * iv )
+{ return aead_wrap_setup( s_origSetup256, c, e, k, iv ); }
+static int aead_wrap_setup_cp( ptls_aead_context_t * c, int e, const void * k, const void * iv )
+{ return aead_wrap_setup( s_origSetupCP, c, e, k, iv ); }
+
+/* Non-const copies (the picotls typedefs are `const`) of the AEAD algorithms + cipher suites, with
+ * setup_crypto / aead overridden to point at the wrappers. */
+static struct st_ptls_aead_algorithm_t s_wrapAes128gcm, s_wrapAes256gcm, s_wrapChachapoly;
+static struct st_ptls_cipher_suite_t   s_wrapAes128gcmSha256, s_wrapAes256gcmSha384, s_wrapChachapolySha256;
+
+static void build_wrapped_suite( struct st_ptls_aead_algorithm_t * wa, ptls_aead_algorithm_t * origA,
+                                 aead_setup_fn * saveSetup, aead_setup_fn wrapSetup,
+                                 struct st_ptls_cipher_suite_t * wcs, ptls_cipher_suite_t * origCs )
+{
+    /* memcpy, not struct assignment: the algo/cipher-suite structs have const members. We then
+     * write only the non-const setup_crypto / aead fields through the non-const tag pointers. */
+    memcpy( wa, origA, sizeof( *wa ) );
+    *saveSetup = origA->setup_crypto;
+    wa->setup_crypto = wrapSetup;
+    memcpy( wcs, origCs, sizeof( *wcs ) );
+    wcs->aead = wa;
+}
+#endif /* MBEDTLS_GCM_ALT */
+
+/* Cipher-suite list, filled at runtime by picotls_build_cipher_suites(). AES-128-GCM first
+ * (HW-accelerated on the RTL8721D IPSEC engine; fewest rounds), then AES-256-GCM, ChaCha20-Poly1305
+ * last — same order as the QUIC client. */
+static ptls_cipher_suite_t * s_cipherSuites[ 4 ];
+
+static void picotls_build_cipher_suites( void )
+{
+    size_t n = 0;
+#if defined( MBEDTLS_GCM_ALT )
+    build_wrapped_suite( &s_wrapAes128gcm, &ptls_mbedtls_aes128gcm, &s_origSetup128, aead_wrap_setup_128,
+                         &s_wrapAes128gcmSha256, &ptls_mbedtls_aes128gcmsha256 );
+    s_cipherSuites[ n++ ] = &s_wrapAes128gcmSha256;
 #if defined( MBEDTLS_SHA384_C )
-    &ptls_mbedtls_aes256gcmsha384,
+    build_wrapped_suite( &s_wrapAes256gcm, &ptls_mbedtls_aes256gcm, &s_origSetup256, aead_wrap_setup_256,
+                         &s_wrapAes256gcmSha384, &ptls_mbedtls_aes256gcmsha384 );
+    s_cipherSuites[ n++ ] = &s_wrapAes256gcmSha384;
 #endif
-    &ptls_mbedtls_chacha20poly1305sha256,
-    NULL,
-};
+    build_wrapped_suite( &s_wrapChachapoly, &ptls_mbedtls_chacha20poly1305, &s_origSetupCP, aead_wrap_setup_cp,
+                         &s_wrapChachapolySha256, &ptls_mbedtls_chacha20poly1305sha256 );
+    s_cipherSuites[ n++ ] = &s_wrapChachapolySha256;
+#else
+    s_cipherSuites[ n++ ] = &ptls_mbedtls_aes128gcmsha256;
+#if defined( MBEDTLS_SHA384_C )
+    s_cipherSuites[ n++ ] = &ptls_mbedtls_aes256gcmsha384;
+#endif
+    s_cipherSuites[ n++ ] = &ptls_mbedtls_chacha20poly1305sha256;
+#endif
+    s_cipherSuites[ n ] = NULL;
+}
 
 /* PSA-backed RNG adapter for mbedtls_pk_parse_key / _sign (reuses picotls's PSA random). */
 static int picotls_rng( void * ctx, unsigned char * buf, size_t len )
@@ -530,6 +654,7 @@ static int picotls_ctx_once( void )
     s_ptlsCtx.random_bytes = ptls_mbedtls_random_bytes;
     s_ptlsCtx.get_time = &s_ptlsGetTime;
     s_ptlsCtx.key_exchanges = ptls_mbedtls_key_exchanges; /* secp256r1 (+ x25519) */
+    picotls_build_cipher_suites();                        /* HW-AEAD coalesce shim under MBEDTLS_GCM_ALT */
     s_ptlsCtx.cipher_suites = s_cipherSuites;
     /* TLS 1.3 middlebox-compatibility mode (RFC 8446 D.4): emit the dummy ChangeCipherSpec so
      * the handshake looks like TLS 1.2 on the wire. AWS IoT's front end (NLB) RSTs 1.3 handshakes
