@@ -101,3 +101,6 @@
 [submodule "component/tlsf_config/tlsf"]
 	path = component/tlsf_config/tlsf
 	url = https://github.com/mattconte/tlsf
+[submodule "component/log_config/log"]
+	path = component/log_config/log
+	url = https://github.com/rxi/log.c
