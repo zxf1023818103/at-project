@@ -75,10 +75,17 @@ add_executable(target_img2_km4
 # (lfs_selftest moved into the amebad_lfs_port archive so ALL LittleFS .text is
 # pinned to the XIP tail by the ld script — keeps boot/WiFi code addresses stable.)
 
+# ROM-mbedTLS self-test image (make ROMKAT=ON): builds the ROM mbedTLS 2.4.0 KAT +
+# ROM-vs-HW AES compare boot self-tests (rom_mbedtls_kat.c / rom_hwcrypto_test.c /
+# rom_mbedtls.c). Default OFF: the console images instead link upstream Mbed TLS
+# (mbedcrypto) for fs_cli's md5sum/sha*sum, which is ABI-incompatible with the ROM
+# mbedTLS (same symbol names) — so the two are mutually exclusive (guarded below).
+option(AMEBAD_ENABLE_ROM_KAT "Build the ROM mbedTLS 2.4.0 / HW-crypto boot self-tests (no upstream mbedTLS)" OFF)
+
 # Console commands registered from main() (like aws_cli.c), so the shared monitor stays
-# untouched: filesystem (ls/cat/rm/rmdir/mkdir/mv/cp/touch/hexdump/df/mkfs) over the POSIX
-# VFS, and time/SNTP (date/uptime/sntp_update). KM4-only; present in every console image.
-# The QUIC image drops the monitor AND freertos_cli, so exclude these there too (else
+# untouched: filesystem (ls/cat/rm/rmdir/mkdir/mv/cp/touch/hexdump/df/mkfs/chmod) over the
+# POSIX VFS, and time/SNTP (date/uptime/sntp_update). KM4-only; present in every console
+# image. The QUIC image drops the monitor AND freertos_cli, so exclude these there too (else
 # FreeRTOS_CLIRegisterCommand is an undefined ref). lfs_config.h / lfs.h come from the
 # lfs_config + littlefs link-group members (incl. LFS_THREADSAFE); FreeRTOS_CLI.h needs the
 # explicit include, same as the AWS block below. time_cli.c's sntp_sync_once() is a weak
@@ -90,6 +97,13 @@ if(NOT AMEBAD_ENABLE_QUIC)
         "${CMAKE_CURRENT_SOURCE_DIR}/env_cli.c")
     target_include_directories(target_img2_km4 PRIVATE
         "${CMAKE_SOURCE_DIR}/component/freertos-cli_config/freertos-cli")
+    # fs_cli's md5sum/sha*sum ride the standard upstream Mbed TLS module API (mbedcrypto,
+    # linked via _hash_grp / the feature _grp). Compiled out in a ROMKAT=ON build, which
+    # links the ABI-incompatible ROM mbedTLS instead.
+    if(NOT AMEBAD_ENABLE_ROM_KAT)
+        set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/fs_cli.c"
+                     APPEND PROPERTY COMPILE_DEFINITIONS FS_CLI_HASH=1)
+    endif()
 endif()
 
 # minizip (ZIP archive) console commands (zip/unzip over the LittleFS VFS) — DEMO only. Built
@@ -170,10 +184,27 @@ if(NOT AMEBAD_ENABLE_QUIC AND NOT AMEBAD_ENABLE_PKCS11 AND NOT AMEBAD_ENABLE_CRY
         "${CMAKE_CURRENT_SOURCE_DIR}/iperf_server.c"        # iperf2 TCP sink (RX throughput from WSL iperf -c)
         "${CMAKE_CURRENT_SOURCE_DIR}/iperf_udp_client.c"    # iperf2 UDP blast (bottleneck discriminator: driver vs TCP pacing)
         "${CMAKE_CURRENT_SOURCE_DIR}/iperf_udp_server.c"    # UDP RX sink (discriminator: is the RX/ACK delivery path tick-quantized?)
+    )
+endif()
+
+# ROM-mbedTLS crypto self-tests (make ROMKAT=ON) — split out of the iperf gate above
+# because they reference ROM mbedTLS symbols (mbedtls_sha*/md5/aes_*) with the ROM ABI and
+# define mbedtls_calloc/free, which collide with the upstream mbedcrypto every console image
+# now links for fs_cli's md5sum/sha*sum. So ROMKAT is its own image: ROM mbedTLS, no upstream,
+# no hash commands (fs_cli's FS_CLI_HASH is off). main.c calls rom_mbedtls_kat() under
+# AMEBAD_ROM_KAT. iperf stays in the default image (it has no mbedTLS refs).
+if(AMEBAD_ENABLE_ROM_KAT AND (AMEBAD_ENABLE_QUIC OR AMEBAD_ENABLE_AWS_IOT OR AMEBAD_ENABLE_PKCS11
+   OR AMEBAD_ENABLE_CRYPTOBENCH OR AMEBAD_ENABLE_NIMBLE))
+    message(FATAL_ERROR "ROMKAT=ON (ROM mbedTLS self-tests) cannot combine with an upstream-mbedTLS image (AWS/QUIC/PKCS11/BENCH/NIMBLE)")
+endif()
+if(AMEBAD_ENABLE_ROM_KAT)
+    target_sources(target_img2_km4 PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/rom_mbedtls_kat.c"     # known-answer test of the ROM mbedTLS 2.4.0 software crypto
         "${CMAKE_SOURCE_DIR}/component/amebad/mbedtls_rom/rom_mbedtls.c"  # ROM mbedTLS ram-map glue (use_hw_crypto_func=0)
         "${CMAKE_CURRENT_SOURCE_DIR}/rom_hwcrypto_test.c"   # HW-vs-SW compare of rom_ssl_ram_map.h hw_crypto_* (IPSEC engine)
     )
+    set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
+                 APPEND PROPERTY COMPILE_DEFINITIONS AMEBAD_ROM_KAT)
 endif()
 # WIP: the image2 link still needs the app/WiFi/mbedTLS/lwIP/log/os_dep
 # stack (~30 undefined symbols at bootstrap). EXCLUDE_FROM_ALL keeps the
@@ -389,6 +420,20 @@ if(AMEBAD_CPP_SELFTEST)
     target_sources(lfs_config PRIVATE "${CMAKE_SOURCE_DIR}/component/littlefs_config/cpp_selftest.cpp")
 endif()
 
+# Upstream Mbed TLS for fs_cli's md5sum/sha*sum (component/mbedtls_config). Only the
+# console images that don't already pull mbedcrypto via a feature _grp need it (default /
+# MINIMAL / SNTP / HCI-alone); AWS/PKCS11/BENCH/NIMBLE list it in their own _grp, and QUIC
+# has no fs_cli, and ROMKAT links ROM mbedTLS instead. Static-archive selection is
+# per-member, so an image that only calls hashes pulls just md5/sha*/platform_util — no
+# x509/tls/threading/port. Joins the cross_refs group (real archive name; the _config
+# umbrella INTERFACE wouldn't expand inside LINK_GROUP).
+set(_hash_grp "")
+if(NOT AMEBAD_ENABLE_QUIC AND NOT AMEBAD_ENABLE_ROM_KAT
+   AND NOT AMEBAD_ENABLE_PKCS11 AND NOT AMEBAD_ENABLE_CRYPTOBENCH
+   AND NOT AMEBAD_ENABLE_AWS_IOT AND NOT AMEBAD_ENABLE_NIMBLE)
+    set(_hash_grp ",mbedcrypto")
+endif()
+
 # Archives wrapped in --start-group (cross_refs) for circular vendor refs.
 # libc (-lc) supplies __libc_init_array (KM4 has C++ global ctors; KM0 didn't)
 # plus memcpy/memset — so KM4 doesn't need the ROM memcpy alias KM0 uses.
@@ -403,7 +448,7 @@ target_link_libraries(target_img2_km4 PRIVATE
     # EXCLUDE_FROM_ALL lib CMake would otherwise sink it past -lc/-lgcc and leave
     # those undefined. amebad_mbed (flash_api) is lfs_port's backend. (The upstream
     # mbedcrypto/mbedx509 + picotls/ngtcp2 crypto join per-feature via the _grp vars.)
-    "$<LINK_GROUP:cross_refs,FreeRTOS,freertos_port,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,freertos_plus_tcp,freertos_plus_tcp_port,amebad_wlan,amebad_wps,amebad_lfs_port,amebad_mbed,lfs_config,littlefs,rxi_log${_diag_grp}${_hci_grp}${_quic_grp}${_pk11_grp}${_bench_grp}${_aws_grp}${_mz_grp}>"
+    "$<LINK_GROUP:cross_refs,FreeRTOS,freertos_port,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,freertos_plus_tcp,freertos_plus_tcp_port,amebad_wlan,amebad_wps,amebad_lfs_port,amebad_mbed,lfs_config,littlefs,rxi_log${_diag_grp}${_hci_grp}${_quic_grp}${_pk11_grp}${_bench_grp}${_aws_grp}${_mz_grp}${_hash_grp}>"
     m
     stdc++
     c
