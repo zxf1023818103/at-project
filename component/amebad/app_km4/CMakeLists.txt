@@ -75,6 +75,23 @@ add_executable(target_img2_km4
 # (lfs_selftest moved into the amebad_lfs_port archive so ALL LittleFS .text is
 # pinned to the XIP tail by the ld script — keeps boot/WiFi code addresses stable.)
 
+# Console commands registered from main() (like aws_cli.c), so the shared monitor stays
+# untouched: filesystem (ls/cat/rm/rmdir/mkdir/mv/cp/touch/hexdump/df/mkfs) over the POSIX
+# VFS, and time/SNTP (date/uptime/sntp_update). KM4-only; present in every console image.
+# The QUIC image drops the monitor AND freertos_cli, so exclude these there too (else
+# FreeRTOS_CLIRegisterCommand is an undefined ref). lfs_config.h / lfs.h come from the
+# lfs_config + littlefs link-group members (incl. LFS_THREADSAFE); FreeRTOS_CLI.h needs the
+# explicit include, same as the AWS block below. time_cli.c's sntp_sync_once() is a weak
+# stub unless sntp_time.c (make SNTP=ON) provides the strong def.
+if(NOT AMEBAD_ENABLE_QUIC)
+    target_sources(target_img2_km4 PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/fs_cli.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/time_cli.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/env_cli.c")
+    target_include_directories(target_img2_km4 PRIVATE
+        "${CMAKE_SOURCE_DIR}/component/freertos-cli_config/freertos-cli")
+endif()
+
 # Diagnostics (iperf throughput + ROM-mbedTLS / wolfCrypt benchmarks). There is
 # no --gc-sections on this link, so unused TUs are only removed by excluding the
 # source. The QUIC image drops them all (smaller KM4 image2 .text -> shifts the

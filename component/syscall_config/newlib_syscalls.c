@@ -525,6 +525,15 @@ int _unlink(const char *path)
     return (rc < 0) ? (errno = lfs_to_errno(rc), -1) : 0;
 }
 
+/* rename()/mv: lfs_rename moves a file or (empty) directory in one op. <stdio.h>
+ * prototypes rename(); this strong def (from the force-included OBJECT lib) beats
+ * libc's link()+unlink() fallback. */
+int rename(const char *oldpath, const char *newpath)
+{
+    int rc = lfs_rename(vfs_lfs_mount(), oldpath, newpath);
+    return (rc < 0) ? (errno = lfs_to_errno(rc), -1) : 0;
+}
+
 /* ---- POSIX <dirent.h> directory enumeration over LittleFS ----------------
  * newlib's <sys/dirent.h> is a `#error` stub, so this component ships its own
  * <dirent.h> and the strong opendir/readdir/closedir/rewinddir here (libc.a has

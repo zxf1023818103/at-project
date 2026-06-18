@@ -8,9 +8,8 @@
  *   set endpoint <ep>      store the AWS IoT ATS endpoint   -> env var "endpoint" (KV/endpoint)
  *   set cert <b64>         client-cert base64 body          -> plain LittleFS DER + env "cert"
  *   set key  <b64>         client-key  base64 body          -> TF-M ITS (secret)
- *   setenv <name> <value>  set an env var (empty value unsets); auto-persisted to KV/<name>
- *   getenv <name>          print an env var
- *   env                    list all env vars
+ *
+ * The generic setenv/getenv/env commands moved to env_cli.c (always-on, all images).
  *
  * The CLI line editor caps a command line at 80 bytes (monitor_cli.c CLI_MAX_INPUT),
  * far short of a ~1.7 KB PEM. So `set cert` / `set key` switch to RAW streaming: the
@@ -99,84 +98,6 @@ static BaseType_t cmd_set(char *out, size_t outlen, const char *cmd)
 
     snprintf(out, outlen, "set: unknown '%.*s' (endpoint|cert|key)\r\n", (int)l1, sub);
     return pdFALSE;
-}
-
-/* ------------------------------------------------------- setenv/getenv/env --- *
- * Generic environment-variable console commands over newlib's environ. setenv is
- * --wrap'd (app_km4 CMakeLists) so a `setenv` here is auto-persisted to KV/<name>
- * and reloaded on the next boot (syscall_config/env.c). Names/values are single
- * space-free CLI tokens (FreeRTOS_CLIGetParameter splits on spaces). */
-#define ENV_CLI_NAME_MAX   64
-#define ENV_CLI_VALUE_MAX  256
-
-static BaseType_t cmd_setenv(char *out, size_t outlen, const char *cmd)
-{
-    BaseType_t ln = 0, lv = 0;
-    const char *name = FreeRTOS_CLIGetParameter(cmd, 1, &ln);
-    const char *val  = FreeRTOS_CLIGetParameter(cmd, 2, &lv);
-    char nbuf[ENV_CLI_NAME_MAX], vbuf[ENV_CLI_VALUE_MAX];
-
-    if (name == NULL || ln == 0 || (size_t)ln >= sizeof(nbuf)) {
-        snprintf(out, outlen, "usage: setenv <name> <value>  (empty value unsets)\r\n");
-        return pdFALSE;
-    }
-    memcpy(nbuf, name, (size_t)ln);
-    nbuf[ln] = '\0';
-    if (val == NULL || lv == 0) {                 /* no value -> unset */
-        unsetenv(nbuf);
-        snprintf(out, outlen, "unset %s\r\n", nbuf);
-        return pdFALSE;
-    }
-    if ((size_t)lv >= sizeof(vbuf)) {
-        snprintf(out, outlen, "setenv: value too long (max %u)\r\n",
-                 (unsigned)(sizeof(vbuf) - 1));
-        return pdFALSE;
-    }
-    memcpy(vbuf, val, (size_t)lv);
-    vbuf[lv] = '\0';
-    snprintf(out, outlen, "setenv %s=%s -> %s\r\n", nbuf, vbuf,
-             (setenv(nbuf, vbuf, 1) == 0) ? "OK" : "FAIL");
-    return pdFALSE;
-}
-
-static BaseType_t cmd_getenv(char *out, size_t outlen, const char *cmd)
-{
-    BaseType_t ln = 0;
-    const char *name = FreeRTOS_CLIGetParameter(cmd, 1, &ln);
-    const char *v;
-    char nbuf[ENV_CLI_NAME_MAX];
-
-    if (name == NULL || ln == 0 || (size_t)ln >= sizeof(nbuf)) {
-        snprintf(out, outlen, "usage: getenv <name>\r\n");
-        return pdFALSE;
-    }
-    memcpy(nbuf, name, (size_t)ln);
-    nbuf[ln] = '\0';
-    v = getenv(nbuf);
-    snprintf(out, outlen, "%s=%s\r\n", nbuf, v ? v : "");
-    return pdFALSE;
-}
-
-/* List environ one entry per FreeRTOS+CLI call (return pdTRUE => call again), so a long
- * environment isn't truncated by the single CLI output buffer. */
-static BaseType_t cmd_env(char *out, size_t outlen, const char *cmd)
-{
-    extern char **environ;
-    static int idx = 0;
-    (void)cmd;
-
-    if (environ == NULL || environ[idx] == NULL) {
-        idx = 0;
-        out[0] = '\0';
-        return pdFALSE;                 /* nothing (more) to print */
-    }
-    snprintf(out, outlen, "%s\r\n", environ[idx]);
-    idx++;
-    if (environ[idx] == NULL) {
-        idx = 0;
-        return pdFALSE;                 /* that was the last entry */
-    }
-    return pdTRUE;                       /* call again for the next entry */
 }
 
 /* --------------------------------------------------------------- pstest --- */
@@ -315,26 +236,11 @@ void aws_cli_register(void)
         "set", "set <endpoint <ep>|cert <b64>|key <b64>>:\r\n provision AWS creds (endpoint->env, cert->LFS file, key->TF-M ITS)\r\n",
         cmd_set, -1
     };
-    static const CLI_Command_Definition_t cmd_setenv_def = {
-        "setenv", "setenv <name> <value>:\r\n set an env var (empty value unsets); persisted to KV/<name>\r\n",
-        cmd_setenv, -1
-    };
-    static const CLI_Command_Definition_t cmd_getenv_def = {
-        "getenv", "getenv <name>:\r\n print an env var\r\n",
-        cmd_getenv, 1
-    };
-    static const CLI_Command_Definition_t cmd_env_def = {
-        "env", "env:\r\n list all env vars\r\n",
-        cmd_env, 0
-    };
     static const CLI_Command_Definition_t cmd_pstest_def = {
         "pstest", "pstest [size] [retries]:\r\n diagnostic: runtime PS write of <size> bytes, retried\r\n",
         cmd_pstest, -1
     };
     FreeRTOS_CLIRegisterCommand(&cmd_blemac_def);
     FreeRTOS_CLIRegisterCommand(&cmd_set_def);
-    FreeRTOS_CLIRegisterCommand(&cmd_setenv_def);
-    FreeRTOS_CLIRegisterCommand(&cmd_getenv_def);
-    FreeRTOS_CLIRegisterCommand(&cmd_env_def);
     FreeRTOS_CLIRegisterCommand(&cmd_pstest_def);
 }

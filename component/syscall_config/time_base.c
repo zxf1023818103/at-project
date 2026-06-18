@@ -57,6 +57,14 @@ void amebad_set_unix_time( time_t secs, unsigned int usec )
     s_seq++;                                       /* -> even: stable */
 }
 
+/* 1 once the wall clock has been set from a real UTC source (SNTP/RTC), 0 while
+ * time() still reports 1970 + uptime. Lets a caller (e.g. the `date` console
+ * command) flag whether the printed time is real. */
+int amebad_time_is_synced( void )
+{
+    return s_synced;
+}
+
 /* Read the base atomically and project to "now". Returns s_synced (0 before the first set). */
 static int now_unix( uint32_t * out_sec, uint32_t * out_usec )
 {

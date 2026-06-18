@@ -44,6 +44,10 @@ int  env_save(const char *name);
  * 1970 + uptime. The base advances on the FreeRTOS tick (SysTick, 1 ms). */
 void amebad_set_unix_time(time_t secs, unsigned int usec);
 
+/* 1 once amebad_set_unix_time() has run (the wall clock is real UTC), else 0
+ * (time() is still 1970 + uptime). */
+int amebad_time_is_synced(void);
+
 #ifdef __cplusplus
 }
 #endif

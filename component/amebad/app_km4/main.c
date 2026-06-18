@@ -597,6 +597,13 @@ int main(void)
      * console stays output-only (DiagPrintf TX is unaffected). */
 #ifndef AT_PROJECT_QUIC
     amebad_monitor_start();
+    /* Filesystem (ls/cat/rm/rmdir/mkdir/mv/cp/touch/hexdump/df/mkfs) + time/SNTP
+     * (date/uptime/sntp_update) console commands, registered into the same CLI list the
+     * monitor uses — like aws_cli_register() below, so the shared monitor stays untouched.
+     * KM4-only: the VFS/LittleFS/newlib-time they use live behind libc, absent on KM0. */
+    { extern void fs_cli_register(void);   fs_cli_register();   }
+    { extern void time_cli_register(void); time_cli_register(); }
+    { extern void env_cli_register(void);  env_cli_register();  }   /* setenv/getenv/env (all images) */
 #ifdef AT_PROJECT_AWS_IOT
     /* Mount LittleFS + load the persisted environment. The non-secret creds live in plain
      * LFS: the AWS endpoint is an env var (KV/endpoint) and the client cert is a plain DER

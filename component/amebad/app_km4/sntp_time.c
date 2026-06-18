@@ -20,6 +20,7 @@
 
 #include "FreeRTOS.h"
 #include "task.h"
+#include "semphr.h"           /* s_sntp_lock: serialize sntp_sync_once (task vs console) */
 #include "FreeRTOS_IP.h"
 #include "FreeRTOS_Sockets.h"
 #include "FreeRTOS_DNS.h"     /* FreeRTOS_gethostbyname */
@@ -48,13 +49,11 @@ static SntpServerInfo_t s_servers[] =
     { "pool.ntp.org",        sizeof( "pool.ntp.org" ) - 1,        SNTP_DEFAULT_SERVER_PORT },
     { "time.cloudflare.com", sizeof( "time.cloudflare.com" ) - 1, SNTP_DEFAULT_SERVER_PORT },
 };
-static SntpServerInfo_t s_env_server[ 1 ];
-static char             s_env_server_name[ 64 ];
-static uint8_t          s_netbuf[ SNTP_PACKET_BASE_SIZE ];
-static SntpContext_t    s_ctx;
-static NetworkContext_t s_netctx;
-static TaskHandle_t     s_selftest_task;
-static volatile int     s_first_sync_done;
+static SntpServerInfo_t  s_env_server[ 1 ];
+static char              s_env_server_name[ 64 ];
+static SemaphoreHandle_t s_sntp_lock;          /* serializes sntp_sync_once (task vs console) */
+static TaskHandle_t      s_selftest_task;
+static volatile int      s_first_sync_done;
 
 /* ---- coreSNTP callbacks --------------------------------------------------------------- */
 
@@ -138,26 +137,16 @@ static int32_t sntp_udp_recv( NetworkContext_t * ctx, uint32_t addr, uint16_t po
     return ( r > 0 ) ? r : 0;
 }
 
-/* ---- tasks ----------------------------------------------------------------------------- */
+/* ---- one-shot sync (shared by the background task and the `sntp_update` command) ------- */
 
-static void sntp_task( void * arg )
+/* Resolve the server list from the NTP_SERVER env var, defaulting it to a China-reachable
+ * server when unset/empty (the public pool / time.google / time.cloudflare time out on some
+ * networks here). Re-read on every sync so a runtime `set NTP_SERVER <host>` takes effect at
+ * the next round. Caller holds s_sntp_lock (this writes the shared s_env_server_name). */
+static size_t pick_servers( const SntpServerInfo_t ** out )
 {
-    UdpTransportInterface_t udp;
-    const SntpServerInfo_t * servers = s_servers;
-    size_t num_servers = sizeof( s_servers ) / sizeof( s_servers[ 0 ] );
-    const char * env_srv;
-    TickType_t rcv_to = pdMS_TO_TICKS( SNTP_SOCK_RCVTIMEO_MS );
-    struct freertos_sockaddr bind_addr;
-    SntpStatus_t st;
+    const char * env_srv = getenv( "NTP_SERVER" );
 
-    ( void ) arg;
-    srand( ( unsigned ) xTaskGetTickCount() );
-
-    /* NTP server config lives in the NTP_SERVER env var; only when it is unset/empty, default it
-     * to a China-reachable server (the public pool / time.google / time.cloudflare time out on
-     * some networks here). A value set/persisted via `set NTP_SERVER <host>` is kept. Mirrors
-     * load_ntp_server() in component/example/qwen/ntp.c. */
-    env_srv = getenv( "NTP_SERVER" );
     if( ( env_srv == NULL ) || ( env_srv[ 0 ] == '\0' ) )
     {
         setenv( "NTP_SERVER", "ntp.aliyun.com", 1 );
@@ -166,60 +155,109 @@ static void sntp_task( void * arg )
     if( ( env_srv != NULL ) && ( env_srv[ 0 ] != '\0' ) )
     {
         strncpy( s_env_server_name, env_srv, sizeof( s_env_server_name ) - 1 );
-        s_env_server[ 0 ].pServerName = s_env_server_name;
+        s_env_server_name[ sizeof( s_env_server_name ) - 1 ] = '\0';
+        s_env_server[ 0 ].pServerName   = s_env_server_name;
         s_env_server[ 0 ].serverNameLen = strlen( s_env_server_name );
-        s_env_server[ 0 ].port = SNTP_DEFAULT_SERVER_PORT;
-        servers = s_env_server;
-        num_servers = 1;
-        log_info( "[SNTP] using NTP_SERVER=%s", s_env_server_name );
+        s_env_server[ 0 ].port          = SNTP_DEFAULT_SERVER_PORT;
+        *out = s_env_server;
+        return 1;
+    }
+    *out = s_servers;
+    return sizeof( s_servers ) / sizeof( s_servers[ 0 ] );
+}
+
+/* Force one SNTP round NOW: (re)read NTP_SERVER, open an ephemeral UDP socket, send a request,
+ * wait for the response, and on success let sntp_set_time() update the wall clock + RTC. Self-
+ * contained (local socket / context / buffer) and mutex-serialized, so the background task and
+ * the console command can both call it. Returns 0 on success, negative on failure.
+ *
+ * Strong def: overrides the weak no-op stub in time_cli.c, so `sntp_update` actually syncs in
+ * any image that links this file (make SNTP=ON). */
+int sntp_sync_once( void )
+{
+    UdpTransportInterface_t  udp;
+    NetworkContext_t         netctx;
+    SntpContext_t            ctx;
+    uint8_t                  netbuf[ SNTP_PACKET_BASE_SIZE ];
+    const SntpServerInfo_t * servers;
+    size_t                   num_servers;
+    struct freertos_sockaddr bind_addr;
+    TickType_t               rcv_to = pdMS_TO_TICKS( SNTP_SOCK_RCVTIMEO_MS );
+    SntpStatus_t             st;
+    int                      rc = -1;
+
+    if( s_sntp_lock == NULL )
+    {
+        s_sntp_lock = xSemaphoreCreateMutex();
+    }
+    if( s_sntp_lock != NULL )
+    {
+        ( void ) xSemaphoreTake( s_sntp_lock, portMAX_DELAY );
     }
 
-    /* One persistent, ephemeral-bound UDP socket for the task lifetime. */
-    s_netctx.sock = FreeRTOS_socket( FREERTOS_AF_INET, FREERTOS_SOCK_DGRAM, FREERTOS_IPPROTO_UDP );
-    if( s_netctx.sock == FREERTOS_INVALID_SOCKET )
+    num_servers = pick_servers( &servers );
+
+    netctx.sock = FreeRTOS_socket( FREERTOS_AF_INET, FREERTOS_SOCK_DGRAM, FREERTOS_IPPROTO_UDP );
+    if( netctx.sock == FREERTOS_INVALID_SOCKET )
     {
         log_error( "[SNTP] socket FAILED" );
-        vTaskDelete( NULL );
-        return;
+        goto out;
     }
     memset( &bind_addr, 0, sizeof( bind_addr ) );
     bind_addr.sin_family = FREERTOS_AF_INET;
-    bind_addr.sin_port = 0;
-    ( void ) FreeRTOS_bind( s_netctx.sock, &bind_addr, sizeof( bind_addr ) );
-    ( void ) FreeRTOS_setsockopt( s_netctx.sock, 0, FREERTOS_SO_RCVTIMEO, &rcv_to, sizeof( rcv_to ) );
+    bind_addr.sin_port   = 0;
+    ( void ) FreeRTOS_bind( netctx.sock, &bind_addr, sizeof( bind_addr ) );
+    ( void ) FreeRTOS_setsockopt( netctx.sock, 0, FREERTOS_SO_RCVTIMEO, &rcv_to, sizeof( rcv_to ) );
 
-    udp.pUserContext = &s_netctx;
-    udp.sendTo = sntp_udp_send;
-    udp.recvFrom = sntp_udp_recv;
+    udp.pUserContext = &netctx;
+    udp.sendTo       = sntp_udp_send;
+    udp.recvFrom     = sntp_udp_recv;
 
-    st = Sntp_Init( &s_ctx, servers, num_servers, SNTP_RESPONSE_TIMEOUT_MS,
-                    s_netbuf, sizeof( s_netbuf ),
+    st = Sntp_Init( &ctx, servers, num_servers, SNTP_RESPONSE_TIMEOUT_MS,
+                    netbuf, sizeof( netbuf ),
                     sntp_resolve_dns, sntp_get_time, sntp_set_time, &udp, NULL );
     if( st != SntpSuccess )
     {
         log_error( "[SNTP] Sntp_Init failed (%d)", ( int ) st );
-        FreeRTOS_closesocket( s_netctx.sock );
-        vTaskDelete( NULL );
-        return;
+        FreeRTOS_closesocket( netctx.sock );
+        goto out;
     }
 
-    log_info( "[SNTP] client up; %u server(s)", ( unsigned ) num_servers );
+    st = Sntp_SendTimeRequest( &ctx, ( uint32_t ) rand(), SNTP_SEND_BLOCK_MS );
+    if( st == SntpSuccess )
+    {
+        st = Sntp_ReceiveTimeResponse( &ctx, SNTP_RECV_BLOCK_MS );   /* sntp_set_time sets the clock */
+    }
+    FreeRTOS_closesocket( netctx.sock );
+    rc = ( st == SntpSuccess ) ? 0 : -2;
+
+out:
+    if( s_sntp_lock != NULL )
+    {
+        ( void ) xSemaphoreGive( s_sntp_lock );
+    }
+    return rc;
+}
+
+/* ---- tasks ----------------------------------------------------------------------------- */
+
+static void sntp_task( void * arg )
+{
+    ( void ) arg;
+    srand( ( unsigned ) xTaskGetTickCount() );
+    log_info( "[SNTP] client up" );
 
     for( ; ; )
     {
-        st = Sntp_SendTimeRequest( &s_ctx, ( uint32_t ) rand(), SNTP_SEND_BLOCK_MS );
-        if( st == SntpSuccess )
-        {
-            st = Sntp_ReceiveTimeResponse( &s_ctx, SNTP_RECV_BLOCK_MS );
-        }
+        int rc = sntp_sync_once();
 
-        if( st == SntpSuccess )
+        if( rc == 0 )
         {
             vTaskDelay( pdMS_TO_TICKS( SNTP_RESYNC_PERIOD_MS ) );   /* synced; re-sync in ~1h */
         }
         else
         {
-            log_error( "[SNTP] round failed (%d); retry in %us", ( int ) st, SNTP_RETRY_MS / 1000U );
+            log_error( "[SNTP] round failed (%d); retry in %us", rc, SNTP_RETRY_MS / 1000U );
             vTaskDelay( pdMS_TO_TICKS( SNTP_RETRY_MS ) );
         }
     }
