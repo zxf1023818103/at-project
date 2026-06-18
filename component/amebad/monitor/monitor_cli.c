@@ -242,7 +242,7 @@ static const CLI_Command_Definition_t kCmds[] = {
     { "reboot",  "reboot [uartburn]:\r\n watchdog-reset this core (uartburn -> UART download mode)\r\n", cmd_reboot, -1 },
     { "dw",      "dw <hexaddr>:\r\n dump a memory dword\r\n",                     cmd_dw,        -1 },
     { "ew",      "ew <hexaddr> <hexval>:\r\n write a memory dword\r\n",           cmd_ew,        -1 },
-    { "flash",   "flash <erase|read|write|...> ...:\r\n flash ops (see SDK cmd_flash)\r\n", cmd_flash_, -1 },
+    { "flash",   "flash <erase|read|write|status|cache|lock|unlock> ...:\r\n flash ops; lock <fw|all> / unlock = SR write-protect (KM4)\r\n", cmd_flash_, -1 },
     { "efuse",   "efuse <wmap|rmap|wraw|rraw> ...:\r\n efuse ops (wmap/wraw BURN efuse)\r\n", cmd_efuse_, -1 },
     { ">>",      ">>:\r\n hand the console to the other core\r\n",                cmd_sw_toggle, 0 },
     { "km0",     "km0:\r\n switch the console to KM0\r\n",                        cmd_sw_km0,    0 },
