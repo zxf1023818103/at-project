@@ -88,6 +88,19 @@ static BaseType_t cmd_heap( char *out, size_t outlen, const char *cmd )
     return pdFALSE;
 }
 
+static BaseType_t cmd_heapreset( char *out, size_t outlen, const char *cmd )
+{
+    ( void ) cmd;
+    /* Re-baseline the min-ever watermark to current free, to isolate a later phase's low-water
+     * (e.g. reset just before a TLS handshake / OTA, then read `heap`). Only meaningful when the
+     * heap was built with CONFIG_MM_ENABLE_MIN_FREE_TRACKING; a no-op otherwise. */
+    extern void vPortResetMinimumEverFreeHeapSize( void );
+    vPortResetMinimumEverFreeHeapSize();
+    snprintf( out, outlen, "min-ever heap watermark reset; now %d bytes free\r\n",
+              ( int ) xPortGetMinimumEverFreeHeapSize() );
+    return pdFALSE;
+}
+
 static BaseType_t cmd_tasks( char *out, size_t outlen, const char *cmd )
 {
     ( void ) cmd;
@@ -223,6 +236,7 @@ static BaseType_t cmd_sw_km4( char *out, size_t outlen, const char *cmd )
 static const CLI_Command_Definition_t kCmds[] = {
     { "version", "version:\r\n print firmware / kernel version + this core\r\n",  cmd_version,   0 },
     { "heap",    "heap:\r\n print free / minimum-ever heap\r\n",                  cmd_heap,      0 },
+    { "heapreset", "heapreset:\r\n reset the min-ever heap watermark (needs CONFIG_MM_ENABLE_MIN_FREE_TRACKING)\r\n", cmd_heapreset, 0 },
     { "tasks",   "tasks:\r\n list the FreeRTOS tasks\r\n",                        cmd_tasks,     0 },
     { "echo",    "echo <text>:\r\n echo the argument back\r\n",                   cmd_echo,      1 },
     { "reboot",  "reboot [uartburn]:\r\n watchdog-reset this core (uartburn -> UART download mode)\r\n", cmd_reboot, -1 },

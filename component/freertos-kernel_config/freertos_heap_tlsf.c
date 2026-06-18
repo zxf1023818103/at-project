@@ -109,8 +109,25 @@ size_t xPortGetFreeHeapSize(void)
 
 size_t xPortGetMinimumEverFreeHeapSize(void)
 {
-    /* tlsf_config min-free tracking is off by default; report current free. */
+#if defined(CONFIG_MM_ENABLE_MIN_FREE_TRACKING) && CONFIG_MM_ENABLE_MIN_FREE_TRACKING
+    /* Real low-water watermark: mm.c updates min_free_size after every malloc when
+     * CONFIG_MM_ENABLE_MIN_FREE_TRACKING is on (O(n)-per-malloc; see mm_config.h). */
+    return kmin_free_size();
+#else
+    /* tracking off (default): no per-malloc overhead; report current free. */
     return kfree_size(0);
+#endif
+}
+
+/* Re-baseline the min-ever-free watermark to the current free (the `heapreset` console command).
+ * Only meaningful when CONFIG_MM_ENABLE_MIN_FREE_TRACKING is on; otherwise a no-op. Lets you
+ * isolate a phase's low-water (e.g. reset right before a TLS handshake / OTA download, then read
+ * `heap`). Not a standard FreeRTOS API. */
+void vPortResetMinimumEverFreeHeapSize(void)
+{
+#if defined(CONFIG_MM_ENABLE_MIN_FREE_TRACKING) && CONFIG_MM_ENABLE_MIN_FREE_TRACKING
+    (void)kmin_free_size_reset();
+#endif
 }
 
 void vPortInitialiseBlocks(void)
