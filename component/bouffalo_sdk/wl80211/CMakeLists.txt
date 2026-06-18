@@ -64,7 +64,7 @@ target_link_libraries(wl80211 PUBLIC
     # wifi_mgmr.c / wifi_mgmr_cli.c #include "macsw.h"
     macsw
     # wl80211_platform.c #include "mm.h"
-    bflb_mm
+    tlsf_config
     # lwip.c #include "dhcp_server.h"
     lwip_dhcpd
     # wifi_mgmr.c / wl80211_platform.c / lwip.c #include "async_event.h"

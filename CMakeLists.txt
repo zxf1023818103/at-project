@@ -1,6 +1,17 @@
 cmake_minimum_required(VERSION 3.20)
 project(at_project C CXX ASM)
 
+# Per-line log basename: rxi/log.c (component/rxi_log_config) prints __FILE__ in its "file:line" tag.
+# Rewrite __FILE__ at preprocess time so it shows just the basename (e.g. "main.c:69") instead of
+# the full build path — compile-time, no runtime strchr (GCC 10 here has no __FILE_NAME__). Strip
+# the dirs that hold log_*-using app code: src/ (cross-platform app) + the AmebaD KM4 app. Common
+# to every build that enters here — the AmebaD build (cmake -S here) and the Bouffalo build (which
+# add_subdirectory()s this root). Other dirs' __FILE__ are unaffected (they don't match the maps).
+add_compile_options(
+    "-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/src/="
+    "-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/component/amebad/app_km4/="
+)
+
 # Root entry for the at_project unified build. Used both:
 #   - directly:  AmebaD SDK's library/Makefile runs `cmake -S <at-project-root>`
 #                to produce build/amebad_user/user_link.list, which the SDK
@@ -35,7 +46,7 @@ add_subdirectory(component/console)
 # links the real bflb_lhal/bflb_log; other platforms use port_generic shims. After
 # the chip vars are known (BOUFFALO_CHIP gates the SDK deps) but it's header/dep
 # choice only, resolved at generate — safe to add here with the other shared libs.
-add_subdirectory(component/bflb_mm)
+add_subdirectory(component/tlsf_config)
 
 # Cross-platform FreeRTOS config base — the settings common to AmebaD KM0/KM4 and
 # Bouffalo; each platform's FreeRTOSConfig.h includes it (freertos_config_common.h).
@@ -49,24 +60,14 @@ add_subdirectory(component/freertos-posix_config)
 # Shared user sources (src/main.cpp + ragel-generated AT parser).
 add_subdirectory(src)
 
-# Bouffalo-specific subtree. Gated on BOUFFALO_CHIP so an AmebaD `cmake -S
-# <root>` invocation (no Bouffalo toolchain) doesn't trip component/'s
-# fatal-error chip check.
-if(BOUFFALO_CHIP)
+# Platform component subtree. Entered for whichever platform's chip vars are set:
+# BOUFFALO_CHIP (Bouffalo SDK subtree) or AMEBAD_CHIP (the AmebaD config dirs +
+# bootloader/app subtree) — component/CMakeLists.txt branches internally and owns
+# each platform's children, so this stays a single strict add_subdirectory. Neither
+# is set in the legacy AmebaD SDK flow (`cmake -S <root>` with no chip toolchain, used
+# only to emit user_link.list), so component/ correctly stays inactive there.
+if(BOUFFALO_CHIP OR AMEBAD_CHIP MATCHES "^amebad-km[04]$")
     add_subdirectory(component)
-endif()
-
-# AmebaD bootloader subtree. Gated on AMEBAD_CHIP (set by
-# cmake/amebad-km{0,4}.cmake) so the legacy AmebaD SDK flow
-# (`cmake -S <root>` with no chip toolchain, used only to produce
-# user_link.list) doesn't enter the bootloader recipe. Per-module
-# add_subdirectory()s live in component/amebad/CMakeLists.txt.
-if(AMEBAD_CHIP MATCHES "^amebad-km[04]$")
-    add_subdirectory(component/amebad)
-    # NimBLE: the cross-platform config + header surface (component/nimble_config)
-    # and the AmebaD port (component/amebad/nimble_port, wired from
-    # component/amebad/CMakeLists.txt) on top of component/amebad/hci. KM4-only (the
-    # port early-returns for km0). Upstream is the submodule component/nimble_config/nimble.
 endif()
 
 # Forward src/'s AT_USER_SOURCES / AT_USER_SRC_DIR one more scope up so a

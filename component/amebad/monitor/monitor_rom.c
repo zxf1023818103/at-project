@@ -98,7 +98,9 @@ u32 cmd_flash(u16 argc,  u8  *argv[])
 	
 		MONITOR_LOG("Erase Flash Start\n");
 
-		AddrTemp = _strtoul((const char*)(argv[2]), (char **)NULL, 16);
+		/* `erase chip` has no address arg; guard so _strtoul(NULL) doesn't fault (block/sector
+		 * pass the address as argv[2]). */
+		AddrTemp = (argc >= 3 && argv[2]) ? _strtoul((const char*)(argv[2]), (char **)NULL, 16) : 0;
 
 		FLASH_Write_Lock();
 		if (_strcmp((const char*)argv[1], "chip") == 0) {
@@ -179,31 +181,44 @@ u32 cmd_flash(u16 argc,  u8  *argv[])
 	}
 
 	if (_strcmp((const char*)argv[0], "status") == 0) {
-		u8 status[2];
-		u8 wstatus = _strtoul((const char*)(argv[2]), (char **)NULL, 16);
+		u8 status[2] = { 0, 0 };
+		/* argv[2] (the write value) only exists for set1/set2; `status get` has none, and
+		 * run_rom_cmd's static argv[] leaves it NULL/stale — guard the parse, _strtoul(NULL)
+		 * faults in ROM. */
+		u8 wstatus = (argc >= 3 && argv[2]) ? (u8)_strtoul((const char*)(argv[2]), (char **)NULL, 16) : 0;
 
+		/* Raw RDSR/WRSR must run under FLASH_Write_Lock at runtime: it freezes the other core and
+		 * restores the SPIC to auto-XIP afterwards. Without it a concurrent XIP fetch during the
+		 * user-mode SPI command faults (imprecise bus error inside FLASH_RxCmd). Same wrap the SDK's
+		 * flash_write_protect() uses. */
 		if (_strcmp((const char*)argv[1], "get") == 0) {
+			/* Read SR2 via the chip-standard RDSR2 0x35 (auto-detect opcode when set) regardless of
+			 * FLASH_Status2_exist — that flag is 0 on this SiP even though the part has SR2/CMP. */
+			u8 rdsr2 = flash_init_para.FLASH_cmd_rd_status2 ? flash_init_para.FLASH_cmd_rd_status2 : 0x35;
+			FLASH_Write_Lock();
 			FLASH_RxCmd(flash_init_para.FLASH_cmd_rd_status, 1, &status[0]);
-			if (flash_init_para.FLASH_Status2_exist) {
-				FLASH_RxCmd(flash_init_para.FLASH_cmd_rd_status2, 1, &status[1]);
-			}
-			
+			FLASH_RxCmd(rdsr2, 1, &status[1]);
+			FLASH_Write_Unlock();
 			MONITOR_LOG("status: %x %x\n", status[0], status[1]);
 		}
-		
+
 		if (_strcmp((const char*)argv[1], "set1") == 0) {
+			FLASH_Write_Lock();
 			FLASH_SetStatus(flash_init_para.FLASH_cmd_wr_status, 1, &wstatus);
+			FLASH_Write_Unlock();
 		}
 
 		if (_strcmp((const char*)argv[1], "set2") == 0) {
+			FLASH_Write_Lock();
 			if(!flash_init_para.FLASH_cmd_wr_status2){
 				FLASH_RxCmd(flash_init_para.FLASH_cmd_rd_status, 1, &status[0]);
 				status[1] = wstatus;
-				
+
 				FLASH_SetStatus(flash_init_para.FLASH_cmd_wr_status, 2, status);
 			}else{
 				FLASH_SetStatus(flash_init_para.FLASH_cmd_wr_status2, 1, &wstatus);
 			}
+			FLASH_Write_Unlock();
 		}
 	}
 	
@@ -218,6 +233,56 @@ u32 cmd_flash(u16 argc,  u8  *argv[])
 			MONITOR_LOG("cache flush \n");
 			Cache_Flush();
 		}
+	}
+
+	if (_strcmp((const char*)argv[0], "lock") == 0 || _strcmp((const char*)argv[0], "unlock") == 0) {
+		/* SPI-NOR block write-protect via the status-register BP/CMP bits. Reversible; read/XIP
+		 * still work, only program/erase is blocked. Values match src/BoardFlashLock.cpp (verified
+		 * on the W25Q/GD25 4 MB SiP):
+		 *   lock fw  -> SR1=0x14 (TB=0,BP=101) + SR2 CMP=1 => bottom 3 MB (0..0x300000: boot +
+		 *               image2) locked, top 1 MB (LittleFS + TF-M ITS) still writable.
+		 *   lock all -> SR1=0x1C (TB=0,BP=111) + SR2 CMP=0 => entire 4 MB locked.
+		 *   unlock   -> SR1=0x00 + SR2 CMP=0               => no protection.
+		 * SR2/CMP is driven via the chip-standard RDSR2 0x35 / WRSR2 0x31 (overridden by the SDK
+		 * auto-detect opcodes when set) UNCONDITIONALLY: flash_init_para.FLASH_Status2_exist reads 0
+		 * on this SiP even though the part HAS SR2, so gating on it would skip CMP and protect the
+		 * wrong region (bare SR1=0x14 without CMP locks the TOP 1 MB, not the firmware). Same raw
+		 * approach BoardFlashLock.cpp uses. SR1 then SR2 written separately. Wrapped in
+		 * FLASH_Write_Lock (as the SDK flash_write_protect / the erase path do) so the raw RDSR/WRSR
+		 * don't collide with XIP. */
+		u8 rdsr2 = flash_init_para.FLASH_cmd_rd_status2 ? flash_init_para.FLASH_cmd_rd_status2 : 0x35;
+		u8 wrsr2 = flash_init_para.FLASH_cmd_wr_status2 ? flash_init_para.FLASH_cmd_wr_status2 : 0x31;
+		int do_lock = (argv[0][0] == 'l');
+		int all = (argc >= 2) && (_strcmp((const char*)argv[1], "all") == 0);
+		u8 sr1_cur = 0, sr2_cur = 0, sr1_new, sr2_new, v1 = 0, v2 = 0;
+		int ok;
+
+		FLASH_Write_Lock();
+		FLASH_RxCmd(flash_init_para.FLASH_cmd_rd_status, 1, &sr1_cur);
+		FLASH_RxCmd(rdsr2, 1, &sr2_cur);
+
+		if (!do_lock) {                 /* unlock: clear all protection */
+			sr1_new = 0x00;
+			sr2_new = sr2_cur & ~0x40;
+		} else if (all) {               /* lock the whole chip */
+			sr1_new = 0x1C;
+			sr2_new = sr2_cur & ~0x40;
+		} else {                        /* lock the firmware region (default) */
+			sr1_new = 0x14;
+			sr2_new = sr2_cur | 0x40;
+		}
+
+		FLASH_SetStatus(flash_init_para.FLASH_cmd_wr_status, 1, &sr1_new);
+		FLASH_SetStatus(wrsr2, 1, &sr2_new);
+
+		FLASH_RxCmd(flash_init_para.FLASH_cmd_rd_status, 1, &v1);
+		FLASH_RxCmd(rdsr2, 1, &v2);
+		FLASH_Write_Unlock();
+
+		ok = (v1 == sr1_new) && (v2 == sr2_new);
+		MONITOR_LOG("flash %s: SR1 %02x->%02x SR2 %02x->%02x %s\n",
+			do_lock ? (all ? "lock all" : "lock fw") : "unlock",
+			sr1_cur, v1, sr2_cur, v2, ok ? "OK" : "FAIL");
 	}
 
 	return 0;

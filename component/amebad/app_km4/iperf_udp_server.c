@@ -22,11 +22,11 @@
  * parse the iperf2 header — it only needs the receive rate.
  */
 #include "FreeRTOS.h"
+#include "at_log.h"
 #include "task.h"
 #include "FreeRTOS_IP.h"
 #include "FreeRTOS_Sockets.h"
 
-extern void DiagPrintf( const char *, ... );
 
 #define IPERF_PORT        5001
 #define IPERF_RXBUF       2048   /* > one 1470-byte iperf UDP datagram */
@@ -43,7 +43,7 @@ static void prvIperfUdpServerTask( void *pvParameters )
     xSock = FreeRTOS_socket( FREERTOS_AF_INET, FREERTOS_SOCK_DGRAM, FREERTOS_IPPROTO_UDP );
     if( ( xSock == FREERTOS_INVALID_SOCKET ) || ( xSock == NULL ) )
     {
-        DiagPrintf( "[KM4] iperf-udp-srv: socket() failed\n\r" );
+        log_error( "[KM4] iperf-udp-srv: socket() failed" );
         vTaskDelete( NULL );
         return;
     }
@@ -55,13 +55,13 @@ static void prvIperfUdpServerTask( void *pvParameters )
     xBind.sin_port = FreeRTOS_htons( IPERF_PORT );
     if( FreeRTOS_bind( xSock, &xBind, sizeof( xBind ) ) != 0 )
     {
-        DiagPrintf( "[KM4] iperf-udp-srv: bind() failed\n\r" );
+        log_error( "[KM4] iperf-udp-srv: bind() failed" );
         FreeRTOS_closesocket( xSock );
         vTaskDelete( NULL );
         return;
     }
 
-    DiagPrintf( "[KM4] iperf-udp-srv: listening UDP :%d (run `iperf -u -c <ip> -b 40M -t 15`)...\n\r",
+    log_info( "[KM4] iperf-udp-srv: listening UDP :%d (run `iperf -u -c <ip> -b 40M -t 15`)...",
                 IPERF_PORT );
 
     {
@@ -83,7 +83,7 @@ static void prvIperfUdpServerTask( void *pvParameters )
                 {
                     started = 1;
                     xStart = xTaskGetTickCount();
-                    DiagPrintf( "[KM4] iperf-udp-srv: first datagram in (%d bytes)\n\r", ( int ) xN );
+                    log_info( "[KM4] iperf-udp-srv: first datagram in (%d bytes)", ( int ) xN );
                 }
                 xLast = xTaskGetTickCount();
                 ulTotal += ( uint32_t ) xN;
@@ -95,7 +95,7 @@ static void prvIperfUdpServerTask( void *pvParameters )
                 {
                     TickType_t xMs = ( xLast - xStart ) * portTICK_PERIOD_MS;
                     if( xMs == 0 ) xMs = 1;
-                    DiagPrintf( "[KM4] iperf-udp-srv: RX running %d pkts in %d ms = %d Kbit/s, %d pps\n\r",
+                    log_info( "[KM4] iperf-udp-srv: RX running %d pkts in %d ms = %d Kbit/s, %d pps",
                                 ( int ) ulPkts, ( int ) xMs,
                                 ( int ) ( ( ulTotal / xMs ) * 8U ),
                                 ( int ) ( ( ulPkts * 1000U ) / xMs ) );
@@ -112,7 +112,7 @@ static void prvIperfUdpServerTask( void *pvParameters )
                 /* still waiting for the first datagram — give up after ~90 s */
                 if( ( ( xTaskGetTickCount() - xBoot ) * portTICK_PERIOD_MS ) > 90000U )
                 {
-                    DiagPrintf( "[KM4] iperf-udp-srv: no data in 90s, giving up\n\r" );
+                    log_info( "[KM4] iperf-udp-srv: no data in 90s, giving up" );
                     FreeRTOS_closesocket( xSock );
                     vTaskDelete( NULL );
                     return;
@@ -126,7 +126,7 @@ static void prvIperfUdpServerTask( void *pvParameters )
             if( xMs == 0 ) xMs = 1;
             ulKbits = ( ulTotal / xMs ) * 8U;
             ulPps   = ( ulPkts * 1000U ) / xMs;
-            DiagPrintf( "[KM4] iperf-udp-srv: RX %d bytes / %d pkts in %d ms = %d Kbit/s, %d pps\n\r",
+            log_info( "[KM4] iperf-udp-srv: RX %d bytes / %d pkts in %d ms = %d Kbit/s, %d pps",
                         ( int ) ulTotal, ( int ) ulPkts, ( int ) xMs,
                         ( int ) ulKbits, ( int ) ulPps );
         }

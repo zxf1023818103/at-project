@@ -15,12 +15,12 @@ in-place anymore** — every component compiles only files under `component/ameb
 - `ftl_km4/src/` — ftl.c, flash_api.c, + ftl's private headers ftl.h / ftl_int.h
 - `at_cmd_km4/src/` — log_service.c (+ the authored at_cmd_stubs.c moved here)
 - `monitor/` (shared `ram/` + `rom/`, compiled per-ABI by `monitor_km0` + `monitor_km4`,
-  mirroring `freertos_glue/`) — monitor_lp/hp.c, shell_ram.c, rtl_trace.c,
+  mirroring `freertos_port/`) — monitor_lp/hp.c, shell_ram.c, rtl_trace.c,
   low_level_io.c, rom/shell_rom.c, rom/monitor_rom.c
 Earlier rounds already vendored: bootloaders + apps (`*/src/`), ram_common/ram_lp/
-ram_hp, usrcfg_*, fwlib_headers, common_ld_script, freertos_glue.
+ram_hp, usrcfg_*, fwlib_headers, common_ld_script, freertos_port (glue half).
 Convention: per-component vendored sources live in `<component>/src/`; sources
-shared by km0+km4 live in a shared sibling folder (freertos_glue/, monitor/).
+shared by km0+km4 live in a shared sibling folder (freertos_port/, monitor/).
 
 **Remaining SDK coupling:**
 1. **Headers** ✅ DONE — fully vendored into `component/amebad/sdk_headers/` (85

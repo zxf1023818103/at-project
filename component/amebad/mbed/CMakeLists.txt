@@ -19,6 +19,7 @@ endif()
 
 add_library(amebad_mbed STATIC
     flash_api.c
+    rtc_api.c       # time_t <-> calendar RTC (rtc_init/read/write); pulled only by the SNTP image's rtc_time.c
 )
 # PUBLIC: consumers (wifi) that link amebad_mbed get the flat mbed headers.
 target_include_directories(amebad_mbed SYSTEM PUBLIC

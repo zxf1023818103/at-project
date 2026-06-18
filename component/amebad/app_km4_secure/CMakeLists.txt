@@ -65,6 +65,15 @@ set(_tfm_args
     "-DBL2=OFF"
     "-DCMAKE_INSTALL_PREFIX=${_tfm_export}"
     "-DCMAKE_BUILD_TYPE=${_tfm_build_type}"
+    # Share ONE Mbed TLS version with the NS side. TF-M's lib/ext/mbedcrypto must own/patch
+    # its own checkout (apply_patches does a destructive git reset --hard / clean -df on the
+    # source), so we can't point it AT our submodule. Instead, make it FETCH FROM our local
+    # tree at OUR version (mbedtls-3.6.4) — no separate upstream download, same version on
+    # SPE + NS, and our submodule stays untouched (TF-M clones into its own build dir).
+    # The CC3XX patch (0005) is renamed out (above): it doesn't apply to 3.6.4 and the
+    # RTL8721D has no CryptoCell (CRYPTO_HW_ACCELERATOR=OFF -> vanilla software wrappers).
+    "-DMBEDCRYPTO_GIT_REMOTE=${CMAKE_SOURCE_DIR}/component/mbedtls_config/mbedtls"
+    "-DMBEDCRYPTO_VERSION=mbedtls-3.6.4"
 )
 
 # PSA secure storage (make STORAGE=ON): enables ITS + PS (encrypted) + the Crypto
@@ -75,6 +84,29 @@ set(_tfm_args
 if(AMEBAD_TFM_STORAGE)
     list(APPEND _tfm_args "-DAMEBAD_TFM_STORAGE=ON")
 endif()
+
+# Skip TF-M's CC3XX mbedcrypto patch (0005): it targets mbedtls-3.6.2 and does NOT apply to
+# our shared 3.6.4, and the RTL8721D has no CryptoCell (CRYPTO_HW_ACCELERATOR=OFF -> vanilla
+# software PSA driver wrappers), so it is unneeded. Renaming it out of the *.patch glob that
+# fetch_remote_library applies is done HERE (from our tracked CMake) so it is reproducible
+# after a `git submodule update` restores the upstream TF-M tree.
+set(_cc3xx_patch "${_tfm_src}/lib/ext/mbedcrypto/0005-Hardcode-CC3XX-entry-points.patch")
+if(EXISTS "${_cc3xx_patch}")
+    file(RENAME "${_cc3xx_patch}" "${_cc3xx_patch}.skip-rtl8721d-sw")
+endif()
+
+# RTL8721D: override TF-M's default NV-seed write. mbedTLS rewrites the CRYPTO_NV_SEED in ITS on
+# every boot (forward-secrecy seed update); that write triggers an ITS block GC which copies any
+# large co-located object (a provisioned AWS key/cert) as long 256-byte SPIC page programs, whose
+# wide user-mode window corrupts KM0's concurrent XIP fetches -> KM0 boot HardFault (AN0400 §18.1).
+# Our version persists only the FIRST (provisioning) write and skips the per-boot update. Copied
+# from our tracked source over the upstream template at configure time so it survives a
+# `git submodule update` (same reproducible pattern as the CC3XX rename above). See the
+# project_amebad_aws_iot memory + doc/amebad_km0_scheduler_and_runtime_flash.md.
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/platform/rtl8721d/crypto_nv_seed.c"
+    "${_tfm_src}/platform/ext/common/template/crypto_nv_seed.c"
+    COPYONLY)
 
 # Wrap the nested CMake invocations so the toolchain bin dir is on PATH.
 set(_env "${CMAKE_COMMAND}" -E env "PATH=${_tc_bin}:$ENV{PATH}")

@@ -20,11 +20,11 @@
  * hang point is exact; if the HW path returns, its output is compared to SW.
  */
 #include "FreeRTOS.h"
+#include "at_log.h"
 #include "task.h"
 #include <string.h>
 #include "rom_mbedtls_crypto.h"   /* ROM mbedTLS software AES */
 
-extern void DiagPrintf(const char *, ...);
 
 /* IPSEC HW-crypto ROM routines = what rom_ssl_ram_map.hw_crypto_aes_ecb_* point to. */
 typedef int (*crypto_init_fn)(void *);
@@ -39,9 +39,9 @@ typedef int (*aes_ecb_fn)(const unsigned char *msg, unsigned int msglen,
 static void hex16(const char *tag, const unsigned char *b)
 {
     int i;
-    DiagPrintf("%s", tag);
-    for (i = 0; i < 16; i++) DiagPrintf("%02x", b[i]);
-    DiagPrintf("\n\r");
+    log_info("%s", tag);
+    for (i = 0; i < 16; i++) log_info("%02x", b[i]);
+    log_info("");
 }
 
 void rom_hwcrypto_compare(void)
@@ -59,7 +59,7 @@ void rom_hwcrypto_compare(void)
     unsigned char sw[16] = {0}, hw[16] = {0};
     int r;
 
-    DiagPrintf("\n\r[HWCMP] ===== ROM crypto HW vs SW (rom_ssl_ram_map hw_crypto_*) =====\n\r");
+    log_info("[HWCMP] ===== ROM crypto HW vs SW (rom_ssl_ram_map hw_crypto_*) =====");
 
     /* ---- SW path: ROM mbedTLS software AES (use_hw_crypto_func=0) ---- */
     {
@@ -69,25 +69,25 @@ void rom_hwcrypto_compare(void)
         mbedtls_aes_crypt_ecb(&c, MBEDTLS_AES_ENCRYPT, pt, sw);
         mbedtls_aes_free(&c);
         hex16("[HWCMP] SW  AES-128-ECB = ", sw);
-        DiagPrintf("[HWCMP] SW  vs FIPS-197  = %s\n\r",
+        log_info("[HWCMP] SW  vs FIPS-197  = %s",
                    memcmp(sw, ct, 16) == 0 ? "MATCH" : "MISMATCH");
     }
 
     /* ---- HW path: the IPSEC engine (rom_ssl_ram_map.hw_crypto_aes_ecb_*) ---- */
-    DiagPrintf("[HWCMP] --- HW IPSEC engine (rtl_crypto_aes_ecb_*) ---\n\r");
-    DiagPrintf("[HWCMP] CRYPTO_Init(NULL) ...\n\r");
+    log_info("[HWCMP] --- HW IPSEC engine (rtl_crypto_aes_ecb_*) ---");
+    log_info("[HWCMP] CRYPTO_Init(NULL) ...");
     r = ROM_CRYPTO_Init(0);
-    DiagPrintf("[HWCMP]   CRYPTO_Init = %d\n\r", r);
+    log_info("[HWCMP]   CRYPTO_Init = %d", r);
 
-    DiagPrintf("[HWCMP] rtl_crypto_aes_ecb_init(key,16) ...\n\r");
+    log_info("[HWCMP] rtl_crypto_aes_ecb_init(key,16) ...");
     r = ROM_aes_ecb_init(key, 16);
-    DiagPrintf("[HWCMP]   aes_ecb_init = %d\n\r", r);
+    log_info("[HWCMP]   aes_ecb_init = %d", r);
 
-    DiagPrintf("[HWCMP] rtl_crypto_aes_ecb_encrypt()  <-- prior finding: AHB stall HANGS here\n\r");
+    log_info("[HWCMP] rtl_crypto_aes_ecb_encrypt()  <-- prior finding: AHB stall HANGS here");
     r = ROM_aes_ecb_encrypt(pt, 16, 0, 0, hw);   /* no output after this line if it hangs */
 
-    DiagPrintf("[HWCMP]   aes_ecb_encrypt = %d  (HW path SURVIVED)\n\r", r);
+    log_info("[HWCMP]   aes_ecb_encrypt = %d  (HW path SURVIVED)", r);
     hex16("[HWCMP] HW  AES-128-ECB = ", hw);
-    DiagPrintf("[HWCMP] HW  vs SW       = %s\n\r", memcmp(hw, sw, 16) == 0 ? "MATCH" : "MISMATCH");
-    DiagPrintf("[HWCMP] ===== done =====\n\r");
+    log_info("[HWCMP] HW  vs SW       = %s", memcmp(hw, sw, 16) == 0 ? "MATCH" : "MISMATCH");
+    log_info("[HWCMP] ===== done =====");
 }

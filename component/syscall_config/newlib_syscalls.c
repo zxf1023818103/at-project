@@ -41,8 +41,9 @@
 #include <stdint.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <sys/stat.h>
+#include <sys/stat.h>       /* struct stat + mkdir() prototype */
 
+#include "dirent.h"         /* DIR / struct dirent / DT_* (this component's POSIX dirent) */
 #include "FreeRTOS.h"        /* pvPortMalloc / vPortFree (heap) + the mutex */
 #include "semphr.h"
 #include "FreeRTOS_IP.h"     /* FreeRTOS_htonl / FreeRTOS_htons (network byte order) */
@@ -524,6 +525,122 @@ int _unlink(const char *path)
     return (rc < 0) ? (errno = lfs_to_errno(rc), -1) : 0;
 }
 
+/* rename()/mv: lfs_rename moves a file or (empty) directory in one op. <stdio.h>
+ * prototypes rename(); this strong def (from the force-included OBJECT lib) beats
+ * libc's link()+unlink() fallback. */
+int rename(const char *oldpath, const char *newpath)
+{
+    int rc = lfs_rename(vfs_lfs_mount(), oldpath, newpath);
+    return (rc < 0) ? (errno = lfs_to_errno(rc), -1) : 0;
+}
+
+/* ---- POSIX <dirent.h> directory enumeration over LittleFS ----------------
+ * newlib's <sys/dirent.h> is a `#error` stub, so this component ships its own
+ * <dirent.h> and the strong opendir/readdir/closedir/rewinddir here (libc.a has
+ * none). DIR wraps an lfs_dir_t + a scratch dirent; readdir maps struct lfs_info
+ * -> struct dirent and hides "."/"..". Paths pass verbatim to lfs (like _open).
+ * mkdir()/rmdir() complete the directory API (lfs_mkdir / lfs_remove). */
+struct __dirstream {
+    lfs_dir_t     dir;
+    struct dirent de;        /* returned by readdir, valid until the next readdir/closedir */
+};
+
+DIR *opendir(const char *path)
+{
+    lfs_t *lfs = vfs_lfs_mount();
+    DIR   *d;
+    int    rc;
+
+    if (lfs == NULL) {
+        errno = ENODEV;
+        return NULL;
+    }
+    d = (DIR *)malloc(sizeof(*d));
+    if (d == NULL) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    rc = lfs_dir_open(lfs, &d->dir, path);
+    if (rc < 0) {
+        free(d);
+        errno = lfs_to_errno(rc);
+        return NULL;
+    }
+    return d;
+}
+
+struct dirent *readdir(DIR *d)
+{
+    struct lfs_info info;
+    int rc;
+
+    if (d == NULL) {
+        errno = EBADF;
+        return NULL;
+    }
+    /* Skip the "." and ".." entries littlefs returns first — POSIX readdir may omit
+     * them and the env loader wants regular files only. */
+    do {
+        rc = lfs_dir_read(vfs_lfs_mount(), &d->dir, &info);
+        if (rc < 0) {
+            errno = lfs_to_errno(rc);
+            return NULL;
+        }
+        if (rc == 0) {
+            return NULL;                 /* end of directory (errno unchanged) */
+        }
+    } while (info.name[0] == '.' &&
+             (info.name[1] == '\0' ||
+              (info.name[1] == '.' && info.name[2] == '\0')));
+
+    d->de.d_ino  = 0;
+    d->de.d_type = (info.type == LFS_TYPE_DIR) ? DT_DIR : DT_REG;
+    strncpy(d->de.d_name, info.name, sizeof(d->de.d_name) - 1);
+    d->de.d_name[sizeof(d->de.d_name) - 1] = '\0';
+    return &d->de;
+}
+
+int closedir(DIR *d)
+{
+    int rc;
+
+    if (d == NULL) {
+        errno = EBADF;
+        return -1;
+    }
+    rc = lfs_dir_close(vfs_lfs_mount(), &d->dir);
+    free(d);
+    return (rc < 0) ? (errno = lfs_to_errno(rc), -1) : 0;
+}
+
+void rewinddir(DIR *d)
+{
+    if (d != NULL) {
+        (void)lfs_dir_rewind(vfs_lfs_mount(), &d->dir);
+    }
+}
+
+/* mkdir() is prototyped by <sys/stat.h> (included above); rmdir() lives in
+ * <unistd.h> which we don't pull in — declare it here next to the definition.
+ * lfs_remove() unlinks a file OR an empty directory (-> ENOTEMPTY if non-empty),
+ * which matches rmdir() semantics. */
+int rmdir(const char *path);
+
+int mkdir(const char *path, mode_t mode)
+{
+    int rc;
+
+    (void)mode;
+    rc = lfs_mkdir(vfs_lfs_mount(), path);
+    return (rc < 0) ? (errno = lfs_to_errno(rc), -1) : 0;
+}
+
+int rmdir(const char *path)
+{
+    int rc = lfs_remove(vfs_lfs_mount(), path);
+    return (rc < 0) ? (errno = lfs_to_errno(rc), -1) : 0;
+}
+
 /* newlib's malloc grows the heap through _sbrk. Keep it OFF the FreeRTOS heap
  * (the app's real heap) — a small dedicated arena is enough for stdio buffering. */
 static char _nl_heap[4096];
@@ -542,28 +659,31 @@ int  _getpid(void)                   { return 1; }
 void _exit(int code)                 { (void)code; for (;;) { } }
 
 /* ---------------------------------------------------------------------------
- * Remaining newlib syscall surface — inert. No current image references these;
- * un-#if-0 + implement when a consumer pulls one (e.g. SNTP would make
- * _gettimeofday return real time instead of -1).
+ * Remaining newlib syscall surface — genuinely inert (nothing references them).
+ * The time syscalls (_gettimeofday/_times, plus settimeofday/clock_gettime) now
+ * live in time_base.c over a real UTC base; environ is provided by env.c. Implement
+ * the rest only if a consumer ever pulls one.
  * ------------------------------------------------------------------------- */
 #if 0
 int    _link(const char *a, const char *b)          { (void)a; (void)b; return -1; }
-int    _times(void *buf)                            { (void)buf; return -1; }
-int    _gettimeofday(void *tv, void *tz)            { (void)tv; (void)tz; return -1; }
 int    _fork(void)                                  { return -1; }
 int    _execve(const char *p, char *const a[], char *const e[]) { (void)p; (void)a; (void)e; return -1; }
 int    _wait(int *status)                           { (void)status; return -1; }
-char  *__env[1] = { 0 };
-char **environ  = __env;
 #endif
 
 /* ===== 3. malloc family over the FreeRTOS heap =========================== *
- * 8-byte header keeps the returned payload 8-byte aligned (FreeRTOS heap returns
- * 8-byte-aligned blocks; portBYTE_ALIGNMENT is 8 on Cortex-M). */
+ * Each block carries an 8-byte header (immediately before the payload) recording
+ * the pvPortMalloc() base + the user size. Storing the base — rather than assuming
+ * payload == base + header — lets memalign()/posix_memalign()/aligned_alloc()
+ * return an arbitrarily-aligned pointer that plain free()/realloc() still accept
+ * (third-party code — picotls/mbedTLS, ngtcp2 — pulls posix_memalign). For plain
+ * malloc the header sits at the pvPortMalloc base and the payload is 8-byte aligned. */
 typedef struct {
-    size_t size;
-    size_t _pad;
+    void  *base;   /* the pvPortMalloc() return that free() must hand back */
+    size_t size;   /* user-visible size (for realloc) */
 } mem_hdr_t;
+
+extern void DiagPrintf(const char *, ...);
 
 void *malloc(size_t size)
 {
@@ -572,10 +692,19 @@ void *malloc(size_t size)
     if (size == 0) {
         size = 1;
     }
+    /* Overflow guard: sizeof(mem_hdr_t) + size must not wrap (a SIZE_MAX-ish request
+     * otherwise allocates a tiny block and the caller's zero/copy walks off into — on
+     * the secure-attributed AmebaD RAM — a SecureFault). Return NULL like a real malloc. */
+    if (size > (size_t)-1 - sizeof(mem_hdr_t)) {
+        DiagPrintf("[MEM] malloc overflow sz=0x%x ret=0x%x\n\r",
+                   (unsigned int)size, (unsigned int)__builtin_return_address(0));
+        return NULL;
+    }
     h = (mem_hdr_t *)pvPortMalloc(sizeof(mem_hdr_t) + size);
     if (h == NULL) {
         return NULL;
     }
+    h->base = h;
     h->size = size;
     return (void *)(h + 1);
 }
@@ -585,7 +714,7 @@ void free(void *ptr)
     if (ptr == NULL) {
         return;
     }
-    vPortFree((void *)(((mem_hdr_t *)ptr) - 1));
+    vPortFree((((mem_hdr_t *)ptr) - 1)->base);
 }
 
 void *calloc(size_t nmemb, size_t size)
@@ -597,7 +726,7 @@ void *calloc(size_t nmemb, size_t size)
     if (nmemb != 0 && total / nmemb != size) {
         return NULL;
     }
-    p = malloc(total);
+    p = malloc(total);   /* malloc guards the sizeof(hdr)+size overflow */
     if (p != NULL) {
         memset(p, 0, total);
     }
@@ -626,6 +755,103 @@ void *realloc(void *ptr, size_t size)
     memcpy(np, ptr, old < size ? old : size);
     free(ptr);
     return np;
+}
+
+/* Aligned allocation that stays free()/realloc()-compatible: over-allocate, place the
+ * payload at the first aligned address that leaves room for the header, and record the
+ * pvPortMalloc base in that header. `alignment` must be a power of two. amebad routes
+ * malloc/free to the FreeRTOS heap but newlib ships no memalign over it, so these live here
+ * (a memalign over the _sbrk heap would be freed via the FreeRTOS free() -> corruption). */
+void *memalign(size_t alignment, size_t size)
+{
+    void      *raw;
+    uintptr_t  u;
+    mem_hdr_t *h;
+
+    if (alignment < sizeof(mem_hdr_t)) {
+        alignment = sizeof(mem_hdr_t);          /* leave room for the header before u */
+    }
+    if (alignment & (alignment - 1)) {
+        return NULL;                            /* not a power of two */
+    }
+    if (size == 0) {
+        size = 1;
+    }
+    raw = pvPortMalloc(size + alignment + sizeof(mem_hdr_t));
+    if (raw == NULL) {
+        return NULL;
+    }
+    u = ((uintptr_t)raw + sizeof(mem_hdr_t) + alignment - 1) & ~(uintptr_t)(alignment - 1);
+    h = (mem_hdr_t *)(u - sizeof(mem_hdr_t));
+    h->base = raw;
+    h->size = size;
+    return (void *)u;
+}
+
+int posix_memalign(void **memptr, size_t alignment, size_t size)
+{
+    void *p;
+
+    if (memptr == NULL || (alignment % sizeof(void *)) != 0 ||
+        (alignment & (alignment - 1)) != 0) {
+        return 22;                              /* EINVAL */
+    }
+    p = memalign(alignment, size);
+    if (p == NULL) {
+        return 12;                              /* ENOMEM */
+    }
+    *memptr = p;
+    return 0;
+}
+
+void *aligned_alloc(size_t alignment, size_t size)   /* C11 */
+{
+    return memalign(alignment, size);
+}
+
+/* inet_pton — presentation -> network address. newlib ships none and the FreeRTOS+TCP stack
+ * uses its own FreeRTOS_inet_pton, so third-party POSIX code (picotls) links this. IPv4 is
+ * parsed for real; IPv6 (AF_INET6) is not supported here (returns 0). Returns 1 ok / 0 invalid
+ * / -1 unsupported family. AF_INET=2 / AF_INET6=10 (Linux convention; no <sys/socket.h> here). */
+int inet_pton(int af, const char *src, void *dst)
+{
+    if (af == 2) {                              /* AF_INET — dotted decimal */
+        unsigned char out[4];
+        const char   *p = src;
+        int           i;
+
+        for (i = 0; i < 4; i++) {
+            unsigned v = 0;
+            int      digits = 0;
+            while (*p >= '0' && *p <= '9') {
+                v = v * 10u + (unsigned)(*p - '0');
+                if (v > 255u) {
+                    return 0;
+                }
+                p++;
+                digits++;
+            }
+            if (digits == 0) {
+                return 0;
+            }
+            out[i] = (unsigned char)v;
+            if (i < 3) {
+                if (*p != '.') {
+                    return 0;
+                }
+                p++;
+            }
+        }
+        if (*p != '\0') {
+            return 0;
+        }
+        memcpy(dst, out, 4);
+        return 1;
+    }
+    if (af == 10) {                             /* AF_INET6 — not supported here */
+        return 0;
+    }
+    return -1;                                  /* EAFNOSUPPORT */
 }
 
 /* newlib's stdio (fopen/__sfp/stream buffers) and libstdc++ allocate through the

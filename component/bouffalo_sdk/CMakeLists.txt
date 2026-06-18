@@ -37,8 +37,8 @@ add_subdirectory(bflb_sysinit)
 add_subdirectory(${BOUFFALO_CHIP}_std)
 add_subdirectory(bflb_lhal)
 add_subdirectory(bflb_log)
-# bflb_mm moved to the shared top-level component (component/bflb_mm), added by the
-# repo-root CMakeLists before this subtree; the `bflb_mm` target already exists.
+# tlsf_config moved to the shared top-level component (component/tlsf_config), added by the
+# repo-root CMakeLists before this subtree; the `tlsf_config` target already exists.
 add_subdirectory(bflb_block_pool)
 add_subdirectory(bflb_timestamp)
 add_subdirectory(bflb_partition)
@@ -221,7 +221,7 @@ target_link_libraries(bouffalo_sdk INTERFACE
     ${BOUFFALO_CHIP}_std
     bflb_lhal
     bflb_libc
-    bflb_mm
+    tlsf_config
     bflb_log
     bflb_block_pool
     bflb_timestamp

@@ -6,11 +6,11 @@
  * has to drain). Started from eNetworkUp.
  */
 #include "FreeRTOS.h"
+#include "at_log.h"
 #include "task.h"
 #include "FreeRTOS_IP.h"
 #include "FreeRTOS_Sockets.h"
 
-extern void DiagPrintf( const char *, ... );
 
 #define IPERF_PORT      5001
 #define IPERF_RXBUF     ( 4 * 1460 )
@@ -29,7 +29,7 @@ static void prvIperfServerTask( void *pvParameters )
     xListen = FreeRTOS_socket( FREERTOS_AF_INET, FREERTOS_SOCK_STREAM, FREERTOS_IPPROTO_TCP );
     if( ( xListen == FREERTOS_INVALID_SOCKET ) || ( xListen == NULL ) )
     {
-        DiagPrintf( "[KM4] iperf: socket() failed\n\r" );
+        log_error( "[KM4] iperf: socket() failed" );
         vTaskDelete( NULL );
         return;
     }
@@ -39,7 +39,7 @@ static void prvIperfServerTask( void *pvParameters )
     xBind.sin_port = FreeRTOS_htons( IPERF_PORT );
     FreeRTOS_bind( xListen, &xBind, sizeof( xBind ) );
     FreeRTOS_listen( xListen, 2 );
-    DiagPrintf( "[KM4] iperf TCP sink :%d  (host: iperf -c <ip> -p %d -t 15)\n\r", IPERF_PORT, IPERF_PORT );
+    log_info( "[KM4] iperf TCP sink :%d  (host: iperf -c <ip> -p %d -t 15)", IPERF_PORT, IPERF_PORT );
 
     for( ; ; )
     {
@@ -49,7 +49,7 @@ static void prvIperfServerTask( void *pvParameters )
             continue;
         }
         FreeRTOS_setsockopt( xConn, 0, FREERTOS_SO_RCVTIMEO, &xRecvTimeout, sizeof( xRecvTimeout ) );
-        DiagPrintf( "[KM4] iperf: client connected; receiving...\n\r" );
+        log_info( "[KM4] iperf: client connected; receiving..." );
 
         {
             uint32_t ulTotal = 0;
@@ -73,7 +73,7 @@ static void prvIperfServerTask( void *pvParameters )
             xMs = ( xTaskGetTickCount() - xStart ) * portTICK_PERIOD_MS;
             if( xMs == 0 ) xMs = 1;
             ulKbits = ( ulTotal / xMs ) * 8U;
-            DiagPrintf( "[KM4] iperf: RX %d bytes in %d ms = %d Kbit/s\n\r",
+            log_info( "[KM4] iperf: RX %d bytes in %d ms = %d Kbit/s",
                         (int)ulTotal, (int)xMs, (int)ulKbits );
         }
         FreeRTOS_closesocket( xConn );

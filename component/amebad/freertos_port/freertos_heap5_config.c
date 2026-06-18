@@ -136,7 +136,12 @@ static unsigned char psRAMHeap[configTOTAL_PSRAM_HEAP_SIZE];
 #if (defined(configUSE_PSRAM_FOR_HEAP_REGION) && ( configUSE_PSRAM_FOR_HEAP_REGION == 1 ))
 		{ psRAMHeap, sizeof(psRAMHeap) },
 #endif
-        { 0, 0 },     // Defines a block from ucHeap
+        { 0, 0 },     // Defines a block from ucHeap (os_heap_init fills [0] = __bfsram_end__..__sram_end__)
+        /* NB: the 128 KB "BT/WiFi extension SRAM" (0x100E0000, EXTENTION_SRAM in the layout ld)
+         * is NOT usable as an early heap region — adding it here makes the board hang silently at
+         * boot (no console output at all), because that SRAM is power-gated until the WiFi/BT
+         * subsystem brings it up, so the TLSF control-block write at os_heap_init() faults. Tried
+         * 2026-06-16; would need a deferred vPortDefineHeapRegions() after wifi_on(), not here. */
         { NULL, 0 }                     // Terminates the array.
     };
 #endif
@@ -189,7 +194,12 @@ __WEAK BaseType_t xTaskResumeAll( void )
 
 void vApplicationMallocFailedHook( void )
 {
-    printf( "Malloc failed [free secure heap size: %d]\r\n", xPortGetFreeHeapSize() );
+    /* Use ROM DiagPrintf (polling, no malloc): the prior printf() mallocs its own buffer, so under
+     * the very heap exhaustion that triggers this hook the message never transmitted -> the device
+     * appeared to hang silently. DiagPrintf always gets the line out. */
+    extern void DiagPrintf( const char *, ... );
+    DiagPrintf( "Malloc failed [free heap %d, min-ever %d]\r\n",
+                ( int ) xPortGetFreeHeapSize(), ( int ) xPortGetMinimumEverFreeHeapSize() );
     __disable_irq();
     for( ;; );
 }

@@ -26,6 +26,21 @@ SECTIONS
 		__ram_text_start__ = .;
 		*(.image2.ram.text*)
 		*(.image2.net.ram.text*)
+		/* Console RX IRQ chain in SRAM (AN0400 §18.2): the LOGUART RX ISR (cli_loguart_rx_isr,
+		 * pinned via IMAGE2_RAM_TEXT_SECTION) can fire while the SPE is programming flash (SPIC
+		 * user mode), when XIP fetch is unavailable — so every function it executes must run from
+		 * RAM too. Pull ONLY those functions (not the whole TUs): RAM .text grows the loaded image
+		 * and pushes __bss_end__ up, shrinking the NS heap (__bss_end__..__sram_top__) that the
+		 * TLS handshake runs to the edge, so keep the footprint minimal. The set: the StreamBuffer
+		 * send path (stream_buffer.c), the FromISR critical mask + priority-validate (portasm.c +
+		 * port.c), and the direct-to-task notify (tasks.c; its list ops are inlined). memcpy is
+		 * aliased to ROM _memcpy (--defsym, km4 CMakeLists). The context-switch handlers
+		 * (PendSV/SVC) stay in XIP — they were never RAM-resident and the flash path works. */
+		*stream_buffer.c.obj(.text.xStreamBufferSendFromISR .text.xStreamBufferSpacesAvailable)
+		*stream_buffer.c.obj(.text.prvWriteMessageToBuffer .text.prvWriteBytesToBuffer .text.prvBytesInBuffer)
+		*port.c.obj(.text.vPortValidateInterruptPriority)
+		*portasm.c.obj(.text.ulSetInterruptMask .text.vClearInterruptMask)
+		*tasks.c.obj(.text.xTaskGenericNotifyFromISR)
 		__ram_text_end__ = .;
 	} > BD_RAM_NS
 

@@ -1,7 +1,7 @@
 ---
 name: amebad-imagetool-flash
-description: Flash AmebaD (RTL8721D) firmware over UART using the Realtek MP_ImageTool_1_N tool from WSL. Drives the two-COM bring-up (one boot-strap port + one data port) end to end via PowerShell — handles tool/chip-name changes, UNC-path gotchas, and the "tool exit code lies" trap.
-argument-hint: [--boot-port COM14] [--flash-port COM3] [--baudrate 1500000] [--skip-mode-check]
+description: Flash AmebaD (RTL8721D) firmware over UART using the Realtek MP_ImageTool_1_N tool from WSL. Drives the two-COM bring-up (one boot-strap port + one data port) end to end via PowerShell — handles tool/chip-name changes, UNC-path gotchas, and the "tool exit code lies" trap. Also provisions AWS IoT creds (endpoint→env / cert→LittleFS file / key→TF-M ITS) over the console after flashing.
+argument-hint: [--boot-port COM14] [--flash-port COM3] [--baudrate 1500000] [--skip-mode-check] [-Endpoint host] [-Cert cert.pem] [-Key key.pem]
 allowed-tools: [Bash, Read, Edit]
 ---
 
@@ -117,6 +117,45 @@ See [[reference-wsl-powershell-serial]] for general WSL ↔ PowerShell serial co
 The script's `[post]` step pulses CHIP_EN low/high on COM10 to reset the chip out of download mode into the new firmware. No manual reset needed.
 
 To watch the app come up on the LOG UART, sniff COM25 at 115200 (or whatever console baud the app uses).
+
+## Provision AWS IoT credentials (AWS=ON image)
+
+The `make AWS=ON` image ships **no embedded identity** — it idle-retries until provisioned, so
+credentials are pushed over the console *after* flashing. `flash.ps1` takes `-Endpoint/-Cert/-Key`
+and, after the post-flash reset, drives the sibling [project/amebad/aws_provision.ps1](../../../home/zxf10/at-project/project/amebad/aws_provision.ps1)
+over `$FlashPort` (which is also the LOGUART console). Each credential goes to storage **by
+secrecy** — only the private key is secret:
+
+| Flag | Console cmd | Storage |
+|------|-------------|---------|
+| `-Endpoint <ats-host>` | `set endpoint <host>` | env var `endpoint` → plain LittleFS `KV/endpoint` |
+| `-Cert <cert.pem>` | `set cert <b64>` | plain LittleFS DER file `aws_cert.der`; path → env var `cert` (`KV/cert`) |
+| `-Key <key.pem>` | `set key <b64>` | TF-M Internal Trusted Storage (the only secret) |
+
+```bash
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$PSPATH" \
+    -BootPort COM14 -FlashPort COM3 -Image "$IMG" \
+    -Endpoint a1xxxx-ats.iot.ap-southeast-1.amazonaws.com \
+    -Cert build/aws-bw20/cert.pem -Key build/aws-bw20/key.pem
+```
+
+- The endpoint + cert persist to LittleFS and the key to TF-M ITS, so **subsequent boots reconnect
+  with no re-flash** (`env_init` reloads `KV/*` into `environ`; the key stays in ITS).
+- **First-time / clean provisioning: pass `-Erase`.** Two reasons: (1) a *normal* flash does NOT
+  touch the TF-M ITS region (0x3F0000), so a stale/corrupt key from a prior run survives and the
+  device fails the TLS handshake with `PK - Invalid key tag or value` (look for `key=NNNB` in the
+  `[AWS] provisioned:` line — a good RSA-2048 key is ~1193 B; 128 B = truncated). (2) The key's ITS
+  write must happen **while the device is idle** — a runtime `psa_its_set` that races the TLS
+  crypto/flash activity fails silently. `flash.ps1 -Erase` + provisioning satisfies both: the
+  device boots fully unprovisioned, stays idle through endpoint→cert→key (each leaves one missing
+  until the key lands), so the key store completes cleanly, *then* it connects.
+- `-Erase` wipes the whole flash incl. LittleFS + TF-M ITS — always pass all three creds with it.
+- Provisioning can be re-run standalone (no flash): `pwsh project/amebad/aws_provision.ps1 -Port
+  COM3 -Endpoint ... -Cert ... -Key ...`. It waits ~25 s for boot/WiFi/AWS to settle first.
+- Runtime console introspection: `env` (list all), `getenv <name>`, `setenv <name> <value>`
+  (auto-persisted to `KV/<name>` by the `--wrap=setenv` hook), `blemac` (Thing name = efuse BLE MAC).
+- PEM armor + newlines are stripped host-side; the bare base64 body is sent as ONE CLI line, paced
+  16 B / 6 ms so the polled LOGUART RX FIFO doesn't overrun (a dropped char fails the base64 decode).
 
 ## When NOT to use this skill
 

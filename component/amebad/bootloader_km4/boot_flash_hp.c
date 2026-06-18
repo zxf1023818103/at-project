@@ -683,12 +683,10 @@ void BOOT_FLASH_Image1(void)
 		goto INVALID_IMG2;
 	}
 
-#if defined(AMEBAD_TFM_BOOT) || defined(AMEBAD_SECURE_BOOT)
-	/* Secure-world-first NS handoff. The secure-jump block below is payload-
-	 * agnostic — it works identically for TF-M (AMEBAD_TFM_BOOT, secure image =
-	 * tfm_s.bin) and for the standalone FreeRTOS secure image (AMEBAD_SECURE_BOOT,
-	 * secure image = freertos_s.bin). Both are raw vector-table-first images that
-	 * run cached-XIP from S_CODE_START 0x0E400000 and do their own SAU/IDAU +
+#if defined(AMEBAD_TFM_BOOT)
+	/* Secure-world-first NS handoff. The secure-jump block below hands off to the
+	 * TF-M secure image (tfm_s.bin) — a raw vector-table-first image that runs
+	 * cached-XIP from S_CODE_START 0x0E400000 and does its own SAU/IDAU +
 	 * BLXNS using the handoff block written here.
 	 *
 	 * TF-M-first NS handoff: app_km4's image2 is now loaded (.data copied above,

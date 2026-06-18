@@ -102,6 +102,14 @@ if(AMEBAD_TFM_STORAGE)
     # must be forced via -D (same as DOORBELL above). The PS flash block (20 KB,
     # SPB=5 in flash_layout.h) must exceed PS_MAX_OBJECT_SIZE (~4.2 KB) — it does.
     add_definitions(-DPS_MAX_ASSET_SIZE=0x1000)
+    # AWS credentials are stored in ITS (no AEAD; TrustZone-protected from NS + RSIP-encrypted at
+    # rest). The earlier ">256 B fails with GENERIC_ERROR" was NOT a storage limit — it was the
+    # unserialized NS interface (concurrent PSA calls trashing the SFN shared secure stack), fixed
+    # by tfm_ns_interface_rtos.c. The private key is stored in **DER** (RSA-2048 ≈ 1.2 KB, ECC ≈
+    # 0.1 KB), well under this 2 KB cap — no need to grow ITS/stacks for an RSA key. Raise the
+    # per-asset cap from the 512 B default to 2 KB + the asset count for endpoint+cert+key+selftest.
+    add_definitions(-DITS_MAX_ASSET_SIZE=0x800)
+    add_definitions(-DITS_NUM_ASSETS=16)
     set(TFM_MBEDCRYPTO_CONFIG_PATH
         "${CMAKE_SOURCE_DIR}/lib/ext/mbedcrypto/mbedcrypto_config/tfm_mbedcrypto_config_profile_medium.h"
         CACHE PATH "mbedcrypto config")

@@ -41,11 +41,6 @@
 [submodule "component/thirdparty/freertos-plus-tcp"]
 	path = component/freertos-plus-tcp_config/freertos-plus-tcp
 	url = https://github.com/FreeRTOS/FreeRTOS-Plus-TCP.git
-[submodule "component/thirdparty/wolfssl"]
-	path = component/wolfssl_config/wolfssl
-	url = https://github.com/wolfSSL/wolfssl.git
-	branch = v5.9.1-stable
-	shallow = true
 [submodule "component/thirdparty/nimble"]
 	path = component/nimble_config/nimble
 	url = https://github.com/apache/mynewt-nimble
@@ -64,3 +59,48 @@
 [submodule "component/freertos-posix_config/freertos-posix"]
 	path = component/freertos-posix_config/freertos-posix
 	url = https://github.com/FreeRTOS/Lab-Project-FreeRTOS-POSIX.git
+[submodule "component/thirdparty/corepkcs11"]
+	path = component/corepkcs11_config/corepkcs11
+	url = https://github.com/FreeRTOS/corePKCS11.git
+[submodule "component/thirdparty/picotls"]
+	path = component/picotls_config/picotls
+	url = https://github.com/h2o/picotls.git
+[submodule "component/coremqtt-agent_config/coremqtt-agent"]
+	path = component/coremqtt-agent_config/coremqtt-agent
+	url = https://github.com/FreeRTOS/coreMQTT-Agent.git
+[submodule "component/coresntp_config/coresntp"]
+	path = component/coresntp_config/coresntp
+	url = https://github.com/FreeRTOS/coreSNTP.git
+[submodule "component/tinycbor_config/tinycbor"]
+	path = component/tinycbor_config/tinycbor
+	url = https://github.com/intel/tinycbor.git
+[submodule "component/backoffalgorithm_config/backoffalgorithm"]
+	path = component/backoffalgorithm_config/backoffalgorithm
+	url = https://github.com/FreeRTOS/backoffAlgorithm.git
+[submodule "component/sigv4_config/sigv4"]
+	path = component/sigv4_config/sigv4
+	url = https://github.com/aws/SigV4-for-AWS-IoT-embedded-sdk.git
+[submodule "component/fleetprovisioning_config/fleetprovisioning"]
+	path = component/fleetprovisioning_config/fleetprovisioning
+	url = https://github.com/aws/Fleet-Provisioning-for-AWS-IoT-embedded-sdk.git
+[submodule "component/deviceshadow_config/deviceshadow"]
+	path = component/deviceshadow_config/deviceshadow
+	url = https://github.com/aws/Device-Shadow-for-AWS-IoT-embedded-sdk.git
+[submodule "component/devicedefender_config/devicedefender"]
+	path = component/devicedefender_config/devicedefender
+	url = https://github.com/aws/Device-Defender-for-AWS-IoT-embedded-sdk.git
+[submodule "component/jobs_config/jobs"]
+	path = component/jobs_config/jobs
+	url = https://github.com/aws/Jobs-for-AWS-IoT-embedded-sdk.git
+[submodule "component/ota_config/ota"]
+	path = component/ota_config/ota
+	url = https://github.com/aws/ota-for-aws-iot-embedded-sdk.git
+[submodule "component/corejson_config/corejson"]
+	path = component/corejson_config/corejson
+	url = https://github.com/FreeRTOS/coreJSON.git
+[submodule "component/tlsf_config/tlsf"]
+	path = component/tlsf_config/tlsf
+	url = https://github.com/mattconte/tlsf
+[submodule "component/rxi_log_config/log"]
+	path = component/rxi_log_config/log
+	url = https://github.com/rxi/log.c

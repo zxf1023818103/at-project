@@ -95,3 +95,23 @@ void lfs_config_unmount(void)
         s_mounted = 0;
     }
 }
+
+int lfs_config_format(void)
+{
+    int err;
+
+    /* Requires a prior successful mount: s_cfg holds the geometry + diskio captured
+     * by build_config() at mount time (mkfs runs at runtime, long after boot mount). */
+    if (s_mounted) {
+        lfs_unmount(&s_lfs);
+        s_mounted = 0;
+    }
+    err = lfs_format(&s_lfs, &s_cfg);
+    if (err == LFS_ERR_OK) {
+        err = lfs_mount(&s_lfs, &s_cfg);
+        if (err == LFS_ERR_OK) {
+            s_mounted = 1;
+        }
+    }
+    return err;
+}

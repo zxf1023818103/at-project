@@ -1,5 +1,6 @@
 /*
- * AmebaD KM4 QUIC LAN speed test — ngtcp2 (v1.23.0) + in-tree wolfSSL TLS 1.3.
+ * AmebaD KM4 QUIC LAN speed test — ngtcp2 (v1.23.0) + picotls TLS 1.3 on the upstream
+ * mbedTLS/PSA backend (the wolfSSL replacement; component/picotls_config + component/amebad/mbedtls_port).
  *
  * Connects to the host quic_perf server (project/amebad/quic_perf) over the LAN
  * and measures QUIC throughput in both directions using the quic-interop "perf"
@@ -16,15 +17,16 @@
  *   (a self-signed cert is fine — the chip runs SSL_VERIFY_NONE.)
  *
  * Structure mirrors ngtcp2's examples/simpleclient.c, with three substitutions:
- *   - crypto backend: quictls  -> wolfSSL  (ngtcp2_crypto_wolfssl_*)
+ *   - crypto backend: quictls  -> picotls/mbedTLS (ngtcp2_crypto_picotls_*)
  *   - socket layer:   POSIX    -> FreeRTOS-Plus-TCP (FreeRTOS_socket/sendto/recvfrom)
  *   - event loop:     libev    -> one task with a recvfrom timeout == ngtcp2 expiry
  *
- * Randomness: ngtcp2 callbacks use a wolfCrypt WC_RNG; wolfSSL's internal RNG
- * uses CUSTOM_RAND_GENERATE_BLOCK (the bench xorshift). Neither is crypto-grade
- * yet — a real TRNG is a follow-up. Functionally sufficient for the handshake.
+ * Randomness: ngtcp2 callbacks + picotls use ptls_mbedtls_random_bytes (PSA
+ * psa_generate_random over the mbedTLS entropy). The AmebaD entropy source is still
+ * the placeholder xorshift (see component/amebad/mbedtls_port) — a real TRNG is a follow-up.
  */
 #include <string.h>
+#include "at_log.h"
 #include <stdint.h>
 
 #include "FreeRTOS.h"
@@ -40,17 +42,19 @@
 #  undef sin_addr
 #endif
 
-#include <wolfssl/options.h>
-#include <wolfssl/ssl.h>
-#include <wolfssl/quic.h>
-#include <wolfssl/wolfcrypt/random.h>
+#include <picotls.h>
+#include <picotls/mbedtls.h>
 
 #include <ngtcp2/ngtcp2.h>
 #include <ngtcp2/ngtcp2_crypto.h>
-#include <ngtcp2/ngtcp2_crypto_wolfssl.h>
+#include <ngtcp2/ngtcp2_crypto_picotls.h>
 
-extern void DiagPrintf(const char *, ...);
-extern void amebad_bench_rng_reseed(unsigned int seed);
+#include "psa/crypto.h"           /* psa_crypto_init — PSA backs ptls_mbedtls_random_bytes */
+#include "mbedtls/build_info.h"   /* MBEDTLS_SHA384_C — gates the AES-256-GCM-SHA384 suite */
+
+extern void mbedtls_threading_freertos_init(void);   /* MBEDTLS_THREADING_ALT callbacks */
+/* The libc/POSIX bits picotls pulls (posix_memalign / aligned_alloc / inet_pton) live in the
+ * newlib retarget — component/syscall_config/newlib_syscalls.c — with the malloc family. */
 
 /* ---- test target (the WSL host's ngtcp2 example server) ---- */
 #define QUIC_SERVER_A0      192
@@ -78,8 +82,7 @@ extern void amebad_bench_rng_reseed(unsigned int seed);
 struct quic_client {
     ngtcp2_crypto_conn_ref conn_ref;
     Socket_t sock;
-    WOLFSSL_CTX *ssl_ctx;
-    WOLFSSL *ssl;
+    ngtcp2_crypto_picotls_ctx cptls;   /* ptls_t + handshake_properties (the TLS native handle) */
     ngtcp2_conn *conn;
     ngtcp2_ccerr last_error;
     ngtcp2_sockaddr_in local_addr;
@@ -99,7 +102,6 @@ struct quic_client {
 };
 
 static struct quic_client s_client;
-static WC_RNG s_rng_ctx;
 static uint8_t s_rxbuf[2048];
 
 /* ngtcp2 wants nanosecond monotonic timestamps. The FreeRTOS tick is 1 ms
@@ -115,13 +117,7 @@ static ngtcp2_tstamp quic_timestamp(void)
 static void rand_cb(uint8_t *dest, size_t destlen, const ngtcp2_rand_ctx *ctx)
 {
     (void)ctx;
-    if (wc_RNG_GenerateBlock(&s_rng_ctx, dest, (word32)destlen) != 0) {
-        /* xorshift fallback so a transient RNG error can't wedge the test */
-        size_t i;
-        for (i = 0; i < destlen; i++) {
-            dest[i] = (uint8_t)(xTaskGetTickCount() + i);
-        }
-    }
+    ptls_mbedtls_random_bytes(dest, destlen);   /* PSA random (mbedTLS backend) */
 }
 
 static int get_new_connection_id_cb(ngtcp2_conn *conn, ngtcp2_cid *cid,
@@ -131,16 +127,9 @@ static int get_new_connection_id_cb(ngtcp2_conn *conn, ngtcp2_cid *cid,
     (void)conn;
     (void)user_data;
 
-    if (wc_RNG_GenerateBlock(&s_rng_ctx, cid->data, (word32)cidlen) != 0) {
-        DiagPrintf("[QUIC] gncid: RNG fail (cid)\n\r");
-        return NGTCP2_ERR_CALLBACK_FAILURE;
-    }
+    ptls_mbedtls_random_bytes(cid->data, cidlen);
     cid->datalen = cidlen;
-
-    if (wc_RNG_GenerateBlock(&s_rng_ctx, token->data, sizeof(token->data)) != 0) {
-        DiagPrintf("[QUIC] gncid: RNG fail (token)\n\r");
-        return NGTCP2_ERR_CALLBACK_FAILURE;
-    }
+    ptls_mbedtls_random_bytes(token->data, sizeof(token->data));
     return 0;
 }
 
@@ -180,64 +169,79 @@ static int acked_stream_data_cb(ngtcp2_conn *conn, int64_t stream_id, uint64_t o
     return 0;
 }
 
-/* ---- wolfSSL client TLS context ---- */
+/* ---- picotls client TLS context (mbedTLS/PSA backend) ---- */
 
-/* NO_ASN_TIME (no on-target clock) makes wolfSSL force HAVE_SESSION_TICKET off,
- * so wolfSSL_CTX_UseSessionTicket — which ngtcp2_crypto_wolfssl_configure_client_
- * context() calls — isn't compiled. Resumption isn't needed for the handshake
- * test; provide a no-op so the helper succeeds. (Strong def: wolfSSL didn't emit
- * one.) */
-int wolfSSL_CTX_UseSessionTicket(WOLFSSL_CTX *ctx)
+/* picotls needs a wall clock for ticket/cert freshness. We do neither (full
+ * handshake, no resumption; server cert unverified), so a monotonic ms counter is
+ * plenty — avoids needing a real RTC. */
+static uint64_t quic_ptls_time(ptls_get_time_t *self)
 {
-    (void)ctx;
-    return WOLFSSL_SUCCESS;
+    (void)self;
+    return (uint64_t)xTaskGetTickCount();
 }
+static ptls_get_time_t s_ptls_get_time = { quic_ptls_time };
+static ptls_context_t  s_ptls_ctx;
+
+/* Cipher-suite preference: AES-GCM first. The RTL8721D IPSEC engine HW-accelerates
+ * AES-GCM (MBEDTLS_GCM_ALT, ~48 MB/s vs ~419 KB/s software — see reference_amebad_hw_crypto
+ * / amebad_crypto_mbedtls_vs_wolfssl.md), so we offer AES-GCM ahead of ChaCha20-Poly1305 and
+ * put the faster AES-128-GCM first (fewer rounds; what the C# server uses). ChaCha is kept
+ * last as a fallback for ChaCha-only peers (also HW-backed via chachapoly_alt). This overrides
+ * the picotls default order (ptls_mbedtls_cipher_suites lists AES-256-GCM first). */
+static ptls_cipher_suite_t *s_cipher_suites[] = {
+    &ptls_mbedtls_aes128gcmsha256,
+#if defined(MBEDTLS_SHA384_C)
+    &ptls_mbedtls_aes256gcmsha384,
+#endif
+    &ptls_mbedtls_chacha20poly1305sha256,
+    NULL,
+};
 
 static int client_ssl_init(struct quic_client *c)
 {
-    c->ssl_ctx = wolfSSL_CTX_new(wolfTLSv1_3_client_method());
-    if (c->ssl_ctx == NULL) {
-        DiagPrintf("[QUIC] wolfSSL_CTX_new failed\n\r");
-        return -1;
-    }
+    static const ptls_iovec_t alpn = { (uint8_t *)QUIC_ALPN, sizeof(QUIC_ALPN) - 1 };
+    /* picotls reads our outgoing TLS extensions from additional_extensions, a
+     * UINT16_MAX-terminated array the APP owns. ngtcp2's set_additional_extensions
+     * fills [0] with the QUIC transport params (and asserts the array is non-NULL),
+     * so we must pre-allocate it + the [1] sentinel. Connections run one at a time, so
+     * a static array is safe; the binding frees only [0].data.base in deconfigure. */
+    static ptls_raw_extension_t exts[2];
 
-    if (ngtcp2_crypto_wolfssl_configure_client_context(c->ssl_ctx) != 0) {
-        DiagPrintf("[QUIC] configure_client_context failed\n\r");
-        return -1;
-    }
-
-    /* This wolfSSL build compiles only P-256 + X25519 (ECC_USER_CURVES). Its
-     * default preferred key-share group is P-521, which isn't compiled, so the
-     * ClientHello key_share generation fails with BAD_FUNC_ARG. Pin the offered
-     * groups to curves we actually have. */
-    {
-        int groups[] = { WOLFSSL_ECC_X25519, WOLFSSL_ECC_SECP256R1 };
-        if (wolfSSL_CTX_set_groups(c->ssl_ctx, groups, 2) != WOLFSSL_SUCCESS) {
-            DiagPrintf("[QUIC] set_groups failed\n\r");
+    /* One-time ptls context wired to the mbedTLS/PSA backend (P-256 + X25519 key
+     * exchanges, AES-GCM / ChaCha20-Poly1305 cipher suites, PSA random). */
+    if (s_ptls_ctx.random_bytes == NULL) {
+        s_ptls_ctx.random_bytes  = ptls_mbedtls_random_bytes;
+        s_ptls_ctx.get_time      = &s_ptls_get_time;
+        s_ptls_ctx.key_exchanges = ptls_mbedtls_key_exchanges;
+        s_ptls_ctx.cipher_suites = s_cipher_suites;   /* AES-GCM-first (HW); see s_cipher_suites */
+        if (ngtcp2_crypto_picotls_configure_client_context(&s_ptls_ctx) != 0) {
+            log_error("[QUIC] configure_client_context failed");
             return -1;
         }
     }
 
-    /* Smoke test: no CA store / no clock -> accept the server cert unverified. */
-    wolfSSL_CTX_set_verify(c->ssl_ctx, WOLFSSL_VERIFY_NONE, NULL);
-
-    c->ssl = wolfSSL_new(c->ssl_ctx);
-    if (c->ssl == NULL) {
-        DiagPrintf("[QUIC] wolfSSL_new failed\n\r");
+    ngtcp2_crypto_picotls_ctx_init(&c->cptls);
+    c->cptls.ptls = ptls_client_new(&s_ptls_ctx);
+    if (c->cptls.ptls == NULL) {
+        log_error("[QUIC] ptls_client_new failed");
         return -1;
     }
 
-    wolfSSL_set_app_data(c->ssl, &c->conn_ref);
-    wolfSSL_set_connect_state(c->ssl);
+    /* Bind the conn_ref so the binding's get_conn() can reach the ngtcp2_conn
+     * (replaces wolfSSL_set_app_data). Smoke test: no verify_certificate set ->
+     * server cert accepted unverified. */
+    *ptls_get_data_ptr(c->cptls.ptls) = &c->conn_ref;
 
-    /* wolfSSL_UseALPN rejects MATCH(=1) alone with BAD_FUNC_ARG; QUIC mandates
-     * ALPN so fail the handshake on mismatch. */
-    if (wolfSSL_UseALPN(c->ssl, (char *)QUIC_ALPN, (unsigned int)strlen(QUIC_ALPN),
-                        WOLFSSL_ALPN_FAILED_ON_MISMATCH) != WOLFSSL_SUCCESS) {
-        DiagPrintf("[QUIC] UseALPN failed\n\r");
-        return -1;
-    }
+    /* QUIC mandates ALPN. SNI is informational here. */
+    c->cptls.handshake_properties.client.negotiated_protocols.list  = &alpn;
+    c->cptls.handshake_properties.client.negotiated_protocols.count = 1;
+    ptls_set_server_name(c->cptls.ptls, "amebad-quic", 0);
 
+    exts[0].type = UINT16_MAX;   /* filled with the QUIC transport params by the binding */
+    exts[1].type = UINT16_MAX;   /* terminator */
+    c->cptls.handshake_properties.additional_extensions = exts;
+    /* configure_client_session needs the ngtcp2_conn, so it's deferred to
+     * client_quic_init() (after ngtcp2_conn_client_new). */
     return 0;
 }
 
@@ -274,13 +278,9 @@ static int client_quic_init(struct quic_client *c)
     int rv;
 
     dcid.datalen = NGTCP2_MIN_INITIAL_DCIDLEN;
-    if (wc_RNG_GenerateBlock(&s_rng_ctx, dcid.data, (word32)dcid.datalen) != 0) {
-        return -1;
-    }
+    ptls_mbedtls_random_bytes(dcid.data, dcid.datalen);
     scid.datalen = 8;
-    if (wc_RNG_GenerateBlock(&s_rng_ctx, scid.data, (word32)scid.datalen) != 0) {
-        return -1;
-    }
+    ptls_mbedtls_random_bytes(scid.data, scid.datalen);
 
     ngtcp2_settings_default(&settings);
     settings.initial_ts = quic_timestamp();
@@ -301,11 +301,15 @@ static int client_quic_init(struct quic_client *c)
     rv = ngtcp2_conn_client_new(&c->conn, &dcid, &scid, &path, NGTCP2_PROTO_VER_V1,
                                 &callbacks, &settings, &params, NULL, c);
     if (rv != 0) {
-        DiagPrintf("[QUIC] conn_client_new: %s\n\r", ngtcp2_strerror(rv));
+        log_info("[QUIC] conn_client_new: %s", ngtcp2_strerror(rv));
         return -1;
     }
 
-    ngtcp2_conn_set_tls_native_handle(c->conn, c->ssl);
+    ngtcp2_conn_set_tls_native_handle(c->conn, &c->cptls);
+    if (ngtcp2_crypto_picotls_configure_client_session(&c->cptls, c->conn) != 0) {
+        log_error("[QUIC] configure_client_session failed");
+        return -1;
+    }
     return 0;
 }
 
@@ -351,7 +355,7 @@ static int client_flush(struct quic_client *c)
                                       c->stream_id, &v, 1, quic_timestamp());
         if (n < 0) {
             if (n != NGTCP2_ERR_STREAM_DATA_BLOCKED) {
-                DiagPrintf("[QUIC] hdr writev: %s\n\r", ngtcp2_strerror((int)n));
+                log_info("[QUIC] hdr writev: %s", ngtcp2_strerror((int)n));
                 ngtcp2_ccerr_set_liberr(&c->last_error, (int)n, NULL, 0);
                 return -1;
             }
@@ -402,9 +406,8 @@ static int client_flush(struct quic_client *c)
                 if (m > 0 && client_send_packet(c, buf, (size_t)m) != 0) return -1;
                 return 0;
             }
-            DiagPrintf("[QUIC] writev_stream: %s (wolfSSL err=%d, tls_alert=%d)\n\r",
+            log_info("[QUIC] writev_stream: %s (tls_alert=%d)",
                        ngtcp2_strerror((int)nwrite),
-                       (int)wolfSSL_get_error(c->ssl, 0),
                        (int)ngtcp2_conn_get_tls_alert2(c->conn));
             ngtcp2_ccerr_set_liberr(&c->last_error, (int)nwrite, NULL, 0);
             return -1;
@@ -429,7 +432,7 @@ static int client_read(struct quic_client *c, const uint8_t *data, size_t datale
     ngtcp2_pkt_info pi = {0};
     int rv = ngtcp2_conn_read_pkt(c->conn, &path, &pi, data, datalen, quic_timestamp());
     if (rv != 0) {
-        DiagPrintf("[QUIC] read_pkt: %s\n\r", ngtcp2_strerror(rv));
+        log_info("[QUIC] read_pkt: %s", ngtcp2_strerror(rv));
         if (!c->last_error.error_code) {
             if (rv == NGTCP2_ERR_CRYPTO) {
                 ngtcp2_ccerr_set_tls_alert(&c->last_error,
@@ -449,7 +452,7 @@ static int client_socket_init(struct quic_client *c)
 
     c->sock = FreeRTOS_socket(FREERTOS_AF_INET, FREERTOS_SOCK_DGRAM, FREERTOS_IPPROTO_UDP);
     if (c->sock == FREERTOS_INVALID_SOCKET || c->sock == NULL) {
-        DiagPrintf("[QUIC] socket() failed\n\r");
+        log_error("[QUIC] socket() failed");
         return -1;
     }
 
@@ -459,7 +462,7 @@ static int client_socket_init(struct quic_client *c)
     bind_addr.sin_family = FREERTOS_AF_INET;
     bind_addr.sin_port = 0;
     if (FreeRTOS_bind(c->sock, &bind_addr, sizeof(bind_addr)) != 0) {
-        DiagPrintf("[QUIC] bind() failed\n\r");
+        log_error("[QUIC] bind() failed");
         return -1;
     }
 
@@ -517,7 +520,7 @@ static int perf_connection(uint64_t dl, uint64_t ul, uint32_t *kbps_out)
 
     if (client_socket_init(c) != 0 || client_ssl_init(c) != 0 ||
         client_quic_init(c) != 0) {
-        DiagPrintf("[QUIC] init failed\n\r");
+        log_error("[QUIC] init failed");
         failed = 1;
         goto cleanup;
     }
@@ -536,18 +539,18 @@ static int perf_connection(uint64_t dl, uint64_t ul, uint32_t *kbps_out)
         socklen_t fromlen = sizeof(from);
 
         if ((int32_t)(now - hb_next) >= 0) {
-            DiagPrintf("[QUIC] .hb so=%d rx=%d ack=%d sr=%d fin=%d\n\r",
+            log_info("[QUIC] .hb so=%d rx=%d ack=%d sr=%d fin=%d",
                        stream_open, (int)c->recv_total, (int)c->acked_total,
                        (int)c->send_remaining, c->send_fin_done);
             hb_next = now + pdMS_TO_TICKS(1000);
         }
 
         if (!stream_open && (int32_t)(now - hs_deadline) >= 0) {
-            DiagPrintf("[QUIC] handshake TIMEOUT\n\r");
+            log_info("[QUIC] handshake TIMEOUT");
             failed = 1; break;
         }
         if ((int32_t)(now - xfer_deadline) >= 0) {
-            DiagPrintf("[QUIC] transfer TIMEOUT (rx=%d tx-acked=%d)\n\r",
+            log_info("[QUIC] transfer TIMEOUT (rx=%d tx-acked=%d)",
                        (unsigned)c->recv_total, (unsigned)c->acked_total);
             failed = 1; break;
         }
@@ -580,7 +583,7 @@ static int perf_connection(uint64_t dl, uint64_t ul, uint32_t *kbps_out)
         } else {
             int rv = ngtcp2_conn_handle_expiry(c->conn, quic_timestamp());
             if (rv != 0) {
-                DiagPrintf("[QUIC] handle_expiry: %s\n\r", ngtcp2_strerror(rv));
+                log_info("[QUIC] handle_expiry: %s", ngtcp2_strerror(rv));
                 failed = 1; break;
             }
         }
@@ -632,9 +635,11 @@ static int perf_connection(uint64_t dl, uint64_t ul, uint32_t *kbps_out)
     }
 
 cleanup:
-    if (c->conn)    ngtcp2_conn_del(c->conn);
-    if (c->ssl)     wolfSSL_free(c->ssl);
-    if (c->ssl_ctx) wolfSSL_CTX_free(c->ssl_ctx);
+    if (c->conn)       ngtcp2_conn_del(c->conn);
+    if (c->cptls.ptls) {
+        ngtcp2_crypto_picotls_deconfigure_session(&c->cptls);
+        ptls_free(c->cptls.ptls);
+    }
     if (c->sock && c->sock != FREERTOS_INVALID_SOCKET) FreeRTOS_closesocket(c->sock);
     return failed ? -1 : 0;
 }
@@ -651,15 +656,16 @@ static void quic_client_task(void *arg)
     }
     vTaskDelay(pdMS_TO_TICKS(200));
 
-    DiagPrintf("[QUIC] ngtcp2 %s + wolfSSL TLS1.3 perf -> %d.%d.%d.%d:%d (ALPN %s)\n\r",
+    log_info("[QUIC] ngtcp2 %s + picotls/mbedTLS TLS1.3 perf -> %d.%d.%d.%d:%d (ALPN %s)",
                ngtcp2_version(0)->version_str,
                QUIC_SERVER_A0, QUIC_SERVER_A1, QUIC_SERVER_A2, QUIC_SERVER_A3,
                QUIC_SERVER_PORT, QUIC_ALPN);
 
-    amebad_bench_rng_reseed((unsigned int)xTaskGetTickCount());
-
-    if (wc_InitRng(&s_rng_ctx) != 0) {
-        DiagPrintf("[QUIC] wc_InitRng failed\n\r");
+    /* mbedTLS runtime: FreeRTOS threading-alt callbacks + PSA (ptls_mbedtls_random_bytes
+     * and the whole picotls mbedTLS backend run on PSA). */
+    mbedtls_threading_freertos_init();
+    if (psa_crypto_init() != PSA_SUCCESS) {   /* PSA backs ptls_mbedtls_* + the whole handshake */
+        log_error("[QUIC] psa_crypto_init failed");
         vTaskDelete(NULL);
         return;
     }
@@ -667,34 +673,34 @@ static void quic_client_task(void *arg)
     /* Loop the test so the host server can be started at any time and a fresh
      * round will pick it up; also lets the console be read on demand. */
     for (int round = 1; ; round++) {
-        DiagPrintf("[QUIC] ---- round %d ----\n\r", round);
+        log_info("[QUIC] ---- round %d ----", round);
 
         /* Phase 1: DOWNLOAD (chip RX). */
-        DiagPrintf("[QUIC] download phase: requesting %d bytes...\n\r",
+        log_info("[QUIC] download phase: requesting %d bytes...",
                    (int)QUIC_PERF_XFER_BYTES);
         rx_ok = (perf_connection(QUIC_PERF_XFER_BYTES, 0, &rx_kbps) == 0);
 
         vTaskDelay(pdMS_TO_TICKS(300));
 
         /* Phase 2: UPLOAD (chip TX). */
-        DiagPrintf("[QUIC] upload phase: sending %d bytes...\n\r",
+        log_info("[QUIC] upload phase: sending %d bytes...",
                    (int)QUIC_PERF_XFER_BYTES);
         tx_ok = (perf_connection(0, QUIC_PERF_XFER_BYTES, &tx_kbps) == 0);
 
-        DiagPrintf("[QUIC] ============ LAN speed test (round %d) ============\n\r", round);
+        log_info("[QUIC] ============ LAN speed test (round %d) ============", round);
         if (rx_ok) {
-            DiagPrintf("[QUIC]   DOWNLOAD (RX): %d kbps  (~%d Mbps)\n\r",
+            log_info("[QUIC]   DOWNLOAD (RX): %d kbps  (~%d Mbps)",
                        (int)rx_kbps, (int)(rx_kbps / 1000));
         } else {
-            DiagPrintf("[QUIC]   DOWNLOAD (RX): FAILED\n\r");
+            log_error("[QUIC]   DOWNLOAD (RX): FAILED");
         }
         if (tx_ok) {
-            DiagPrintf("[QUIC]   UPLOAD   (TX): %d kbps  (~%d Mbps)\n\r",
+            log_info("[QUIC]   UPLOAD   (TX): %d kbps  (~%d Mbps)",
                        (int)tx_kbps, (int)(tx_kbps / 1000));
         } else {
-            DiagPrintf("[QUIC]   UPLOAD   (TX): FAILED\n\r");
+            log_error("[QUIC]   UPLOAD   (TX): FAILED");
         }
-        DiagPrintf("[QUIC] =================================================\n\r");
+        log_info("[QUIC] =================================================");
 
         vTaskDelay(pdMS_TO_TICKS(8000));   /* pause between rounds */
     }
@@ -705,7 +711,8 @@ void quic_test_start(void)
     static int started = 0;
     if (!started) {
         started = 1;
-        /* Big stack: TLS 1.3 handshake + ngtcp2 conn state. */
-        xTaskCreate(quic_client_task, "quic_cli", 8192, NULL, tskIDLE_PRIORITY + 2, NULL);
+        /* Big stack: TLS 1.3 handshake (picotls + mbedTLS ECDHE keygen are stack-heavy)
+         * + ngtcp2 conn state. 16K words = 64 KB. */
+        xTaskCreate(quic_client_task, "quic_cli", 16384, NULL, tskIDLE_PRIORITY + 2, NULL);
     }
 }

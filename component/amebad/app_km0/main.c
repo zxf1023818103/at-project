@@ -5,6 +5,9 @@
 void app_captouch_init(void);
 void app_keyscan_init(u8 reset_status);
 
+/* console: FreeRTOS-Plus-CLI over the LOGUART (component/amebad/monitor) */
+extern void amebad_monitor_start(void);
+
 void app_dslp_wake(void)
 {
 	u32 aon_wake_event = SOCPS_AONWakeReason();
@@ -198,11 +201,12 @@ int main(void)
 	if (ps_config.km0_osc2m_close == FALSE) {
 		app_loguart_lowpower();
 	}
-	shell_init_ram();
+	/* FreeRTOS-Plus-CLI console. KM0 boots WAITING (not the console owner) — KM4 owns the
+	 * console at boot; the user hands it over with `>>` / `km0`. The console POLLS the UART,
+	 * so no RX IRQ is enabled here (the old InterruptDis(UART_LOG_IRQ_LP) yield is gone). */
+	amebad_monitor_start();
 
 	app_pmu_init();
-	/*switch shell control to KM4 */
-	InterruptDis(UART_LOG_IRQ_LP);
 
 	if(SOCPS_DsleepWakeStatusGet() == TRUE) {
 		app_dslp_wake();

@@ -24,7 +24,7 @@ build flag `AMEBAD_ENABLE_NIMBLE`(app_km4),与 `AMEBAD_ENABLE_HCI` 并列、共�
   upstream src 目录(porting/nimble/src、porting/npl/freertos/src、nimble/src、nimble/host/src+util+
   services/{ans,bas,gap,gatt,dis,ias,lls,tps}/src、host/store/ram/src、transport/src、host/mesh/src、
   ext/tinycrypt/src);我们 3 个胶水 .c 显式列。
-- **syscfg**:component/nimble/include/syscfg/syscfg.h = 预定义 override(BLE_TRANSPORT_HS=native、
+- **syscfg**:component/nimble_config/include/syscfg/syscfg.h = 预定义 override(BLE_TRANSPORT_HS=native、
   **BLE_TRANSPORT_LL=custom**、BLE_MESH=1、SM_SC=1、BSP_SIMULATED=0)→ `#include_next <syscfg/syscfg.h>`
   拉 upstream 默认 → `#include "mesh_defaults.h"`。**我们的 include 目录必须排第一**(才 shadow + include_next)。
 - **mesh_defaults.h**:upstream porting 默认 syscfg **不含** BLE_MESH_* 子选项(只在 mesh 示例里),
@@ -34,7 +34,7 @@ build flag `AMEBAD_ENABLE_NIMBLE`(app_km4),与 `AMEBAD_ENABLE_HCI` 并列、共�
   public 名由 transport/monitor.h inline 转发)+ `ble_transport_ll_init`;RX 调 public `ble_transport_to_hs_evt/acl`。
   transport_amebad.c 要先 `#include "os/os.h"`(transport.h 用 os_mempool_put_fn)。
 - **console shim**:core host(ble_hs.c 等)无条件 `#include <console/console.h>`,只用 console_printf。
-  自备 component/nimble/include/console/console.h:`#define console_printf(f,...) printf(f,##...)`(printf=
+  自备 component/nimble_config/include/console/console.h:`#define console_printf(f,...) printf(f,##...)`(printf=
   hci_compat.c 的 wrapper)。
 - **NPL in_isr 要 CMSIS SCB**:npl_os_freertos.c `#include NIMBLE_NPL_OS_EXTRA_INCLUDE` → CMake
   `-DNIMBLE_NPL_OS_EXTRA_INCLUDE="ameba_soc.h"`。
@@ -45,7 +45,7 @@ build flag `AMEBAD_ENABLE_NIMBLE`(app_km4),与 `AMEBAD_ENABLE_HCI` 并列、共�
   + amebad_wlan。libnimble.a ~937KB;全 image link 零未解析、655360 B(HCI 基线 618496,+~36KB gc 后)。
 
 **P1+P2 已完成(2026-06,实机 host synced ✅)**:NimBLE 1.9.0 在控制器上跑通,btgap.a 彻底被开源栈取代。
-- transport(component/nimble/transport_amebad.c)照 upstream **`nimble/transport/uart_ll`**(LL-side H4)写:
+- transport(component/amebad/nimble_port/transport_amebad.c)照 upstream **`nimble/transport/uart_ll`**(LL-side H4)写:
   - **复用 NimBLE 的 H4 状态机** `nimble/transport/common/hci_h4/`(要把 `hci_h4.c` 加进 glob + include
     `transport/common/hci_h4/include`)。`ble_transport_ll_init` 里 `hci_h4_sm_init(&sm, &hci_h4_allocs_from_ll, frame_cb)`;
     frame_cb:EVT→`ble_transport_to_hs_evt`、ACL→`ble_transport_to_hs_acl`。H4 类型:CMD=0x01/ACL=0x02/EVT=0x04。
@@ -83,8 +83,8 @@ scan→connect→discover→read 00→write 0xA5→read-back a5 = **PASS**。BD_
   改 PTA_AUTO。验证工具 project/amebad/nimble_ble_{verify,soak}.py(Windows bleak)。
 
 **SM crypto 换 wolfSSL 已完成(2026-06,实机 KAT 全 PASS)**:NimBLE 1.9.0 的 `ble_sm_alg.c`
-**写死 tinycrypt**(无 `BLE_CRYPTO_STACK_*` 开关),故不改上游,而是新增胶水 `component/nimble/wolfcrypt_sm_glue.c`
-重实现它(+mesh)调的那几个原语,底层接 wolfCrypt(component/amebad/wolfssl v5.9.1):
+**写死 tinycrypt**(无 `BLE_CRYPTO_STACK_*` 开关),故不改上游,而是新增胶水 `component/nimble_config/wolfcrypt_sm_glue.c`
+重实现它(+mesh)调的那几个原语,底层接 wolfCrypt(component/wolfssl_config v5.9.1):
 - **AES-128 单块**:`tc_aes128_set_encrypt_key`/`tc_aes_encrypt` → `wc_AesSetKeyDirect`/`wc_AesEncryptDirect`
   (要在 user_settings 开 `WOLFSSL_AES_DIRECT`)。**tinycrypt cmac_mode.c 保留**,内部调 tc_aes_encrypt → AES-CMAC(f4/f5/f6/g2)自动走 wolfCrypt。
 - **ECDH P-256**:`uECC_make_key`/`uECC_shared_secret`/`uECC_valid_public_key`/`uECC_set_rng` → `wc_ecc_*`。

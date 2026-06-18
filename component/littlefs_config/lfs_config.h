@@ -70,6 +70,11 @@ lfs_t *lfs_config_mount(const struct lfs_diskio *io);
 /* Unmount the shared singleton (a no-op if it was never mounted). */
 void lfs_config_unmount(void);
 
+/* Reformat the LFS region (mkfs): unmount, lfs_format the medium, then re-mount the
+ * now-blank filesystem. Requires a prior successful mount (the geometry + diskio are
+ * captured at mount time). Returns LFS_ERR_OK, or a negative lfs error. */
+int lfs_config_format(void);
+
 #ifdef __cplusplus
 }
 #endif

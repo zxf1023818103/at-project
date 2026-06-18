@@ -15,6 +15,7 @@
  * dispatch is safe), like tfm_psa_selftest.c.
  */
 #include <stdint.h>
+#include "at_log.h"
 #include <string.h>
 
 #include "psa/internal_trusted_storage.h"
@@ -22,7 +23,6 @@
 #include "psa/protected_storage.h"
 #endif
 
-extern int DiagPrintf(const char *fmt, ...);
 
 #define STG_ITS_UID     ((psa_storage_uid_t)0x5354475F49545301ULL) /* "STG_ITS\1" */
 #define STG_PS_UID      ((psa_storage_uid_t)0x5354475F50530001ULL) /* "STG_PS\0\1" */
@@ -47,26 +47,26 @@ static void stg_test_its(void)
         /* First boot: write the secret. */
         s = psa_its_set(STG_ITS_UID, sizeof(stg_secret), stg_secret, PSA_STORAGE_FLAG_NONE);
         if (s != PSA_SUCCESS) {
-            DiagPrintf("[STG] ITS set FAIL (status=%d)\n\r", (int)s);
+            log_error("[STG] ITS set FAIL (status=%d)", (int)s);
             return;
         }
         memset(rd, 0, sizeof(rd));
         s = psa_its_get(STG_ITS_UID, 0, sizeof(rd), rd, &got);
-        DiagPrintf("[STG] ITS set/get %s (first boot, status=%d len=%d match=%d)\n\r",
+        log_info("[STG] ITS set/get %s (first boot, status=%d len=%d match=%d)",
                    (s == PSA_SUCCESS && got == sizeof(stg_secret) &&
                     memcmp(rd, stg_secret, sizeof(stg_secret)) == 0) ? "PASS" : "FAIL",
                    (int)s, (int)got, (int)(memcmp(rd, stg_secret, sizeof(stg_secret)) == 0));
         return;
     }
     if (s != PSA_SUCCESS) {
-        DiagPrintf("[STG] ITS get_info FAIL (status=%d)\n\r", (int)s);
+        log_error("[STG] ITS get_info FAIL (status=%d)", (int)s);
         return;
     }
 
     /* Subsequent boot: the UID persisted -> read back and compare. */
     memset(rd, 0, sizeof(rd));
     s = psa_its_get(STG_ITS_UID, 0, sizeof(rd), rd, &got);
-    DiagPrintf("[STG] ITS persistence %s (survived reboot, size=%d len=%d)\n\r",
+    log_info("[STG] ITS persistence %s (survived reboot, size=%d len=%d)",
                (s == PSA_SUCCESS && got == sizeof(stg_secret) &&
                 memcmp(rd, stg_secret, sizeof(stg_secret)) == 0) ? "PASS" : "FAIL",
                (int)info.size, (int)got);
@@ -85,22 +85,22 @@ static void stg_test_ps(void)
     s = psa_ps_get_info(STG_PS_UID, &info);
     if (s == PSA_ERROR_DOES_NOT_EXIST) {
         s = psa_ps_set(STG_PS_UID, sizeof(stg_secret), stg_secret, PSA_STORAGE_FLAG_NONE);
-        if (s != PSA_SUCCESS) { DiagPrintf("[STG] PS set FAIL (status=%d)\n\r", (int)s); return; }
+        if (s != PSA_SUCCESS) { log_error("[STG] PS set FAIL (status=%d)", (int)s); return; }
         memset(rd, 0, sizeof(rd));
         s = psa_ps_get(STG_PS_UID, 0, sizeof(rd), rd, &got);
-        DiagPrintf("[STG] PS set/get %s (first boot, status=%d len=%d)\n\r",
+        log_info("[STG] PS set/get %s (first boot, status=%d len=%d)",
                    (s == PSA_SUCCESS && got == sizeof(stg_secret) &&
                     memcmp(rd, stg_secret, sizeof(stg_secret)) == 0) ? "PASS" : "FAIL",
                    (int)s, (int)got);
     } else if (s == PSA_SUCCESS) {
         memset(rd, 0, sizeof(rd));
         s = psa_ps_get(STG_PS_UID, 0, sizeof(rd), rd, &got);
-        DiagPrintf("[STG] PS persistence %s (survived reboot, len=%d)\n\r",
+        log_info("[STG] PS persistence %s (survived reboot, len=%d)",
                    (s == PSA_SUCCESS && got == sizeof(stg_secret) &&
                     memcmp(rd, stg_secret, sizeof(stg_secret)) == 0) ? "PASS" : "FAIL",
                    (int)got);
     } else {
-        DiagPrintf("[STG] PS get_info FAIL (status=%d)\n\r", (int)s); return;
+        log_error("[STG] PS get_info FAIL (status=%d)", (int)s); return;
     }
 
     /* Confidentiality: the raw PS flash bytes must NOT equal the plaintext secret
@@ -110,7 +110,7 @@ static void stg_test_ps(void)
         for (unsigned i = 0; i < sizeof(stg_secret); i++) {
             if (ps_raw[i] != stg_secret[i]) { leaks_plaintext = 0; break; }
         }
-        DiagPrintf("[STG] PS ciphertext-at-rest %s (raw[0..3]=%02x %02x %02x %02x)\n\r",
+        log_info("[STG] PS ciphertext-at-rest %s (raw[0..3]=%02x %02x %02x %02x)",
                    leaks_plaintext ? "FAIL" : "PASS",
                    ps_raw[0], ps_raw[1], ps_raw[2], ps_raw[3]);
     }
@@ -119,7 +119,7 @@ static void stg_test_ps(void)
 
 void amebad_tfm_storage_selftest(void)
 {
-    DiagPrintf("[STG] PSA secure storage self-test\n\r");
+    log_info("[STG] PSA secure storage self-test");
     stg_test_its();
 #ifdef AMEBAD_TFM_STORAGE_PS
     stg_test_ps();

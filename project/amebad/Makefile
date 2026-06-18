@@ -11,9 +11,15 @@
 #   make NIMBLE=ON       # NimBLE host image (LE/GATT + wolfSSL SM crypto)
 #   make HCI=ON          # bare HCI / DTM test image (mutually exclusive with NIMBLE)
 #   make QUIC=ON         # ngtcp2 QUIC client self-test (full wolfSSL TLS1.3 + QUIC)
+#   make BENCH=ON        # upstream Mbed TLS v3.6.4 crypto microbenchmark ([MCB] scores)
+#   make MINIMAL=ON      # strip diagnostics (iperf / LFS+ROM-mbedTLS KAT / HW-crypto bench): WiFi connect only
 #   make TFM=ON          # in-tree TF-M secure world (SPE via ExternalProject; app_km4 = NSPE)
-#   make SECURE=ON       # standalone FreeRTOS TrustZone secure image + KM4 secure-context feature test (excl. TFM)
 #   make STORAGE=ON      # TF-M PSA secure storage (ITS + PS) + NS storage self-test (implies TFM=ON)
+#   make AWS=ON          # AWS IoT Core MQTT/TLS demo (coreMQTT + mbedTLS; cert/endpoint->LFS, key->TF-M PS; implies STORAGE=ON)
+#   make TLS_BACKEND=<picotls|mbedtls>   # TLS-over-TCP backend for AWS (default picotls: TLS 1.3 only,
+#                        # ~112 KB smaller flash + ~24 KB less heap, shares the QUIC TLS stack). Use mbedtls
+#                        # for TLS 1.2 compatibility / broader servers (1.2+1.3, mature, native X.509).
+#                        # e.g. make AWS=ON TLS_BACKEND=mbedtls
 #   make clean           # ninja clean both cores
 #   make distclean       # delete build/km0 build/km4 build/amebad
 #
@@ -30,12 +36,39 @@ BUILD_TYPE := MinSizeRel
 NIMBLE     ?= OFF          # ON -> NimBLE host
 HCI        ?= OFF          # ON -> bare HCI/DTM
 QUIC       ?= OFF          # ON -> ngtcp2 QUIC client self-test (pulls full wolfSSL TLS1.3)
-WOLFASM    ?= ON           # ON -> wolfCrypt Thumb2 symmetric/hash asm (faster; OFF = portable C)
+PKCS11     ?= OFF          # ON -> corePKCS11 token self-test (upstream mbedTLS backend + LittleFS PAL)
+BENCH      ?= OFF          # ON -> upstream Mbed TLS v3.6.4 crypto microbenchmark ([MCB] scores)
+MINIMAL    ?= OFF          # ON -> strip diagnostics (iperf / KAT / HW-crypto bench); WiFi-connect only (pairs with TFM=ON)
 TFM        ?= OFF          # ON -> build + boot in-tree TF-M SPE (app_km4 becomes the NS side)
-SECURE     ?= OFF          # ON -> standalone FreeRTOS TrustZone secure image + KM4 secure-context feature test (mutually exclusive with TFM)
+TLS_BACKEND ?= picotls     # AWS TLS-over-TCP backend (default: picotls — TLS 1.3 only; ~112 KB smaller flash + ~24 KB less heap; shares the QUIC TLS stack). Set mbedtls for TLS 1.2 compatibility / broader server support (1.2+1.3, mature, native X.509). Switch wiring: component/network_transport/transport_tls.h.
+ifeq ($(filter $(TLS_BACKEND),mbedtls picotls),)
+$(error TLS_BACKEND must be 'mbedtls' or 'picotls')
+endif
+HWGCM      ?= $(TFM)       # default = TFM: route AES-GCM + ChaCha20-Poly1305 to the RTL8721D IPSEC HW engine (needs TFM=ON's SAU, so on iff TFM is on). Both TLS backends use it: mbedTLS via the classic one-shot mbedtls_gcm; picotls via the encrypt-coalesce shim in transport_picotls.c that reduces its PSA multi-part AEAD to the engine's one-shot path.
 STORAGE    ?= OFF          # ON -> TF-M PSA secure storage (ITS + PS) + NS storage self-test; implies TFM=ON
+AWS        ?= OFF          # ON -> AWS IoT Core MQTT/TLS demo (coreMQTT + mbedTLS); cert/endpoint->LFS, private key->TF-M PS
+SNTP       ?= OFF          # ON -> coreSNTP UTC sync -> newlib _gettimeofday (time_base.c) -> [TIME] date/time self-test
+ifeq ($(AWS),ON)
+# AWS=ON: the MQTT client private key lives in TF-M secure storage (implies STORAGE/TFM).
+# NOTE: no trailing comment on the assignment — a trailing-space value breaks the STORAGE ifeq below.
+STORAGE    := ON
+endif
+# HW-GCM (HWGCM follows TFM above, so ON for these TF-M images) is verified end-to-end for BOTH QUIC
+# (picotls/PSA AEAD: ~7.1 Mbps DL / 2.9 UL, vs 1.7 / 1.2 with software GCM) and AWS IoT (mbedTLS
+# TLS1.3 handshake + MQTT telemetry). gcm_alt.c brings the IPSEC engine up itself, once, via the NS
+# rtl_cryptoEngine_init alias 0x1010ea49. The long-misdiagnosed "HW-GCM hangs the first op" was
+# gcm_alt calling the SECURE CRYPTO_Init alias (0x10104a49) from NS, which dead-spins in ROM
+# BOOT_ROM_ResetVsr (reset handshake). Pass HWGCM=OFF to force software GCM.
 ifeq ($(STORAGE),ON)
 TFM        := ON           # secure storage lives in the TF-M SPE
+endif
+# NS-direct HW crypto reaches the secure-only crypto peripheral only once a TrustZone
+# image has configured the SAU (target_cfg). Without TF-M there is no SAU -> the first HW
+# crypto op hangs on the secure-attributed peripheral. Fail the build rather than hang.
+ifeq ($(HWGCM),ON)
+ifneq ($(TFM),ON)
+$(error HWGCM=ON requires TFM=ON (NS-direct HW crypto needs TF-M's SAU; a non-TF-M image hangs))
+endif
 endif
 VFSTEST    ?= OFF          # ON -> POSIX-fd VFS self-test (fopen/open/socket over LFS+sockets)
 CPPTEST    ?= OFF          # ON -> C++ std::filesystem/iostream self-test (cout/cin over LPUART, stderr LOGUART)
@@ -58,11 +91,14 @@ configure:
 	  $$([ -f build/km4/CMakeCache.txt ] || echo -DCMAKE_TOOLCHAIN_FILE=cmake/amebad-km4.cmake) \
 	  -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) \
 	  -DAMEBAD_ENABLE_NIMBLE=$(NIMBLE) -DAMEBAD_ENABLE_HCI=$(HCI) \
-	  -DAMEBAD_ENABLE_QUIC=$(QUIC) \
-	  -DAMEBAD_WOLFSSL_ARMASM=$(WOLFASM) \
+	  -DAMEBAD_ENABLE_QUIC=$(QUIC) -DAMEBAD_ENABLE_PKCS11=$(PKCS11) \
+	  -DAMEBAD_ENABLE_CRYPTOBENCH=$(BENCH) -DAMEBAD_ENABLE_MINIMAL=$(MINIMAL) \
+	  -DAMEBAD_ENABLE_AWS_IOT=$(AWS) \
+	  -DAMEBAD_TLS_BACKEND=$(TLS_BACKEND) \
+	  -DAMEBAD_ENABLE_SNTP=$(SNTP) \
+	  -DAMEBAD_MBEDTLS_HW_GCM=$(HWGCM) \
 	  -DAMEBAD_TFM_BOOT=$(TFM) \
 	  -DAMEBAD_TFM_STORAGE=$(STORAGE) \
-	  -DAMEBAD_FREERTOS_SECURE=$(SECURE) \
 	  -DAMEBAD_VFS_SELFTEST=$(VFSTEST) \
 	  -DAMEBAD_CPP_SELFTEST=$(CPPTEST)
 

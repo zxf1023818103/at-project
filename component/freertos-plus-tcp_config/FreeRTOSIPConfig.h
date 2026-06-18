@@ -19,18 +19,26 @@
 #define ipconfigUSE_TCP                         1       /* iperf throughput test */
 #define ipconfigUSE_DHCP                        1
 
-/* TCP tuning for throughput. Window must cover the bandwidth-delay product;
- * with power-save OFF the WiFi RTT drops to ~1-2 ms, but keep generous buffers
- * so the sender can keep the pipe full. */
-#define ipconfigTCP_WIN_SEG_COUNT               64
+/* TCP buffers. Two profiles:
+ *  - Default (iperf/QUIC throughput images): big window to keep the pipe full at ~1-2 ms RTT.
+ *  - AMEBAD_NET_LOW_MEM (AWS/MINIMAL connect-only images, set per-target in app_km4/CMakeLists):
+ *    the MQTT client is low-rate, so shrink the per-socket RX/TX buffers + window hard to give the
+ *    tight NS heap back ~50 KB. 6*1460 still comfortably streams the AWS server cert handshake. */
 #define ipconfigUSE_TCP_WIN                      1
-#define ipconfigTCP_RX_BUFFER_LENGTH            ( 24 * 1460 )   /* ~35 KB */
-#define ipconfigTCP_TX_BUFFER_LENGTH            ( 24 * 1460 )   /* ~35 KB */
+#if defined( AMEBAD_NET_LOW_MEM )
+    #define ipconfigTCP_WIN_SEG_COUNT           16
+    #define ipconfigTCP_RX_BUFFER_LENGTH        ( 6 * 1460 )    /* ~8.5 KB */
+    #define ipconfigTCP_TX_BUFFER_LENGTH        ( 6 * 1460 )    /* ~8.5 KB */
+#else
+    #define ipconfigTCP_WIN_SEG_COUNT           64
+    #define ipconfigTCP_RX_BUFFER_LENGTH        ( 24 * 1460 )   /* ~35 KB */
+    #define ipconfigTCP_TX_BUFFER_LENGTH        ( 24 * 1460 )   /* ~35 KB */
+#endif
 #define ipconfigTCP_MSS                         ( 1500 - 40 )   /* 1460 */
 #define ipconfigTCP_TIME_TO_LIVE                128
 #define ipconfigIGNORE_UNKNOWN_PACKETS          0
 #define ipconfigDHCP_REGISTER_HOSTNAME          0
-#define ipconfigUSE_DNS                         0
+#define ipconfigUSE_DNS                         1       /* FreeRTOS_gethostbyname: resolve the AWS IoT endpoint (tcp_sockets_wrapper) */
 #define ipconfigUSE_LLMNR                       0
 #define ipconfigUSE_NBNS                        0
 
@@ -49,8 +57,20 @@
 #define ipconfigNETWORK_MTU                     1500
 #define ipconfigBYTE_ORDER                      pdFREERTOS_LITTLE_ENDIAN
 
-/* Buffers (BufferAllocation_2 = heap). Bump for TCP throughput. */
-#define ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS  40
+/* Network buffer descriptors (BufferAllocation_2 = heap, each ~MTU+pad ~1.6 KB). 40 for TCP
+ * throughput; 14 is plenty for the low-rate MQTT client and saves ~42 KB of NS heap. */
+#if defined( AMEBAD_NET_LOW_MEM )
+    #define ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS  24   /* was 14: too tight for the TLS handshake's
+                                                          * bursty bidirectional flight (server ~6KB in +
+                                                          * client flight out + ACKs + concurrent WiFi RX)
+                                                          * -> transient pool exhaustion surfaced as a
+                                                          * FreeRTOS_recv ENOMEM = MBEDTLS_ERR_SSL_INTERNAL
+                                                          * handshake failure. BufferAllocation_2 is
+                                                          * heap-on-demand, so the extra 10 only cost during
+                                                          * a burst. Steady MQTT still uses only a few. */
+#else
+    #define ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS  40
+#endif
 #define ipconfigEVENT_QUEUE_LENGTH              ( ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS + 5 )
 #define ipconfigUSE_CALLBACKS                   0
 

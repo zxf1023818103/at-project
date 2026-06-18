@@ -44,6 +44,7 @@
 | `AmebaD USB Quick Start V1.2.pdf` | AmebaD USB 快速上手 |
 | `UM0202 Ameba BT Throughput Test Example UM.pdf` | BT 吞吐测试示例用户手册 |
 | `AN0412 Ameba-D Throughput Test Report.pdf` | AmebaD Wi-Fi 吞吐测试报告 |
+| `AN0400 Ameba-D Application Note v12.pdf` | **总应用笔记**（build/IPC/flash/power/wifi 全覆盖）。关键章节：§18 Flash Operation（SPIC auto/user 模式互斥 + `FLASH_Write_Lock` 跨核保护，Fig 18-1 IPC 睡眠握手）、§12 IPC（`ipc_init_config[]` 两核 + `ipc_table_init`）、§15 Power Save、§17 ipccfg/sleepcfg —— TF-M 安全存储跨核 flash 仲裁的背景依据，见 `project_amebad_aws_iot` 记忆 |
 | `TR1060 RTL8711Dx Cable Link RvR Test Report.pdf` | RTL8711Dx RvR 测试报告 |
 | `AmebaD-LT 路由器兼容性测试报告.pdf` | AmebaD 路由器兼容性测试（呼应 2.4G 拥塞坑） |
 

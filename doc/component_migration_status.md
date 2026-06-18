@@ -125,7 +125,7 @@ bignum.c 加回 bflb_mbedtls_port。
 
 ### `CONFIG_SHELL=n`
 [project/bouffalo/proj.conf](../project/bouffalo/proj.conf) 关了 shell。
-`components/shell/` 还没抽，开启会让 `bflb_mm/mm_debug.c` 报 `shell.h: No such
+`components/shell/` 还没抽，开启会让 `tlsf_config/mm_debug.c` 报 `shell.h: No such
 file or directory`。Shell 抽过来后改回 `y` 即可。
 
 ### `bflb_zypher_bluetooth` profile-defs
@@ -193,7 +193,7 @@ make CHIP=bl616cl BOARD=bl616cldk      # 产 at_bl616cl_whole_flash_data.bin
 ### 一堆 `proj.conf` 选项没有对应组件
 当前还设着但只是宏定义，没有 backing source：
 - `CONFIG_BFLOG n` — 已关，没问题
-- `CONFIG_TLSF y` — `bflb_mm` 里有 tlsf 子目录，被 lazy 拉，已工作
+- `CONFIG_TLSF y` — `tlsf_config` 里有 tlsf 子目录，被 lazy 拉，已工作
 - `CONFIG_PING y` — `components/network/ping/` 没抽
 - `CONFIG_BLSYNC y` — Bouffalo Lab Sync 没抽
 - `CONFIG_COEX*` — Wi-Fi/BT 共存仲裁，编译时是宏；要不要抽 `components/wireless/coex/`
@@ -349,7 +349,7 @@ wait
 
 1. **`src/main.cpp` BL616/BL616CL 路径 runtime**：现在能编只是因为它 include 的 `wifi_mgmr.h` / `bl_fw_api.h` / `btble_lib_api.h` 都 wire 上了，**runtime 没验过**。第一次上板要看哪些 init 顺序 / GPIO 引脚 / UART 配置要调。
 2. **接 `pm_manager` caller / `CONFIG_TICKLESS_ACCURATE`**：CMakeLists wiring + proj.conf 翻 `CONFIG_PM_MANAGER=y` 现在都能 link（见上面"CONFIG_PM_MANAGER wiring OK"段），但 final ELF 仍 0 caller。要做 BT/Wi-Fi PS 联合 tickless idle，得：（a）proj.conf 加 `set(CONFIG_PM_MANAGER y)` + `set(CONFIG_TICKLESS_ACCURATE y)`；（b）找谁 register pm_sleep_check callback；（c）`tickless_accurate.c` 里 MTIME / MTIMECMP defines 已经按 chip 配好。
-3. **`CONFIG_SHELL=n`** 仍然关着；要打开得抽 `platform/bouffalo_sdk/components/shell/`（参考 bflb_mm/mm_debug.c 用 shell.h 那条）。
+3. **`CONFIG_SHELL=n`** 仍然关着；要打开得抽 `platform/bouffalo_sdk/components/shell/`（参考 tlsf_config/mm_debug.c 用 shell.h 那条）。
 4. **CI 没接** BL616 / BL616CL；目前只有 BL602 在 CI 走 build。要加 matrix job + artifact upload。
 5. **`component/bouffalo_sdk/bflb_image_tool/bflb_tools` / `component/bouffalo_sdk/bflb_image_tool/bflb_elf_to_bin.py` 这条 pipeline 也得在 CLAUDE.md 里同步**（CLAUDE.md 里说"Output: `project/bouffalo/build_<CHIP>/build_out/whole_flash_data.bin`"已过期，现在是 `build_<CHIP>/at_<chip>_whole_flash_data.bin`，没有 build_out 子目录）。
 6. **BL602 latent heap overlap**：lwip 的 `ram_heap[]` (`.wifibss`, 8 KB) 物理上落在 mm OCRAM 池 `__HeapBase..__HeapLimit` 区间内 — `bl602_flash.ld` 把 `ram_memory` 和 `ram_wifi` 两个 region 物理重叠，mm 看到的"free"区间里夹着一段 lwip 在用的 RAM。当前 mm 用量没爬到那个 offset 所以还没炸，但任何大块 malloc / 长期碎片化都会撞。详见 [bl602_heap_overlap.md](bl602_heap_overlap.md)。修法建议 `MEM_LIBC_MALLOC=1` 让 lwip 走 mm 一个池。BL702 / BL702L 这种单 bank chip 大概率同病；BL616CL 因为 ram_memory 和 ram_wifi 分别在 0x60xxxxxx / 0x20xxxxxx 不同物理 bank 不受影响。

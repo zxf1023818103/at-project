@@ -1,5 +1,5 @@
 /*
- * AmebaD KM4 (HP) image2 — WiFi + FreeRTOS-Plus-TCP DHCP bring-up.
+ * AmebaD KM4 (HP) image2 - WiFi + FreeRTOS-Plus-TCP DHCP bring-up.
  *
  * Goal of this slice: associate to an AP (WPA2-PSK) and obtain an IP via
  * FreeRTOS-Plus-TCP's DHCP client, proving the FreeRTOS+TCP stack runs on
@@ -11,17 +11,30 @@
  *   -> FreeRTOS+TCP: fill interface + endpoint(DHCP) -> FreeRTOS_IPInit_Multi
  *   -> DHCP -> vApplicationIPNetworkEventHook(eNetworkUp) prints the IP.
  */
+#include <stdio.h>                /* printf (timestamped [KM4] logs, replacing DiagPrintf) */
+#include <stdlib.h>               /* setenv (default TZ) */
+#include <time.h>                 /* tzset */
 #include "ameba_soc.h"
 #include "FreeRTOS.h"
 #include "task.h"
 #include "wifi_conf.h"            /* wifi_on / wifi_connect / wifi_get_mac_address */
 #include "FreeRTOS_IP.h"
 #include "FreeRTOS_Routing.h"     /* NetworkInterface_t / NetworkEndPoint_t / FillEndPoint */
+#include "at_log.h"                  /* rxi log.c: log_info / log_error (replaces printf / DiagPrintf) */
+#include "log_lock.h"             /* log_lock_init: FreeRTOS-mutex thread-safety for the logger */
 
-/* basic AT log / shell console (monitor shell over the log UART) */
-extern void shell_init_rom(u32 TBLSz, void *pTBL);
-extern void shell_init_ram(void);
-extern void shell_uart_irq_rom(void *Data);
+/* ameba_soc.h -> platform_stdlib_rtl8721d.h does `#define printf _rtl_printf` (unless STD_PRINTF),
+ * which writes straight to the LOGUART and bypasses the newlib console — so it gets no per-line
+ * timestamp. Undo it so our printf logs flow through _write -> at_console_write and pick up the
+ * [HH:MM:SS] prefix (like the [SNTP]/[TIME]/[RTC] logs do). The explicit DiagPrintf calls below
+ * (pre-scheduler banner, AWS mount) are unaffected; snprintf/sprintf keep the _rtl_ versions. */
+#undef printf
+
+/* console: FreeRTOS-Plus-CLI over the LOGUART (component/amebad/monitor) */
+extern void amebad_monitor_start(void);
+
+/* ROM/fwlib CPU clock select (rtl8721d_system.h; CLK_KM4_200M comes in via ameba_soc.h). */
+extern void SystemSetCpuClk(unsigned char CpuClk);
 
 /* FreeRTOS+TCP Realtek glue (component/amebad/freertos_tcp_port) */
 extern NetworkInterface_t *pxRealtek_FillInterfaceDescriptor(BaseType_t xEMACIndex,
@@ -53,14 +66,14 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
         uint32_t ulIP = 0, ulMask = 0, ulGW = 0, ulDNS = 0;
         FreeRTOS_GetAddressConfiguration( &ulIP, &ulMask, &ulGW, &ulDNS );
         /* IPs are in network byte order; byte 0 = first octet. */
-        DiagPrintf( "[KM4] ==== network UP ====\n\r" );
-        DiagPrintf( "[KM4] DHCP IP   %d.%d.%d.%d\n\r",
+        log_info( "[KM4] ==== network UP ====" );
+        log_info( "[KM4] DHCP IP   %d.%d.%d.%d",
                     (int)( ulIP & 0xff ), (int)( ( ulIP >> 8 ) & 0xff ),
                     (int)( ( ulIP >> 16 ) & 0xff ), (int)( ( ulIP >> 24 ) & 0xff ) );
-        DiagPrintf( "[KM4] netmask   %d.%d.%d.%d\n\r",
+        log_info( "[KM4] netmask   %d.%d.%d.%d",
                     (int)( ulMask & 0xff ), (int)( ( ulMask >> 8 ) & 0xff ),
                     (int)( ( ulMask >> 16 ) & 0xff ), (int)( ( ulMask >> 24 ) & 0xff ) );
-        DiagPrintf( "[KM4] gateway   %d.%d.%d.%d\n\r",
+        log_info( "[KM4] gateway   %d.%d.%d.%d",
                     (int)( ulGW & 0xff ), (int)( ( ulGW >> 8 ) & 0xff ),
                     (int)( ( ulGW >> 16 ) & 0xff ), (int)( ( ulGW >> 24 ) & 0xff ) );
 #ifdef AT_PROJECT_QUIC
@@ -69,10 +82,22 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
          * are not linked in this image). */
         extern void quic_test_start( void );
         quic_test_start();
-#else
+#elif defined(AT_PROJECT_AWS_IOT)
+        /* AWS IoT Core MQTT/TLS demo: connect to AWS IoT over mutually-authenticated
+         * TLS and publish telemetry. Credentials: endpoint+cert from LittleFS, the
+         * private key from TF-M Protected Storage (provisioned via `set ...`). */
+        extern void aws_iot_demo_start( void );
+        aws_iot_demo_start();
+#elif defined(AT_PROJECT_SNTP)
+        /* coreSNTP UTC time-sync -> newlib _gettimeofday (time_base.c) -> the [TIME]
+         * date/time self-test runs once the first sync lands. */
+        extern void sntp_sync_start( void );
+        sntp_sync_start();
+#elif !defined(AT_PROJECT_PKCS11) && !defined(AT_PROJECT_CRYPTOBENCH) && !defined(AT_PROJECT_MINIMAL)
         /* Default = TCP TX (device -> WSL `iperf -s`); also exercises the
          * rewritten FreeRTOS+TCP RX bridge via the ACK path. The UDP TX/RX and
-         * TCP-sink probes are kept available for throughput diagnostics. */
+         * TCP-sink probes are kept available for throughput diagnostics.
+         * The PKCS11 / crypto-bench / minimal images drop the iperf TUs. */
         iperf_client_start();
         ( void ) iperf_udp_client_start;
         ( void ) iperf_udp_server_start;
@@ -81,7 +106,7 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
     }
     else
     {
-        DiagPrintf( "[KM4] ==== network DOWN ====\n\r" );
+        log_info( "[KM4] ==== network DOWN ====" );
     }
 }
 
@@ -110,7 +135,7 @@ static unsigned char prvHexByte( const char * p )
  * purpose-built path is an "extended country info" scan: with it enabled the
  * driver parses each AP's beacon Country IE and appends the 2-byte country code
  * into every scan-buffer record (at offset 14, right before the SSID). This
- * probe runs that scan and prints the RAW per-AP country field — unlike
+ * probe runs that scan and prints the RAW per-AP country field - unlike
  * wifi_get_country_code(), which hides "no AP advertised one" behind a "US"
  * default when fewer than 3 APs agree.
  *
@@ -127,20 +152,20 @@ static void dump_surrounding_country_codes( void )
 
     sb.buf_len = 25 * 50;                            /* 25 B/record * up to 50 APs */
     sb.buf = (char *) pvPortMalloc( sb.buf_len );
-    if( !sb.buf ) { DiagPrintf( "[CC] malloc %d failed\n\r", sb.buf_len ); return; }
+    if( !sb.buf ) { log_error( "[CC] malloc %d failed", sb.buf_len ); return; }
     memset( sb.buf, 0, sb.buf_len );
 
     rltk_wlan_enable_scan_with_extended_countryinfo( 1 );
     if( wifi_scan( RTW_SCAN_TYPE_ACTIVE, RTW_BSS_TYPE_ANY, &sb ) < 0 )
     {
-        DiagPrintf( "[CC] scan FAILED\n\r" );
+        log_error( "[CC] scan FAILED" );
         rltk_wlan_enable_scan_with_extended_countryinfo( 0 );
         vPortFree( sb.buf );
         return;
     }
     rltk_wlan_enable_scan_with_extended_countryinfo( 0 );
 
-    DiagPrintf( "\n\r[CC] ==== surrounding-AP country codes (beacon Country IE) ====\n\r" );
+    log_info( "[CC] ==== surrounding-AP country codes (beacon Country IE) ====" );
     while( plen < sb.buf_len )
     {
         int len = ( unsigned char ) sb.buf[ plen ];
@@ -153,15 +178,15 @@ static void dump_surrounding_country_codes( void )
         ssid_len = len - HDR - CC;
         aps++;
         if( c0 && c1 ) with_cc++;
-        DiagPrintf( "[CC] %02x:%02x:%02x:%02x:%02x:%02x ch=%d cc=%c%c ssid=",
+        log_info( "[CC] %02x:%02x:%02x:%02x:%02x:%02x ch=%d cc=%c%c ssid=",
                     r[1], r[2], r[3], r[4], r[5], r[6], ch,
                     ( c0 >= 0x20 && c0 < 0x7f ) ? c0 : '-',
                     ( c1 >= 0x20 && c1 < 0x7f ) ? c1 : '-' );
-        for( i = 0; i < ssid_len; i++ ) DiagPrintf( "%c", sb.buf[ plen + HDR + CC + i ] );
-        DiagPrintf( "\n\r" );
+        for( i = 0; i < ssid_len; i++ ) log_info( "%c", sb.buf[ plen + HDR + CC + i ] );
+        log_info( "" );
         plen += len;
     }
-    DiagPrintf( "[CC] ==== %d APs scanned, %d advertised a country code ====\n\r",
+    log_info( "[CC] ==== %d APs scanned, %d advertised a country code ====",
                 aps, with_cc );
     vPortFree( sb.buf );
 }
@@ -180,7 +205,7 @@ typedef struct {
  *   [0]=len [1..6]=bssid [7..10]=rssi(int) [11]=enc_alg [12]=wps [13]=channel
  *   [14..]=ssid (len-14 bytes)
  * Prints every AP, and records the target SSID's real channel + security so the
- * connect uses a concrete security type (never RTW_SECURITY_UNKNOWN) — the bug in
+ * connect uses a concrete security type (never RTW_SECURITY_UNKNOWN) - the bug in
  * wifi_connect_simple was leaving security unknown / pscan-restricting the scan.
  */
 static int scan_print_handler( char *buf, int buflen, char *target_ssid, void *user_data )
@@ -188,7 +213,7 @@ static int scan_print_handler( char *buf, int buflen, char *target_ssid, void *u
     found_ap_t *fa = (found_ap_t *) user_data;
     int plen = 0;
 
-    DiagPrintf( "[SCAN] ==== APs (probing SSID '%s') ====\n\r", target_ssid );
+    log_info( "[SCAN] ==== APs (probing SSID '%s') ====", target_ssid );
     while( plen < buflen )
     {
         unsigned char *r = (unsigned char *)( buf + plen );
@@ -204,7 +229,7 @@ static int scan_print_handler( char *buf, int buflen, char *target_ssid, void *u
         n = ( ssid_len > 32 ) ? 32 : ( ssid_len < 0 ? 0 : ssid_len );
         memcpy( ssidbuf, buf + plen + 14, n );
         ssidbuf[ n ] = 0;
-        DiagPrintf( "[SCAN] %02x:%02x:%02x:%02x:%02x:%02x ch=%d rssi=%d enc=%d ssid=%s\n\r",
+        log_info( "[SCAN] %02x:%02x:%02x:%02x:%02x:%02x ch=%d rssi=%d enc=%d ssid=%s",
                     r[1], r[2], r[3], r[4], r[5], r[6], ch, rssi, enc, ssidbuf );
         if( ssid_len == (int) strlen( target_ssid )
             && memcmp( buf + plen + 14, target_ssid, ssid_len ) == 0 )
@@ -217,7 +242,7 @@ static int scan_print_handler( char *buf, int buflen, char *target_ssid, void *u
              * the RTL8721D intermittently loses the 4-way EAPOL frames (M3/M4) so
              * the handshake stalls after the pairwise key (the AP completes + even
              * assigns DHCP, but the chip never signals FOURWAY_HANDSHAKE_DONE so
-             * wifi_connect blocks) — measured ~1/5 connects on 2.4 GHz vs 5/5 on a
+             * wifi_connect blocks) - measured ~1/5 connects on 2.4 GHz vs 5/5 on a
              * clean 5 GHz channel. (The old 2.4-GHz preference was a workaround for
              * a band-steering status-30 reject; the AP no longer steers, so 5 GHz
              * associates fine.) */
@@ -238,7 +263,7 @@ static int scan_print_handler( char *buf, int buflen, char *target_ssid, void *u
         }
         plen += len;
     }
-    DiagPrintf( "[SCAN] ==== end ====\n\r" );
+    log_info( "[SCAN] ==== end ====" );
     return 0;
 }
 
@@ -252,11 +277,22 @@ static void wifi_bringup_thread( void *param )
     /* Throughput: run KM4 at max clock (default may be lower for power). */
     SystemSetCpuClk( CLK_KM4_200M );
 
+#ifdef AT_PROJECT_SNTP
+    /* Seed the wall clock from the hardware RTC: if a prior SNTP sync wrote it and
+     * the RTC survived (warm reset / deep sleep), time() reads real local time from
+     * here on, so the [KM4] WiFi logs below are already timestamped with wall-clock
+     * before SNTP re-syncs. A cold boot leaves the RTC at ~1970 -> seed is skipped. */
+    {
+        extern int rtc_time_seed( void );
+        rtc_time_seed();
+    }
+#endif
+
     /* Set up the KM4 side of the KM4<->KM0 IPC, exactly as the SDK's main() does
      * before WiFi. The WiFi driver self-registers its own data IPC channel (so
      * scan/wifi_on basically work without this), but the GENERAL IPC dispatch
      * (ipc_table_init + the IPC_IRQ handler) is what services KM0-side
-     * coordination — including the inter-core RESET handshake (0x480003f8 bit25)
+     * coordination - including the inter-core RESET handshake (0x480003f8 bit25)
      * that the channel-plan reboot waits on. Without this, that reboot spins in
      * ROM forever. See memory reference-amebad-chplan-reboot-handshake. */
     InterruptRegister( (IRQ_FUN)IPC_INTHandler, IPC_IRQ, (u32)IPCM0_DEV, 5 );
@@ -265,12 +301,26 @@ static void wifi_bringup_thread( void *param )
 
     /* LittleFS bring-up + self-test: mount the on-flash FS (auto-formats if the
      * region is blank) and exercise read of the prefilled lfs.bin + a write/
-     * read-back round trip. Runs here (scheduler up — the flash device lock and
-     * the LFS mutex need FreeRTOS) before WiFi, independent of the link. */
+     * read-back round trip. Runs here (scheduler up - the flash device lock and
+     * the LFS mutex need FreeRTOS) before WiFi, independent of the link.
+     * Dropped from the minimal image (WiFi-connect only); the LFS .text stays
+     * linked (XIP-tail pinned), only the self-test call is skipped. */
+#ifndef AT_PROJECT_MINIMAL
     {
         extern void lfs_selftest( void );
         lfs_selftest();
     }
+#endif
+
+
+#ifdef AT_PROJECT_PKCS11
+    /* corePKCS11 token self-test: needs LittleFS mounted (above) for the PAL + the scheduler
+     * (mbedTLS FreeRTOS threading mutexes). Independent of WiFi. See pkcs11_selftest.c. */
+    {
+        extern void amebad_pkcs11_selftest( void );
+        amebad_pkcs11_selftest();
+    }
+#endif
 
 #ifdef AMEBAD_CPP_SELFTEST
     /* C++ std::filesystem / iostream self-test over the POSIX VFS. Brings up the
@@ -300,10 +350,10 @@ static void wifi_bringup_thread( void *param )
         rtw_efuse_boot_write();
     }
 
-    DiagPrintf( "[KM4] wifi_on(RTW_MODE_STA)...\n\r" );
+    log_info( "[KM4] wifi_on(RTW_MODE_STA)..." );
     if( wifi_on( RTW_MODE_STA ) < 0 )
     {
-        DiagPrintf( "[KM4] wifi_on FAILED\n\r" );
+        log_error( "[KM4] wifi_on FAILED" );
         vTaskDelete( NULL );
         return;
     }
@@ -311,20 +361,20 @@ static void wifi_bringup_thread( void *param )
 #ifdef AT_PROJECT_HCI
     /* BLE DTM image: WiFi is on (DTM needs that for coex), so bring up the BT
      * controller (gnt_bt + bte_init = HCI patch download + reset), then optionally
-     * open the HCI bridge. Skip wifi_connect/iperf — DTM only needs WiFi on. */
+     * open the HCI bridge. Skip wifi_connect/iperf - DTM only needs WiFi on. */
     {
         extern void bt_dtm_bringup( void );
         extern void bt_dtm_enter_bridge( uint32_t, uint8_t );
         ( void ) bt_dtm_enter_bridge;
         /* Bring up the BT controller: gnt_bt + bte_init downloads the firmware
          * patch over HCI-UART and runs the HCI init sequence (read version / read
-         * ROM / set baud / download patch / HCI reset) — i.e. it exercises real
+         * ROM / set baud / download patch / HCI reset) - i.e. it exercises real
          * HCI command/event round-trips, visible on the console. */
         bt_dtm_bringup();
         /* Hand the console to a host BT-test tool: open the transparent HCI bridge.
          * This takes over COM29 as a raw HCI pipe (the RAM shell is gone until
          * reset). The host syncs on the "entering HCI bridge" marker printed by
-         * bt_dtm_enter_bridge() and then drives raw HCI — see project/amebad/hci_test.ps1.
+         * bt_dtm_enter_bridge() and then drives raw HCI - see project/amebad/hci_test.ps1.
          * host_baud = 1500000 keeps the current console rate so COM29 doesn't re-rate. */
         bt_dtm_enter_bridge( 1500000, 0 );
         vTaskDelete( NULL );
@@ -336,7 +386,7 @@ static void wifi_bringup_thread( void *param )
     /* NimBLE host image: start the Apache NimBLE host (controller bring-up + host +
      * advertising) on top of our HCI transport (component/amebad/nimble_port). Then FALL THROUGH
      * to the normal WiFi connect + FreeRTOS+TCP + iperf path so WiFi traffic and BLE
-     * run concurrently — exercising WiFi/BT coex (P5). amebad_nimble_start() spawns
+     * run concurrently - exercising WiFi/BT coex (P5). amebad_nimble_start() spawns
      * its own host/RX tasks and returns. */
     {
         extern void amebad_nimble_start( void );
@@ -360,7 +410,7 @@ static void wifi_bringup_thread( void *param )
     {
         mac[ i ] = prvHexByte( &mac_str[ i * 3 ] );
     }
-    DiagPrintf( "[KM4] MAC %s -> %02x:%02x:%02x:%02x:%02x:%02x\n\r",
+    log_info( "[KM4] MAC %s -> %02x:%02x:%02x:%02x:%02x:%02x",
                 mac_str, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5] );
 
     /* Register netif + MAC with the driver (so RX delivers and LwIP_GetMAC
@@ -370,7 +420,7 @@ static void wifi_bringup_thread( void *param )
     FreeRTOS_FillEndPoint( &xInterface, &xEndPoint, ucIPAddress, ucNetMask,
                            ucGatewayAddress, ucDNSServer, mac );
     xEndPoint.bits.bWantDHCP = pdTRUE;
-    DiagPrintf( "[KM4] FreeRTOS_IPInit_Multi...\n\r" );
+    log_info( "[KM4] FreeRTOS_IPInit_Multi..." );
     FreeRTOS_IPInit_Multi();
     amebad_freertos_tcp_set_ready();
 
@@ -415,7 +465,7 @@ static void wifi_bringup_thread( void *param )
             int scan_try;
             for( scan_try = 0; scan_try < 6; scan_try++ )
             {
-                DiagPrintf( "[KM4] scan for '%s' (prefer 5 GHz, try %d)...\n\r",
+                log_info( "[KM4] scan for '%s' (prefer 5 GHz, try %d)...",
                             kSsid, scan_try + 1 );
                 wifi_scan_networks_with_ssid( scan_print_handler, &fa, 1000,
                                               (char *) kSsid, strlen( kSsid ) );
@@ -425,16 +475,16 @@ static void wifi_bringup_thread( void *param )
         }
         if( !fa.found )
         {
-            DiagPrintf( "[KM4] '%s' not found in scan — abort\n\r", kSsid );
+            log_error( "[KM4] '%s' not found in scan - abort", kSsid );
             vTaskDelete( NULL );
             return;
         }
-        DiagPrintf( "[KM4] found '%s' ch=%d rssi=%d sec=0x%x; pscan + connect...\n\r",
+        log_info( "[KM4] found '%s' ch=%d rssi=%d sec=0x%x; pscan + connect...",
                     kSsid, fa.channel, fa.rssi, (unsigned) fa.security );
         ch = fa.channel;
         /* This AP (MikroTik) intermittently answers the first assoc with status
          * 30 = "rejected temporarily; try again later". It's transient, so retry
-         * a handful of times (re-arming pscan each attempt — the driver consumes
+         * a handful of times (re-arming pscan each attempt - the driver consumes
          * the pscan channel list on each connect) before giving up. */
         {
             int attempt, ok = 0;
@@ -442,14 +492,14 @@ static void wifi_bringup_thread( void *param )
              * this MAC's stale station entry (the driver-only chip never sent a
              * deauth on reset, so the AP keeps the old session across our reboot).
              * Sending a broadcast deauth before each attempt flushes that entry, so
-             * the assoc is accepted on the first try — verified 3/3 (no status 30,
+             * the assoc is accepted on the first try - verified 3/3 (no status 30,
              * no retry needed). b_broadcast=1, key_type=0. The 8-try loop below now
              * just covers the rare genuinely-transient reject. */
             extern void rltk_wlan_tx_deauth( unsigned char b_broadcast, unsigned char key_type );
             for( attempt = 1; attempt <= 8; attempt++ )
             {
                 u8 c = ch, ps = PSCAN_ENABLE;
-                DiagPrintf( "[KM4] tx_deauth(broadcast) before attempt %d\n\r", attempt );
+                log_info( "[KM4] tx_deauth(broadcast) before attempt %d", attempt );
                 rltk_wlan_tx_deauth( 1, 0 );
                 vTaskDelay( pdMS_TO_TICKS( 80 ) );
                 wifi_set_pscan_chan( &c, &ps, 1 );
@@ -459,12 +509,12 @@ static void wifi_bringup_thread( void *param )
                     ok = 1;
                     break;
                 }
-                DiagPrintf( "[KM4] wifi_connect attempt %d FAILED, retrying...\n\r", attempt );
+                log_error( "[KM4] wifi_connect attempt %d FAILED, retrying...", attempt );
                 vTaskDelay( pdMS_TO_TICKS( 800 ) );
             }
             if( !ok )
             {
-                DiagPrintf( "[KM4] wifi_connect FAILED (gave up)\n\r" );
+                log_error( "[KM4] wifi_connect FAILED (gave up)" );
                 vTaskDelete( NULL );
                 return;
             }
@@ -476,20 +526,27 @@ static void wifi_bringup_thread( void *param )
     {
         int rssi = 0;
         wifi_get_rssi( &rssi );
-        DiagPrintf( "[KM4] associated; power-save off; RSSI %d dBm; waiting for DHCP...\n\r", rssi );
+        log_info( "[KM4] associated; power-save off; RSSI %d dBm; waiting for DHCP...", rssi );
     }
 
-    /* Crypto/SSL self-tests run AFTER WiFi is connected (boot goes straight into
-     * WiFi bring-up first). The ROM mbedTLS KAT + wolfCrypt benchmark are pure
-     * software crypto, independent of the link. Skipped in the QUIC image (those
-     * diagnostic TUs aren't linked; the QUIC handshake test runs from the
-     * network-up hook instead). */
-#ifndef AT_PROJECT_QUIC
+    /* Upstream Mbed TLS v3.6.4 microbenchmark ([MCB] scores) - the apples-to-apples
+     * successor to the removed wolfCrypt [WCB] bench. Runs here at 200 MHz, after
+     * associate, so the timebase matches the old wolfCrypt run. Replaces the ROM-mbedTLS
+     * KAT in this image (the ROM mbedTLS 2.4.0 TU is not linked alongside upstream). */
+#if defined(AT_PROJECT_CRYPTOBENCH)
+    {
+        extern void mbedtls_bench( void );
+        mbedtls_bench();
+    }
+#elif !defined(AT_PROJECT_QUIC) && !defined(AT_PROJECT_PKCS11) && !defined(AT_PROJECT_MINIMAL) && !defined(AT_PROJECT_AWS_IOT)
+    /* ROM mbedTLS KAT (pure software crypto, independent of the link). Skipped in the
+     * QUIC/PKCS11/minimal/AWS images (their diagnostic TUs aren't linked). The wolfCrypt
+     * benchmarks were removed with the wolfSSL retirement (crypto is now mbedTLS/picotls). */
     {
         extern void rom_mbedtls_kat( void );
         rom_mbedtls_kat();
     }
-    /* HW IPSEC engine compare is gated off: CRYPTO_Init faults (SecureFault) — the
+    /* HW IPSEC engine compare is gated off: CRYPTO_Init faults (SecureFault) - the
      * crypto peripheral (~0x48012000) is secure-attributed and unreachable from
      * this NS driver-only image. Re-enable to retest. */
 #if 0
@@ -498,29 +555,26 @@ static void wifi_bringup_thread( void *param )
         rom_hwcrypto_compare();
     }
 #endif
-    {
-        extern void wolfcrypt_bench( void );
-        wolfcrypt_bench();
-    }
-    /* ROM-mbedTLS vs wolfCrypt on the same algos across CPU clocks (200/100/50/25). */
-    {
-        extern void crypto_clock_bench( void );
-        crypto_clock_bench();
-    }
-#endif /* !AT_PROJECT_QUIC */
+#endif /* !AT_PROJECT_QUIC && !AT_PROJECT_PKCS11 */
 
     vTaskDelete( NULL );
 }
 
 int main(void)
 {
-    DiagPrintf("\n\r[KM4] at-project image2 — FreeRTOS+TCP DHCP bring-up\n\r");
-    DiagPrintf("[KM4] FreeRTOS kernel %s\n\r", tskKERNEL_VERSION_NUMBER);
+    log_lock_init();   /* install the FreeRTOS-mutex lock before any log_* (pre-scheduler is fine) */
+    log_info("[KM4] at-project image2 - FreeRTOS+TCP DHCP bring-up");
+    log_info("[KM4] FreeRTOS kernel %s", tskKERNEL_VERSION_NUMBER);
 
 #ifdef AMEBAD_TFM_BOOT
-    /* app_km4 is TF-M's Non-Secure world: exercise a real PSA service call.
-     * Done here (pre-scheduler, single-threaded) so the bare-metal NS dispatch
-     * is safe. See tfm_psa_selftest.c. */
+    /* Serialize every NS->SPE PSA call: tfm_ns_interface_rtos.c takes this mutex around each
+     * dispatch so two NS tasks can't be inside a secure call at once (the SFN partitions share a
+     * secure stack - concurrent callers corrupt it). Created here, pre-scheduler. */
+    {
+        extern uint32_t tfm_ns_interface_init(void);
+        tfm_ns_interface_init();
+    }
+    /* app_km4 is TF-M's Non-Secure world: exercise a real PSA service call. */
     {
         extern void amebad_tfm_psa_selftest(void);
         amebad_tfm_psa_selftest();
@@ -534,42 +588,64 @@ int main(void)
 #endif
 #endif
 
-#ifdef AMEBAD_FREERTOS_SECURE
-    /* app_km4 is the Non-Secure world of the standalone FreeRTOS TrustZone secure
-     * image: spin up the secure-context preemption test. Tasks are created here
-     * (pre-scheduler); each allocates its secure context lazily on first run via
-     * the handler-mode SVC. See freertos_secure_test.c. */
+    /* Console: FreeRTOS-Plus-CLI over the LOGUART (component/amebad/monitor). KM4 owns the
+     * console at boot; `>>` / `km0` hand it to KM0. It POLLS the UART (LOGUART_Readable) and
+     * never enables the RX IRQ, so it sidesteps the ROM "Irq 3 Fun Not Assign" storm an
+     * enabled-but-unhandled RX line causes. Dropped from the QUIC image (the handshake
+     * self-test is autonomous): removing the monitor from KM4 image2 shrinks .text and shifts
+     * the XIP layout to dodge the boot-hang (doc/amebad_xip_layout_boot_hang.md); that image's
+     * console stays output-only (DiagPrintf TX is unaffected). */
+#ifndef AT_PROJECT_QUIC
+    amebad_monitor_start();
+    /* Filesystem (ls/cat/rm/rmdir/mkdir/mv/cp/touch/hexdump/df/mkfs) + time/SNTP
+     * (date/uptime/sntp_update) console commands, registered into the same CLI list the
+     * monitor uses — like aws_cli_register() below, so the shared monitor stays untouched.
+     * KM4-only: the VFS/LittleFS/newlib-time they use live behind libc, absent on KM0. */
+    { extern void fs_cli_register(void);   fs_cli_register();   }
+    { extern void time_cli_register(void); time_cli_register(); }
+    { extern void env_cli_register(void);  env_cli_register();  }   /* setenv/getenv/env (all images) */
+#ifdef AMEBAD_ENABLE_MINIZIP
+    { extern void zip_cli_register(void);  zip_cli_register();  }   /* zip/unzip demo (non-AWS images) */
+#endif
+#ifdef AT_PROJECT_AWS_IOT
+    /* Mount LittleFS + load the persisted environment. The non-secret creds live in plain
+     * LFS: the AWS endpoint is an env var (KV/endpoint) and the client cert is a plain DER
+     * file (aws_cert.der) whose path is an env var (KV/cert); only the private key needs the
+     * encrypted / TrustZone-protected TF-M ITS. env_init() loads every KV/ file into newlib's
+     * environ (a --wrap=setenv hook then auto-persists any runtime setenv back to KV/). */
     {
-        extern void freertos_secure_test_start(void);
-        freertos_secure_test_start();
+        extern void *amebad_lfs_mount(void);
+        extern void  env_init(void);
+        void *lfs = amebad_lfs_mount();
+        log_info("[AWS] LittleFS mount %s", lfs ? "OK" : "FAILED");
+        if (lfs)
+            env_init();
+    }
+    /* Create the PSA-access mutex (pre-scheduler) + register the `set` / `blemac`
+     * provisioning commands into the CLI list. */
+    {
+        extern void aws_provision_init(void);
+        extern void aws_cli_register(void);
+        aws_provision_init();
+        aws_cli_register();
     }
 #endif
-
-    /* AT log / shell console (ROM + RAM shell + LOGUART RX ISR). */
-#ifndef AT_PROJECT_QUIC
-    /* AT/monitor shell. Dropped from the QUIC image (the handshake self-test is
-     * autonomous, runs from the network-up hook) to remove the at_cmd/monitor
-     * code from KM4 image2 — this changes the XIP relative layout to dodge the
-     * boot-hang (doc/amebad_xip_layout_boot_hang.md) and shrinks the image. */
-    shell_init_rom(0, 0);
-    shell_init_ram();
-    InterruptRegister((IRQ_FUN)shell_uart_irq_rom, UART_LOG_IRQ, (u32)NULL, 5);
-    /* Enable the LOGUART RX IRQ ONLY when a handler is registered. In the QUIC
-     * image the shell is gated out (above), so NOTHING registers IRQ 3 — yet we
-     * used to enable it here unconditionally. With the line enabled but no
-     * handler, any byte sent to the LOG UART makes ROM's INT_Entry fire forever
-     * ("Irq 3 Fun Not Assign" storm): ROM never clears the UART RX interrupt, so
-     * it re-pends at priority 5 and starves the WiFi/IP tasks — so typing to the
-     * console within the first seconds both spammed that message AND blocked DHCP
-     * (no IP). The QUIC console is output-only (DiagPrintf TX is unaffected), so
-     * just leave RX disabled there. */
-    InterruptEn(UART_LOG_IRQ, 5);
 #endif
+
+    /* Default the wall clock + log timestamps to China Standard Time (UTC+8) so printf logs read
+     * local time. Only set it when TZ is unset/empty (a persisted/user TZ is kept); tzset() then
+     * loads it into newlib's _timezone (read by at_console_timestamp). */
+    {
+        const char *tz = getenv("TZ");
+        if ((tz == NULL) || (tz[0] == '\0'))
+            setenv("TZ", "CST-8", 1);
+    }
+    tzset();
 
     /* WiFi+DHCP bring-up runs as its own task (wifi_connect blocks). */
     if (xTaskCreate(wifi_bringup_thread, "wifi_bringup", 4096, NULL,
                     tskIDLE_PRIORITY + 3, NULL) != pdPASS)
-        DiagPrintf("[KM4] xTaskCreate(wifi_bringup) failed\n\r");
+        log_error("[KM4] xTaskCreate(wifi_bringup) failed");
 
     vTaskStartScheduler();
 

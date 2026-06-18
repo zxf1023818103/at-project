@@ -38,3 +38,23 @@ target_compile_options(zlibstatic PRIVATE -w)
 # Umbrella INTERFACE (伞形): consumers link `zlib_config` to get the static lib.
 add_library(zlib_config INTERFACE)
 target_link_libraries(zlib_config INTERFACE zlibstatic)
+
+# minizip (zlib contrib/minizip) — ZIP archive read/write over zlib. Library sources only
+# (zip.c/unzip.c/ioapi.c); the PC programs minizip.c/miniunz.c are NOT built. USE_FILE32API
+# maps the ioapi fopen64 family to plain fopen — a consumer that supplies its own ioapi (e.g.
+# a LittleFS-backed one) never touches stdio. EXCLUDE_FROM_ALL: pulled in only where linked.
+set(_minizip "${CMAKE_CURRENT_SOURCE_DIR}/zlib/contrib/minizip")
+add_library(minizip STATIC EXCLUDE_FROM_ALL
+    "${_minizip}/zip.c"
+    "${_minizip}/unzip.c"
+    "${_minizip}/ioapi.c"
+)
+target_include_directories(minizip PUBLIC "${_minizip}")
+# USE_FILE32API: map the ioapi fopen64 family to plain fopen (a custom VFS ioapi is supplied, so
+# stdio is never actually used). Z_BUFSIZE: minizip embeds `Byte buffered_data[Z_BUFSIZE]` INLINE
+# in zip64_internal, and zipOpen3 puts a zip64_internal ON THE STACK — the default 64 KB overflows
+# the console task's 8 KB stack (Hard Fault at `sub sp,#0x10000`). 2 KB is plenty for the deflate
+# output chunk (just more, smaller writes) and keeps zipOpen3's stack frame small.
+target_compile_definitions(minizip PRIVATE USE_FILE32API Z_BUFSIZE=2048)
+target_compile_options(minizip PRIVATE -w)          # vendor contrib: silence -Wall -Wextra
+target_link_libraries(minizip PUBLIC zlibstatic)

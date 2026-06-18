@@ -127,6 +127,11 @@ elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
         rtl8721d_gdma_ram.c
         rtl8721d_flash_ram.c
         rtl8721d_ram_libc.c
+        rtl8721d_wdg.c          # WDG HAL — not in the HP ROM; the KM4 console `reboot`
+                                # (and mbed wdt_api/sys_api) need it for a watchdog reset.
+        rtl8721d_rtc.c          # RTC HAL — not in the HP ROM; the SNTP image's rtc_time.c
+                                # (mbed rtc_api) needs RTC_Init/SetTime/GetTime to keep wall
+                                # clock across warm resets. Pulled only when referenced.
     )
     target_link_libraries(amebad_ram_common PUBLIC amebad_sdk_includes)
     target_compile_options(amebad_ram_common PRIVATE ${_ram_warnings})
