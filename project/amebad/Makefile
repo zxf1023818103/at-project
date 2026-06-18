@@ -16,10 +16,10 @@
 #   make TFM=ON          # in-tree TF-M secure world (SPE via ExternalProject; app_km4 = NSPE)
 #   make STORAGE=ON      # TF-M PSA secure storage (ITS + PS) + NS storage self-test (implies TFM=ON)
 #   make AWS=ON          # AWS IoT Core MQTT/TLS demo (coreMQTT + mbedTLS; cert/endpoint->LFS, key->TF-M PS; implies STORAGE=ON)
-#   make TLS_BACKEND=<mbedtls|picotls>   # TLS-over-TCP backend for AWS (default mbedtls, recommended:
-#                        # 1.2+1.3, mature, native X.509/HW-GCM). picotls = TLS 1.3 only + ~112 KB smaller
-#                        # (the QUIC TLS lib); pick it only to unify on one TLS stack with all-1.3 servers.
-#                        # e.g. make AWS=ON TLS_BACKEND=picotls
+#   make TLS_BACKEND=<picotls|mbedtls>   # TLS-over-TCP backend for AWS (default picotls: TLS 1.3 only,
+#                        # ~112 KB smaller flash + ~24 KB less heap, shares the QUIC TLS stack). Use mbedtls
+#                        # for TLS 1.2 compatibility / broader servers (1.2+1.3, mature, native X.509).
+#                        # e.g. make AWS=ON TLS_BACKEND=mbedtls
 #   make clean           # ninja clean both cores
 #   make distclean       # delete build/km0 build/km4 build/amebad
 #
@@ -40,7 +40,7 @@ PKCS11     ?= OFF          # ON -> corePKCS11 token self-test (upstream mbedTLS 
 BENCH      ?= OFF          # ON -> upstream Mbed TLS v3.6.4 crypto microbenchmark ([MCB] scores)
 MINIMAL    ?= OFF          # ON -> strip diagnostics (iperf / KAT / HW-crypto bench); WiFi-connect only (pairs with TFM=ON)
 TFM        ?= OFF          # ON -> build + boot in-tree TF-M SPE (app_km4 becomes the NS side)
-TLS_BACKEND ?= mbedtls     # AWS TLS-over-TCP backend (default + recommended: mbedtls — TLS 1.2+1.3, mature, native X.509 + HW-GCM). picotls = TLS 1.3 only, ~112 KB smaller, and is the QUIC TLS lib; use it to unify on one TLS stack when all servers do 1.3. Switch wiring: component/network_transport/transport_tls.h.
+TLS_BACKEND ?= picotls     # AWS TLS-over-TCP backend (default: picotls — TLS 1.3 only; ~112 KB smaller flash + ~24 KB less heap; shares the QUIC TLS stack). Set mbedtls for TLS 1.2 compatibility / broader server support (1.2+1.3, mature, native X.509). Switch wiring: component/network_transport/transport_tls.h.
 ifeq ($(filter $(TLS_BACKEND),mbedtls picotls),)
 $(error TLS_BACKEND must be 'mbedtls' or 'picotls')
 endif
