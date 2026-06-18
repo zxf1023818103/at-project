@@ -538,10 +538,12 @@ static void wifi_bringup_thread( void *param )
         extern void mbedtls_bench( void );
         mbedtls_bench();
     }
-#elif !defined(AT_PROJECT_QUIC) && !defined(AT_PROJECT_PKCS11) && !defined(AT_PROJECT_MINIMAL) && !defined(AT_PROJECT_AWS_IOT)
-    /* ROM mbedTLS KAT (pure software crypto, independent of the link). Skipped in the
-     * QUIC/PKCS11/minimal/AWS images (their diagnostic TUs aren't linked). The wolfCrypt
-     * benchmarks were removed with the wolfSSL retirement (crypto is now mbedTLS/picotls). */
+#elif defined(AMEBAD_ROM_KAT)
+    /* ROM mbedTLS KAT (pure software crypto in the A-cut mask ROM). Only in the explicit
+     * ROMKAT=ON diagnostic image: the default/console images now link upstream Mbed TLS
+     * (mbedcrypto, for fs_cli's md5sum/sha*sum), whose strong symbols would override the ROM
+     * ones and break the KAT — so the ROM TU is built (and called) only when upstream is NOT
+     * linked. The wolfCrypt benchmarks were removed with the wolfSSL retirement. */
     {
         extern void rom_mbedtls_kat( void );
         rom_mbedtls_kat();

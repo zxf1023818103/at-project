@@ -1,6 +1,7 @@
 /*
  * fs_cli.c — LittleFS file commands for the AmebaD KM4 FreeRTOS-Plus-CLI console:
- *   ls cat rm rmdir mkdir mv cp touch hexdump df mkfs
+ *   ls cat rm rmdir mkdir mv cp touch hexdump df mkfs chmod
+ *   md5sum sha1sum sha224sum sha256sum sha384sum sha512sum   (when FS_CLI_HASH)
  *
  * Registered into the running CLI list from main() after amebad_monitor_start(),
  * exactly like aws_cli.c — so the shared component/amebad/monitor stays untouched
@@ -11,13 +12,23 @@
  * open/read/write/close/lseek/stat/unlink/rename + opendir/readdir/closedir +
  * mkdir/rmdir. Paths pass verbatim to littlefs (no cwd; "/" is the root).
  *
+ * chmod/ls store+show POSIX permission bits as a LittleFS custom attribute
+ * (FS_ATTR_MODE) — LittleFS has no native mode field — via lfs_setattr/lfs_getattr,
+ * the same direct-lfs path df/mkfs already use.
+ *
+ * The hash commands (FS_CLI_HASH) call the standard upstream Mbed TLS module API
+ * (mbedcrypto, component/mbedtls_config) — NOT ROM mbedTLS — so a future
+ * MBEDTLS_SHA256_ALT etc. (component/amebad/mbedtls_port) can back them with the ROM
+ * mbedtls_*_process / IPSEC HW engine with no change here. They are compiled out in
+ * a ROMKAT=ON build (which links ROM mbedTLS instead, ABI-incompatible with upstream).
+ *
  * Output policy (matches the monitor's run_rom_cmd idiom): commands whose output can
  * exceed the 2 KB CLI buffer (ls/cat/hexdump) stream straight to the LOGUART via
  * DiagPutChar and leave the CLI buffer empty; short status lines use snprintf(out,...).
  * Direct writes also skip the per-line log timestamp, which is what a raw dump wants.
  */
 #include <stdio.h>
-#include <stdlib.h>          /* strtol */
+#include <stdlib.h>          /* strtol, strtoul */
 #include <string.h>
 #include <fcntl.h>           /* open, O_RDONLY/O_WRONLY/O_CREAT/O_TRUNC */
 #include <unistd.h>          /* read, write, close, unlink, rmdir */
@@ -29,10 +40,24 @@
 #include "FreeRTOS_CLI.h"
 #include "ameba_soc.h"       /* DiagPutChar */
 
-#include "lfs_config.h"      /* lfs_t, lfs_fs_size, LFS_CFG_BLOCK_*, lfs_config_format */
+#include "lfs_config.h"      /* lfs_t, lfs_fs_size, LFS_CFG_BLOCK_*, lfs_config_format,
+                              * lfs_setattr/lfs_getattr, LFS_ERR_NOATTR (via lfs.h) */
 #include "syscalls.h"        /* vfs_lfs_mount */
 
+#ifdef FS_CLI_HASH
+/* Upstream Mbed TLS streaming hash modules (mbedcrypto). Headers are already on the
+ * include path via amebad_mbedtls_headers; symbols resolve to the linked mbedcrypto. */
+#include <mbedtls/md5.h>
+#include <mbedtls/sha1.h>
+#include <mbedtls/sha256.h>
+#include <mbedtls/sha512.h>
+#endif
+
 #define FS_PATH_MAX   256
+
+/* LittleFS user-attribute type id holding the POSIX permission bits (stored as a
+ * uint16_t, low 12 bits). 'm' for "mode"; the only custom attr the repo uses. */
+#define FS_ATTR_MODE  ((uint8_t)'m')
 
 /* One scratch buffer shared by cat/cp/hexdump. Safe as a static: only the single
  * console (cli) task ever runs these handlers, one command at a time. */
@@ -98,16 +123,45 @@ static void join_path(char *dst, size_t sz, const char *dir, const char *name)
     dst[n] = '\0';
 }
 
+/* Read the FS_ATTR_MODE attribute for `path`, or synthesize a default (0755 dir /
+ * 0644 file) when the entry was never chmod'd (lfs_getattr -> LFS_ERR_NOATTR) or the
+ * filesystem is unavailable. Returns the 12 low permission bits. */
+static uint16_t fs_mode_of(lfs_t *lfs, const char *path, int is_dir)
+{
+    uint16_t m;
+
+    if (lfs != NULL &&
+        lfs_getattr(lfs, path, FS_ATTR_MODE, &m, sizeof m) == (lfs_ssize_t)sizeof m) {
+        return (uint16_t)(m & 07777);
+    }
+    return is_dir ? 0755 : 0644;
+}
+
+/* Format a 10-char "drwxr-xr-x" permission string (NUL-terminated). Renders the rwx
+ * triplets; the set-uid/gid/sticky bits are stored but not displayed. */
+static void fs_mode_str(char b[11], uint16_t mode, int is_dir)
+{
+    static const char rwx[8][4] = { "---", "--x", "-w-", "-wx",
+                                    "r--", "r-x", "rw-", "rwx" };
+    b[0] = is_dir ? 'd' : '-';
+    memcpy(b + 1, rwx[(mode >> 6) & 7], 3);
+    memcpy(b + 4, rwx[(mode >> 3) & 7], 3);
+    memcpy(b + 7, rwx[ mode       & 7], 3);
+    b[10] = '\0';
+}
+
 /* ----------------------------------------------------------------------- ls --- */
 static BaseType_t cmd_ls(char *out, size_t outlen, const char *cmd)
 {
-    char path[FS_PATH_MAX], child[FS_PATH_MAX], num[24];
+    char path[FS_PATH_MAX], child[FS_PATH_MAX], num[24], perm[11];
     const char *dir;
+    lfs_t *lfs;
     DIR *d;
     struct dirent *e;
 
     out[0] = '\0';
     dir = (fs_arg(cmd, 1, path, sizeof path) > 0) ? path : "/";
+    lfs = vfs_lfs_mount();
 
     d = opendir(dir);
     if (d == NULL) {
@@ -115,19 +169,24 @@ static BaseType_t cmd_ls(char *out, size_t outlen, const char *cmd)
         return pdFALSE;
     }
     while ((e = readdir(d)) != NULL) {
-        fs_emit(e->d_name);
-        if (e->d_type == DT_DIR) {
-            fs_emit("/\r\n");
-        } else {
+        int is_dir = (e->d_type == DT_DIR);
+        long size = 0;
+
+        join_path(child, sizeof child, dir, e->d_name);
+        if (!is_dir) {
             struct stat st;
-            join_path(child, sizeof child, dir, e->d_name);
             if (stat(child, &st) == 0) {
-                snprintf(num, sizeof num, "  %ld\r\n", (long)st.st_size);
-            } else {
-                snprintf(num, sizeof num, "\r\n");
+                size = (long)st.st_size;
             }
-            fs_emit(num);
         }
+        fs_mode_str(perm, fs_mode_of(lfs, child, is_dir), is_dir);
+        /* "<perm>  <size>  <name>[/]" — streamed piecewise (long names never need a
+         * big line buffer). */
+        fs_emit(perm);
+        snprintf(num, sizeof num, "  %10ld  ", size);
+        fs_emit(num);
+        fs_emit(e->d_name);
+        fs_emit(is_dir ? "/\r\n" : "\r\n");
     }
     closedir(d);
     return pdFALSE;
@@ -375,6 +434,113 @@ static BaseType_t cmd_mkfs(char *out, size_t outlen, const char *cmd)
     return pdFALSE;
 }
 
+/* -------------------------------------------------------------------- chmod --- */
+static BaseType_t cmd_chmod(char *out, size_t outlen, const char *cmd)
+{
+    char marg[16], path[FS_PATH_MAX], *end;
+    unsigned long v;
+    uint16_t mode;
+    lfs_t *lfs;
+    int err;
+
+    out[0] = '\0';
+    if (fs_arg(cmd, 1, marg, sizeof marg) <= 0 || fs_arg(cmd, 2, path, sizeof path) <= 0) {
+        snprintf(out, outlen, "usage: chmod <octal-mode> <path>\r\n");
+        return pdFALSE;
+    }
+    v = strtoul(marg, &end, 8);          /* numeric octal only (like chmod's numeric form) */
+    if (*end != '\0' || v > 07777) {
+        snprintf(out, outlen, "chmod: invalid octal mode '%s'\r\n", marg);
+        return pdFALSE;
+    }
+    lfs = vfs_lfs_mount();
+    if (lfs == NULL) {
+        snprintf(out, outlen, "chmod: no filesystem\r\n");
+        return pdFALSE;
+    }
+    mode = (uint16_t)v;
+    err = lfs_setattr(lfs, path, FS_ATTR_MODE, &mode, sizeof mode);
+    if (err < 0) {
+        snprintf(out, outlen, "chmod: %s: %s\r\n", path,
+                 (err == LFS_ERR_NOENT) ? "no such file or directory" : "error");
+        return pdFALSE;
+    }
+    snprintf(out, outlen, "chmod: %s -> %04lo\r\n", path, (unsigned long)mode);
+    return pdFALSE;
+}
+
+#ifdef FS_CLI_HASH
+/* ------------------------------------------------------ md5sum/sha*sum --- */
+enum { H_MD5, H_SHA1, H_SHA224, H_SHA256, H_SHA384, H_SHA512 };
+
+/* Stream <file> through the selected Mbed TLS hash (512-byte chunks via s_fsbuf, the
+ * same read loop cat/hexdump use) and print "<hexdigest>  <path>" (coreutils style)
+ * into the CLI buffer. The digest line fits the 2 KB out buffer (64 hex + path). */
+static BaseType_t cmd_hash(char *out, size_t outlen, const char *cmd, int algo)
+{
+    char path[FS_PATH_MAX];
+    unsigned char dig[64];
+    union {
+        mbedtls_md5_context    md5;
+        mbedtls_sha1_context   sha1;
+        mbedtls_sha256_context sha256;
+        mbedtls_sha512_context sha512;
+    } ctx;
+    int fd, n, i, p, diglen;
+
+    out[0] = '\0';
+    if (fs_arg(cmd, 1, path, sizeof path) <= 0) {
+        snprintf(out, outlen, "usage: <md5|sha1|sha224|sha256|sha384|sha512>sum <file>\r\n");
+        return pdFALSE;
+    }
+    fd = open(path, O_RDONLY);
+    if (fd < 0) {
+        snprintf(out, outlen, "%s: not found\r\n", path);
+        return pdFALSE;
+    }
+
+    switch (algo) {
+    case H_MD5:    mbedtls_md5_init(&ctx.md5);       mbedtls_md5_starts(&ctx.md5);          diglen = 16; break;
+    case H_SHA1:   mbedtls_sha1_init(&ctx.sha1);     mbedtls_sha1_starts(&ctx.sha1);        diglen = 20; break;
+    case H_SHA224: mbedtls_sha256_init(&ctx.sha256); mbedtls_sha256_starts(&ctx.sha256, 1); diglen = 28; break;
+    case H_SHA256: mbedtls_sha256_init(&ctx.sha256); mbedtls_sha256_starts(&ctx.sha256, 0); diglen = 32; break;
+    case H_SHA384: mbedtls_sha512_init(&ctx.sha512); mbedtls_sha512_starts(&ctx.sha512, 1); diglen = 48; break;
+    default:       mbedtls_sha512_init(&ctx.sha512); mbedtls_sha512_starts(&ctx.sha512, 0); diglen = 64; break;
+    }
+    while ((n = read(fd, (char *)s_fsbuf, sizeof s_fsbuf)) > 0) {
+        switch (algo) {
+        case H_MD5:    mbedtls_md5_update(&ctx.md5, s_fsbuf, n);       break;
+        case H_SHA1:   mbedtls_sha1_update(&ctx.sha1, s_fsbuf, n);     break;
+        case H_SHA224:
+        case H_SHA256: mbedtls_sha256_update(&ctx.sha256, s_fsbuf, n); break;
+        default:       mbedtls_sha512_update(&ctx.sha512, s_fsbuf, n); break;
+        }
+    }
+    close(fd);
+    switch (algo) {
+    case H_MD5:    mbedtls_md5_finish(&ctx.md5, dig);       mbedtls_md5_free(&ctx.md5);       break;
+    case H_SHA1:   mbedtls_sha1_finish(&ctx.sha1, dig);     mbedtls_sha1_free(&ctx.sha1);     break;
+    case H_SHA224:
+    case H_SHA256: mbedtls_sha256_finish(&ctx.sha256, dig); mbedtls_sha256_free(&ctx.sha256); break;
+    default:       mbedtls_sha512_finish(&ctx.sha512, dig); mbedtls_sha512_free(&ctx.sha512); break;
+    }
+
+    p = 0;
+    for (i = 0; i < diglen; i++) {
+        p += snprintf(out + p, outlen - p, "%02x", dig[i]);
+    }
+    snprintf(out + p, outlen - p, "  %s\r\n", path);
+    return pdFALSE;
+}
+
+static BaseType_t cmd_md5sum   (char *o, size_t l, const char *c) { return cmd_hash(o, l, c, H_MD5);    }
+static BaseType_t cmd_sha1sum  (char *o, size_t l, const char *c) { return cmd_hash(o, l, c, H_SHA1);   }
+static BaseType_t cmd_sha224sum(char *o, size_t l, const char *c) { return cmd_hash(o, l, c, H_SHA224); }
+static BaseType_t cmd_sha256sum(char *o, size_t l, const char *c) { return cmd_hash(o, l, c, H_SHA256); }
+static BaseType_t cmd_sha384sum(char *o, size_t l, const char *c) { return cmd_hash(o, l, c, H_SHA384); }
+static BaseType_t cmd_sha512sum(char *o, size_t l, const char *c) { return cmd_hash(o, l, c, H_SHA512); }
+#endif /* FS_CLI_HASH */
+
 /* ----------------------------------------------------------- registration --- */
 void fs_cli_register(void)
 {
@@ -390,6 +556,15 @@ void fs_cli_register(void)
         { "touch",   "touch <file>:\r\n create an empty file if missing\r\n",          cmd_touch,    1 },
         { "df",      "df:\r\n show LittleFS block usage\r\n",                           cmd_df,       0 },
         { "mkfs",    "mkfs [yes|-y]:\r\n format the LittleFS partition (ERASES all)\r\n", cmd_mkfs,  -1 },
+        { "chmod",   "chmod <octal> <path>:\r\n set rwx permission bits (stored as an lfs attr)\r\n", cmd_chmod, 2 },
+#ifdef FS_CLI_HASH
+        { "md5sum",    "md5sum <file>:\r\n print the MD5 of a file\r\n",                 cmd_md5sum,    1 },
+        { "sha1sum",   "sha1sum <file>:\r\n print the SHA-1 of a file\r\n",              cmd_sha1sum,   1 },
+        { "sha224sum", "sha224sum <file>:\r\n print the SHA-224 of a file\r\n",          cmd_sha224sum, 1 },
+        { "sha256sum", "sha256sum <file>:\r\n print the SHA-256 of a file\r\n",          cmd_sha256sum, 1 },
+        { "sha384sum", "sha384sum <file>:\r\n print the SHA-384 of a file\r\n",          cmd_sha384sum, 1 },
+        { "sha512sum", "sha512sum <file>:\r\n print the SHA-512 of a file\r\n",          cmd_sha512sum, 1 },
+#endif
     };
     unsigned i;
 
