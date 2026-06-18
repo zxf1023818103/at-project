@@ -92,6 +92,30 @@ if(NOT AMEBAD_ENABLE_QUIC)
         "${CMAKE_SOURCE_DIR}/component/freertos-cli_config/freertos-cli")
 endif()
 
+# minizip (ZIP archive) console commands (zip/unzip over the LittleFS VFS) — DEMO only. Built
+# into the console images EXCEPT QUIC (no console) and AWS (heap/flash-tight: ~90 KB free with
+# TLS/MQTT up, and minizip's ~50 KB working set risks OOM on a re-handshake spike). So it rides
+# the lighter images (default / SNTP / MINIMAL), 200 KB+ free heap. minizip + zlibstatic are leaf
+# libs needing libc/libgcc, so (like littlefs) they join the cross_refs LINK_GROUP via _mz_grp
+# below to avoid CMake sinking the EXCLUDE_FROM_ALL libs past -lc. zip.h/unzip.h/ioapi.h come
+# from minizip's PUBLIC include via the group.
+set(_mz_grp "")
+if(NOT AMEBAD_ENABLE_QUIC AND NOT AMEBAD_ENABLE_AWS_IOT)
+    set(_mz_grp ",minizip,zlibstatic")
+    target_sources(target_img2_km4 PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/zip_cli.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/freertos_malloc_wrap.c")
+    # zlib's zcalloc + minizip's ALLOC bottom out in libc malloc, which on AmebaD uses newlib's
+    # tiny 4 KB _sbrk arena — far too small for deflate (~tens of KB) / minizip's 64 KB buffer
+    # (faults inside deflate). Redirect every libc allocation in this image to the FreeRTOS/TLSF
+    # heap (~270 KB) via __wrap_* in freertos_malloc_wrap.c. Link-time, so it also catches the
+    # allocations inside zlibstatic / minizip.
+    target_link_options(target_img2_km4 PRIVATE
+        "-Wl,--wrap=malloc" "-Wl,--wrap=free" "-Wl,--wrap=calloc" "-Wl,--wrap=realloc")
+    set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
+                 APPEND PROPERTY COMPILE_DEFINITIONS AMEBAD_ENABLE_MINIZIP)
+endif()
+
 # Diagnostics (iperf throughput + ROM-mbedTLS / wolfCrypt benchmarks). There is
 # no --gc-sections on this link, so unused TUs are only removed by excluding the
 # source. The QUIC image drops them all (smaller KM4 image2 .text -> shifts the
@@ -379,7 +403,7 @@ target_link_libraries(target_img2_km4 PRIVATE
     # EXCLUDE_FROM_ALL lib CMake would otherwise sink it past -lc/-lgcc and leave
     # those undefined. amebad_mbed (flash_api) is lfs_port's backend. (The upstream
     # mbedcrypto/mbedx509 + picotls/ngtcp2 crypto join per-feature via the _grp vars.)
-    "$<LINK_GROUP:cross_refs,FreeRTOS,freertos_port,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,freertos_plus_tcp,freertos_plus_tcp_port,amebad_wlan,amebad_wps,amebad_lfs_port,amebad_mbed,lfs_config,littlefs,rxi_log${_diag_grp}${_hci_grp}${_quic_grp}${_pk11_grp}${_bench_grp}${_aws_grp}>"
+    "$<LINK_GROUP:cross_refs,FreeRTOS,freertos_port,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,freertos_plus_tcp,freertos_plus_tcp_port,amebad_wlan,amebad_wps,amebad_lfs_port,amebad_mbed,lfs_config,littlefs,rxi_log${_diag_grp}${_hci_grp}${_quic_grp}${_pk11_grp}${_bench_grp}${_aws_grp}${_mz_grp}>"
     m
     stdc++
     c

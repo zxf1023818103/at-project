@@ -604,6 +604,9 @@ int main(void)
     { extern void fs_cli_register(void);   fs_cli_register();   }
     { extern void time_cli_register(void); time_cli_register(); }
     { extern void env_cli_register(void);  env_cli_register();  }   /* setenv/getenv/env (all images) */
+#ifdef AMEBAD_ENABLE_MINIZIP
+    { extern void zip_cli_register(void);  zip_cli_register();  }   /* zip/unzip demo (non-AWS images) */
+#endif
 #ifdef AT_PROJECT_AWS_IOT
     /* Mount LittleFS + load the persisted environment. The non-secret creds live in plain
      * LFS: the AWS endpoint is an env var (KV/endpoint) and the client cert is a plain DER
