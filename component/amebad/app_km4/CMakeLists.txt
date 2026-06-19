@@ -177,22 +177,11 @@ if(AMEBAD_ENABLE_AWS_IOT OR AMEBAD_ENABLE_MINIMAL)
     endforeach()
 endif()
 
-if(NOT AMEBAD_ENABLE_QUIC AND NOT AMEBAD_ENABLE_PKCS11 AND NOT AMEBAD_ENABLE_CRYPTOBENCH
-   AND NOT AMEBAD_ENABLE_MINIMAL AND NOT AMEBAD_ENABLE_AWS_IOT AND NOT AMEBAD_ENABLE_SNTP)
-    target_sources(target_img2_km4 PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/iperf_client.c"        # iperf2 TCP client (TX throughput to WSL iperf -s)
-        "${CMAKE_CURRENT_SOURCE_DIR}/iperf_server.c"        # iperf2 TCP sink (RX throughput from WSL iperf -c)
-        "${CMAKE_CURRENT_SOURCE_DIR}/iperf_udp_client.c"    # iperf2 UDP blast (bottleneck discriminator: driver vs TCP pacing)
-        "${CMAKE_CURRENT_SOURCE_DIR}/iperf_udp_server.c"    # UDP RX sink (discriminator: is the RX/ACK delivery path tick-quantized?)
-    )
-endif()
-
-# ROM-mbedTLS crypto self-tests (make ROMKAT=ON) — split out of the iperf gate above
-# because they reference ROM mbedTLS symbols (mbedtls_sha*/md5/aes_*) with the ROM ABI and
-# define mbedtls_calloc/free, which collide with the upstream mbedcrypto every console image
-# now links for fs_cli's md5sum/sha*sum. So ROMKAT is its own image: ROM mbedTLS, no upstream,
-# no hash commands (fs_cli's FS_CLI_HASH is off). main.c calls rom_mbedtls_kat() under
-# AMEBAD_ROM_KAT. iperf stays in the default image (it has no mbedTLS refs).
+# ROM-mbedTLS crypto self-tests (make ROMKAT=ON). They reference ROM mbedTLS symbols
+# (mbedtls_sha*/md5/aes_*) with the ROM ABI and define mbedtls_calloc/free, which collide with
+# the upstream mbedcrypto every console image now links for fs_cli's md5sum/sha*sum. So ROMKAT is
+# its own image: ROM mbedTLS, no upstream, no hash commands (fs_cli's FS_CLI_HASH is off). main.c
+# calls rom_mbedtls_kat() under AMEBAD_ROM_KAT.
 if(AMEBAD_ENABLE_ROM_KAT AND (AMEBAD_ENABLE_QUIC OR AMEBAD_ENABLE_AWS_IOT OR AMEBAD_ENABLE_PKCS11
    OR AMEBAD_ENABLE_CRYPTOBENCH OR AMEBAD_ENABLE_NIMBLE))
     message(FATAL_ERROR "ROMKAT=ON (ROM mbedTLS self-tests) cannot combine with an upstream-mbedTLS image (AWS/QUIC/PKCS11/BENCH/NIMBLE)")
@@ -434,6 +423,27 @@ if(NOT AMEBAD_ENABLE_QUIC AND NOT AMEBAD_ENABLE_ROM_KAT
     set(_hash_grp ",mbedcrypto")
 endif()
 
+# iperf3 (make IPERF=ON): the `iperf` console command over upstream esnet/iperf
+# (component/iperf3_config) + the BSD-sockets/pthread shim in component/syscall_config. Pulls
+# libiperf3.a + cJSON into the cross_refs group; the socket/pthread impls come from the
+# force-linked syscall_config. mbedcrypto rides in too (via _hash_grp) for fs_cli's hashes.
+option(AMEBAD_ENABLE_IPERF "Build the iperf3 server/client console command (upstream esnet/iperf)" OFF)
+set(_iperf_grp "")
+if(AMEBAD_ENABLE_IPERF)
+    # libiperf3.a has circular intra-archive refs (api<->net<->locale<->...) + libc refs, so it joins
+    # the cross_refs --start-group as a raw archive (with cjson, the only lib it needs there). iperf3
+    # is a dep-less static lib (genex includes, no target link deps) so listing it here doesn't cycle;
+    # the socket()/pthread/select impls come from the force-linked syscall_config.
+    set(_iperf_grp ",iperf3,cjson")
+    target_sources(target_img2_km4 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/iperf_cli.c")
+    target_include_directories(target_img2_km4 PRIVATE
+        "${CMAKE_SOURCE_DIR}/component/iperf3_config/iperf3/src"
+        "${CMAKE_SOURCE_DIR}/component/cjson_config/cjson"   # iperf headers redirect cjson.h -> cJSON.h
+        "${CMAKE_SOURCE_DIR}/component/freertos-cli_config/freertos-cli")
+    set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
+                 APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_IPERF)
+endif()
+
 # Archives wrapped in --start-group (cross_refs) for circular vendor refs.
 # libc (-lc) supplies __libc_init_array (KM4 has C++ global ctors; KM0 didn't)
 # plus memcpy/memset — so KM4 doesn't need the ROM memcpy alias KM0 uses.
@@ -448,7 +458,7 @@ target_link_libraries(target_img2_km4 PRIVATE
     # EXCLUDE_FROM_ALL lib CMake would otherwise sink it past -lc/-lgcc and leave
     # those undefined. amebad_mbed (flash_api) is lfs_port's backend. (The upstream
     # mbedcrypto/mbedx509 + picotls/ngtcp2 crypto join per-feature via the _grp vars.)
-    "$<LINK_GROUP:cross_refs,FreeRTOS,freertos_port,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,freertos_plus_tcp,freertos_plus_tcp_port,amebad_wlan,amebad_wps,amebad_lfs_port,amebad_mbed,lfs_config,littlefs,rxi_log${_diag_grp}${_hci_grp}${_quic_grp}${_pk11_grp}${_bench_grp}${_aws_grp}${_mz_grp}${_hash_grp}>"
+    "$<LINK_GROUP:cross_refs,FreeRTOS,freertos_port,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,freertos_plus_tcp,freertos_plus_tcp_port,amebad_wlan,amebad_wps,amebad_lfs_port,amebad_mbed,lfs_config,littlefs,rxi_log${_diag_grp}${_hci_grp}${_quic_grp}${_pk11_grp}${_bench_grp}${_aws_grp}${_mz_grp}${_hash_grp}${_iperf_grp}>"
     m
     stdc++
     c

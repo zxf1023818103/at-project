@@ -85,7 +85,7 @@
 #define ipconfigMAX_ARP_AGE                     150
 
 #define ipconfigCHECK_IP_QUEUE_SPACE            0
-#define ipconfigSUPPORT_SELECT_FUNCTION         0
+#define ipconfigSUPPORT_SELECT_FUNCTION         1   /* POSIX select() shim (bsd_socket.c) bridges onto FreeRTOS_select */
 #define ipconfigSUPPORT_OUTGOING_PINGS          0
 #define ipconfigREPLY_TO_INCOMING_PINGS         1
 

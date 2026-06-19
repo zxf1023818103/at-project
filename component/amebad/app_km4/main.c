@@ -41,10 +41,6 @@ extern NetworkInterface_t *pxRealtek_FillInterfaceDescriptor(BaseType_t xEMACInd
                                                              NetworkInterface_t *pxInterface);
 extern void amebad_register_wlan_netif(int idx, unsigned char *mac);
 extern void amebad_freertos_tcp_set_ready(void);
-extern void iperf_client_start(void);
-extern void iperf_server_start(void);
-extern void iperf_udp_client_start(void);
-extern void iperf_udp_server_start(void);
 
 #define WLAN_STA_IDX  0
 
@@ -93,15 +89,6 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
          * date/time self-test runs once the first sync lands. */
         extern void sntp_sync_start( void );
         sntp_sync_start();
-#elif !defined(AT_PROJECT_PKCS11) && !defined(AT_PROJECT_CRYPTOBENCH) && !defined(AT_PROJECT_MINIMAL)
-        /* Default = TCP TX (device -> WSL `iperf -s`); also exercises the
-         * rewritten FreeRTOS+TCP RX bridge via the ACK path. The UDP TX/RX and
-         * TCP-sink probes are kept available for throughput diagnostics.
-         * The PKCS11 / crypto-bench / minimal images drop the iperf TUs. */
-        iperf_client_start();
-        ( void ) iperf_udp_client_start;
-        ( void ) iperf_udp_server_start;
-        ( void ) iperf_server_start;
 #endif
     }
     else
@@ -608,6 +595,9 @@ int main(void)
     { extern void env_cli_register(void);  env_cli_register();  }   /* setenv/getenv/env (all images) */
 #ifdef AMEBAD_ENABLE_MINIZIP
     { extern void zip_cli_register(void);  zip_cli_register();  }   /* zip/unzip demo (non-AWS images) */
+#endif
+#ifdef AT_PROJECT_IPERF
+    { extern void iperf_cli_register(void); iperf_cli_register(); }  /* iperf3 server/client (make IPERF=ON) */
 #endif
 #ifdef AT_PROJECT_AWS_IOT
     /* Mount LittleFS + load the persisted environment. The non-secret creds live in plain

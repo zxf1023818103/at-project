@@ -102,6 +102,10 @@ if(AMEBAD_CHIP MATCHES "^amebad-km[04]$")
     #   freertos-plus-tcp_config  before  syscall_config   (syscall PRIVATE-links it)
     #   mbedtls_config            before  ngtcp2_config/picotls_config (they link mbedcrypto)
     add_subdirectory(freertos-plus-tcp_config)  # FreeRTOS-Plus-TCP V4.0.0 core stack + FreeRTOSIPConfig.h (freertos_plus_tcp / freertos-plus-tcp_config)
+    if(NOT TARGET cjson)
+        add_subdirectory(cjson_config)          # DaveGamble cJSON — iperf3 dep (not otherwise built in the amebad-km image)
+    endif()
+    add_subdirectory(iperf3_config)             # esnet/iperf3 (perf measurement; submodule pinned 3.21) — reuses cjson_config
     add_subdirectory(ngtcp2_config)             # ngtcp2 QUIC + the picotls crypto binding (built only when AMEBAD_ENABLE_QUIC)
     add_subdirectory(coremqtt_config)           # coreMQTT v5.0.2 static lib + core_mqtt_config.h
     add_subdirectory(backoffalgorithm_config)   # backoffAlgorithm v1.4.2 (reconnect backoff-with-jitter) — coreMQTT companion

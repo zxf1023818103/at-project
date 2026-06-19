@@ -30,6 +30,11 @@ struct lfs *vfs_lfs_mount(void);
  * handle (FreeRTOS+TCP Socket_t), opaque here. Returns the fd (>=3), or -1/errno. */
 int fd_open_socket(void *socket);
 
+/* fd -> the native socket handle registered via fd_open_socket(), or NULL if the fd is
+ * not a socket. Used by the BSD-sockets shim (bsd_socket.c) for the bind/connect/
+ * setsockopt/select/... operations that don't go through read()/write()/close(). */
+void *fd_get_socket(int fd);
+
 /* KV-file-backed environment (env.c). env_init() loads every regular file under KV/
  * into newlib's environ — call once, right after the platform's LittleFS mount.
  * env_save() persists one variable. The consuming image MUST link with

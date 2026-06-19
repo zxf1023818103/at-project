@@ -32,6 +32,13 @@ extern int  wifi_is_connected_to_ap( void );
 
 #define WLAN_STA_IDX    0
 
+/* Force the linker to pull component/amebad/wlan/src/rtw_opt_skbuf.o (our larger TX/RX skb pool: 24
+ * data / 26 struct buffers) instead of lib_wlan.a's WEAK 8/10 defaults. That object sits in a static
+ * lib and nothing else references it, so without this it's never pulled and the pool silently stays
+ * at 8 (effective TX = 6 buffers → the high-rate upload wedge; found via OpenOCD). See rtw_opt_skbuf.c. */
+extern int rtw_opt_skbuf_force_link;
+__attribute__( ( used ) ) static int * const amebad_pull_skbuf = &rtw_opt_skbuf_force_link;
+
 /* Set pdTRUE once FreeRTOS_IPInit_Multi() has run (buffer pool + IP task exist).
  * The driver starts delivering RX (beacons/probes) during association — i.e.
  * BEFORE the IP stack is up — so the RX bridge must drop (but still drain) frames

@@ -104,3 +104,6 @@
 [submodule "component/rxi_log_config/log"]
 	path = component/rxi_log_config/log
 	url = https://github.com/rxi/log.c
+[submodule "component/iperf3_config/iperf3"]
+	path = component/iperf3_config/iperf3
+	url = https://github.com/esnet/iperf.git

@@ -3,15 +3,31 @@
 #include <skbuff.h>
 
 #define MAX_SKB_BUF_SIZE     1658	// should >= the size in wlan driver
-/* skb pool depth. 16 deepens the TX/RX pipeline for throughput (iperf/QUIC); the AWS/MINIMAL
- * connect-only images (AMEBAD_NET_LOW_MEM, set per-target in app_km4/CMakeLists) are low-rate, so
- * 10 is ample and gives back ~10 KB of NS heap (each skb is ~1658 B). */
+/* skb pool depth — the driver's TX+RX share these fixed pools: MAX_SKB_BUF_NUM data buffers
+ * (skb_data_pool) + MAX_LOCAL_SKB_NUM skb structs (skb_pool). 24 for the throughput images
+ * (iperf/QUIC); the AWS/MINIMAL connect-only images (AMEBAD_NET_LOW_MEM) are low-rate, so 10 is ample.
+ *
+ * CRITICAL (found via OpenOCD live read 2026-06-18): the prebuilt lib_wlan.a WEAK-defines all of
+ * nr_xmitframe/nr_xmitbuff/max_local_skb_num/max_skb_buf_num + skb_pool/skb_data_pool with its stock
+ * defaults (8 data / 10 struct). This TU strong-defines them, but it lives in a static lib
+ * (amebad_wlan_glue) and the linker pulls lib_wlan.a's freertos_skbuff.o first (for alloc_skb/kfree_skb)
+ * — so nothing references THIS object and it's never pulled, silently leaving the pool at 8/10 (a 50%
+ * cut of the configured depth). Fix: `rtw_opt_skbuf_force_link` below is referenced from realtek_netif.c
+ * (always linked) to force this object in, so these strong defs win and the configured depth is real.
+ * NB: nr_xmitframe/nr_xmitbuff MUST stay == MAX_SKB_BUF_NUM — lib_wlan.a couples the TX caps to the
+ * pool size; decoupling them (TX < pool) corrupts its xmit accounting and hard-faults under load.
+ * (This restores the intended pool depth; it does NOT fix the ~4 s sustained-upload wedge — that is a
+ * lib_wlan.a/firmware-level hang reproduced identically on the stock Realtek SDK image, independent of
+ * the IP stack and of pool depth/rate. See the iperf3 component memo.) */
 #if defined( AMEBAD_NET_LOW_MEM )
 #define MAX_SKB_BUF_NUM      10
 #else
-#define MAX_SKB_BUF_NUM      16   /* was 8 — deeper TX/RX pipeline for throughput */
+#define MAX_SKB_BUF_NUM      24   /* deeper TX/RX pipeline for the throughput images (iperf/QUIC) */
 #endif
 #define MAX_LOCAL_SKB_NUM    (MAX_SKB_BUF_NUM + 2)
+
+/* Referenced from realtek_netif.c so the linker actually pulls this object (see note above). */
+int rtw_opt_skbuf_force_link = 1;
 
 /* DO NOT modify skb_buf and skb_data structure */
 struct skb_buf {

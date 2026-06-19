@@ -24,7 +24,9 @@
 # Built where its deps exist (FreeRTOS heap + littlefs + FreeRTOS+TCP), so it is
 # add_subdirectory'd by the consuming platform (AmebaD KM4), not at the repo root —
 # freertos-plus-tcp_config is KM4-gated. lfs.h (littlefs) is the only universally-present dep.
-add_library(syscall_config OBJECT newlib_syscalls.c env.c time_base.c)
+add_library(syscall_config OBJECT newlib_syscalls.c env.c time_base.c
+            bsd_socket.c     # BSD-sockets/POSIX-net layer over FreeRTOS-Plus-TCP (socket/select/getaddrinfo/...)
+            pthread_shim.c)  # the pthread slice iperf3 needs, over FreeRTOS tasks/mutexes
 
 # PUBLIC: syscalls.h (vfs_lfs_mount / fd_open_socket / env_init hooks) AND our
 # self-contained <dirent.h> (newlib's <sys/dirent.h> is a `#error` stub) — placed

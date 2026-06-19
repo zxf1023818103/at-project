@@ -41,6 +41,7 @@ PKCS11     ?= OFF          # ON -> corePKCS11 token self-test (upstream mbedTLS 
 BENCH      ?= OFF          # ON -> upstream Mbed TLS v3.6.4 crypto microbenchmark ([MCB] scores)
 MINIMAL    ?= OFF          # ON -> strip diagnostics (iperf / KAT / HW-crypto bench); WiFi-connect only (pairs with TFM=ON)
 ROMKAT     ?= OFF          # ON -> ROM mbedTLS 2.4.0 / HW-crypto self-tests (no upstream mbedTLS; drops fs_cli md5sum/sha*sum)
+IPERF      ?= OFF          # ON -> `iperf` console command over upstream iperf3 + BSD-sockets shim (syscall_config)
 TFM        ?= OFF          # ON -> build + boot in-tree TF-M SPE (app_km4 becomes the NS side)
 TLS_BACKEND ?= picotls     # AWS TLS-over-TCP backend (default: picotls — TLS 1.3 only; ~112 KB smaller flash + ~24 KB less heap; shares the QUIC TLS stack). Set mbedtls for TLS 1.2 compatibility / broader server support (1.2+1.3, mature, native X.509). Switch wiring: component/network_transport/transport_tls.h.
 ifeq ($(filter $(TLS_BACKEND),mbedtls picotls),)
@@ -95,7 +96,7 @@ configure:
 	  -DAMEBAD_ENABLE_NIMBLE=$(NIMBLE) -DAMEBAD_ENABLE_HCI=$(HCI) \
 	  -DAMEBAD_ENABLE_QUIC=$(QUIC) -DAMEBAD_ENABLE_PKCS11=$(PKCS11) \
 	  -DAMEBAD_ENABLE_CRYPTOBENCH=$(BENCH) -DAMEBAD_ENABLE_MINIMAL=$(MINIMAL) \
-	  -DAMEBAD_ENABLE_ROM_KAT=$(ROMKAT) \
+	  -DAMEBAD_ENABLE_ROM_KAT=$(ROMKAT) -DAMEBAD_ENABLE_IPERF=$(IPERF) \
 	  -DAMEBAD_ENABLE_AWS_IOT=$(AWS) \
 	  -DAMEBAD_TLS_BACKEND=$(TLS_BACKEND) \
 	  -DAMEBAD_ENABLE_SNTP=$(SNTP) \

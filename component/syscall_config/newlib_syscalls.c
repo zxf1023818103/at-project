@@ -46,6 +46,7 @@
 #include "dirent.h"         /* DIR / struct dirent / DT_* (this component's POSIX dirent) */
 #include "FreeRTOS.h"        /* pvPortMalloc / vPortFree (heap) + the mutex */
 #include "semphr.h"
+#include "task.h"            /* xTaskGetTickCount (seed for the /dev/urandom PRNG) */
 #include "FreeRTOS_IP.h"     /* FreeRTOS_htonl / FreeRTOS_htons (network byte order) */
 #include "FreeRTOS_Sockets.h"/* Socket_t / FreeRTOS_recv / FreeRTOS_send / closesocket */
 #include "lfs.h"             /* lfs_t / lfs_file_* / LFS_O_* / lfs_stat */
@@ -73,7 +74,7 @@
 #define VFS_MAX_FD      16          /* max concurrently-open file+socket fds */
 #define VFS_HASH_SIZE   31          /* open-addressing buckets, prime > VFS_MAX_FD */
 
-typedef enum { VFS_FREE = 0, VFS_FILE, VFS_SOCKET } vfs_type_t;
+typedef enum { VFS_FREE = 0, VFS_FILE, VFS_SOCKET, VFS_URANDOM } vfs_type_t;
 
 typedef struct {
     vfs_type_t type;                /* VFS_FREE => unused pool slot */
@@ -249,6 +250,7 @@ typedef struct {
 } vfs_ops_t;
 static const vfs_ops_t *s_file_ops;        /* set by _open */
 static const vfs_ops_t *s_sock_ops;        /* set by fd_open_socket */
+static const vfs_ops_t *s_urandom_ops;     /* set by _open for /dev/urandom */
 
 /* errno mappers */
 static int lfs_to_errno(int e)
@@ -308,6 +310,26 @@ static long file_size(vfs_slot_t *s)
 }
 static const vfs_ops_t FILE_OPS = { file_read, file_write, file_close, file_lseek, file_size };
 
+/* ---- /dev/urandom pseudo-device (wired by _open for "/dev/urandom"|"/dev/random") ----
+ * Non-cryptographic xorshift32 PRNG — enough for iperf3's session cookie; NOT real entropy. */
+static uint32_t s_rng;
+static int urandom_read(vfs_slot_t *s, char *b, int n)
+{
+    int i;
+    (void)s;
+    if (s_rng == 0) { s_rng = (uint32_t)xTaskGetTickCount() | 1u; }
+    for (i = 0; i < n; i++) {
+        s_rng ^= s_rng << 13; s_rng ^= s_rng >> 17; s_rng ^= s_rng << 5;
+        b[i] = (char)(s_rng >> 24);
+    }
+    return n;
+}
+static int urandom_write(vfs_slot_t *s, const char *b, int n) { (void)s; (void)b; return n; }
+static int urandom_close(vfs_slot_t *s) { (void)s; return 0; }
+static int urandom_lseek(vfs_slot_t *s, int off, int whence) { (void)s; (void)off; (void)whence; return 0; }
+static long urandom_size(vfs_slot_t *s) { (void)s; return -1; }
+static const vfs_ops_t URANDOM_OPS = { urandom_read, urandom_write, urandom_close, urandom_lseek, urandom_size };
+
 /* ---- FreeRTOS+TCP socket backend (wired by fd_open_socket) ---- */
 static int sock_read(vfs_slot_t *s, char *b, int n)
 {
@@ -355,11 +377,24 @@ int fd_open_socket(void *socket)
     return fd;
 }
 
+/* fd -> the FreeRTOS Socket_t backing it, or NULL if fd is not a registered socket.
+ * Lets the BSD-sockets shim (bsd_socket.c) reach the native handle for the operations
+ * that bypass the read/write/close VFS path (bind/connect/setsockopt/select/...). */
+void *fd_get_socket(int fd)
+{
+    vfs_slot_t *s = fd_get(fd);
+    return (s != NULL && s->type == VFS_SOCKET) ? (void *)s->u.s : NULL;
+}
+
 /* fd -> its backend op table (NULL only if the fd's backend was never wired, which
  * for a valid open fd cannot happen — _open/fd_open_socket set it). */
 static const vfs_ops_t *slot_ops(const vfs_slot_t *s)
 {
-    return (s->type == VFS_FILE) ? s_file_ops : s_sock_ops;
+    switch (s->type) {
+    case VFS_FILE:   return s_file_ops;
+    case VFS_SOCKET: return s_sock_ops;
+    default:         return s_urandom_ops;   /* VFS_URANDOM */
+    }
 }
 
 /* ===== 2. newlib syscall entry points ==================================== */
@@ -376,6 +411,14 @@ int _open(const char *path, int flags, int mode)
     int lflags = 0, fd, rc;
 
     (void)mode;
+    /* /dev/urandom (+ /dev/random) pseudo-device — no filesystem, no real entropy. iperf3
+     * opens it for its session cookie; other POSIX crypto code may too. */
+    if (strcmp(path, "/dev/urandom") == 0 || strcmp(path, "/dev/random") == 0) {
+        fd = fd_alloc(VFS_URANDOM, &slot);
+        if (fd < 0) { return -1; }
+        s_urandom_ops = &URANDOM_OPS;
+        return fd;
+    }
     lfs = vfs_lfs_mount();
     if (lfs == NULL) {
         errno = ENODEV;
