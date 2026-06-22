@@ -1437,6 +1437,7 @@ struct osdep_service_ops {
 	u8 (*rtw_get_scheduler_state)(void);
 	void (*rtw_create_secure_context)(u32 secure_stack_size);
 	void* (*rtw_get_current_TaskHandle)(void);
+	u8* (*rtw_zmalloc_32aligned)(u32 sz);
 };
 
 #ifdef __cplusplus

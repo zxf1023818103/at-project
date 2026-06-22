@@ -2,7 +2,12 @@
 #include <osdep_service.h>
 #include <skbuff.h>
 
-#define MAX_SKB_BUF_SIZE     1658	// should >= the size in wlan driver
+#define MAX_SKB_BUF_SIZE     2104	// must make sizeof(struct skb_data)==2116 to match the
+					// newer lib_wlan_fpu.a: its init_skb_data_pool strides the pool
+					// at #2116 (8 list + 2104 buf + 4 ref); the old 1658 left our
+					// array short, so the lib memset/strided ~10KB past it into the
+					// heap free-list (the #51 boot corruption). DO NOT change without
+					// re-checking the lib's stride constant (objdump init_skb_data_pool).
 /* skb pool depth — the driver's TX+RX share these fixed pools: MAX_SKB_BUF_NUM data buffers
  * (skb_data_pool) + MAX_LOCAL_SKB_NUM skb structs (skb_pool). 24 for the throughput images
  * (iperf/QUIC); the AWS/MINIMAL connect-only images (AMEBAD_NET_LOW_MEM) are low-rate, so 10 is ample.
@@ -19,10 +24,21 @@
  * (This restores the intended pool depth; it does NOT fix the ~4 s sustained-upload wedge — that is a
  * lib_wlan.a/firmware-level hang reproduced identically on the stock Realtek SDK image, independent of
  * the IP stack and of pool depth/rate. See the iperf3 component memo.) */
+/* skb_data_pool depth. CRITICAL for the newer lib_wlan_fpu.a: its RX DMA ring init
+ * (rtl8721d_init_desc_ring) hard-codes a 32-descriptor ring and pre-allocates ONE skb_data
+ * per descriptor via dev_alloc_skb -> the skb_data_pool. So the pool MUST be >= 32, or
+ * rtl8721d_init_desc_ring's alloc loop drains the pool, hits "[alloc_skb] Wait for skbdata",
+ * dev_alloc_skb returns NULL, and rtw_drv_probe()->rltk_wlan_init()->wifi_on() all fail
+ * ("wlan initialization fail" / "wifi_on FAILED"). 24 (the old lib's depth) is too small.
+ * This pool is RX-only here: the new lib allocates TX xmitbuf/xmitframe from the HEAP
+ * (_rtw_init_xmit_priv -> rtw_zvmalloc / rtw_os_xmit_resource_alloc), NOT from skb_data_pool,
+ * so 40 = 32 ring + 8 RX-refill churn headroom (refill allocs a fresh skb before freeing the
+ * one handed to the stack). Verified by objdump of init_desc_ring (movs r6,#32; cmp/ble loop)
+ * + OpenOCD live read (skbdata_used_num pinned at 24 == old pool size at the failure). */
 #if defined( AMEBAD_NET_LOW_MEM )
-#define MAX_SKB_BUF_NUM      10
+#define MAX_SKB_BUF_NUM      40
 #else
-#define MAX_SKB_BUF_NUM      24   /* deeper TX/RX pipeline for the throughput images (iperf/QUIC) */
+#define MAX_SKB_BUF_NUM      40   /* 32-deep RX ring (lib_wlan_fpu.a) + 8 refill churn headroom */
 #endif
 #define MAX_LOCAL_SKB_NUM    (MAX_SKB_BUF_NUM + 2)
 

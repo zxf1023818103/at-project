@@ -30,9 +30,14 @@
     #define ipconfigTCP_RX_BUFFER_LENGTH        ( 6 * 1460 )    /* ~8.5 KB */
     #define ipconfigTCP_TX_BUFFER_LENGTH        ( 6 * 1460 )    /* ~8.5 KB */
 #else
-    #define ipconfigTCP_WIN_SEG_COUNT           64
-    #define ipconfigTCP_RX_BUFFER_LENGTH        ( 24 * 1460 )   /* ~35 KB */
-    #define ipconfigTCP_TX_BUFFER_LENGTH        ( 24 * 1460 )   /* ~35 KB */
+    /* lib-swap experiment branch: the TizenRT lib_wlan_fpu.a's 84 KB skb pool (40 x 2116) +
+     * the 16 KB debug guards squeeze the NS heap to ~36 KB free, so the old 24*1460 (~35 KB)
+     * per-direction stream buffer no longer allocates after TCP connect. 8*1460 (~11.7 KB) is
+     * still far above the bandwidth-delay product at this link rate (~10 Mbit/s, ~2 ms RTT),
+     * so throughput stays link-limited and the TX-wedge test is unaffected. */
+    #define ipconfigTCP_WIN_SEG_COUNT           16
+    #define ipconfigTCP_RX_BUFFER_LENGTH        ( 8 * 1460 )    /* ~11.7 KB (was 24*1460) */
+    #define ipconfigTCP_TX_BUFFER_LENGTH        ( 8 * 1460 )    /* ~11.7 KB (was 24*1460) */
 #endif
 #define ipconfigTCP_MSS                         ( 1500 - 40 )   /* 1460 */
 #define ipconfigTCP_TIME_TO_LIVE                128

@@ -89,7 +89,22 @@ u8* _freertos_zmalloc(u32 sz)
 	if (pbuf != NULL)
 		memset(pbuf, 0, sz);
 
-	return pbuf;	
+	return pbuf;
+}
+
+/* 32-byte-aligned zeroed alloc (rtw_zmalloc_32aligned). The newer lib_wlan calls
+ * this through the osdep_service table for DMA/cache-aligned buffers. kmemalign()
+ * is the tlsf_config heap's aligned allocator; the result is a normal kmalloc block,
+ * so the lib's rtw_mfree (-> _freertos_mfree -> vPortFree) frees it correctly. */
+u8* _freertos_zmalloc_32aligned(u32 sz)
+{
+	extern void *kmemalign(size_t size, size_t align);
+	u8 *pbuf = (u8 *)kmemalign((size_t)sz, 32);
+
+	if (pbuf != NULL)
+		memset(pbuf, 0, sz);
+
+	return pbuf;
 }
 
 void _freertos_mfree(u8 *pbuf, u32 sz)
@@ -1114,4 +1129,5 @@ const struct osdep_service_ops osdep_service = {
 	_freertos_get_scheduler_state,	//rtw_get_scheduler_state
 	_freertos_create_secure_context,	// rtw_create_secure_context	
 	_freertos_get_current_TaskHandle,	//rtw_get_current_TaskHandle
+	_freertos_zmalloc_32aligned,	//rtw_zmalloc_32aligned
 };

@@ -138,6 +138,20 @@ void amebad_tcp_netif_input( int idx, unsigned int len )
     struct eth_drv_sg sg;
     int total_len = ( int ) len;
 
+    /* Match TizenRT's netif_rx: trust the driver skb's own length (skb->len), NOT
+     * the `len` argument. If `len` overshoots skb->len, rltk_wlan_recv over-reads the
+     * skb (copying adjacent skb-pool memory), skb_pull underflows skb->len, and the
+     * FreeRTOS+TCP buffer is sized wrong. Use skb->len when available + bounded. */
+    {
+        extern unsigned int amebad_recv_skb_len( int idx );
+        unsigned int slen = amebad_recv_skb_len( idx );
+        if( ( slen != 0xFFFFFFFFu ) && ( slen > 0u ) &&
+            ( slen <= ( unsigned int ) ( ipconfigNETWORK_MTU + 14 + 4 ) ) )
+        {
+            total_len = ( int ) slen;
+        }
+    }
+
     if( ( total_len <= 0 ) || ( total_len > ( int ) ( ipconfigNETWORK_MTU + 14 + 4 ) ) )
     {
         return;

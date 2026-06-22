@@ -82,6 +82,13 @@ typedef struct {
         lfs_file_t f;               /* VFS_FILE */
         Socket_t   s;               /* VFS_SOCKET */
     } u;
+    /* Connected-UDP emulation (VFS_SOCKET only). FreeRTOS+TCP's connect()/send()/recv()
+     * are TCP-only, but POSIX UDP apps (iperf -u) connect() a datagram socket then
+     * read()/write() it. We record the peer on connect() and route write()->FreeRTOS_sendto
+     * / read()->FreeRTOS_recvfrom for UDP sockets. Set via fd_udp_set/fd_udp_connect. */
+    unsigned char           udp;       /* 1 => SOCK_DGRAM socket */
+    unsigned char           udp_conn;  /* 1 => peer recorded (connect()ed) */
+    struct freertos_sockaddr udp_peer; /* connect() destination, for sendto() */
 } vfs_slot_t;
 
 typedef struct { int fd; int slot; } vfs_hentry_t;  /* fd == 0 => empty bucket */
@@ -195,6 +202,8 @@ static int fd_alloc(vfs_type_t type, vfs_slot_t **out)
         return -1;
     }
     s_slots[slot].type = type;
+    s_slots[slot].udp = 0;          /* clear stale connected-UDP state from a prior fd */
+    s_slots[slot].udp_conn = 0;
     if (out != NULL) {
         *out = &s_slots[slot];
     }
@@ -333,12 +342,24 @@ static const vfs_ops_t URANDOM_OPS = { urandom_read, urandom_write, urandom_clos
 /* ---- FreeRTOS+TCP socket backend (wired by fd_open_socket) ---- */
 static int sock_read(vfs_slot_t *s, char *b, int n)
 {
-    BaseType_t r = FreeRTOS_recv(s->u.s, b, (size_t)n, 0);
+    BaseType_t r;
+    if (s->udp) {                    /* datagram: recvfrom (FreeRTOS_recv is TCP-only) */
+        struct freertos_sockaddr fa;
+        socklen_t falen = sizeof(fa);
+        r = FreeRTOS_recvfrom(s->u.s, b, (size_t)n, 0, &fa, &falen);
+    } else {
+        r = FreeRTOS_recv(s->u.s, b, (size_t)n, 0);
+    }
     return (r < 0) ? (errno = frtos_to_errno(r), -1) : (int)r;
 }
 static int sock_write(vfs_slot_t *s, const char *b, int n)
 {
-    BaseType_t r = FreeRTOS_send(s->u.s, b, (size_t)n, 0);
+    BaseType_t r;
+    if (s->udp && s->udp_conn) {     /* connected datagram: sendto the recorded peer */
+        r = FreeRTOS_sendto(s->u.s, b, (size_t)n, 0, &s->udp_peer, sizeof(s->udp_peer));
+    } else {
+        r = FreeRTOS_send(s->u.s, b, (size_t)n, 0);
+    }
     return (r < 0) ? (errno = frtos_to_errno(r), -1) : (int)r;
 }
 static int sock_close(vfs_slot_t *s)
@@ -384,6 +405,39 @@ void *fd_get_socket(int fd)
 {
     vfs_slot_t *s = fd_get(fd);
     return (s != NULL && s->type == VFS_SOCKET) ? (void *)s->u.s : NULL;
+}
+
+/* Connected-UDP emulation, used by the BSD shim (bsd_socket.c). FreeRTOS+TCP has no
+ * "connected" datagram socket, so a UDP app's connect()+read()/write() (iperf -u) is
+ * emulated by recording the peer in the slot and routing sock_read/sock_write to
+ * recvfrom/sendto. The peer crosses the syscalls.h boundary as an opaque void* (a
+ * struct freertos_sockaddr) so consumers needn't pull in FreeRTOS+TCP headers. */
+void fd_udp_set(int fd)                 /* mark fd's socket as SOCK_DGRAM */
+{
+    vfs_slot_t *s = fd_get(fd);
+    if (s != NULL && s->type == VFS_SOCKET) { s->udp = 1; }
+}
+
+int fd_udp_connect(int fd, const void *peer)   /* record the connect() peer */
+{
+    vfs_slot_t *s = fd_get(fd);
+    if (s == NULL || s->type != VFS_SOCKET || !s->udp || peer == NULL) { return -1; }
+    s->udp_peer = *(const struct freertos_sockaddr *)peer;
+    s->udp_conn = 1;
+    return 0;
+}
+
+/* 0 = not a UDP socket (TCP / not an fd); 1 = UDP, not yet connect()ed; 2 = UDP and
+ * connected (and *peer_out, if non-NULL, is filled with the recorded freertos_sockaddr). */
+int fd_udp_kind(int fd, void *peer_out)
+{
+    vfs_slot_t *s = fd_get(fd);
+    if (s == NULL || s->type != VFS_SOCKET || !s->udp) { return 0; }
+    if (s->udp_conn) {
+        if (peer_out != NULL) { *(struct freertos_sockaddr *)peer_out = s->udp_peer; }
+        return 2;
+    }
+    return 1;
 }
 
 /* fd -> its backend op table (NULL only if the fd's backend was never wired, which
@@ -545,6 +599,23 @@ int _fstat(int fd, struct stat *st)
 int _isatty(int fd)
 {
     return (fd <= 2) ? 1 : 0;
+}
+
+/* fcntl: iperf's timeout_connect() does fcntl(F_GETFL) + fcntl(F_SETFL, O_NONBLOCK) around a
+ * timed connect (any non-(-1) timeout, e.g. the data stream's DEFAULT_NO_MSG_RCVD_TIMEOUT).
+ * newlib's libc fcntl is a stub returning ENOSYS, which fails the data-stream connect (iperf
+ * reports IESTREAMCONNECT "Function not implemented"). This strong, referenced def overrides it
+ * (same mechanism as rename() above). Accept the flag ops: our sockets stay blocking and iperf
+ * drives readiness via select()/MSG_DONTWAIT, so connect() completes synchronously and the
+ * O_NONBLOCK toggle is a harmless no-op. */
+int fcntl(int fd, int cmd, ...)
+{
+    (void)fd;
+    switch (cmd) {
+    case F_GETFL: return O_RDWR;    /* a sane, nonzero flag word for timeout_connect to restore */
+    case F_SETFL: return 0;         /* accept O_NONBLOCK et al. */
+    default:      return 0;         /* F_GETFD/F_SETFD/... accepted */
+    }
 }
 
 int _stat(const char *path, struct stat *st)

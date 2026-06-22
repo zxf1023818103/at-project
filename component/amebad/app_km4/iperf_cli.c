@@ -4,20 +4,21 @@
  * (component/syscall_config/bsd_socket.c + pthread_shim.c). Replaces the old
  * homegrown iperf2 probes. Built only with make IPERF=ON (AMEBAD_ENABLE_IPERF).
  *
- *   iperf -s [port]                       run a server (default port 5201)
- *   iperf -c <host> [port] [secs] [mbit]  run a client to <host>
+ *   iperf -s [port]                            run a server (default port 5201)
+ *   iperf -c <host> [port] [secs] [mbit] [-u]  run a client to <host>
  *
  * The optional [mbit] caps the client's offered bitrate (application-level pacing).
+ * The optional trailing "-u" switches the client to UDP (see the wedge note below).
  *
- * KNOWN LIMITATION (device-as-client / TX): a sustained upload wedges the whole chip after ~4 s of
- * continuous TX — a lib_wlan.a/firmware-level hang (the console dies, the TCP connection goes
- * half-open). It reproduces identically on the stock Realtek SDK's own ATWT iperf2 client, so it is
- * NOT specific to this FreeRTOS-Plus-TCP port or to the skb pool depth/rate (2 / 8 / 20 Mbit/s all
- * hang at ~4 s — it is time-, not byte-driven). Use `iperf -s` (device-as-server / RX) for sustained
- * tests; the client direction is reliable only for a short (<~3 s) burst. See the iperf3 component memo.
+ * KNOWN LIMITATION (device-as-client / TCP TX): a sustained TCP upload wedges the whole chip
+ * after ~1-3 s of continuous TX — a lib_wlan.a/firmware-level fault in the TX-DMA reclaim path
+ * (rate-dependent; reproduces on the stock Realtek SDK's own ATWT iperf2 client, so it is NOT
+ * specific to this FreeRTOS-Plus-TCP port). The wedge is TCP-specific: `iperf -c <host> ... -u`
+ * (UDP) sustains a full-length upload (verified 30 s, 0 % loss). Use `iperf -s` (device RX) or
+ * `-u` (UDP TX) for sustained tests; the TCP client direction is reliable only for a short burst.
  *
- * iperf_run_client/server block the CLI task for the test, streaming results to the
- * console via the library's printf path.
+ * iperf_run_client/server block the CLI task for the duration of the test, streaming results to
+ * the console via the library's printf path.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,7 +44,7 @@ static int arg(const char *cmd, UBaseType_t idx, char *buf, size_t sz)
 
 static BaseType_t cmd_iperf(char *out, size_t outlen, const char *cmd)
 {
-    char mode[8], a2[64], a3[16], a4[16], a5[16];
+    char mode[8], a2[64], a3[16], a4[16], a5[16], a6[8];
     struct iperf_test *t;
     int rc;
 
@@ -60,7 +61,7 @@ static BaseType_t cmd_iperf(char *out, size_t outlen, const char *cmd)
     /* iperf's per-stream read/write buffer is mmap'd (= malloc'd here) at blksize; the 128 KB default
      * no longer fits the FreeRTOS heap once the WiFi skb pool is enlarged (rtw_opt_skbuf.c). 16 KB is
      * ample for the read/write granularity at this link rate. */
-    iperf_set_test_blksize(t, 16 * 1024);
+    iperf_set_test_blksize(t, 8 * 1024);
 
     if (strcmp(mode, "-s") == 0) {
         iperf_set_test_role(t, 's');
@@ -68,7 +69,7 @@ static BaseType_t cmd_iperf(char *out, size_t outlen, const char *cmd)
         rc = iperf_run_server(t);
     } else if (strcmp(mode, "-c") == 0) {
         if (arg(cmd, 2, a2, sizeof a2) <= 0) {
-            snprintf(out, outlen, "usage: iperf -c <host> [port] [secs] [mbit]\r\n");
+            snprintf(out, outlen, "usage: iperf -c <host> [port] [secs] [mbit] [-u]\r\n");
             iperf_free_test(t);
             return pdFALSE;
         }
@@ -78,6 +79,18 @@ static BaseType_t cmd_iperf(char *out, size_t outlen, const char *cmd)
         if (arg(cmd, 4, a4, sizeof a4) > 0) { iperf_set_test_duration(t, atoi(a4)); }
         if (arg(cmd, 5, a5, sizeof a5) > 0) {
             iperf_set_test_rate(t, (uint64_t)atoi(a5) * 1000000U);   /* Mbit/s -> bit/s pacing */
+        }
+        /* Optional 6th arg "-u"/"udp": switch the client to UDP. The TX wedge is TCP-specific, so
+         * UDP sustains a full-length upload. Use a single-MSS datagram (no IP fragmentation) and
+         * default the offered rate to 20 Mbit/s when none was given (iperf's UDP default is a
+         * trickle 1 Mbit/s, useless for a throughput/wedge test). */
+        if (arg(cmd, 6, a6, sizeof a6) > 0 &&
+            (strcmp(a6, "-u") == 0 || strcmp(a6, "udp") == 0)) {
+            set_protocol(t, Pudp);
+            iperf_set_test_blksize(t, DEFAULT_UDP_BLKSIZE);   /* 1460: one datagram, no fragmentation */
+            if (arg(cmd, 5, a5, sizeof a5) <= 0) {
+                iperf_set_test_rate(t, (uint64_t)20 * 1000000U);
+            }
         }
         rc = iperf_run_client(t);
     } else {
@@ -95,7 +108,7 @@ void iperf_cli_register(void)
 {
     static const CLI_Command_Definition_t def = {
         "iperf",
-        "iperf -s [port] | -c <host> [port] [secs] [mbit]:\r\n run the iperf3 server/client\r\n",
+        "iperf -s [port] | -c <host> [port] [secs] [mbit] [-u]:\r\n run the iperf3 server/client (-u = UDP)\r\n",
         cmd_iperf, -1
     };
     FreeRTOS_CLIRegisterCommand(&def);

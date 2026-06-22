@@ -111,6 +111,7 @@ int socket(int domain, int type, int protocol)
         FreeRTOS_closesocket(s);
         return -1;
     }
+    if (type == SOCK_DGRAM) { fd_udp_set(fd); }   /* enable connected-UDP emulation */
     return fd;
 }
 
@@ -158,6 +159,9 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
 
     if (s == NULL) { errno = EBADF; return -1; }
     if (to_freertos(addr, addrlen, &fa) != 0) { return -1; }
+    /* UDP: FreeRTOS+TCP has no connected datagram socket. Record the peer so write()/send()
+     * sendto() it (and read()/recv() recvfrom()) — connect() itself just succeeds. */
+    if (fd_udp_kind(fd, NULL) != 0) { return fd_udp_connect(fd, &fa); }
     /* FreeRTOS_connect blocks until connected/timeout — non-blocking connect() callers
      * (poll-for-writable) still work since the subsequent poll reports ready. */
     if (FreeRTOS_connect(s, &fa, sizeof(fa)) != 0) { errno = ECONNREFUSED; return -1; }
@@ -203,10 +207,14 @@ ssize_t recv(int fd, void *buf, size_t len, int flags)
 {
     Socket_t s = sock(fd);
     BaseType_t f = (flags & MSG_DONTWAIT) ? FREERTOS_MSG_DONTWAIT : 0;
+    struct freertos_sockaddr fa;
+    socklen_t falen = sizeof(fa);
     BaseType_t r;
 
     if (s == NULL) { errno = EBADF; return -1; }
-    r = FreeRTOS_recv(s, buf, len, f);
+    /* UDP (iperf -u reads via recv(MSG_TRUNC)): FreeRTOS_recv is TCP-only -> recvfrom. */
+    r = fd_udp_kind(fd, NULL) ? FreeRTOS_recvfrom(s, buf, len, f, &fa, &falen)
+                              : FreeRTOS_recv(s, buf, len, f);
     if (r < 0) { errno = (r == -pdFREERTOS_ERRNO_EWOULDBLOCK) ? EWOULDBLOCK : EIO; return -1; }
     return (ssize_t)r;
 }
@@ -215,9 +223,16 @@ ssize_t send(int fd, const void *buf, size_t len, int flags)
 {
     Socket_t s = sock(fd);
     BaseType_t f = (flags & MSG_DONTWAIT) ? FREERTOS_MSG_DONTWAIT : 0;
+    struct freertos_sockaddr fa;
     BaseType_t r;
 
     if (s == NULL) { errno = EBADF; return -1; }
+    /* Connected UDP: sendto the recorded peer (FreeRTOS_send is TCP-only). */
+    if (fd_udp_kind(fd, &fa) == 2) {
+        r = FreeRTOS_sendto(s, buf, len, f, &fa, sizeof(fa));
+        if (r == 0) { errno = EIO; return -1; }   /* sendto returns 0 on failure */
+        return (ssize_t)r;
+    }
     r = FreeRTOS_send(s, buf, len, f);
     if (r < 0) { errno = (r == -pdFREERTOS_ERRNO_EWOULDBLOCK) ? EWOULDBLOCK : EIO; return -1; }
     return (ssize_t)r;
@@ -288,6 +303,16 @@ int getsockopt(int fd, int level, int optname, void *optval, socklen_t *optlen)
     if (level == SOL_SOCKET && optname == SO_ERROR &&
         optval != NULL && optlen != NULL && *optlen >= (socklen_t)sizeof(int)) {
         *(int *)optval = 0;
+        *optlen = sizeof(int);
+        return 0;
+    }
+    /* SO_SNDBUF/SO_RCVBUF: FreeRTOS+TCP UDP sockets have no settable per-socket buffer (they
+     * draw from the shared network-buffer pool), but iperf's UDP setup rejects the test if the
+     * reported size is below blksize ("socket buffer size not set correctly", IEUDPBUFSIZE).
+     * Report a generous size so the check passes; we accept-and-ignore the matching setsockopt. */
+    if (level == SOL_SOCKET && (optname == SO_SNDBUF || optname == SO_RCVBUF) &&
+        optval != NULL && optlen != NULL && *optlen >= (socklen_t)sizeof(int)) {
+        *(int *)optval = 65535;
         *optlen = sizeof(int);
         return 0;
     }

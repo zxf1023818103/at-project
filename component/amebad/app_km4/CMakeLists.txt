@@ -54,12 +54,13 @@ set(_rom_str_ld  "${AMEBAD_STRING_ROM_KM4_LD}")                      # KM4 swlib
 set(_rom_cmsis_ld "${AMEBAD_CMSIS_ROM_KM4_LD}")                      # KM4 CMSIS mpu/DSP ROM symbols (cmsis_rom)
 set(_rom_wifi_ld "${CMAKE_CURRENT_SOURCE_DIR}/rom_symbol_wifi.ld")   # extra ROM PROVIDEs (PAD_CMD) for lib_wlan
 set(_rom_mbed_ld "${CMAKE_SOURCE_DIR}/component/amebad/mbedtls_rom/mbedtls_rom.ld")  # ROM mbedTLS 2.4.0 + ssl ram map symbols
+set(_rom_crypto_ld "${CMAKE_CURRENT_SOURCE_DIR}/rom_symbol_crypto.ld")  # ROM rtl_aes_*/rtl_mpi_*/rtl_ecp_*/rtl_md5_* for the newer TizenRT lib_wlan_fpu.a (PROVIDE, no-op if unreferenced)
 set(_layout_ld   "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_layout_is.ld")
 set(_combined_ld "${CMAKE_CURRENT_BINARY_DIR}/rlx8721d.ld")
 add_custom_command(
     OUTPUT  "${_combined_ld}"
-    COMMAND "${CMAKE_COMMAND}" -E cat "${_img2_ld}" "${_rom_sym_ld}" "${_rom_fwlib_ld}" "${_rom_str_ld}" "${_rom_cmsis_ld}" "${_rom_wifi_ld}" "${_rom_mbed_ld}" > "${_combined_ld}"
-    DEPENDS "${_img2_ld}" "${_rom_sym_ld}" "${_rom_fwlib_ld}" "${_rom_str_ld}" "${_rom_cmsis_ld}" "${_rom_wifi_ld}" "${_rom_mbed_ld}" "${_layout_ld}"
+    COMMAND "${CMAKE_COMMAND}" -E cat "${_img2_ld}" "${_rom_sym_ld}" "${_rom_fwlib_ld}" "${_rom_str_ld}" "${_rom_cmsis_ld}" "${_rom_wifi_ld}" "${_rom_mbed_ld}" "${_rom_crypto_ld}" > "${_combined_ld}"
+    DEPENDS "${_img2_ld}" "${_rom_sym_ld}" "${_rom_fwlib_ld}" "${_rom_str_ld}" "${_rom_cmsis_ld}" "${_rom_wifi_ld}" "${_rom_mbed_ld}" "${_rom_crypto_ld}" "${_layout_ld}"
     COMMENT "concat KM4 image2 linker script"
     VERBATIM
 )
@@ -114,7 +115,7 @@ endif()
 # below to avoid CMake sinking the EXCLUDE_FROM_ALL libs past -lc. zip.h/unzip.h/ioapi.h come
 # from minizip's PUBLIC include via the group.
 set(_mz_grp "")
-if(NOT AMEBAD_ENABLE_QUIC AND NOT AMEBAD_ENABLE_AWS_IOT)
+if(NOT AMEBAD_ENABLE_QUIC AND NOT AMEBAD_ENABLE_AWS_IOT AND NOT AMEBAD_ENABLE_IPERF)
     set(_mz_grp ",minizip,zlibstatic")
     target_sources(target_img2_km4 PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/zip_cli.c"
@@ -470,6 +471,11 @@ target_link_options(target_img2_km4 PRIVATE
     "-L${CMAKE_CURRENT_SOURCE_DIR}"
     "-Wl,--no-enum-size-warning"
     "-Wl,--warn-common"
+    # The newer TizenRT lib_wlan_fpu.a / lib_wps_fpu.a are built -mfloat-abi=softfp
+    # while our fw is hard-float; the two are link-compatible (the WiFi API is all
+    # int/ptr/struct, no float args cross the boundary) but ld warns on the EABI
+    # VFP-args attribute mismatch. Silence it (only WiFi-image links pull those .a).
+    "-Wl,--no-warn-mismatch"
     "-Wl,-Map=$<TARGET_FILE_DIR:target_img2_km4>/target_img2.map"
     # Resolve memcpy to the ROM _memcpy (0x10110d2d, string_rom_km4.ld) instead of newlib's XIP
     # copy. The console RX ISR's StreamBuffer path (RAM-resident, rlx8721d_img2_is.ld) calls memcpy

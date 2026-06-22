@@ -35,6 +35,16 @@ int fd_open_socket(void *socket);
  * setsockopt/select/... operations that don't go through read()/write()/close(). */
 void *fd_get_socket(int fd);
 
+/* Connected-UDP emulation (FreeRTOS+TCP connect()/send()/recv() are TCP-only). The BSD
+ * shim marks a datagram fd with fd_udp_set(), records the connect() peer with
+ * fd_udp_connect(), and queries fd_udp_kind() to route I/O: 0 = not UDP, 1 = UDP
+ * unconnected, 2 = UDP connected (peer_out, if non-NULL, gets the freertos_sockaddr).
+ * `peer`/`peer_out` are an opaque struct freertos_sockaddr (kept void* to avoid pulling
+ * FreeRTOS+TCP headers into syscalls.h consumers). */
+void fd_udp_set(int fd);
+int  fd_udp_connect(int fd, const void *peer);
+int  fd_udp_kind(int fd, void *peer_out);
+
 /* KV-file-backed environment (env.c). env_init() loads every regular file under KV/
  * into newlib's environ — call once, right after the platform's LittleFS mount.
  * env_save() persists one variable. The consuming image MUST link with

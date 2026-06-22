@@ -78,6 +78,10 @@ set_target_properties(amebad_wlan PROPERTIES
 # joins the KM4 image2 link group alongside the prebuilt libs.
 add_library(amebad_wlan_glue STATIC EXCLUDE_FROM_ALL
     "${CMAKE_CURRENT_SOURCE_DIR}/src/lwip_intf.c"
+    # Compat shims the newer TizenRT lib_wlan_fpu.a/lib_wps_fpu.a expect the
+    # integrator to define (rtw_printf, WPS g_wps_context/wpas_get_wifi_mac,
+    # WoWLAN rs8721d_set_*_cmd). See doc/amebad_tizenrt_wifi_lib_port.md.
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/amebad_wlan_compat.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/rtw_opt_skbuf.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/rtw_opt_rf_para_rtl8721d.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/rtw_opt_wlan_ram_map.c"

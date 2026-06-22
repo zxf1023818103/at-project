@@ -147,6 +147,23 @@ void rltk_wlan_recv(int idx, struct eth_drv_sg *sg_list, int sg_len)
 }
 
 /*
+ *      amebad_recv_skb_len - length of the driver's pending RX skb for idx.
+ *      TizenRT's netif_rx uses skb->len (the authoritative frame length), NOT the
+ *      `len` argument the driver passes to netif_rx(); the FreeRTOS+TCP RX bridge
+ *      uses this to size/copy the exact skb instead of trusting `len`. Returns
+ *      0xFFFFFFFF if there's no pending skb (caller falls back to `len`).
+ */
+unsigned int amebad_recv_skb_len(int idx)
+{
+	struct sk_buff *skb;
+	if (idx == -1) {
+		return 0xFFFFFFFFu;
+	}
+	skb = rltk_wlan_get_recv_skb(idx);
+	return (skb != NULL) ? (unsigned int)skb->len : 0xFFFFFFFFu;
+}
+
+/*
  *      netif_is_valid_IP - driver RX filter: is this destination IP for us?
  *      Delegated to the FreeRTOS+TCP endpoint (accept-on-uncertainty is safe).
  */

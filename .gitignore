@@ -12,3 +12,7 @@
 /doc/realtek_an/*.docx
 /doc/realtek_an/*.doc
 component/amebad/app_km4/aws_iot_creds.h
+
+# Vendored dependency trees (lwip/ngtcp2/mbedtls/... ~164 MB) staged outside the
+# component/*_config submodules; build-unused, never committed.
+/component/thirdparty/
