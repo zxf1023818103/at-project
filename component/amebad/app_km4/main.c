@@ -41,6 +41,11 @@ extern NetworkInterface_t *pxRealtek_FillInterfaceDescriptor(BaseType_t xEMACInd
                                                              NetworkInterface_t *pxInterface);
 extern void amebad_register_wlan_netif(int idx, unsigned char *mac);
 extern void amebad_freertos_tcp_set_ready(void);
+/* Homegrown iperf2 throughput probes (make IPERF=ON); auto-run from the network-up hook. */
+extern void iperf_client_start(void);
+extern void iperf_server_start(void);
+extern void iperf_udp_client_start(void);
+extern void iperf_udp_server_start(void);
 
 #define WLAN_STA_IDX  0
 
@@ -89,6 +94,15 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
          * date/time self-test runs once the first sync lands. */
         extern void sntp_sync_start( void );
         sntp_sync_start();
+#elif defined(AT_PROJECT_IPERF)
+        /* Default throughput probe: device -> host TCP TX (the device-as-client
+         * upload that exercises the WiFi TX path). The UDP TX/RX + TCP-sink probes
+         * stay available for diagnostics. Homegrown iperf2 over FreeRTOS+TCP sockets
+         * with a static TX buffer — no iperf3 mmap/pthread/cJSON heap churn. */
+        iperf_client_start();
+        ( void ) iperf_udp_client_start;
+        ( void ) iperf_udp_server_start;
+        ( void ) iperf_server_start;
 #endif
     }
     else
@@ -426,7 +440,7 @@ static void wifi_bringup_thread( void *param )
      * channel + security, PRINT every result, THEN pscan that channel and connect
      * with the discovered security type. */
     {
-        const char *kSsid = "Zeng";
+        const char *kSsid = "AIoT";
         found_ap_t  fa = { 0, 0, RTW_SECURITY_OPEN, 0 };
         u8 ch;
 
@@ -595,9 +609,6 @@ int main(void)
     { extern void env_cli_register(void);  env_cli_register();  }   /* setenv/getenv/env (all images) */
 #ifdef AMEBAD_ENABLE_MINIZIP
     { extern void zip_cli_register(void);  zip_cli_register();  }   /* zip/unzip demo (non-AWS images) */
-#endif
-#ifdef AT_PROJECT_IPERF
-    { extern void iperf_cli_register(void); iperf_cli_register(); }  /* iperf3 server/client (make IPERF=ON) */
 #endif
 #ifdef AT_PROJECT_AWS_IOT
     /* Mount LittleFS + load the persisted environment. The non-secret creds live in plain

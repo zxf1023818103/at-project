@@ -423,23 +423,19 @@ if(NOT AMEBAD_ENABLE_QUIC AND NOT AMEBAD_ENABLE_ROM_KAT
     set(_hash_grp ",mbedcrypto")
 endif()
 
-# iperf3 (make IPERF=ON): the `iperf` console command over upstream esnet/iperf
-# (component/iperf3_config) + the BSD-sockets/pthread shim in component/syscall_config. Pulls
-# libiperf3.a + cJSON into the cross_refs group; the socket/pthread impls come from the
-# force-linked syscall_config. mbedcrypto rides in too (via _hash_grp) for fs_cli's hashes.
-option(AMEBAD_ENABLE_IPERF "Build the iperf3 server/client console command (upstream esnet/iperf)" OFF)
-set(_iperf_grp "")
+# iperf (make IPERF=ON): the four homegrown iperf2-protocol throughput probes
+# (TCP/UDP x client/server) that auto-run from the network-up hook. They talk
+# FreeRTOS-Plus-TCP sockets directly (FreeRTOS_socket/send) with a static TX buffer
+# — no BSD-sockets/pthread/cJSON/mmap shim, no dynamic per-stream buffers — so they
+# avoid the upstream-iperf3 port's heap churn. (iperf3 was tried as component/
+# iperf3_config but its mmap/pthread/cJSON path corrupted the TLSF heap on TX.)
+option(AMEBAD_ENABLE_IPERF "Build the homegrown iperf2 throughput probes" OFF)
 if(AMEBAD_ENABLE_IPERF)
-    # libiperf3.a has circular intra-archive refs (api<->net<->locale<->...) + libc refs, so it joins
-    # the cross_refs --start-group as a raw archive (with cjson, the only lib it needs there). iperf3
-    # is a dep-less static lib (genex includes, no target link deps) so listing it here doesn't cycle;
-    # the socket()/pthread/select impls come from the force-linked syscall_config.
-    set(_iperf_grp ",iperf3,cjson")
-    target_sources(target_img2_km4 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/iperf_cli.c")
-    target_include_directories(target_img2_km4 PRIVATE
-        "${CMAKE_SOURCE_DIR}/component/iperf3_config/iperf3/src"
-        "${CMAKE_SOURCE_DIR}/component/cjson_config/cjson"   # iperf headers redirect cjson.h -> cJSON.h
-        "${CMAKE_SOURCE_DIR}/component/freertos-cli_config/freertos-cli")
+    target_sources(target_img2_km4 PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/iperf_client.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/iperf_server.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/iperf_udp_client.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/iperf_udp_server.c")
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_IPERF)
 endif()
@@ -458,7 +454,7 @@ target_link_libraries(target_img2_km4 PRIVATE
     # EXCLUDE_FROM_ALL lib CMake would otherwise sink it past -lc/-lgcc and leave
     # those undefined. amebad_mbed (flash_api) is lfs_port's backend. (The upstream
     # mbedcrypto/mbedx509 + picotls/ngtcp2 crypto join per-feature via the _grp vars.)
-    "$<LINK_GROUP:cross_refs,FreeRTOS,freertos_port,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,freertos_plus_tcp,freertos_plus_tcp_port,amebad_wlan,amebad_wps,amebad_lfs_port,amebad_mbed,lfs_config,littlefs,rxi_log${_diag_grp}${_hci_grp}${_quic_grp}${_pk11_grp}${_bench_grp}${_aws_grp}${_mz_grp}${_hash_grp}${_iperf_grp}>"
+    "$<LINK_GROUP:cross_refs,FreeRTOS,freertos_port,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,freertos_plus_tcp,freertos_plus_tcp_port,amebad_wlan,amebad_wps,amebad_lfs_port,amebad_mbed,lfs_config,littlefs,rxi_log${_diag_grp}${_hci_grp}${_quic_grp}${_pk11_grp}${_bench_grp}${_aws_grp}${_mz_grp}${_hash_grp}>"
     m
     stdc++
     c
