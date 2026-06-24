@@ -52,11 +52,82 @@ extern void iperf_udp_server_start(void);
 static NetworkInterface_t xInterface;
 static NetworkEndPoint_t  xEndPoint;
 
-/* DHCP-only: start with 0.0.0.0 so the endpoint requests an address. */
-static const uint8_t ucIPAddress[ 4 ]    = { 0, 0, 0, 0 };
-static const uint8_t ucNetMask[ 4 ]      = { 255, 255, 255, 0 };
-static const uint8_t ucGatewayAddress[4] = { 0, 0, 0, 0 };
-static const uint8_t ucDNSServer[ 4 ]    = { 0, 0, 0, 0 };
+/* DHCP-only by default (0.0.0.0). The cached DHCP_* lease, when present, is loaded into these as
+ * the endpoint's prior address so FreeRTOS+TCP DHCP REQUESTs it (INIT-REBOOT) instead of a cold
+ * DISCOVER — non-const so wifi_bringup_thread can seed them from env before FreeRTOS_FillEndPoint. */
+static uint8_t ucIPAddress[ 4 ]    = { 0, 0, 0, 0 };
+static uint8_t ucNetMask[ 4 ]      = { 255, 255, 255, 0 };
+static uint8_t ucGatewayAddress[4] = { 0, 0, 0, 0 };
+static uint8_t ucDNSServer[ 4 ]    = { 0, 0, 0, 0 };
+
+/* ---- WIFI_* / DHCP_* env helpers: boot-default WiFi connect + DHCP-lease cache (speed up the
+ * connect flow by skipping the scan and the cold DHCP DISCOVER on a known network). ---- */
+
+/* WIFI_SECURITY string <-> rtw_security_t. The scan only ever yields these four (scan_print_handler);
+ * map WPA2/WPA3/AES variants to WPA2-AES-PSK (the chip negotiates the actual cipher). */
+static rtw_security_t wifi_sec_from_str( const char *s )
+{
+    if( s == NULL || s[ 0 ] == '\0' )            return RTW_SECURITY_UNKNOWN;
+    if( strcmp( s, "OPEN" ) == 0 )               return RTW_SECURITY_OPEN;
+    if( strcmp( s, "WEP" ) == 0 )                return RTW_SECURITY_WEP_PSK;
+    if( strcmp( s, "WPA2_TKIP" ) == 0 )          return RTW_SECURITY_WPA2_TKIP_PSK;
+    if( strcmp( s, "WPA2" ) == 0 || strcmp( s, "WPA2_AES" ) == 0 ||
+        strcmp( s, "WPA3" ) == 0 || strcmp( s, "WPA2_WPA3" ) == 0 )
+                                                 return RTW_SECURITY_WPA2_AES_PSK;
+    return RTW_SECURITY_UNKNOWN;
+}
+static const char *wifi_sec_to_str( rtw_security_t sec )
+{
+    switch( sec )
+    {
+        case RTW_SECURITY_OPEN:          return "OPEN";
+        case RTW_SECURITY_WEP_PSK:       return "WEP";
+        case RTW_SECURITY_WPA2_TKIP_PSK: return "WPA2_TKIP";
+        default:                         return "WPA2_AES";   /* WPA2/WPA3 AES */
+    }
+}
+
+/* "a.b.c.d" -> out[4]; returns 1 on success. Hand-rolled (no sscanf: in main.c the stdio family is
+ * the ROM _rtl_* which rejects several conversions). */
+static int parse_ipv4( const char *s, uint8_t out[ 4 ] )
+{
+    int i;
+    if( s == NULL || s[ 0 ] == '\0' )
+        return 0;
+    for( i = 0; i < 4; i++ )
+    {
+        char         *end;
+        unsigned long v = strtoul( s, &end, 10 );
+        if( end == s || v > 255 )
+            return 0;
+        out[ i ] = (uint8_t) v;
+        s = end;
+        if( i < 3 )
+        {
+            if( *s != '.' )
+                return 0;
+            s++;
+        }
+    }
+    return 1;
+}
+
+/* FreeRTOS+TCP IPv4 (network byte order, octet 0 = first) -> "a.b.c.d" in buf (>= 16 bytes). Uses
+ * %d (the ROM _rtl_snprintf in main.c does not support %u). */
+static void fmt_ipv4( uint32_t ip, char *buf, size_t buflen )
+{
+    snprintf( buf, buflen, "%d.%d.%d.%d",
+              (int)( ip & 0xff ), (int)( ( ip >> 8 ) & 0xff ),
+              (int)( ( ip >> 16 ) & 0xff ), (int)( ( ip >> 24 ) & 0xff ) );
+}
+
+/* setenv only when the value changed, so the IP task does not rewrite KV/LFS every DHCP event. */
+static void env_set_if_changed( const char *name, const char *value )
+{
+    const char *cur = getenv( name );
+    if( cur == NULL || strcmp( cur, value ) != 0 )
+        setenv( name, value, 1 );
+}
 
 /* Called by the IP task when the interface comes up (DHCP done) or goes down.
  * ipconfigIPv4_BACKWARD_COMPATIBLE=1 -> single-arg hook. */
@@ -77,6 +148,16 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
         log_info( "[KM4] gateway   %d.%d.%d.%d",
                     (int)( ulGW & 0xff ), (int)( ( ulGW >> 8 ) & 0xff ),
                     (int)( ( ulGW >> 16 ) & 0xff ), (int)( ( ulGW >> 24 ) & 0xff ) );
+        /* Cache this lease for the next boot (DHCP_IP/GATEWAY/NETMASK/SERVER). Written only on
+         * change (env_set_if_changed), so the IP task does not rewrite KV/LFS on every renew. */
+        {
+            char b[ 16 ];
+            fmt_ipv4( ulIP,   b, sizeof( b ) );  env_set_if_changed( "DHCP_IP",      b );
+            fmt_ipv4( ulGW,   b, sizeof( b ) );  env_set_if_changed( "DHCP_GATEWAY", b );
+            fmt_ipv4( ulMask, b, sizeof( b ) );  env_set_if_changed( "DHCP_NETMASK", b );
+            fmt_ipv4( xEndPoint.xDHCPData.ulDHCPServerAddress, b, sizeof( b ) );
+            env_set_if_changed( "DHCP_SERVER", b );
+        }
 #ifdef AT_PROJECT_QUIC
         /* QUIC build: run the ngtcp2 + wolfSSL TLS1.3 handshake self-test against
          * the WSL QUIC server instead of the iperf throughput probes (iperf TUs
@@ -418,6 +499,21 @@ static void wifi_bringup_thread( void *param )
      * returns the real MAC), then bring up FreeRTOS+TCP BEFORE associating. */
     amebad_register_wlan_netif( WLAN_STA_IDX, mac );
     pxRealtek_FillInterfaceDescriptor( WLAN_STA_IDX, &xInterface );
+    /* Seed the endpoint's default IPv4 from the cached DHCP_* lease, if any. FreeRTOS+TCP uses it as
+     * the fallback when DHCP times out (instant last-known-good instead of staying at 0.0.0.0); DHCP
+     * still runs + validates on the happy path, so a stale lease is harmless. (A real "skip DHCP"
+     * fast path would need ipconfigUSE_DHCP_HOOK; see the network-up hook note.) */
+    {
+        uint8_t ip[ 4 ], gw[ 4 ], mask[ 4 ];
+        if( parse_ipv4( getenv( "DHCP_IP" ), ip ) )
+        {
+            memcpy( ucIPAddress, ip, 4 );
+            if( parse_ipv4( getenv( "DHCP_GATEWAY" ), gw ) )   memcpy( ucGatewayAddress, gw, 4 );
+            if( parse_ipv4( getenv( "DHCP_NETMASK" ), mask ) ) memcpy( ucNetMask, mask, 4 );
+            log_info( "[KM4] DHCP cache: seeded prior IP %u.%u.%u.%u (fallback)",
+                        ip[ 0 ], ip[ 1 ], ip[ 2 ], ip[ 3 ] );
+        }
+    }
     FreeRTOS_FillEndPoint( &xInterface, &xEndPoint, ucIPAddress, ucNetMask,
                            ucGatewayAddress, ucDNSServer, mac );
     xEndPoint.bits.bWantDHCP = pdTRUE;
@@ -440,9 +536,29 @@ static void wifi_bringup_thread( void *param )
      * channel + security, PRINT every result, THEN pscan that channel and connect
      * with the discovered security type. */
     {
-        const char *kSsid = "AIoT";
+        /* Boot-default connection from env: WIFI_SSID / WIFI_PASSWORD (fall back to the built-in
+         * defaults if unset). If WIFI_CHANNEL + WIFI_SECURITY were cached on a prior connect, skip
+         * the multi-second scan and go straight to pscan + connect. */
+        const char *kSsid = getenv( "WIFI_SSID" );
+        const char *kPass = getenv( "WIFI_PASSWORD" );
         found_ap_t  fa = { 0, 0, RTW_SECURITY_OPEN, 0 };
         u8 ch;
+        int need_scan = 1;
+        if( kSsid == NULL ) kSsid = "AIoT";
+        if( kPass == NULL ) kPass = "123456789";
+        {
+            const char    *ce = getenv( "WIFI_CHANNEL" );
+            rtw_security_t sc = wifi_sec_from_str( getenv( "WIFI_SECURITY" ) );
+            if( ce != NULL && ce[ 0 ] != '\0' && sc != RTW_SECURITY_UNKNOWN )
+            {
+                fa.found = 1;
+                fa.channel = (unsigned char) atoi( ce );
+                fa.security = sc;
+                need_scan = 0;
+                log_info( "[KM4] '%s' cached: ch=%d sec=%s -> skip scan",
+                            kSsid, fa.channel, getenv( "WIFI_SECURITY" ) );
+            }
+        }
 
         /* PMF / 802.11w: keep it OFF (0 = no MFP support). We tried advertising
          * MFP-capable (1) and MFP-required (2) via rltk_set_pmf so the AP could keep
@@ -462,8 +578,11 @@ static void wifi_bringup_thread( void *param )
          * scan_print_handler), so re-scan a few times until the 5 GHz BSSID shows
          * up; settle for 2.4 GHz only if 5 GHz never appears. fa accumulates
          * across passes (the 5 GHz-preferring handler keeps the best seen so far). */
+wifi_connect_attempt:
+        if( need_scan )
         {
             int scan_try;
+            fa.found = 0;
             for( scan_try = 0; scan_try < 6; scan_try++ )
             {
                 log_info( "[KM4] scan for '%s' (prefer 5 GHz, try %d)...",
@@ -473,15 +592,22 @@ static void wifi_bringup_thread( void *param )
                 if( fa.found && fa.channel > 14 ) break;   /* got a 5 GHz BSSID */
                 vTaskDelay( pdMS_TO_TICKS( 200 ) );
             }
+            if( !fa.found )
+            {
+                log_error( "[KM4] '%s' not found in scan - abort", kSsid );
+                vTaskDelete( NULL );
+                return;
+            }
+            log_info( "[KM4] found '%s' ch=%d rssi=%d sec=0x%x; pscan + connect...",
+                        kSsid, fa.channel, fa.rssi, (unsigned) fa.security );
+            /* Cache channel + security so the next boot skips the scan. */
+            {
+                char chbuf[ 8 ];
+                snprintf( chbuf, sizeof( chbuf ), "%d", fa.channel );
+                env_set_if_changed( "WIFI_CHANNEL", chbuf );
+                env_set_if_changed( "WIFI_SECURITY", wifi_sec_to_str( fa.security ) );
+            }
         }
-        if( !fa.found )
-        {
-            log_error( "[KM4] '%s' not found in scan - abort", kSsid );
-            vTaskDelete( NULL );
-            return;
-        }
-        log_info( "[KM4] found '%s' ch=%d rssi=%d sec=0x%x; pscan + connect...",
-                    kSsid, fa.channel, fa.rssi, (unsigned) fa.security );
         ch = fa.channel;
         /* This AP (MikroTik) intermittently answers the first assoc with status
          * 30 = "rejected temporarily; try again later". It's transient, so retry
@@ -504,8 +630,8 @@ static void wifi_bringup_thread( void *param )
                 rltk_wlan_tx_deauth( 1, 0 );
                 vTaskDelay( pdMS_TO_TICKS( 80 ) );
                 wifi_set_pscan_chan( &c, &ps, 1 );
-                if( wifi_connect( (char *) kSsid, fa.security, "123456789",
-                                  (int) strlen( kSsid ), 9, 0, NULL ) == RTW_SUCCESS )
+                if( wifi_connect( (char *) kSsid, fa.security, (char *) kPass,
+                                  (int) strlen( kSsid ), (int) strlen( kPass ), 0, NULL ) == RTW_SUCCESS )
                 {
                     ok = 1;
                     break;
@@ -515,6 +641,16 @@ static void wifi_bringup_thread( void *param )
             }
             if( !ok )
             {
+                if( !need_scan )
+                {
+                    /* The cached WIFI_CHANNEL/SECURITY are stale (AP moved channel / changed
+                     * security). Drop the cache and fall back to a full scan in this same boot. */
+                    log_error( "[KM4] cached-channel connect failed - clearing cache, rescanning" );
+                    env_set_if_changed( "WIFI_CHANNEL", "" );
+                    env_set_if_changed( "WIFI_SECURITY", "" );
+                    need_scan = 1;
+                    goto wifi_connect_attempt;
+                }
                 log_error( "[KM4] wifi_connect FAILED (gave up)" );
                 vTaskDelete( NULL );
                 return;
