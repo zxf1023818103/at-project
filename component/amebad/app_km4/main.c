@@ -43,6 +43,8 @@ extern void amebad_register_wlan_netif(int idx, unsigned char *mac);
 extern void amebad_freertos_tcp_set_ready(void);
 /* NTP server captured from DHCP option 42 (FreeRTOS_DHCP.c at-project patch); network byte order, 0=none. */
 extern uint32_t ulDHCPNtpServerAddress;
+/* 802.11d Country IE of the associated AP's beacon (rtw_get_bcn_country_code, lib_wlan.a); 2 bytes, 0=none. */
+extern void wext_get_country_code( unsigned char *country_code_get );
 /* Homegrown iperf2 throughput probes (make IPERF=ON); auto-run from the network-up hook. */
 extern void iperf_client_start(void);
 extern void iperf_server_start(void);
@@ -129,6 +131,36 @@ static void env_set_if_changed( const char *name, const char *value )
     const char *cur = getenv( name );
     if( cur == NULL || strcmp( cur, value ) != 0 )
         setenv( name, value, 1 );
+}
+
+/* Country-plan auto-detect: when neither WIFI_COUNTRY nor WIFI_CHANPLAN is provisioned, learn the
+ * regulatory domain from the associated AP's beacon (802.11d Country IE, via rtw_get_bcn_country_code)
+ * and persist it to WIFI_COUNTRY, so the NEXT boot's wifi_set_country_code() sets the matching channel
+ * plan from the start. Persist-and-apply-next-boot (not apply-now) because a runtime channel-plan
+ * change triggers a disruptive driver reboot. (The SDK's scan-based variant
+ * wifi_scan_networks_with_extended_countryinfo() / dump_surrounding_country_codes() hangs in this
+ * driver-only image - the extended-country scan mode never returns - so read the beacon Country IE
+ * instead.) Call once the association has completed. */
+static void wifi_autodetect_country( void )
+{
+    unsigned char cc[ 2 ] = { 0, 0 };
+
+    if( ( getenv( "WIFI_COUNTRY" ) != NULL ) || ( getenv( "WIFI_CHANPLAN" ) != NULL ) )
+        return;   /* regulatory domain already provisioned - leave it alone */
+
+    wext_get_country_code( cc );
+    if( !( cc[ 0 ] >= 'A' && cc[ 0 ] <= 'Z' && cc[ 1 ] >= 'A' && cc[ 1 ] <= 'Z' ) )
+    {
+        log_info( "[KM4] country auto-detect: AP beacon has no Country IE (cc=%02x %02x) - keeping default plan",
+                    cc[ 0 ], cc[ 1 ] );
+        return;
+    }
+    {
+        char ccs[ 3 ] = { (char) cc[ 0 ], (char) cc[ 1 ], '\0' };
+        setenv( "WIFI_COUNTRY", ccs, 1 );
+        log_info( "[KM4] country auto-detected from AP beacon: %s -> saved to WIFI_COUNTRY (channel plan applies next boot)",
+                    ccs );
+    }
 }
 
 
@@ -694,6 +726,9 @@ wifi_connect_attempt:
         wifi_get_rssi( &rssi );
         log_info( "[KM4] associated; power-save off; RSSI %d dBm; waiting for DHCP...", rssi );
     }
+
+    /* Learn the regulatory domain from the associated AP's beacon if it was not provisioned. */
+    wifi_autodetect_country();
 
     /* Upstream Mbed TLS v3.6.4 microbenchmark ([MCB] scores) - the apples-to-apples
      * successor to the removed wolfCrypt [WCB] bench. Runs here at 200 MHz, after
