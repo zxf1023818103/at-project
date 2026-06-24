@@ -933,6 +933,16 @@ TlsTransportStatus_t TLS_FreeRTOS_Connect( NetworkContext_t * pNetworkContext,
     p->rxConsumed = 0;
     isTlsCreated = pdTRUE;
 
+    /* Pre-reserve a full TLS record (16 KB) up front, while the heap is least fragmented. Otherwise
+     * the decrypt path reallocs rxPlain up to ~16 KB mid-stream, and that large realloc fails in a
+     * fragmented heap during a big transfer (e.g. an OTA download), aborting the connection. */
+    if( ptls_buffer_reserve( &p->rxPlain, 16640 ) != 0 )
+    {
+        LogError( ( "rxPlain pre-reserve failed" ) );
+        status = TLS_TRANSPORT_INSUFFICIENT_MEMORY;
+        goto Cleanup;
+    }
+
     if( pNetworkCredentials->disableSni == pdFALSE )
     {
         ptls_set_server_name( p->tls, pHostName, 0 );
