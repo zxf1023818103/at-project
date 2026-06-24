@@ -521,13 +521,15 @@ if(AMEBAD_TFM_BOOT)
         "${_tfm_export}/interface/lib/s_veneers.o")
     # Clamp the NS FreeRTOS heap top below TF-M's secure RAM. tfm_s runs cached-XIP
     # (code in flash, not RAM), so the only secure SRAM is S_DATA
-    # (0x10060000..0x1007FFFF); app_km4 as the NSPE must keep its heap (and
+    # (0x10070000..0x1007FFFF); app_km4 as the NSPE must keep its heap (and
     # everything else) under that or os_heap_init faults the moment heap5 touches
     # the secure region. __tz_sram_top__ feeds rlx8721d_img2_is.ld's __sram_end__
-    # (= region_defs.h S_DATA_START). This is the os_heap_init-hang fix: previously
-    # the NS heap ran up to BD_RAM_NS top 0x1007C000, overlapping the secure window.
+    # and MUST equal region_defs.h S_DATA_START. This is the os_heap_init-hang fix:
+    # previously the NS heap ran up to BD_RAM_NS top 0x1007C000, overlapping the secure
+    # window. 2026-06-24: raised 0x10060000 -> 0x10070000 (TF-M S_DATA 120 KB -> 56 KB),
+    # +64 KB of NS heap.
     target_link_options(target_img2_km4 PRIVATE
-        "-Wl,--defsym=__tz_sram_top__=0x10060000")
+        "-Wl,--defsym=__tz_sram_top__=0x10070000")
 
     # PSA secure storage self-test (make STORAGE=ON). Adds the ITS [+ PS] NS client
     # interface + the storage round-trip/persistence test (tfm_storage_selftest.c).

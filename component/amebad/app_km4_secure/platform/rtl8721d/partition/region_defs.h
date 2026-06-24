@@ -9,13 +9,19 @@
  *   Peripherals: NS alias 0x40000000, Secure alias 0x50000000.
  *
  * Partition (bring-up):
- *   NS_DATA  0x10005000..0x10060000  (364 KB)  -> existing driver-only app + QUIC
- *   S_DATA   0x10060000..0x10080000  (128 KB)  -> TF-M SPE data/bss/heap/stack
+ *   NS_DATA  0x10005000..0x10070000  (428 KB)  -> existing driver-only app + QUIC
+ *   S_DATA   0x10070000..0x10080000  (64 KB)   -> TF-M SPE data/bss/heap/stack
  *   S_CODE   0x0E000000.. +256 KB              -> TF-M SPE (XIP), NSC at its top
  *   NS_CODE  0x0E040000.. +1.5 MB              -> NS app (XIP)
- * The IDAU/SAU in target_cfg.c attribute the SRAM boundary (0x10060000) and the
- * XIP S/NS split (0x0E040000). Raising NS_DATA/S_DATA later only needs these
- * three numbers + target_cfg to stay consistent.
+ * The IDAU/SAU in target_cfg.c attribute the SRAM boundary (S_DATA_START) and the
+ * XIP S/NS split (0x0E040000). target_cfg.c derives the SAU/IDAU NS-SRAM region end
+ * from S_DATA_START, so the SRAM boundary moves with the three numbers below + the
+ * app_km4 NSPE's --defsym=__tz_sram_top__ (which caps its heap at S_DATA_START).
+ *
+ * 2026-06-24: S_DATA shrunk 120 KB -> 56 KB (S_DATA_START 0x10060000 -> 0x10070000),
+ * returning 64 KB to the NS heap. Measured TF-M SPE secure-RAM peak is ~45 KB (bss
+ * 43.9 KB + 2 KB heap; .bss is static so the peak is deterministic), leaving ~11 KB
+ * headroom. If TF-M partitions are added later (e.g. attestation), give some back.
  */
 #ifndef __REGION_DEFS_H__
 #define __REGION_DEFS_H__
@@ -30,8 +36,8 @@
 #define NS_STACK_SIZE           (0x00000400)
 
 /* ---- Secure RAM (high) : TF-M SPE data ---- */
-#define S_DATA_START            (0x10060000)
-#define S_DATA_SIZE             (0x0001E000)   /* 120 KB (top 8 KB carved for S_RAM_CODE below) */
+#define S_DATA_START            (0x10070000)
+#define S_DATA_SIZE             (0x0000E000)   /* 56 KB: measured SPE peak ~45 KB -> ~11 KB headroom (was 120 KB @ 0x10060000) */
 #define S_DATA_LIMIT            (S_DATA_START + S_DATA_SIZE - 1)
 
 /* ---- Secure RAM code (CODE_RAM) : SPIC-operating flash driver copied here at boot ----
@@ -39,13 +45,13 @@
  * flash, because while a flash op holds the SPIC in user mode the device can't serve XIP fetches.
  * Our Driver_Flash.c functions tagged .ramfunc land here; TF-M's tfm_common_s.ld .ER_CODE_SRAM
  * section (gated on S_RAM_CODE_START) places them in CODE_RAM with LMA in flash, and the CMSIS
- * startup copy-table copies them at reset. Sits at the very top of the 128 KB secure SRAM. */
+ * startup copy-table copies them at reset. Sits at the very top of the 64 KB secure SRAM. */
 #define S_RAM_CODE_SIZE         (0x00002000)   /* 8 KB */
-#define S_RAM_CODE_START        (S_DATA_START + S_DATA_SIZE)   /* 0x1007E000 */
+#define S_RAM_CODE_START        (S_DATA_START + S_DATA_SIZE)   /* 0x1007E000 (unchanged: still SRAM top - 8 KB) */
 
 /* ---- Non-secure RAM (low) : driver-only app + QUIC ---- */
 #define NS_DATA_START           (0x10005000)
-#define NS_DATA_SIZE            (0x0005B000)   /* -> ends at S_DATA_START 0x10060000 */
+#define NS_DATA_SIZE            (0x0006B000)   /* -> ends at S_DATA_START 0x10070000 */
 #define NS_DATA_LIMIT           (NS_DATA_START + NS_DATA_SIZE - 1)
 
 #define TOTAL_RAM_SIZE          (S_DATA_SIZE + NS_DATA_SIZE)
