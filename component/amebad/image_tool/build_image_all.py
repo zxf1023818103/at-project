@@ -31,6 +31,7 @@ script — prefer it so the invocation lives in the build, not in muscle memory.
 """
 import argparse
 import os
+import struct
 import subprocess
 import sys
 
@@ -190,7 +191,31 @@ def main():
     with open(merged, "wb") as f:
         f.write(km0_km4_img2)
 
+    # OTA upgrade image, in the stock SDK's Realtek format (gnu_utility/prepend_ota_header.sh +
+    # the `checksum` tool): a 32-byte OTA header followed by the OTA slot payload. The payload is
+    # everything from OFF_IMAGE2 onward = image2 [+ IMG3 for a TF-M build] — exactly what a
+    # device-side OTA download writes into the inactive slot (and what the bootloader maps + resolves
+    # IMG3 from), unlike the stock script which is image2-only and so misses the TF-M secure image.
+    # Header (8 x 4-byte fields; CHECKSUM/IMAGE_LEN/OFFSET/IMAGE_ADDR little-endian):
+    #   VERSION=0xFFFFFFFF  OTA_NUM=1  OTA_SIGN="OTA1"(0x4F544131)  HEADER_LEN=24
+    #   CHECKSUM=sum(payload)&0xFFFFFFFF  IMAGE_LEN=len(payload)  OFFSET=32  IMAGE_ADDR=0xFFFFFFFF
+    ota_payload = bytes(image[OFF_IMAGE2:])
+    ota_header = (
+        struct.pack(">I", 0xFFFFFFFF) +                       # VERSION   (as-is)
+        struct.pack("<I", 1) +                                # OTA_NUM
+        struct.pack(">I", 0x4F544131) +                       # OTA_SIGN  "OTA1" (as-is)
+        struct.pack("<I", 24) +                               # HEADER_LEN
+        struct.pack("<I", sum(ota_payload) & 0xFFFFFFFF) +    # CHECKSUM
+        struct.pack("<I", len(ota_payload)) +                 # IMAGE_LEN
+        struct.pack("<I", 32) +                               # OFFSET (header size)
+        struct.pack("<I", 0xFFFFFFFF))                        # IMAGE_ADDR
+    ota_all = os.path.join(outdir, "OTA_All.bin")
+    with open(ota_all, "wb") as f:
+        f.write(ota_header + ota_payload)
+
     print("\n-> %s  (%d bytes)" % (args.out, len(image)))
+    print("-> %s  (32 B OTA header + %d B payload = image2%s)"
+          % (ota_all, len(ota_payload), " + IMG3" if secure_blob is not None else ""))
     print("\nFlash one of two ways:")
     print("  A. single image (blanks the cal regions):")
     print("       %s  @ 0x08000000" % args.out)
