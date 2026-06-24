@@ -97,6 +97,10 @@ if(NOT AMEBAD_ENABLE_QUIC)
         "${CMAKE_CURRENT_SOURCE_DIR}/env_cli.c")
     target_include_directories(target_img2_km4 PRIVATE
         "${CMAKE_SOURCE_DIR}/component/freertos-cli_config/freertos-cli")
+    # env.c (syscall_config) persists every setenv() to KV/<name> via this link-time wrap; main.c
+    # mounts LittleFS + env_init()s globally now, so the WIFI_* / DHCP_* / NTP_SERVER env vars work
+    # and persist in EVERY non-QUIC image (not just AWS). __real_setenv resolves to libc's setenv.
+    target_link_options(target_img2_km4 PRIVATE "-Wl,--wrap=setenv")
     # fs_cli's md5sum/sha*sum ride the standard upstream Mbed TLS module API (mbedcrypto,
     # linked via _hash_grp / the feature _grp). Compiled out in a ROMKAT=ON build, which
     # links the ABI-incompatible ROM mbedTLS instead.
@@ -350,10 +354,7 @@ if(AMEBAD_ENABLE_AWS_IOT)
     # archive is already in the link group via _diag_grp.
     target_include_directories(target_img2_km4 PRIVATE
         "${CMAKE_SOURCE_DIR}/component/freertos-cli_config/freertos-cli")
-    # KV-file-backed environment (syscall_config/env.c): wrap setenv() so every set auto-persists
-    # to KV/<name>. The endpoint (KV/endpoint) and the client-cert path (KV/cert) are env vars;
-    # env_init() reloads them after the LittleFS mount. __real_setenv resolves to libc's setenv.
-    target_link_options(target_img2_km4 PRIVATE "-Wl,--wrap=setenv")
+    # (--wrap=setenv + the LittleFS mount + env_init are now global, in the NOT-QUIC block above.)
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_AWS_IOT)
     # OTA test/version stamp: the firmware version string printed at task start + published in

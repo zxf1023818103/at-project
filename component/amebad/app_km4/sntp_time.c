@@ -43,15 +43,12 @@ struct NetworkContext
 #define SNTP_RESYNC_PERIOD_MS       ( 3600U * 1000U )   /* re-sync every hour */
 #define SNTP_RETRY_MS               ( 10000U )  /* backoff after a failed round */
 
-static SntpServerInfo_t s_servers[] =
-{
-    { "time.google.com",     sizeof( "time.google.com" ) - 1,     SNTP_DEFAULT_SERVER_PORT },
-    { "pool.ntp.org",        sizeof( "pool.ntp.org" ) - 1,        SNTP_DEFAULT_SERVER_PORT },
-    { "time.cloudflare.com", sizeof( "time.cloudflare.com" ) - 1, SNTP_DEFAULT_SERVER_PORT },
-};
 static SntpServerInfo_t  s_env_server[ 1 ];
 static char              s_env_server_name[ 64 ];
 static SemaphoreHandle_t s_sntp_lock;          /* serializes sntp_sync_once (task vs console) */
+
+/* NTP server from DHCP option 42 (FreeRTOS_DHCP.c at-project patch); network byte order, 0 = none. */
+extern uint32_t ulDHCPNtpServerAddress;
 static TaskHandle_t      s_selftest_task;
 static volatile int      s_first_sync_done;
 
@@ -59,7 +56,9 @@ static volatile int      s_first_sync_done;
 
 static bool sntp_resolve_dns( const SntpServerInfo_t * srv, uint32_t * ip )
 {
-    *ip = FreeRTOS_gethostbyname( srv->pServerName );   /* network-order IPv4, 0 on failure */
+    *ip = FreeRTOS_gethostbyname( srv->pServerName );   /* network-order IPv4, 0 on failure;
+                                                         * already handles a dotted-decimal IP (a
+                                                         * DHCP-learned NTP server) via inet_addr. */
     return ( *ip != 0U );
 }
 
@@ -147,23 +146,32 @@ static size_t pick_servers( const SntpServerInfo_t ** out )
 {
     const char * env_srv = getenv( "NTP_SERVER" );
 
-    if( ( env_srv == NULL ) || ( env_srv[ 0 ] == '\0' ) )
-    {
-        setenv( "NTP_SERVER", "ntp.aliyun.com", 1 );
-        env_srv = getenv( "NTP_SERVER" );
-    }
+    /* Priority: explicit NTP_SERVER env > NTP server learned from DHCP option 42 (captured by the
+     * FreeRTOS_DHCP.c at-project patch into ulDHCPNtpServerAddress) > built-in default. The default is
+     * NOT persisted (no setenv) so a DHCP-learned NTP is still used on a later boot; an explicit
+     * `set NTP_SERVER <host>` is honoured and persists through the env layer. */
     if( ( env_srv != NULL ) && ( env_srv[ 0 ] != '\0' ) )
     {
         strncpy( s_env_server_name, env_srv, sizeof( s_env_server_name ) - 1 );
-        s_env_server_name[ sizeof( s_env_server_name ) - 1 ] = '\0';
-        s_env_server[ 0 ].pServerName   = s_env_server_name;
-        s_env_server[ 0 ].serverNameLen = strlen( s_env_server_name );
-        s_env_server[ 0 ].port          = SNTP_DEFAULT_SERVER_PORT;
-        *out = s_env_server;
-        return 1;
     }
-    *out = s_servers;
-    return sizeof( s_servers ) / sizeof( s_servers[ 0 ] );
+    else if( ulDHCPNtpServerAddress != 0U )
+    {
+        uint32_t a = ulDHCPNtpServerAddress;
+        snprintf( s_env_server_name, sizeof( s_env_server_name ), "%d.%d.%d.%d",
+                  (int)( a & 0xff ), (int)( ( a >> 8 ) & 0xff ),
+                  (int)( ( a >> 16 ) & 0xff ), (int)( ( a >> 24 ) & 0xff ) );
+        log_info( "[SNTP] using DHCP NTP server %s", s_env_server_name );
+    }
+    else
+    {
+        strncpy( s_env_server_name, "ntp.aliyun.com", sizeof( s_env_server_name ) - 1 );
+    }
+    s_env_server_name[ sizeof( s_env_server_name ) - 1 ] = '\0';
+    s_env_server[ 0 ].pServerName   = s_env_server_name;
+    s_env_server[ 0 ].serverNameLen = strlen( s_env_server_name );
+    s_env_server[ 0 ].port          = SNTP_DEFAULT_SERVER_PORT;
+    *out = s_env_server;
+    return 1;
 }
 
 /* Force one SNTP round NOW: (re)read NTP_SERVER, open an ephemeral UDP socket, send a request,

@@ -41,6 +41,8 @@ extern NetworkInterface_t *pxRealtek_FillInterfaceDescriptor(BaseType_t xEMACInd
                                                              NetworkInterface_t *pxInterface);
 extern void amebad_register_wlan_netif(int idx, unsigned char *mac);
 extern void amebad_freertos_tcp_set_ready(void);
+/* NTP server captured from DHCP option 42 (FreeRTOS_DHCP.c at-project patch); network byte order, 0=none. */
+extern uint32_t ulDHCPNtpServerAddress;
 /* Homegrown iperf2 throughput probes (make IPERF=ON); auto-run from the network-up hook. */
 extern void iperf_client_start(void);
 extern void iperf_server_start(void);
@@ -158,6 +160,30 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
             fmt_ipv4( ulMask, b, sizeof( b ) );  env_set_if_changed( "DHCP_NETMASK", b );
             fmt_ipv4( xEndPoint.xDHCPData.ulDHCPServerAddress, b, sizeof( b ) );
             env_set_if_changed( "DHCP_SERVER", b );
+        }
+        /* DHCP-provided DNS server list (endpoint settings) + NTP server (DHCP option 42, captured by
+         * the FreeRTOS_DHCP.c at-project patch into ulDHCPNtpServerAddress). */
+        {
+            char     b[ 16 ];
+            unsigned i;
+            for( i = 0; i < ipconfigENDPOINT_DNS_ADDRESS_COUNT; i++ )
+            {
+                uint32_t d = xEndPoint.ipv4_settings.ulDNSServerAddresses[ i ];
+                if( d != 0U )
+                {
+                    fmt_ipv4( d, b, sizeof( b ) );
+                    log_info( "[KM4] DHCP DNS[%d] %s", (int) i, b );
+                }
+            }
+            if( ulDHCPNtpServerAddress != 0U )
+            {
+                fmt_ipv4( ulDHCPNtpServerAddress, b, sizeof( b ) );
+                log_info( "[KM4] DHCP NTP    %s", b );
+            }
+            else
+            {
+                log_info( "[KM4] DHCP NTP    (none - DHCP option 42 not received)" );
+            }
         }
 #ifdef AT_PROJECT_QUIC
         /* QUIC build: run the ngtcp2 + wolfSSL TLS1.3 handshake self-test against
@@ -749,22 +775,21 @@ int main(void)
 #ifdef AMEBAD_ENABLE_MINIZIP
     { extern void zip_cli_register(void);  zip_cli_register();  }   /* zip/unzip demo (non-AWS images) */
 #endif
-#ifdef AT_PROJECT_AWS_IOT
-    /* Mount LittleFS + load the persisted environment. The non-secret creds live in plain
-     * LFS: the AWS endpoint is an env var (KV/endpoint) and the client cert is a plain DER
-     * file (aws_cert.der) whose path is an env var (KV/cert); only the private key needs the
-     * encrypted / TrustZone-protected TF-M ITS. env_init() loads every KV/ file into newlib's
-     * environ (a --wrap=setenv hook then auto-persists any runtime setenv back to KV/). */
+    /* Mount LittleFS + load the persisted environment (KV/) for ALL non-QUIC images, so the
+     * WIFI_* / DHCP_* / NTP_SERVER (and the AWS endpoint/cert) env vars work everywhere - not just
+     * the AWS image. lfs_config_mount is idempotent (a singleton), so this is harmless when
+     * lfs_selftest already mounted earlier. env_init() loads every KV/ file into newlib's environ;
+     * the --wrap=setenv hook (linked into every image) then auto-persists any runtime setenv to KV/. */
     {
         extern void *amebad_lfs_mount(void);
         extern void  env_init(void);
         void *lfs = amebad_lfs_mount();
-        log_info("[AWS] LittleFS mount %s", lfs ? "OK" : "FAILED");
+        log_info("[KM4] LittleFS mount %s", lfs ? "OK" : "FAILED");
         if (lfs)
             env_init();
     }
-    /* Create the PSA-access mutex (pre-scheduler) + register the `set` / `blemac`
-     * provisioning commands into the CLI list. */
+#ifdef AT_PROJECT_AWS_IOT
+    /* AWS: the PSA-access mutex (pre-scheduler) + the `set` / `blemac` provisioning commands. */
     {
         extern void aws_provision_init(void);
         extern void aws_cli_register(void);
