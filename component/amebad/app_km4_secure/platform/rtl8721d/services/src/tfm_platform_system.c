@@ -31,6 +31,11 @@
  * secure world can read the secure eFuse and to tell blank-vs-programmed, WITHOUT
  * leaking the key (only a folded 32-bit hash + a blank flag cross the boundary). */
 #define AMEBAD_IOCTL_EFUSE_HUK_INFO  ((tfm_platform_ioctl_req_t)0x8721E0)
+/* eFuse security-key probe: read SBOOT public key (0x1A0,32B), RSIP key (0x190,16B) and the
+ * protection/config region (0x1C0,2B) in the secure world (raw EFUSERead8 stalls from the NS
+ * runtime), returning only NON-SECRET summaries {blank flag, folded fingerprint} + the (non-secret)
+ * protection config word. Lets the OTA work confirm Secure Boot / RSIP keys are still unfused. */
+#define AMEBAD_IOCTL_EFUSE_SEC_INFO  ((tfm_platform_ioctl_req_t)0x8721E1)
 
 /* HW-crypto KAT: run the IPSEC engine AES-128-ECB known-answer test from the
  * SECURE side. The crypto peripheral is security-attributed secure-only — the NS
@@ -100,6 +105,45 @@ enum tfm_platform_err_t tfm_platform_hal_ioctl(tfm_platform_ioctl_req_t request,
         out[0] = (uint32_t)((all_ff || all_00) ? 1 : 0);   /* blank? */
         out[1] = fp;                                        /* fingerprint */
         memset(huk, 0, sizeof(huk));                        /* wipe the key from the stack */
+
+        memcpy(out_vec->base, out, sizeof(out));
+        out_vec->len = sizeof(out);
+        return TFM_PLATFORM_ERR_SUCCESS;
+    }
+    case AMEBAD_IOCTL_EFUSE_SEC_INFO: {
+        /* {sboot_blank, sboot_fp, rsip_blank, rsip_fp, prot} — all non-secret summaries. */
+        uint8_t  buf[32];
+        uint32_t out[5];
+        uint32_t i, fp;
+        int all_ff, all_00;
+
+        if (out_vec == NULL || out_vec->base == NULL || out_vec->len < sizeof(out)) {
+            return TFM_PLATFORM_ERR_INVALID_PARAM;
+        }
+        /* SBOOT public key (Ed25519) @ 0x1A0, 32 B */
+        amebad_secure_read_efuse(0x1A0u, 32u, buf);
+        fp = 0x811C9DC5u; all_ff = 1; all_00 = 1;
+        for (i = 0; i < 32u; i++) {
+            fp = (fp ^ buf[i]) * 0x01000193u;
+            if (buf[i] != 0xFFu) { all_ff = 0; }
+            if (buf[i] != 0x00u) { all_00 = 0; }
+        }
+        out[0] = (uint32_t)((all_ff || all_00) ? 1 : 0);
+        out[1] = fp;
+        /* RSIP key @ 0x190, 16 B */
+        amebad_secure_read_efuse(0x190u, 16u, buf);
+        fp = 0x811C9DC5u; all_ff = 1; all_00 = 1;
+        for (i = 0; i < 16u; i++) {
+            fp = (fp ^ buf[i]) * 0x01000193u;
+            if (buf[i] != 0xFFu) { all_ff = 0; }
+            if (buf[i] != 0x00u) { all_00 = 0; }
+        }
+        out[2] = (uint32_t)((all_ff || all_00) ? 1 : 0);
+        out[3] = fp;
+        /* protection / security-config @ 0x1C0, 2 B (non-secret config) */
+        amebad_secure_read_efuse(0x1C0u, 2u, buf);
+        out[4] = (uint32_t)buf[0] | ((uint32_t)buf[1] << 8);
+        memset(buf, 0, sizeof(buf));
 
         memcpy(out_vec->base, out, sizeof(out));
         out_vec->len = sizeof(out);

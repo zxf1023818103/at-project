@@ -51,6 +51,34 @@ static BaseType_t cmd_blemac(char *out, size_t outlen, const char *cmd)
     return pdFALSE;
 }
 
+/* ----------------------------------------------------------------- secchk --- */
+/* Diagnostic (`secchk`): report whether RSIP flash-encryption and Secure Boot are armed, ahead of the
+ * OTA secure-boot/RSIP work. Reading the RAW key eFuse (EFUSERead8 of 0x190/0x1A0, or the ROM `efuse
+ * rraw`) STALLS from the NS runtime (TrustZone + eFuse power domain; the bootloader reads it in secure
+ * context with the eFuse powered). So read the AUTOLOAD registers the bootloader itself uses instead:
+ * REG_LP_EFUSE_PROTECTION (= eFuse 0x1C0/0x1C1 security config; all-1s = blank/unfused) and
+ * REG_SYS_EFUSE_SYSCFG3 (the OTF/RSIP enable bit). NB: the command is NOT named "efuse" — the monitor
+ * already registers an "efuse" (wmap/rmap/wraw/rraw -> ROM cmd_efuse) that would shadow it. */
+static BaseType_t cmd_efusechk(char *out, size_t outlen, const char *cmd)
+{
+    /* Raw EFUSERead8 of the key region stalls from the NS runtime (TZ/power-domain; the bootloader
+     * reads efuse in secure context at boot). Instead read the eFuse PROTECTION/CONFIG registers that
+     * the bootloader itself uses (REG_LP_EFUSE_PROTECTION = efuse 0x1C0/0x1C1 autoload; REG_SYS_EFUSE_
+     * SYSCFG3 = the OTF/RSIP enable) — NS-readable, and they tell whether RSIP / Secure Boot are armed
+     * and whether the security config region is still blank (all-1s = unconfigured/unfused). */
+    u32 prot    = HAL_READ32(SYSTEM_CTRL_BASE_LP, REG_LP_EFUSE_PROTECTION);
+    u32 syscfg3 = HAL_READ32(SYSTEM_CTRL_BASE_LP, REG_SYS_EFUSE_SYSCFG3);
+    (void)cmd;
+    log_info("[EFUSE] protection reg (efuse 0x1C0/1) = 0x%08x", (unsigned)prot);
+    log_info("[EFUSE] syscfg3 reg                    = 0x%08x", (unsigned)syscfg3);
+    log_info("[EFUSE] Secure Boot (IMG2)             = %s",
+             (prot & BIT_SECURE_IMG2_DIS) ? "OFF (disabled bit set)" : "ON (ENABLED)");
+    log_info("[EFUSE] RSIP/OTF flash encryption      = %s",
+             (syscfg3 & BIT_SYS_FLASH_ENCRYPT_EN) ? "ON (ENABLED)" : "OFF (plain image)");
+    snprintf(out, outlen, "efuse enable-state -> see [EFUSE] log\r\n");
+    return pdFALSE;
+}
+
 /* -------------------------------------------------------------------- set --- */
 static BaseType_t cmd_set(char *out, size_t outlen, const char *cmd)
 {
@@ -240,7 +268,12 @@ void aws_cli_register(void)
         "pstest", "pstest [size] [retries]:\r\n diagnostic: runtime PS write of <size> bytes, retried\r\n",
         cmd_pstest, -1
     };
+    static const CLI_Command_Definition_t cmd_efusechk_def = {
+        "secchk", "secchk:\r\n RSIP/Secure-Boot enable state from the eFuse autoload registers\r\n",
+        cmd_efusechk, 0
+    };
     FreeRTOS_CLIRegisterCommand(&cmd_blemac_def);
     FreeRTOS_CLIRegisterCommand(&cmd_set_def);
     FreeRTOS_CLIRegisterCommand(&cmd_pstest_def);
+    FreeRTOS_CLIRegisterCommand(&cmd_efusechk_def);
 }

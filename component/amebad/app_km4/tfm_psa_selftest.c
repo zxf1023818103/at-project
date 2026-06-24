@@ -23,6 +23,7 @@
 #define AMEBAD_IOCTL_PING        ((tfm_platform_ioctl_req_t)0x8721D0)
 #define AMEBAD_IOCTL_PING_XOR    (0x8721D000u)
 #define AMEBAD_IOCTL_EFUSE_HUK_INFO  ((tfm_platform_ioctl_req_t)0x8721E0)
+#define AMEBAD_IOCTL_EFUSE_SEC_INFO  ((tfm_platform_ioctl_req_t)0x8721E1)
 #define AMEBAD_IOCTL_HWCRYPTO_KAT    ((tfm_platform_ioctl_req_t)0x8721F0)
 #define AMEBAD_IOCTL_HWCRYPTO_GCM    ((tfm_platform_ioctl_req_t)0x872200)
 #define AMEBAD_IOCTL_HWCRYPTO_GCM1200 ((tfm_platform_ioctl_req_t)0x872210)
@@ -55,6 +56,19 @@ void amebad_tfm_psa_selftest(void)
             tfm_platform_ioctl(AMEBAD_IOCTL_EFUSE_HUK_INFO, NULL, &ov2);
         log_info("[KM4] eFuse HUK(0x150,32B): ret=%d blank=%d fingerprint=0x%08x",
                    (int)r2, (int)info[0], info[1]);
+    }
+
+    /* eFuse security-key probe (secure-side read): SBOOT public key (0x1A0), RSIP key (0x190) and
+     * the protection/config word (0x1C0). Confirms whether Secure Boot / RSIP keys are still unfused
+     * ahead of the OTA work (raw EFUSERead8 of these stalls from the NS runtime). */
+    {
+        uint32_t sec[5] = { 0, 0, 0, 0, 0 };
+        psa_outvec ov3 = { .base = sec, .len = sizeof(sec) };
+        enum tfm_platform_err_t r3 =
+            tfm_platform_ioctl(AMEBAD_IOCTL_EFUSE_SEC_INFO, NULL, &ov3);
+        log_info("[KM4] eFuse SBOOT_PK(0x1A0,32B): ret=%d blank=%d fp=0x%08x", (int)r3, (int)sec[0], sec[1]);
+        log_info("[KM4] eFuse RSIP_KEY(0x190,16B): blank=%d fp=0x%08x", (int)sec[2], sec[3]);
+        log_info("[KM4] eFuse PROT(0x1C0/1,2B)   : 0x%04x (0xffff = blank/unfused)", (unsigned)sec[4]);
     }
 
 #ifndef AT_PROJECT_MINIMAL
