@@ -909,6 +909,32 @@ void  _free_r   (struct _reent *r, void *p)             { (void)r; free(p); }
 void *_calloc_r (struct _reent *r, size_t a, size_t b)  { (void)r; return calloc(a, b); }
 void *_realloc_r(struct _reent *r, void *p, size_t n)   { (void)r; return realloc(p, n); }
 
+/* ===== 3b. libc malloc --wrap redirect (merged from freertos_malloc_wrap.c) === *
+ * The strong malloc above is the default for the whole image. The minizip-enabled images
+ * (non-QUIC, non-AWS) ALSO pass -Wl,--wrap=malloc/free/calloc/realloc (app_km4/CMakeLists.txt):
+ * a link-time redirect so EVERY libc allocation in the image — including zlib's zcalloc and
+ * minizip's ALLOC, which both bottom out in malloc — lands on the FreeRTOS/TLSF heap, not
+ * newlib's tiny 4 KB _sbrk arena (a Hard Fault inside zipOpen3/deflate otherwise).
+ *
+ * These __wrap_* MUST route to pvPortMalloc DIRECTLY, not call malloc() — under --wrap a call
+ * to malloc() inside __wrap_malloc rewrites to __wrap_malloc and recurses. pvPortMalloc passes
+ * MM_FLAG_HEAP_ANY (spans all TLSF heaps) + 8-byte align (NOT kmalloc(n,0): the TLSF heaps are
+ * ids 1..N, id 0 is invalid -> NULL); krealloc locates the owning heap from the ptr. In images
+ * that do not pass --wrap, these symbols are unreferenced and gc-stripped. */
+extern void *pvPortCalloc(size_t nmemb, size_t size);
+extern void *krealloc(void *ptr, size_t newsize);
+
+void *__wrap_malloc(size_t n)                  { return pvPortMalloc(n); }
+void  __wrap_free(void *p)                     { vPortFree(p); }
+void *__wrap_calloc(size_t nmemb, size_t size) { return pvPortCalloc(nmemb, size); }
+
+void *__wrap_realloc(void *p, size_t n)
+{
+    if (p == NULL) { return pvPortMalloc(n); }    /* realloc(NULL, n) == malloc(n) */
+    if (n == 0)    { vPortFree(p); return NULL; } /* realloc(p, 0)    == free(p)   */
+    return krealloc(p, n);                         /* finds p's owning TLSF heap     */
+}
+
 /* ===== 4. BSD byte-order helpers (delegate to FreeRTOS+TCP) =============== *
  * ngtcp2_net.h's non-WIN32 path expands ngtcp2_htonl(N) -> htonl(N) etc., and it
  * does not include <arpa/inet.h> (HAVE_ARPA_INET_H is unset), so it needs these

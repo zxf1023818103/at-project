@@ -117,13 +117,13 @@ set(_mz_grp "")
 if(NOT AMEBAD_ENABLE_QUIC AND NOT AMEBAD_ENABLE_AWS_IOT)
     set(_mz_grp ",minizip,zlibstatic")
     target_sources(target_img2_km4 PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/zip_cli.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/freertos_malloc_wrap.c")
+        "${CMAKE_CURRENT_SOURCE_DIR}/zip_cli.c")
     # zlib's zcalloc + minizip's ALLOC bottom out in libc malloc, which on AmebaD uses newlib's
     # tiny 4 KB _sbrk arena — far too small for deflate (~tens of KB) / minizip's 64 KB buffer
     # (faults inside deflate). Redirect every libc allocation in this image to the FreeRTOS/TLSF
-    # heap (~270 KB) via __wrap_* in freertos_malloc_wrap.c. Link-time, so it also catches the
-    # allocations inside zlibstatic / minizip.
+    # heap (~270 KB) via the __wrap_* malloc family in syscall_config/newlib_syscalls.c (always
+    # linked into the KM4 image). Link-time, so it also catches the allocations inside zlibstatic /
+    # minizip.
     target_link_options(target_img2_km4 PRIVATE
         "-Wl,--wrap=malloc" "-Wl,--wrap=free" "-Wl,--wrap=calloc" "-Wl,--wrap=realloc")
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
