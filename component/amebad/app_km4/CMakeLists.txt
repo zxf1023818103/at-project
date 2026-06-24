@@ -347,9 +347,21 @@ if(AMEBAD_ENABLE_AWS_IOT)
         "${CMAKE_CURRENT_SOURCE_DIR}/aws_iot_demo.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/aws_provision.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/aws_cli.c"                    # `set` / `blemac` console commands
+        "${CMAKE_CURRENT_SOURCE_DIR}/ota_http.c"                  # `ota_http <url>` command (coreHTTP + llhttp)
+        "${CMAKE_CURRENT_SOURCE_DIR}/ota_flash.c"                 # runtime OTA slot write/toggle/reboot
+        "${CMAKE_CURRENT_SOURCE_DIR}/urlparse.c"                  # vendored URL parser (from ngtcp2)
         "${CMAKE_SOURCE_DIR}/component/amebad/mbed/efuse_api.c")   # efuse_logical_read (BLE MAC @ 0x190); not built into amebad_mbed
     set_source_files_properties("${CMAKE_SOURCE_DIR}/component/amebad/mbed/efuse_api.c"
         PROPERTIES COMPILE_OPTIONS "-w")
+    set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/urlparse.c"
+        PROPERTIES COMPILE_OPTIONS "-w")                          # vendored 3rd-party: silence its warnings
+    # coreHTTP (request builder) + its bundled llhttp parser, for ota_http.c.
+    target_link_libraries(target_img2_km4 PRIVATE corehttp_config)
+    target_include_directories(target_img2_km4 PRIVATE
+        "${CMAKE_SOURCE_DIR}/component/corehttp_config"
+        "${CMAKE_SOURCE_DIR}/component/corehttp_config/corehttp/source/include"
+        "${CMAKE_SOURCE_DIR}/component/corehttp_config/corehttp/source/interface"
+        "${CMAKE_SOURCE_DIR}/component/corehttp_config/corehttp/source/dependency/3rdparty/llhttp/include")
     # FreeRTOS-Plus-CLI header for aws_cli.c (FreeRTOS_CLIRegisterCommand); the freertos_cli
     # archive is already in the link group via _diag_grp.
     target_include_directories(target_img2_km4 PRIVATE

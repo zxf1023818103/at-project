@@ -870,12 +870,15 @@ int main(void)
             env_init();
     }
 #ifdef AT_PROJECT_AWS_IOT
-    /* AWS: the PSA-access mutex (pre-scheduler) + the `set` / `blemac` provisioning commands. */
+    /* AWS: the PSA-access mutex (pre-scheduler) + the `set` / `blemac` provisioning commands +
+     * the `ota_http <url>` OTA-over-HTTP(S) command. */
     {
         extern void aws_provision_init(void);
         extern void aws_cli_register(void);
+        extern void ota_http_register(void);
         aws_provision_init();
         aws_cli_register();
+        ota_http_register();
     }
 #endif
 #endif
