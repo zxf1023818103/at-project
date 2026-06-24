@@ -1845,19 +1845,35 @@ _WEAK void wifi_set_mib(void)
 //----------------------------------------------------------------------------//
 _WEAK void wifi_set_country_code(void)
 {
-	//wifi_set_country(RTW_COUNTRY_US); // 2.4G only
-	//wifi_change_channel_plan(0x25); // Support 2.4G and 5G, ex: 0x25 = 2G_FCC1, 5G_FCC1
+	/* The driver calls this ONCE during wifi_on (before the scan), so it is the single place the
+	 * regulatory channel plan is set: from the WIFI_COUNTRY / WIFI_CHANPLAN env vars if provisioned
+	 * (at-project: see main.c's WiFi env feature), else the CN default. Doing it here (instead of a
+	 * second apply later in the app) keeps "Set Channel Plan" to one print.
+	 *   WIFI_COUNTRY  = ISO 2-letter code (e.g. CN/US) -> wifi_set_channel_plan_by_country_code()
+	 *   WIFI_CHANPLAN = explicit Realtek channel-plan code (hex/dec) -> wifi_change_channel_plan()
+	 *
+	 * Default = China so 5 GHz U-NII-3 (ch149-165) is allowed and we can reach a ch149 AP. (The
+	 * auto-detect variant wifi_scan_country_code_and_set_channel_plan() hangs here: its internal
+	 * extended-country scan stalls in this driver-only image; the plain SSID scan works, the extended
+	 * one doesn't.) A channel-plan change triggers a reboot whose ROM path waits on the 0x480003f8
+	 * bit25 inter-core reset handshake — now serviced via the KM4 IPC set up in main(). See memory
+	 * reference-amebad-chplan-reboot-handshake. */
+	const char *cc = getenv("WIFI_COUNTRY");
+	const char *cp = getenv("WIFI_CHANPLAN");
 
-	/* Set regulatory domain to China so 5 GHz U-NII-3 (ch149-165) is allowed and
-	 * we can reach a ch149 AP. (The auto-detect variant
-	 * wifi_scan_country_code_and_set_channel_plan() hangs here: its internal
-	 * extended-country scan, wifi_scan_networks_with_extended_countryinfo, stalls
-	 * reliably in this driver-only image — same scan that hung as
-	 * dump_surrounding_country_codes; the plain SSID scan works, the extended one
-	 * doesn't.) The channel-plan change triggers a reboot whose ROM path waits on
-	 * the 0x480003f8 bit25 inter-core reset handshake — now serviced via the KM4
-	 * IPC set up in main(). See memory reference-amebad-chplan-reboot-handshake. */
-	wifi_set_country(RTW_COUNTRY_CN);
+	if ((cc && cc[0]) || (cp && cp[0])) {
+		if (cc && cc[0]) {
+			RTW_API_INFO("\n\rWIFI_COUNTRY=%s -> channel plan by country\n", cc);
+			wifi_set_channel_plan_by_country_code((unsigned char *)cc);
+		}
+		if (cp && cp[0]) {
+			uint8_t plan = (uint8_t)strtoul(cp, NULL, 0);
+			RTW_API_INFO("\n\rWIFI_CHANPLAN=%s\n", cp);
+			wifi_change_channel_plan(plan);
+		}
+	} else {
+		wifi_set_country(RTW_COUNTRY_CN);
+	}
 }
 
 //----------------------------------------------------------------------------//

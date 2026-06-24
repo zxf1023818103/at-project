@@ -129,6 +129,7 @@ static void env_set_if_changed( const char *name, const char *value )
         setenv( name, value, 1 );
 }
 
+
 /* Called by the IP task when the interface comes up (DHCP done) or goes down.
  * ipconfigIPv4_BACKWARD_COMPATIBLE=1 -> single-arg hook. */
 void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
@@ -571,26 +572,8 @@ static void wifi_bringup_thread( void *param )
          * still use PMF). CONFIG_IEEE80211W is enabled in the driver (wlan/autoconf.h);
          * the value enum is comment-only in wifi_conf.h, hence the literal. */
         wifi_set_mfp_support( 0 );
-
-        /* Regulatory domain from env, applied BEFORE the scan so it covers the allowed channels:
-         * WIFI_COUNTRY = ISO 2-letter code (e.g. CN/US) -> channel plan by that country;
-         * WIFI_CHANPLAN = an explicit Realtek channel-plan code (hex like 0x20 or decimal) that
-         * overrides it. Either or both may be set; the explicit plan wins (applied last). */
-        {
-            const char *cc = getenv( "WIFI_COUNTRY" );
-            const char *cp = getenv( "WIFI_CHANPLAN" );
-            if( cc != NULL && cc[ 0 ] != '\0' )
-            {
-                wifi_set_channel_plan_by_country_code( (unsigned char *) cc );
-                log_info( "[KM4] WIFI_COUNTRY=%s -> channel plan by country", cc );
-            }
-            if( cp != NULL && cp[ 0 ] != '\0' )
-            {
-                uint8_t plan = (uint8_t) strtoul( cp, NULL, 0 );
-                wifi_change_channel_plan( plan );
-                log_info( "[KM4] WIFI_CHANPLAN=%s -> channel plan 0x%x", cp, (unsigned) plan );
-            }
-        }
+        /* NB: the regulatory channel plan (WIFI_COUNTRY / WIFI_CHANPLAN, else CN default) is set in
+         * the wifi_set_country_code() override above, which the driver calls once during wifi_on. */
 
         /* The directed all-channel scan intermittently captures only the 2.4 GHz
          * BSSID and misses the dual-band AP's 5 GHz one (probe-response timing).
