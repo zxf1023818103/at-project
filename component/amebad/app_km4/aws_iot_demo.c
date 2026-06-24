@@ -33,6 +33,14 @@
 #include "aws_iot_config.h"
 #include "aws_provision.h"
 
+/* Build-time firmware version string, injected by CMake (-DAT_FW_VERSION="...", see the AWS block in
+ * component/amebad/app_km4/CMakeLists.txt, driven by `make AWS=ON FW_VERSION=...`). Printed at task
+ * start and published in telemetry so an OTA that swaps flash banks is observably verified: build OTA-A
+ * and a version-bumped OTA-B, and the running version tells which image (hence which slot) booted. */
+#ifndef AT_FW_VERSION
+#define AT_FW_VERSION "dev"
+#endif
+
 
 /* mbedTLS FreeRTOS threading shim - must be registered once before any mbedTLS use
  * (component/mbedtls_config/mbedtls_threading_alt.c). It only calls mbedtls_threading_set_alt()
@@ -185,6 +193,7 @@ static void aws_mqtt_task(void *param)
         vTaskDelete(NULL);
         return;
     }
+    log_info("[AWS] fw version = %s", AT_FW_VERSION);
     log_info("[AWS] device (BLE MAC / Thing) = %s", mac);
     snprintf(topic_tele, sizeof(topic_tele), AWS_TOPIC_TELEMETRY_FMT, mac);
     snprintf(topic_cmd,  sizeof(topic_cmd),  AWS_TOPIC_CMD_FMT,  mac);
@@ -264,8 +273,8 @@ static void aws_mqtt_task(void *param)
                     char payload[160];
                     MQTTPublishInfo_t pub;
                     int n = snprintf(payload, sizeof(payload),
-                                     "{\"thing\":\"%s\",\"seq\":%u,\"uptime_ms\":%u,\"heap\":%u}",
-                                     mac, (unsigned)seq,
+                                     "{\"thing\":\"%s\",\"fw\":\"%s\",\"seq\":%u,\"uptime_ms\":%u,\"heap\":%u}",
+                                     mac, AT_FW_VERSION, (unsigned)seq,
                                      (unsigned)prvGetTimeMs(),
                                      (unsigned)xPortGetFreeHeapSize());
                     memset(&pub, 0, sizeof(pub));

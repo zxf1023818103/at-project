@@ -50,6 +50,7 @@ endif
 HWGCM      ?= $(TFM)       # default = TFM: route AES-GCM + ChaCha20-Poly1305 to the RTL8721D IPSEC HW engine (needs TFM=ON's SAU, so on iff TFM is on). Both TLS backends use it: mbedTLS via the classic one-shot mbedtls_gcm; picotls via the encrypt-coalesce shim in transport_picotls.c that reduces its PSA multi-part AEAD to the engine's one-shot path.
 STORAGE    ?= OFF          # ON -> TF-M PSA secure storage (ITS + PS) + NS storage self-test; implies TFM=ON
 AWS        ?= OFF          # ON -> AWS IoT Core MQTT/TLS demo (coreMQTT + mbedTLS); cert/endpoint->LFS, private key->TF-M PS
+FW_VERSION ?= ota-A        # firmware version string stamped into the AWS image (printed + in telemetry); bump for an OTA target build, e.g. make AWS=ON FW_VERSION=ota-B
 SNTP       ?= OFF          # ON -> coreSNTP UTC sync -> newlib _gettimeofday (time_base.c) -> [TIME] date/time self-test
 ifeq ($(AWS),ON)
 # AWS=ON: the MQTT client private key lives in TF-M secure storage (implies STORAGE/TFM).
@@ -98,6 +99,7 @@ configure:
 	  -DAMEBAD_ENABLE_CRYPTOBENCH=$(BENCH) -DAMEBAD_ENABLE_MINIMAL=$(MINIMAL) \
 	  -DAMEBAD_ENABLE_ROM_KAT=$(ROMKAT) -DAMEBAD_ENABLE_IPERF=$(IPERF) \
 	  -DAMEBAD_ENABLE_AWS_IOT=$(AWS) \
+	  -DAMEBAD_FW_VERSION=$(FW_VERSION) \
 	  -DAMEBAD_TLS_BACKEND=$(TLS_BACKEND) \
 	  -DAMEBAD_ENABLE_SNTP=$(SNTP) \
 	  -DAMEBAD_MBEDTLS_HW_GCM=$(HWGCM) \

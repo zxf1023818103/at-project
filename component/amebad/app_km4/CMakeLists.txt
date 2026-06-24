@@ -356,6 +356,13 @@ if(AMEBAD_ENABLE_AWS_IOT)
     target_link_options(target_img2_km4 PRIVATE "-Wl,--wrap=setenv")
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_AWS_IOT)
+    # OTA test/version stamp: the firmware version string printed at task start + published in
+    # telemetry (aws_iot_demo.c). Override per build: `make AWS=ON FW_VERSION=ota-B` (threaded to
+    # -DAMEBAD_FW_VERSION by project/amebad/Makefile). Lets a bank-swapping OTA be verified by the
+    # running version string.
+    set(AMEBAD_FW_VERSION "ota-A" CACHE STRING "Firmware version string stamped into the AWS image")
+    set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/aws_iot_demo.c"
+                 APPEND PROPERTY COMPILE_DEFINITIONS "AT_FW_VERSION=\"${AMEBAD_FW_VERSION}\"")
     # AWS is a connect-and-run image: strip the boot diagnostics like MINIMAL — iperf / LFS
     # self-test / ROM-mbedTLS KAT and the TF-M HW-crypto KAT/GCM throughput bench (~40 s before
     # WiFi). The endpoint + client cert live in LittleFS (env var + plain file); only the private
