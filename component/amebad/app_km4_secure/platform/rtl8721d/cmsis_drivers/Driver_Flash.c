@@ -172,7 +172,7 @@ RAMFUNC static int32_t ARM_Flash_ProgramData(uint32_t addr, const void *data, ui
     static uint8_t pad_buf[FLASH_PAGE_SIZE];
     const uint8_t *p = (const uint8_t *)data;
     uint32_t remaining = cnt;
-    uint32_t primask;
+    uint32_t faultmask;
 
     while (remaining > 0U) {
         /* A page-program must not cross a 256-byte page boundary. */
@@ -205,11 +205,18 @@ RAMFUNC static int32_t ARM_Flash_ProgramData(uint32_t addr, const void *data, ui
             }
         }
 
-        primask = __get_PRIMASK();
-        __disable_irq();
+        /* FAULTMASK, not PRIMASK: this masks the brief SPIC user-mode window where XIP instruction
+         * fetch is unavailable. PRIMASK_S (the old __disable_irq) boosts secure execution priority to
+         * 0, which does NOT reliably gate Non-secure interrupts (SysTick/WiFi) while secure code runs
+         * — a TrustZone preemption left a ~1/5 residual: an NS IRQ fires, its handler fetches from the
+         * dead XIP -> garbage -> UNDEFINSTR HardFault. FAULTMASK_S boosts to -1, masking ALL exceptions
+         * except NMI, including NS interrupts. The window is a single polled ROM program + cache barrier
+         * (microseconds), so masking NMI too is fine. */
+        faultmask = __get_FAULTMASK();
+        __set_FAULTMASK(1u);
         rom_flash_tx12(addr, prog, (uint8_t *)(uintptr_t)src);
         flash_write_barrier(addr, prog);
-        __set_PRIMASK(primask);
+        __set_FAULTMASK(faultmask);
 
         addr      += chunk;
         p         += chunk;
@@ -220,11 +227,13 @@ RAMFUNC static int32_t ARM_Flash_ProgramData(uint32_t addr, const void *data, ui
 
 RAMFUNC static int32_t ARM_Flash_EraseSector(uint32_t addr)
 {
-    uint32_t primask = __get_PRIMASK();
-    __disable_irq();
+    /* FAULTMASK_S (not PRIMASK_S): also mask Non-secure interrupts across the SPIC user-mode window
+     * (see ARM_Flash_ProgramData). PRIMASK_S doesn't gate NS interrupts while secure code runs. */
+    uint32_t faultmask = __get_FAULTMASK();
+    __set_FAULTMASK(1u);
     rom_flash_erase(ERASE_SECTOR, addr);
     flash_write_barrier(addr, FLASH_AREA_IMAGE_SECTOR_SIZE);
-    __set_PRIMASK(primask);
+    __set_FAULTMASK(faultmask);
     return ARM_DRIVER_OK;
 }
 
