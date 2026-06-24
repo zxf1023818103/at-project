@@ -572,6 +572,26 @@ static void wifi_bringup_thread( void *param )
          * the value enum is comment-only in wifi_conf.h, hence the literal. */
         wifi_set_mfp_support( 0 );
 
+        /* Regulatory domain from env, applied BEFORE the scan so it covers the allowed channels:
+         * WIFI_COUNTRY = ISO 2-letter code (e.g. CN/US) -> channel plan by that country;
+         * WIFI_CHANPLAN = an explicit Realtek channel-plan code (hex like 0x20 or decimal) that
+         * overrides it. Either or both may be set; the explicit plan wins (applied last). */
+        {
+            const char *cc = getenv( "WIFI_COUNTRY" );
+            const char *cp = getenv( "WIFI_CHANPLAN" );
+            if( cc != NULL && cc[ 0 ] != '\0' )
+            {
+                wifi_set_channel_plan_by_country_code( (unsigned char *) cc );
+                log_info( "[KM4] WIFI_COUNTRY=%s -> channel plan by country", cc );
+            }
+            if( cp != NULL && cp[ 0 ] != '\0' )
+            {
+                uint8_t plan = (uint8_t) strtoul( cp, NULL, 0 );
+                wifi_change_channel_plan( plan );
+                log_info( "[KM4] WIFI_CHANPLAN=%s -> channel plan 0x%x", cp, (unsigned) plan );
+            }
+        }
+
         /* The directed all-channel scan intermittently captures only the 2.4 GHz
          * BSSID and misses the dual-band AP's 5 GHz one (probe-response timing).
          * 2.4 GHz is congested here and unreliable for the 4-way handshake (see
