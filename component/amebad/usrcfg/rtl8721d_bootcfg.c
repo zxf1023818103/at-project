@@ -91,7 +91,7 @@ u8 Force_OTA1_GPIO = 0xFF;
 *	TRUE: enable 
 */
 BOOT_RAM_DATA_SECTION
-u8 Boot_Log_En = FALSE;
+u8 Boot_Log_En = TRUE;   /* DEBUG: enable the bootloader log (OTA select / IMG2 SBOOT OK ...) */
 
 
 /**
