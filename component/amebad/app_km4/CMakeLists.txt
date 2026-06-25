@@ -430,6 +430,10 @@ if(AMEBAD_SBOOT)
     target_sources(target_img2_km4 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/sboot_cli.c")
     target_include_directories(target_img2_km4 PRIVATE "${CMAKE_SOURCE_DIR}/build/sboot")
     target_compile_definitions(target_img2_km4 PRIVATE AMEBAD_SBOOT)
+    # DEBUG eFuse-burn provisioning command - needs the TF-M secure world (EFUSE_WRITE IOCTL).
+    if(AMEBAD_TFM_STORAGE)
+        target_sources(target_img2_km4 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/efuse_burn_cli.c")
+    endif()
 endif()
 
 # Upstream Mbed TLS for fs_cli's md5sum/sha*sum (component/mbedtls_config). Only the

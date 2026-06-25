@@ -22,7 +22,8 @@
 #define AMEBAD_EFUSE_HUK_ADDR   0x150u   /* TrustZone-secure user eFuse base */
 #define AMEBAD_EFUSE_HUK_SIZE   32u      /* 0x150..0x16F (0x170 = RDP key)    */
 
-#define AMEBAD_ROM_EFUSEREAD8_S 0x10100a31u
+#define AMEBAD_ROM_EFUSEREAD8_S  0x10100a31u
+#define AMEBAD_ROM_EFUSEWRITE8_S 0x10100b1du   /* secure ROM EFUSEWrite8 (rom_symbol_s.txt) */
 #define AMEBAD_EFUSE_CTRL1_S    0x40000810u
 #define AMEBAD_EFUSE_L25_VOL    7u
 
@@ -35,6 +36,24 @@ static inline void amebad_secure_read_efuse(uint32_t addr, uint32_t size, uint8_
         ((uint32_t (*)(uint32_t, uint32_t, uint8_t *, uint8_t))AMEBAD_ROM_EFUSEREAD8_S)
             (ctrl, addr + i, &buf[i], (uint8_t)AMEBAD_EFUSE_L25_VOL);
     }
+}
+
+/* DEBUG / test-device PROVISIONING ONLY: program `size` bytes into secure eFuse at `addr`. eFuse is
+ * ONE-WAY irreversible. Mirrors the read above via the secure ROM EFUSEWrite8 alias. Returns 1 if every
+ * per-byte ROM call reported success. NEVER ship - this lets NS drive arbitrary secure eFuse burns. */
+static inline uint32_t amebad_secure_write_efuse(uint32_t addr, uint32_t size, const uint8_t *buf)
+{
+    uint32_t ctrl = *(volatile uint32_t *)AMEBAD_EFUSE_CTRL1_S;
+    uint32_t i, ok = 1u;
+
+    for (i = 0; i < size; i++) {
+        uint32_t r = ((uint32_t (*)(uint32_t, uint32_t, uint8_t, uint8_t))AMEBAD_ROM_EFUSEWRITE8_S)
+            (ctrl, addr + i, buf[i], (uint8_t)AMEBAD_EFUSE_L25_VOL);
+        if (r == 0u) {
+            ok = 0u;
+        }
+    }
+    return ok;
 }
 
 #endif /* AMEBAD_EFUSE_HUK_H */

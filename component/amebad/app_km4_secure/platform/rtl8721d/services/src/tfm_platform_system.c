@@ -40,6 +40,9 @@
  * HUK 0x150 / SWD PWD 0x180 / RDP 0x170 / ... Deliberately defeats the never-leave-the-SPE property
  * above; for dev provisioning bookkeeping, NEVER ship. */
 #define AMEBAD_IOCTL_EFUSE_RAW       ((tfm_platform_ioctl_req_t)0x8721E2)
+/* DEBUG / test-device PROVISIONING ONLY: BURN secure eFuse (in_vec={u32 addr,u32 len,u8 data[len]}).
+ * ONE-WAY IRREVERSIBLE. NEVER ship - lets NS program arbitrary secure eFuse. */
+#define AMEBAD_IOCTL_EFUSE_WRITE     ((tfm_platform_ioctl_req_t)0x8721E3)
 
 /* HW-crypto KAT: run the IPSEC engine AES-128-ECB known-answer test from the
  * SECURE side. The crypto peripheral is security-attributed secure-only — the NS
@@ -128,6 +131,30 @@ enum tfm_platform_err_t tfm_platform_hal_ioctl(tfm_platform_ioctl_req_t request,
         }
         amebad_secure_read_efuse(req[0], req[1], (uint8_t *)out_vec->base);
         out_vec->len = req[1];
+        return TFM_PLATFORM_ERR_SUCCESS;
+    }
+    case AMEBAD_IOCTL_EFUSE_WRITE: {
+        /* DEBUG / test-device PROVISIONING ONLY: program secure eFuse. in_vec = {u32 addr, u32 len,
+         * u8 data[len]} (len <= 32). ONE-WAY IRREVERSIBLE - never ship. Returns {ok} in out_vec. */
+        const uint32_t *hdr;
+        const uint8_t  *data;
+        uint32_t addr, len, ok;
+
+        if (in_vec == NULL || in_vec->base == NULL || in_vec->len < 2u * sizeof(uint32_t)) {
+            return TFM_PLATFORM_ERR_INVALID_PARAM;
+        }
+        hdr  = (const uint32_t *)in_vec->base;
+        addr = hdr[0];
+        len  = hdr[1];
+        data = (const uint8_t *)(hdr + 2);
+        if (len == 0u || len > 32u || in_vec->len < 2u * sizeof(uint32_t) + len) {
+            return TFM_PLATFORM_ERR_INVALID_PARAM;
+        }
+        ok = amebad_secure_write_efuse(addr, len, data);
+        if (out_vec != NULL && out_vec->base != NULL && out_vec->len >= sizeof(ok)) {
+            memcpy(out_vec->base, &ok, sizeof(ok));
+            out_vec->len = sizeof(ok);
+        }
         return TFM_PLATFORM_ERR_SUCCESS;
     }
     case AMEBAD_IOCTL_EFUSE_SEC_INFO: {
