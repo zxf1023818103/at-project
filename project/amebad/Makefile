@@ -94,6 +94,11 @@ SBOOT      ?= ON           # DEFAULT-ON: Ed25519-sign image2 (boot-ROM secure-bo
 EFUSE_DEBUG ?= OFF         # ON -> DEBUG eFuse provisioning aids (NEVER ship): `efuse_burn` console cmd,
                            #       boot-dump of all eFuse keys + MACs, and Boot_Log_En (verbose bootloader
                            #       log). Default OFF; the signing (SBOOT) is independent and stays on.
+RSIP       ?= OFF          # ON -> EncTool-encrypt km0/km4 boot + image2 with AMEBAD_RSIP_KEY/IV. Only
+                           #       boots on a board with the RSIP key fused @0x190 + the RSIP-enable eFuse
+                           #       bit set (otherwise garbage). Key/IV default in image_tool/CMakeLists.txt.
+RSIP_KEY   ?= 32982100546871a0aa983b2987560000   # build key string; eFuse 0x190 holds its REVERSE byte
+RSIP_IV    ?= 90acd34ec70a53fa6eba8ca400000000   # order (AN0405). Override for a board's actual fused key.
 IMAGE      := $(REPO)/build/amebad/firmware.bin
 
 all: image
@@ -109,7 +114,9 @@ configure:
 	  -DAMEBAD_CHIP=amebad-km0 \
 	  $$([ -f build/km0/CMakeCache.txt ] || echo -DCMAKE_TOOLCHAIN_FILE=cmake/amebad-km0.cmake) \
 	  -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) \
-	  -DAMEBAD_EFUSE_DEBUG=$(EFUSE_DEBUG)
+	  -DAMEBAD_EFUSE_DEBUG=$(EFUSE_DEBUG) \
+	  -DAMEBAD_RSIP_ENABLE=$(RSIP) \
+	  -DAMEBAD_RSIP_KEY=$(RSIP_KEY) -DAMEBAD_RSIP_IV=$(RSIP_IV)
 	cd $(REPO) && cmake -S . -B build/km4 -G $(GEN) \
 	  -DAMEBAD_CHIP=amebad-km4 \
 	  $$([ -f build/km4/CMakeCache.txt ] || echo -DCMAKE_TOOLCHAIN_FILE=cmake/amebad-km4.cmake) \
@@ -127,7 +134,9 @@ configure:
 	  -DAMEBAD_VFS_SELFTEST=$(VFSTEST) \
 	  -DAMEBAD_CPP_SELFTEST=$(CPPTEST) \
 	  -DAMEBAD_SBOOT=$(SBOOT) \
-	  -DAMEBAD_EFUSE_DEBUG=$(EFUSE_DEBUG)
+	  -DAMEBAD_EFUSE_DEBUG=$(EFUSE_DEBUG) \
+	  -DAMEBAD_RSIP_ENABLE=$(RSIP) \
+	  -DAMEBAD_RSIP_KEY=$(RSIP_KEY) -DAMEBAD_RSIP_IV=$(RSIP_IV)
 
 # build_image_all.py builds both cores (cmake --build, generator-agnostic — reuses
 # the Ninja trees configured above) and assembles the flashable image.

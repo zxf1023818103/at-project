@@ -34,6 +34,7 @@ import os
 import struct
 import subprocess
 import sys
+import tempfile
 
 # This script lives in component/amebad/image_tool/ -> repo root is three up.
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -94,6 +95,35 @@ def cache_bool(build_dir, key):
             if line.startswith(key + ":") and "=" in line:
                 return line.split("=", 1)[1].strip().upper() in ("ON", "TRUE", "1", "YES")
     return False
+
+
+def cache_str(build_dir, key, default=""):
+    """Value of a CMakeCache.txt STRING variable (or default)."""
+    cache = os.path.join(build_dir, "CMakeCache.txt")
+    if os.path.exists(cache):
+        with open(cache) as f:
+            for line in f:
+                if line.startswith(key + ":") and "=" in line:
+                    return line.split("=", 1)[1].strip()
+    return default
+
+
+ENCTOOL = os.path.join(REPO, "component", "amebad", "image_tool", "EncTool")
+
+
+def rsip_encrypt(blob, xip_addr, key, iv):
+    """RSIP-encrypt `blob` for XIP base `xip_addr` (e.g. "0x0e000000") via EncTool; return the
+    ciphertext. RSIP's AES-CTR counter is seeded from the XIP address, so the result is only valid
+    when the SoC reads it back (OTF) at that same address. Applied to image2 AFTER signing, so the
+    signed payload + SB_HEADER are inside the encrypted region (the bootloader verifies the signature
+    over the OTF-decrypted plaintext). Bootloaders are encrypted CMake-side (they aren't signed)."""
+    with tempfile.TemporaryDirectory() as td:
+        src = os.path.join(td, "in.bin")
+        dst = os.path.join(td, "out.bin")
+        with open(src, "wb") as f:
+            f.write(blob)
+        run([ENCTOOL, "rsip", src, dst, xip_addr, key, iv])
+        return read(dst)
 
 
 def place(image, offset, blob, name):
@@ -179,6 +209,25 @@ def main():
         if not os.path.exists(priv_pem):
             sys.exit("AMEBAD_SBOOT: %s not found (run sboot_keygen.py at configure)." % priv_pem)
         km4_img2 = sign_km4_image2(km4_img2, priv_pem)
+
+    # RSIP image2 encryption — MUST be sign-then-encrypt (bootloaders are encrypted CMake-side; the
+    # image2 is left plaintext by CMake and encrypted HERE, after signing). The bootloader verifies
+    # the Ed25519 signature over the OTF-DECRYPTED image2 and reads the SB_HEADER from the decrypted
+    # region, so the signed blob (payload + SB_HEADER) is what must be encrypted. km0 image2 reads at
+    # XIP 0x0c000000, km4 image2 at 0x0e000000 (AN0405 §3.2.2). Encrypting in CMake before this script
+    # signed would have signed ciphertext -> IMG2 SBOOT FAIL on a secure-boot board.
+    rsip = cache_bool(args.km4_build, "AMEBAD_RSIP_ENABLE")
+    if rsip:
+        if tfm_boot or frtos_secure:
+            sys.exit("AMEBAD_RSIP_ENABLE + TF-M/SECURE not supported: the IMG3 secure blob "
+                     "(tfm_s/freertos_s @ XIP 0x0E400000) would also need RSIP encryption, which this "
+                     "script does not yet do. Build the RSIP image without TF-M/SECURE.")
+        rsip_key = cache_str(args.km4_build, "AMEBAD_RSIP_KEY")
+        rsip_iv  = cache_str(args.km4_build, "AMEBAD_RSIP_IV")
+        print("\nRSIP-encrypting image2 (sign-then-encrypt): key=%s.. iv=%s.." %
+              (rsip_key[:8], rsip_iv[:8]))
+        km0_img2 = rsip_encrypt(km0_img2, "0x0c000000", rsip_key, rsip_iv)
+        km4_img2 = rsip_encrypt(km4_img2, "0x0e000000", rsip_key, rsip_iv)
 
     # cross-core image2 merge (imagetool.sh RSIP-off branch is a plain cat)
     km0_km4_img2 = km0_img2 + km4_img2

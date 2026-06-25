@@ -256,8 +256,10 @@ function(amebad_make_image2_all_bin AXF_TARGET OUT_NAME RSIP_ADDR)
         VERBATIM
     )
 
-    # --- Stage C: optional RSIP encryption in place (XIP cache base).
-    if(AMEBAD_RSIP_ENABLE)
+    # --- Stage C: image2 RSIP encryption MOVED to build_image_all.py (sign-then-encrypt: image2 must
+    # be Ed25519-SIGNED before it is encrypted, else the signature lands on ciphertext and a
+    # secure-boot board IMG2-SBOOT-FAILs). Left plaintext here; the script encrypts @ 0x0c000000.
+    if(FALSE)  # was: if(AMEBAD_RSIP_ENABLE)
         set(_out_enc "${_imgdir}/${OUT_NAME}.enc")
         add_custom_command(TARGET ${AXF_TARGET} POST_BUILD
             COMMAND "${AMEBAD_ENCTOOL}" rsip
@@ -341,8 +343,9 @@ function(amebad_make_image2_all_bin_hp AXF_TARGET OUT_NAME RSIP_ADDR)
         VERBATIM
     )
 
-    # --- Stage C: optional RSIP encryption in place (KM4 XIP cache base).
-    if(AMEBAD_RSIP_ENABLE)
+    # --- Stage C: image2 RSIP encryption MOVED to build_image_all.py (sign-then-encrypt; see the KM0
+    # image2 note above). Left plaintext here; the script signs then encrypts km4 image2 @ 0x0e000000.
+    if(FALSE)  # was: if(AMEBAD_RSIP_ENABLE)
         set(_out_enc "${_imgdir}/${OUT_NAME}.enc")
         add_custom_command(TARGET ${AXF_TARGET} POST_BUILD
             COMMAND "${AMEBAD_ENCTOOL}" rsip

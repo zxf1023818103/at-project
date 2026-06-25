@@ -98,6 +98,71 @@ static BaseType_t cmd_efuse_burn(char *out, size_t outlen, const char *cmd)
     return pdFALSE;
 }
 
+/* The LOGICAL eFuse map (autoload view) — different from the raw physical bytes efuse_burn writes.
+ * Some controls (e.g. RSIP Enable = logical 0xE[2], AN0405) live only here and MUST be set via the
+ * ROM logical-map write (which re-packs physical sections), not a raw physical burn. NS-side; no TF-M. */
+extern int efuse_logical_read(uint16_t addr, uint16_t size, uint8_t *pbuf);
+extern int efuse_logical_write(uint16_t addr, uint16_t size, uint8_t *data);
+
+static const char EHEX[] = "0123456789abcdef";
+
+static BaseType_t cmd_efuse_lread(char *out, size_t outlen, const char *cmd)
+{
+    BaseType_t la = 0, ll = 0;
+    const char *a = FreeRTOS_CLIGetParameter(cmd, 1, &la);
+    const char *l = FreeRTOS_CLIGetParameter(cmd, 2, &ll);
+    char abuf[12], lbuf[8], hex[2 * 32 + 1];
+    uint8_t buf[32];
+    uint16_t addr, len;
+    int rr, i;
+
+    if (a == NULL || l == NULL || la == 0 || (size_t)la >= sizeof(abuf) || ll == 0 || (size_t)ll >= sizeof(lbuf)) {
+        snprintf(out, outlen, "usage: efuse_lread <laddr_hex> <len(dec,1..32)>\r\n");
+        return pdFALSE;
+    }
+    memcpy(abuf, a, (size_t)la); abuf[la] = '\0';
+    memcpy(lbuf, l, (size_t)ll); lbuf[ll] = '\0';
+    addr = (uint16_t)strtoul(abuf, NULL, 16);
+    len  = (uint16_t)strtoul(lbuf, NULL, 10);
+    if (len == 0u || len > 32u) { snprintf(out, outlen, "len 1..32\r\n"); return pdFALSE; }
+    rr = efuse_logical_read(addr, len, buf);
+    for (i = 0; i < (int)len; i++) { hex[2 * i] = EHEX[buf[i] >> 4]; hex[2 * i + 1] = EHEX[buf[i] & 0x0Fu]; }
+    hex[2 * len] = '\0';
+    log_info("[EFUSE] logical 0x%x [%u] = %s (ret=%d)", (unsigned)addr, (unsigned)len, hex, rr);
+    snprintf(out, outlen, "efuse_lread 0x%x -> see [EFUSE] log\r\n", (unsigned)addr);
+    return pdFALSE;
+}
+
+static BaseType_t cmd_efuse_lwrite(char *out, size_t outlen, const char *cmd)
+{
+    BaseType_t la = 0, ld = 0, lc = 0;
+    const char *a = FreeRTOS_CLIGetParameter(cmd, 1, &la);
+    const char *d = FreeRTOS_CLIGetParameter(cmd, 2, &ld);
+    const char *c = FreeRTOS_CLIGetParameter(cmd, 3, &lc);
+    char abuf[12], rbhex[2 * 32 + 1];
+    uint8_t data[32], rb[32];
+    uint16_t addr;
+    int dlen, rc, i;
+
+    if (a == NULL || d == NULL || c == NULL || lc != 7 || strncmp(c, "CONFIRM", 7) != 0) {
+        snprintf(out, outlen, "usage: efuse_lwrite <laddr_hex> <data_hex> CONFIRM  (ONE-WAY)\r\n");
+        return pdFALSE;
+    }
+    if (la == 0 || (size_t)la >= sizeof(abuf)) { snprintf(out, outlen, "bad addr\r\n"); return pdFALSE; }
+    memcpy(abuf, a, (size_t)la); abuf[la] = '\0';
+    addr = (uint16_t)strtoul(abuf, NULL, 16);
+    dlen = parse_hex(d, (int)ld, data, (int)sizeof(data));
+    if (dlen <= 0) { snprintf(out, outlen, "bad data hex (1..32 bytes)\r\n"); return pdFALSE; }
+    rc = efuse_logical_write(addr, (uint16_t)dlen, data);
+    (void)efuse_logical_read(addr, (uint16_t)dlen, rb);
+    for (i = 0; i < dlen; i++) { rbhex[2 * i] = EHEX[rb[i] >> 4]; rbhex[2 * i + 1] = EHEX[rb[i] & 0x0Fu]; }
+    rbhex[2 * dlen] = '\0';
+    log_info("[EFUSE] LWRITE logical 0x%x rc=%d ; read-back = %s (%s)", (unsigned)addr, rc, rbhex,
+             (memcmp(rb, data, (size_t)dlen) == 0) ? "MATCH" : "MISMATCH");
+    snprintf(out, outlen, "efuse_lwrite 0x%x done -> see [EFUSE] log\r\n", (unsigned)addr);
+    return pdFALSE;
+}
+
 void efuse_burn_cli_register(void)
 {
     static const CLI_Command_Definition_t def = {
@@ -105,5 +170,17 @@ void efuse_burn_cli_register(void)
         "efuse_burn <addr_hex> <data_hex> CONFIRM:\r\n DEBUG: burn secure eFuse (ONE-WAY irreversible)\r\n",
         cmd_efuse_burn, -1
     };
+    static const CLI_Command_Definition_t lrd = {
+        "efuse_lread",
+        "efuse_lread <laddr_hex> <len>:\r\n DEBUG: read the logical eFuse map\r\n",
+        cmd_efuse_lread, -1
+    };
+    static const CLI_Command_Definition_t lwr = {
+        "efuse_lwrite",
+        "efuse_lwrite <laddr_hex> <data_hex> CONFIRM:\r\n DEBUG: write logical eFuse (ONE-WAY)\r\n",
+        cmd_efuse_lwrite, -1
+    };
     FreeRTOS_CLIRegisterCommand(&def);
+    FreeRTOS_CLIRegisterCommand(&lrd);
+    FreeRTOS_CLIRegisterCommand(&lwr);
 }

@@ -90,6 +90,7 @@ void amebad_tfm_psa_selftest(void)
     {
         static const char hexd[] = "0123456789abcdef";
         static const struct { uint32_t addr, size; const char *label; } regs[] = {
+            { 0x019u,  1u, "RSIP_EN(0x19,1B)" },     /* physical RSIP-enable byte (bit5); blank=0xff */
             { 0x150u, 32u, "HUK(0x150,32B)" },
             { 0x170u, 16u, "RDP_KEY(0x170,16B)" },
             { 0x180u, 16u, "SWD_PWD(0x180,16B)" },
