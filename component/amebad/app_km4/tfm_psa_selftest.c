@@ -59,6 +59,29 @@ void amebad_tfm_psa_selftest(void)
                    (int)r2, (int)info[0], info[1]);
     }
 
+    /* DEBUG: WiFi + BLE MAC from the (non-secure) eFuse logical map - read here, before WiFi is up
+     * (wifi_get_mac_address needs the driver running). Same line format as the key dump below. */
+    {
+        static const char hexd[] = "0123456789abcdef";
+        extern int efuse_logical_read(uint16_t addr, uint16_t size, uint8_t *pbuf);
+        static const struct { uint16_t addr; const char *label; } macs[] = {
+            { 0x11Au, "WiFi_MAC(0x11A,6B)" },
+            { 0x190u, "BLE_MAC(0x190,6B)" },
+        };
+        uint8_t m[6];
+        char    hexm[2 * 6 + 1];
+        unsigned mi, k;
+        for (mi = 0; mi < sizeof(macs) / sizeof(macs[0]); mi++) {
+            int rr = efuse_logical_read(macs[mi].addr, 6u, m);
+            for (k = 0; k < 6u; k++) {
+                hexm[2 * k]     = hexd[m[k] >> 4];
+                hexm[2 * k + 1] = hexd[m[k] & 0x0Fu];
+            }
+            hexm[12] = '\0';
+            log_info("[KM4] eFuse %s RAW = %s (ret=%d, DEBUG/test-only)", macs[mi].label, hexm, rr);
+        }
+    }
+
     /* DEBUG / test-device key inventory ONLY: dump ALL the RAW secret eFuse key regions at boot so a
      * provisioned board can be re-recorded / recovered from the console log. This deliberately
      * defeats the never-leave-the-SPE property - NEVER ship: it exposes the device root key, RDP/RSIP
