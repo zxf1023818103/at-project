@@ -104,8 +104,12 @@ if(AMEBAD_CHIP MATCHES "^amebad-km[04]$")
     add_subdirectory(freertos-plus-tcp_config)  # FreeRTOS-Plus-TCP V4.0.0 core stack + FreeRTOSIPConfig.h (freertos_plus_tcp / freertos-plus-tcp_config)
     add_subdirectory(ngtcp2_config)             # ngtcp2 QUIC + the picotls crypto binding (built only when AMEBAD_ENABLE_QUIC)
     add_subdirectory(coremqtt_config)           # coreMQTT v5.0.2 static lib + core_mqtt_config.h
+    add_subdirectory(coremqtt-agent_config)     # coreMQTT-Agent v2.0.0 (thread-safe wrapper; shared MQTT conn for telemetry + OTA) — links coremqtt_config
     add_subdirectory(backoffalgorithm_config)   # backoffAlgorithm v1.4.2 (reconnect backoff-with-jitter) — coreMQTT companion
     add_subdirectory(corehttp_config)           # coreHTTP v3.1.3 static lib + core_http_config.h
+    add_subdirectory(corejson_config)           # coreJSON parser (OTA job-document parsing) — ota_config dep
+    add_subdirectory(tinycbor_config)           # TinyCBOR (OTA MQTT data-plane block decode) — ota_config dep
+    add_subdirectory(ota_config)                # AWS IoT OTA Agent v3.3.0 (aws_ota; MQTT/HTTP/PAL injected by consumer) — links corejson_config + tinycbor_config + freertos_config
     add_subdirectory(coresntp_config)           # coreSNTP SNTPv4 client static lib + core_sntp_config.h (built only when AMEBAD_ENABLE_SNTP)
     add_subdirectory(freertos-cli_config)       # FreeRTOS-Plus-CLI V202212.00 static lib (config via FreeRTOSConfig.h)
     add_subdirectory(nimble_config)             # INTERFACE: NimBLE syscfg + upstream include surface

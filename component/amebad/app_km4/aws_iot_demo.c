@@ -1,80 +1,105 @@
 /*
- * aws_iot_demo.c - AmebaD KM4 AWS IoT Core MQTT/TLS client (make AWS=ON).
+ * aws_iot_demo.c - AmebaD KM4 AWS IoT Core MQTT/TLS client over coreMQTT-Agent
+ * (make AWS=ON).
  *
- * coreMQTT over the FreeRTOS reference mbedTLS TLS transport
- * (component/network_transport/transport_mbedtls.c -> TLS_FreeRTOS_*) on
- * FreeRTOS-Plus-TCP. Mutual TLS to AWS IoT Core port 8883:
- *   - server trust  : Amazon Root CA 1 (embedded, aws_iot_config.h)
- *   - endpoint       : env var "endpoint" (plain LittleFS KV/endpoint)
- *   - client cert    : plain LittleFS DER file, path = env var "cert" (parse_file)
- *   - private key    : TF-M ITS (the only secret; provisioned via `set key`, encrypted at rest)
- *   - client id      : the module BLE MAC = AWS Thing name (efuse 0x190)
+ * Refactored from the direct-coreMQTT telemetry loop to the coreMQTT-Agent so the
+ * telemetry task and the OTA agent task safely SHARE one MQTT connection:
+ *   - aws_agent_task    owns the TLS socket + the MQTTAgentContext_t. It connects
+ *                       (TLS + MQTT_Connect), then runs MQTTAgent_CommandLoop(), which
+ *                       serialises every other task's MQTT API calls and pumps
+ *                       MQTT_ProcessLoop. On disconnect it reconnects (backoff) +
+ *                       MQTTAgent_ResumeSession and loops again.
+ *   - aws_telemetry_task waits for the agent to be connected, subscribes to the command
+ *                       topic (via the subscription_manager), then publishes telemetry
+ *                       JSON to bw20/<mac>/telemetry every period using MQTTAgent_Publish.
+ *   - the OTA agent     (ota_app.c) shares the same MQTTAgentContext_t for its job /
+ *                       stream topics; ota_app_init() is started after the first connect.
  *
- * Started from main()'s network-up hook (vApplicationIPNetworkEventHook). If the
- * device is not yet provisioned it idles and retries, so `set ...` can be run live.
- *
- * NOTE: this mbedTLS config has MBEDTLS_HAVE_TIME off, so X.509 validity-date checks
- * are skipped (no RTC wall-clock); the chain/signature to Amazon Root CA 1 is still
- * verified. Acceptable for the demo.
+ * Mutual TLS to AWS IoT Core port 8883 (server trust = Amazon Root CA 1; endpoint = env
+ * "endpoint"; client cert = plain LFS DER via "cert" env; private key = TF-M ITS). Thing
+ * name = BLE MAC (efuse 0x190) = MQTT client id. There is no embedded client identity;
+ * an unprovisioned device idle-retries so `set ...` can run live.
  */
 #include <stdint.h>
 #include "at_log.h"
 #include <stdio.h>
-#include <stdlib.h>     /* getenv (endpoint + cert-path env vars) */
+#include <stdlib.h>
 #include <string.h>
 
 #include "FreeRTOS.h"
 #include "task.h"
 
 #include "core_mqtt.h"
-#include "transport_tls.h"          /* TLS_FreeRTOS_*, NetworkCredentials_t, TlsTransportParams_t (backend via TLS_BACKEND) */
+#include "core_mqtt_agent.h"
+#include "transport_tls.h"
 #include "backoff_algorithm.h"
 
 #include "aws_iot_config.h"
 #include "aws_provision.h"
 
-/* Build-time firmware version string, injected by CMake (-DAT_FW_VERSION="...", see the AWS block in
- * component/amebad/app_km4/CMakeLists.txt, driven by `make AWS=ON FW_VERSION=...`). Printed at task
- * start and published in telemetry so an OTA that swaps flash banks is observably verified: build OTA-A
- * and a version-bumped OTA-B, and the running version tells which image (hence which slot) booted. */
+#include "freertos_agent_message.h"
+#include "freertos_command_pool.h"
+#include "subscription_manager.h"
+#include "ota_app.h"
+
 #ifndef AT_FW_VERSION
 #define AT_FW_VERSION "dev"
 #endif
 
-
-/* mbedTLS FreeRTOS threading shim - must be registered once before any mbedTLS use
- * (component/mbedtls_config/mbedtls_threading_alt.c). It only calls mbedtls_threading_set_alt()
- * (function-pointer registration), so it is idempotent / safe to call repeatedly. */
 extern void mbedtls_threading_freertos_init(void);
 
-/* The FreeRTOS reference transport (transport_mbedtls.c, under MBEDTLS_THREADING_ALT) calls
- * mbedtls_platform_threading_init() inside initMbedtls() on every TLS_FreeRTOS_Connect. The
- * repo's threading port exposes mbedtls_threading_freertos_init() instead, so bridge them here. */
+/* transport_mbedtls.c calls mbedtls_platform_threading_init() inside its connect path;
+ * bridge it to the repo's threading port (idempotent function-pointer registration). */
 void mbedtls_platform_threading_init(void)
 {
     mbedtls_threading_freertos_init();
 }
 
-/* coreMQTT transport context: the transport defines `struct NetworkContext` to hold a
- * TlsTransportParams_t*; the consumer mirrors that definition (C file-scope struct). */
 struct NetworkContext
 {
     TlsTransportParams_t * pParams;
 };
 
-#define AWS_NET_BUFFER_SZ      1024   /* coreMQTT fixed buffer (.bss). The demo's packets are tiny
-                                        * (CONNECT ~30 B, SUBSCRIBE, telemetry PUBLISH ~160 B), so 1 KB
-                                        * is ample; trimmed from 2 KB to hand the byte back to the
-                                        * NS FreeRTOS heap, which the TLS handshake runs to the edge. */
-#define AWS_TLS_RECV_TMO_MS    3000
-#define AWS_TLS_SEND_TMO_MS    3000
+#define AWS_NET_BUFFER_SZ      2048   /* coreMQTT-Agent fixed buffer: must hold the largest
+                                        * packet pumped through the shared connection - OTA
+                                        * job docs / 4 KB stream data blocks dwarf the tiny
+                                        * telemetry PUBLISH, so this is bumped from the old
+                                        * 1 KB telemetry-only buffer. */
+#define AWS_TLS_RECV_TMO_MS    1000
+#define AWS_TLS_SEND_TMO_MS    1000
 #define AWS_CONNECT_TMO_MS     8000
 
 #define AWS_BACKOFF_BASE_MS    1000
 #define AWS_BACKOFF_MAX_MS     16000
 #define AWS_BACKOFF_MAX_TRIES  BACKOFF_ALGORITHM_RETRY_FOREVER
 
+/* MQTT v5 ACK-properties buffer required by MQTTAgent_Init (QoS1/2 ack props). */
+#define AWS_ACK_PROPS_BUF_SZ   256
+
 static uint8_t s_net_buffer[AWS_NET_BUFFER_SZ];
+static uint8_t s_ack_props_buffer[AWS_ACK_PROPS_BUF_SZ];
+
+/* The shared MQTT-Agent context + its message-queue backend (command pointers). */
+static MQTTAgentContext_t      s_agent;
+static MQTTAgentMessageContext_t s_agentMsgCtx;     /* { QueueHandle_t queue } - see freertos_agent_message.h */
+#define AWS_AGENT_QUEUE_LEN    ( 25 )
+static StaticQueue_t           s_agentQueueStorage;
+static uint8_t                 s_agentQueueBuf[ AWS_AGENT_QUEUE_LEN * sizeof( MQTTAgentCommand_t * ) ];
+
+/* Connection bits shared between the agent task and the telemetry task. */
+static NetworkContext_t        s_net;
+static TlsTransportParams_t    s_tlsParams;
+static NetworkCredentials_t    s_creds;
+static char                    s_mac[16];
+static char                    s_endpoint[AWS_ENDPOINT_MAX];
+static char                    s_certPath[64];
+static char                    s_key[AWS_KEY_MAX];
+static size_t                  s_keyLen = 0;
+static char                    s_topic_tele[96];
+static char                    s_topic_cmd[96];
+
+static volatile int            s_connected = 0;   /* set by the agent task once MQTT is up */
+static volatile int            s_otaStarted = 0;
 
 /* ----------------------------------------------------------------- time ----- */
 static uint32_t prvGetTimeMs(void)
@@ -82,241 +107,327 @@ static uint32_t prvGetTimeMs(void)
     return (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
 }
 
-/* ------------------------------------------------------------- MQTT events --- */
-static bool prvEventCallback(MQTTContext_t *pContext,
-                             MQTTPacketInfo_t *pPacketInfo,
-                             MQTTDeserializedInfo_t *pDeserializedInfo,
-                             enum MQTTSuccessFailReasonCode *pReasonCode,
-                             MQTTPropBuilder_t *pSendProps,
-                             MQTTPropBuilder_t *pGetProps)
+/* --------------------------------------------------- incoming publish route -- */
+/* The agent's single incoming-publish callback: fan out via the subscription manager
+ * (the OTA topics + the command topic each register a handler there). */
+static void prvIncomingPublishCallback(MQTTAgentContext_t *pAgentCtx,
+                                       uint16_t packetId,
+                                       MQTTPublishInfo_t *pPublishInfo)
 {
-    (void)pContext; (void)pReasonCode; (void)pSendProps; (void)pGetProps;
-
-    if ((pPacketInfo->type & 0xF0U) == MQTT_PACKET_TYPE_PUBLISH) {
-        MQTTPublishInfo_t *pub = pDeserializedInfo->pPublishInfo;
-        if (pub != NULL) {
-            log_info("[AWS] RX publish topic=%.*s payload=%.*s",
-                       (int)pub->topicNameLength, pub->pTopicName,
-                       (int)pub->payloadLength, (const char *)pub->pPayload);
-        }
-    } else {
-        log_info("[AWS] MQTT ctrl packet 0x%02x id=%u",
-                   pPacketInfo->type, (unsigned)pDeserializedInfo->packetIdentifier);
+    (void)pAgentCtx; (void)packetId;
+    if (SubscriptionManager_HandleIncomingPublishes(pPublishInfo) == false) {
+        log_info("[AWS] RX unrouted publish topic=%.*s",
+                 (int)pPublishInfo->topicNameLength, pPublishInfo->pTopicName);
     }
-    return true;
 }
 
-/* ------------------------------------------------------- connect (TLS+MQTT) -- */
-/* Returns 0 on a fully-established MQTT session, negative otherwise. */
-static int prvConnect(MQTTContext_t *pMqtt, NetworkContext_t *pNet,
-                      const char *endpoint, const char *clientId,
-                      const NetworkCredentials_t *creds)
+/* The command topic handler (replaces the old prvEventCallback PUBLISH branch). */
+static void prvCommandTopicHandler(void *pvCtx, MQTTPublishInfo_t *pPublishInfo)
+{
+    (void)pvCtx;
+    log_info("[AWS] RX publish topic=%.*s payload=%.*s",
+             (int)pPublishInfo->topicNameLength, pPublishInfo->pTopicName,
+             (int)pPublishInfo->payloadLength, (const char *)pPublishInfo->pPayload);
+}
+
+/* ----------------------------------------------- provisioning (idle-retry) --- */
+static void prvWaitForProvisioning(void)
+{
+    for (;;) {
+        const char *ep = getenv("endpoint");
+        const char *cp = getenv("cert");
+        int rk = aws_load_key(s_key, sizeof(s_key), &s_keyLen);
+        if (ep != NULL && cp != NULL && rk == 0) {
+            strncpy(s_endpoint, ep, sizeof(s_endpoint) - 1);
+            s_endpoint[sizeof(s_endpoint) - 1] = '\0';
+            strncpy(s_certPath, cp, sizeof(s_certPath) - 1);
+            s_certPath[sizeof(s_certPath) - 1] = '\0';
+            break;
+        }
+        log_info("[AWS] NOT provisioned (endpoint:%s cert:%s key:%s, free heap %u) - run: set endpoint <ep> / set cert <b64> / set key <b64>",
+                 ep ? "ok" : "MISSING", cp ? "ok" : "MISSING", rk ? "MISSING" : "ok",
+                 (unsigned)xPortGetFreeHeapSize());
+        vTaskDelay(pdMS_TO_TICKS(5000));
+    }
+    log_info("[AWS] provisioned: endpoint=%s certPath=%s key=%uB (free heap %u)",
+             s_endpoint, s_certPath, (unsigned)s_keyLen, (unsigned)xPortGetFreeHeapSize());
+}
+
+/* ----------------------------------------- TLS connect + MQTT_Connect (agent) */
+/* Establish the TLS socket and the MQTT session on the agent's own mqttContext.
+ * Returns 0 on a fully-established MQTT session, negative otherwise. */
+static int prvAgentConnect(bool *pSessionPresent)
 {
     TransportInterface_t transport;
-    MQTTFixedBuffer_t fixedBuffer = { s_net_buffer, sizeof(s_net_buffer) };
     MQTTConnectInfo_t connectInfo;
     MQTTStatus_t st;
     TlsTransportStatus_t ts;
-    bool sessionPresent = false;
 
-    log_info("[AWS] connecting TLS to %s:%d ...", endpoint, AWS_MQTT_PORT);
-    ts = TLS_FreeRTOS_Connect(pNet, endpoint, AWS_MQTT_PORT, creds,
+    log_info("[AWS] connecting TLS to %s:%d ...", s_endpoint, AWS_MQTT_PORT);
+    ts = TLS_FreeRTOS_Connect(&s_net, s_endpoint, AWS_MQTT_PORT, &s_creds,
                               AWS_TLS_RECV_TMO_MS, AWS_TLS_SEND_TMO_MS);
     if (ts != TLS_TRANSPORT_SUCCESS) {
         log_error("[AWS] TLS connect FAIL (%d)", (int)ts);
         return -1;
     }
 
-    transport.pNetworkContext = pNet;
+    transport.pNetworkContext = &s_net;
     transport.send = TLS_FreeRTOS_send;
     transport.recv = TLS_FreeRTOS_recv;
     transport.writev = NULL;
 
-    st = MQTT_Init(pMqtt, &transport, prvGetTimeMs, prvEventCallback, &fixedBuffer);
-    if (st != MQTTSuccess) {
-        log_error("[AWS] MQTT_Init FAIL (%d)", (int)st);
-        TLS_FreeRTOS_Disconnect(pNet);
-        return -2;
+    /* (Re)initialise the agent over this transport: MQTTAgent_Init does MQTT_Init +
+     * MQTT_InitStatefulQoS internally, using the records embedded in s_agent. */
+    {
+        MQTTFixedBuffer_t fixedBuffer = { s_net_buffer, sizeof(s_net_buffer) };
+        MQTTAgentMessageInterface_t messageInterface;
+
+        messageInterface.pMsgCtx        = &s_agentMsgCtx;
+        messageInterface.send           = Agent_MessageSend;
+        messageInterface.recv           = Agent_MessageReceive;
+        messageInterface.getCommand     = Agent_GetCommand;
+        messageInterface.releaseCommand = Agent_ReleaseCommand;
+
+        st = MQTTAgent_Init(&s_agent, &messageInterface, &fixedBuffer, &transport,
+                            prvGetTimeMs, prvIncomingPublishCallback, NULL,
+                            s_ack_props_buffer, sizeof(s_ack_props_buffer));
+        if (st != MQTTSuccess) {
+            log_error("[AWS] MQTTAgent_Init FAIL (%d)", (int)st);
+            TLS_FreeRTOS_Disconnect(&s_net);
+            return -2;
+        }
     }
 
     memset(&connectInfo, 0, sizeof(connectInfo));
     connectInfo.cleanSession = true;
     connectInfo.keepAliveSeconds = AWS_MQTT_KEEPALIVE_S;
-    connectInfo.pClientIdentifier = clientId;
-    connectInfo.clientIdentifierLength = (uint16_t)strlen(clientId);
-    /* AWS IoT mutual-TLS: no username/password (the X.509 client cert authenticates). */
+    connectInfo.pClientIdentifier = s_mac;
+    connectInfo.clientIdentifierLength = (uint16_t)strlen(s_mac);
 
-    st = MQTT_Connect(pMqtt, &connectInfo, NULL, AWS_CONNECT_TMO_MS,
-                      &sessionPresent, NULL, NULL);
+    st = MQTT_Connect(&s_agent.mqttContext, &connectInfo, NULL, AWS_CONNECT_TMO_MS,
+                      pSessionPresent, NULL, NULL);
     if (st != MQTTSuccess) {
         log_error("[AWS] MQTT_Connect FAIL (%d)", (int)st);
-        TLS_FreeRTOS_Disconnect(pNet);
+        TLS_FreeRTOS_Disconnect(&s_net);
         return -3;
     }
 
-    log_info("[AWS] MQTT connected to %s as '%s'", endpoint, clientId);
+    log_info("[AWS] MQTT connected to %s as '%s'", s_endpoint, s_mac);
     return 0;
 }
 
-/* ------------------------------------------------------------- the task ----- */
-static void aws_mqtt_task(void *param)
+/* ------------------------------------------------------- the agent task ----- */
+static void aws_agent_task(void *param)
 {
-    MQTTContext_t mqtt;
-    NetworkContext_t net;
-    TlsTransportParams_t tlsParams;
-    NetworkCredentials_t creds;
-    char mac[16];
-    char topic_tele[96], topic_cmd[96];
-    /* Credentials are split by secrecy (provisioned at runtime via `set ...`, aws_cli.c):
-     *  - endpoint    : env var "endpoint" (plain LittleFS KV/endpoint)        -> getenv
-     *  - client cert : a plain LittleFS DER file, path = env var "cert"       -> mbedtls_x509_crt_parse_file
-     *  - private key : TF-M ITS (the only secret)                             -> aws_load_key (DER into .bss)
-     * There is NO embedded fallback: an unprovisioned device idle-retries instead of connecting, so
-     * the firmware carries no client identity. Only the public Amazon Root CA 1 stays embedded
-     * (aws_iot_config.h). The key DER lands in a static (.bss) buffer, NOT pvPortMalloc: psa_its_get
-     * marshals into it across the NS->SPE boundary and the SPM whitelists NS SRAM (.bss), not a
-     * PSRAM-backed heap. endpoint/certPath are copied into static buffers so they stay valid if the
-     * operator re-runs `set ...` (which would realloc the environ string).
-     * (See the project_amebad_aws_iot memory + doc/amebad_km0_scheduler_and_runtime_flash.md.) */
-    static char endpoint[AWS_ENDPOINT_MAX];
-    static char certPath[64];
-    static char key[AWS_KEY_MAX];
-    size_t keyLen = 0;
     (void)param;
 
-    net.pParams = &tlsParams;
-
+    s_net.pParams = &s_tlsParams;
     mbedtls_threading_freertos_init();
 
-    if (aws_get_ble_mac(mac, sizeof(mac)) != 0) {
+    if (aws_get_ble_mac(s_mac, sizeof(s_mac)) != 0) {
         log_error("[AWS] efuse BLE MAC read FAIL - task exiting");
         vTaskDelete(NULL);
         return;
     }
     log_info("[AWS] fw version = %s", AT_FW_VERSION);
-    log_info("[AWS] device (BLE MAC / Thing) = %s", mac);
-    snprintf(topic_tele, sizeof(topic_tele), AWS_TOPIC_TELEMETRY_FMT, mac);
-    snprintf(topic_cmd,  sizeof(topic_cmd),  AWS_TOPIC_CMD_FMT,  mac);
+    log_info("[AWS] device (BLE MAC / Thing) = %s", s_mac);
+    snprintf(s_topic_tele, sizeof(s_topic_tele), AWS_TOPIC_TELEMETRY_FMT, s_mac);
+    snprintf(s_topic_cmd,  sizeof(s_topic_cmd),  AWS_TOPIC_CMD_FMT,  s_mac);
 
-    /* Idle-retry until the endpoint env var, the cert-path env var, and the ITS key are all present,
-     * so the operator can provision live over the console (it then connects without a reboot). Copy
-     * the two env strings into stable static buffers; the key comes back as raw DER. */
-    for (;;) {
-        const char *ep = getenv("endpoint");
-        const char *cp = getenv("cert");
-        int rk = aws_load_key(key, sizeof(key), &keyLen);
-        if (ep != NULL && cp != NULL && rk == 0) {
-            strncpy(endpoint, ep, sizeof(endpoint) - 1);
-            endpoint[sizeof(endpoint) - 1] = '\0';
-            strncpy(certPath, cp, sizeof(certPath) - 1);
-            certPath[sizeof(certPath) - 1] = '\0';
-            break;
-        }
-        log_info("[AWS] NOT provisioned (endpoint:%s cert:%s key:%s, free heap %u) - run: set endpoint <ep> / set cert <b64> / set key <b64>",
-               ep ? "ok" : "MISSING", cp ? "ok" : "MISSING", rk ? "MISSING" : "ok",
-               (unsigned)xPortGetFreeHeapSize());
-        vTaskDelay(pdMS_TO_TICKS(5000));
-    }
-    log_info("[AWS] provisioned: endpoint=%s certPath=%s key=%uB (free heap %u)",
-           endpoint, certPath, (unsigned)keyLen, (unsigned)xPortGetFreeHeapSize());
+    prvWaitForProvisioning();
 
-    memset(&creds, 0, sizeof(creds));
-    creds.pRootCa = (const uint8_t *)AWS_ROOT_CA_PEM;   /* public Amazon Root CA 1 (embedded) */
-    creds.rootCaSize = sizeof(AWS_ROOT_CA_PEM);         /* literal: includes NUL */
-    creds.pClientCert = NULL;                           /* cert loaded from a file (pClientCertPath) */
-    creds.clientCertSize = 0;
-    creds.pClientCertPath = certPath;                   /* plain LittleFS DER -> mbedtls_x509_crt_parse_file */
-    creds.pPrivateKey = (const uint8_t *)key;           /* DER from TF-M ITS */
-    creds.privateKeySize = keyLen;
-    creds.disableSni = 0;
+    memset(&s_creds, 0, sizeof(s_creds));
+    s_creds.pRootCa = (const uint8_t *)AWS_ROOT_CA_PEM;
+    s_creds.rootCaSize = sizeof(AWS_ROOT_CA_PEM);
+    s_creds.pClientCert = NULL;
+    s_creds.clientCertSize = 0;
+    s_creds.pClientCertPath = s_certPath;
+    s_creds.pPrivateKey = (const uint8_t *)s_key;
+    s_creds.privateKeySize = s_keyLen;
+    s_creds.disableSni = 0;
 
-    /* Reconnect loop with exponential backoff. */
+    /* The command-pointer queue the agent + app tasks rendezvous on. */
+    s_agentMsgCtx.queue = xQueueCreateStatic(AWS_AGENT_QUEUE_LEN,
+                                             sizeof(MQTTAgentCommand_t *),
+                                             s_agentQueueBuf, &s_agentQueueStorage);
+    configASSERT(s_agentMsgCtx.queue != NULL);
+
     for (;;) {
         BackoffAlgorithmContext_t backoff;
         BackoffAlgorithmStatus_t bs = BackoffAlgorithmSuccess;
         uint16_t nextBackoff = 0;
+        bool sessionPresent = false;
+        MQTTStatus_t loopStatus;
 
         BackoffAlgorithm_InitializeParams(&backoff, AWS_BACKOFF_BASE_MS,
                                           AWS_BACKOFF_MAX_MS, AWS_BACKOFF_MAX_TRIES);
 
-        while (prvConnect(&mqtt, &net, endpoint, mac, &creds) != 0) {
+        while (prvAgentConnect(&sessionPresent) != 0) {
             uint32_t rnd = prvGetTimeMs();
             bs = BackoffAlgorithm_GetNextBackoff(&backoff, rnd, &nextBackoff);
             if (bs != BackoffAlgorithmSuccess) {
-                log_info("[AWS] backoff exhausted - retrying in %u ms", AWS_BACKOFF_MAX_MS);
                 nextBackoff = AWS_BACKOFF_MAX_MS;
             }
             log_info("[AWS] reconnect in %u ms", (unsigned)nextBackoff);
             vTaskDelay(pdMS_TO_TICKS(nextBackoff));
         }
 
-        /* Subscribe to the command topic (QoS1). */
-        {
-            MQTTSubscribeInfo_t sub;
-            memset(&sub, 0, sizeof(sub));
-            sub.qos = MQTTQoS0;   /* QoS0: no MQTT_InitStatefulQoS state records needed */
-            sub.pTopicFilter = topic_cmd;
-            sub.topicFilterLength = (uint16_t)strlen(topic_cmd);
-            if (MQTT_Subscribe(&mqtt, &sub, 1, MQTT_GetPacketId(&mqtt), NULL) != MQTTSuccess)
-                log_error("[AWS] subscribe '%s' FAIL", topic_cmd);
-            else
-                log_info("[AWS] subscribed '%s'", topic_cmd);
+        /* Resume any QoS1/2 state if the broker kept the session (it won't with
+         * cleanSession=true, but ResumeSession also clears stale state cleanly). */
+        (void)MQTTAgent_ResumeSession(&s_agent, sessionPresent);
+
+        s_connected = 1;
+
+        /* Start the OTA agent on the first connect; on later reconnects just re-kick it.
+         * (The OTA agent re-subscribes its own job/stream topics through the agent.) */
+        if (!s_otaStarted) {
+            if (ota_app_init(&s_agent, s_mac) == 0) {
+                s_otaStarted = 1;
+            }
+        }
+        if (s_otaStarted) {
+            ota_app_on_mqtt_connected();
         }
 
-        /* Publish telemetry every AWS_TELEMETRY_PERIOD_MS; pump the loop in between. */
+        /* Run the command loop - this owns the socket + pumps ProcessLoop until a
+         * disconnect or error, serialising telemetry/OTA MQTT commands. */
+        loopStatus = MQTTAgent_CommandLoop(&s_agent);
+
+        /* Loop returned: connection is down. Tear down + reconnect. */
+        s_connected = 0;
+        log_info("[AWS] command loop exited (%d) - disconnecting", (int)loopStatus);
+        TLS_FreeRTOS_Disconnect(&s_net);
+
+        /* Cancel any commands queued while the loop was not running so their
+         * completion callbacks fire (waking blocked telemetry/OTA wrappers). */
+        (void)MQTTAgent_CancelAll(&s_agent);
+
+        vTaskDelay(pdMS_TO_TICKS(AWS_BACKOFF_BASE_MS));
+    }
+}
+
+/* ----------------------------------------------------- the telemetry task --- */
+static void prvSubscribeCmdComplete(MQTTAgentCommandContext_t *pCmdCtx,
+                                    MQTTAgentReturnInfo_t *pReturnInfo)
+{
+    TaskHandle_t task = (TaskHandle_t)pCmdCtx;
+    (void)pReturnInfo;
+    if (task != NULL) {
+        xTaskNotifyGive(task);
+    }
+}
+
+static void prvSubscribeCommandTopic(void)
+{
+    MQTTAgentSubscribeArgs_t subscribeArgs;
+    MQTTSubscribeInfo_t subscribeInfo;
+    MQTTAgentCommandInfo_t commandInfo = { 0 };
+
+    /* Register the routing entry first, then enqueue the SUBSCRIBE. */
+    if (SubscriptionManager_AddSubscription(s_topic_cmd, (uint16_t)strlen(s_topic_cmd),
+                                            prvCommandTopicHandler, NULL) == false) {
+        log_error("[AWS] subscription table full for '%s'", s_topic_cmd);
+        return;
+    }
+
+    memset(&subscribeInfo, 0, sizeof(subscribeInfo));
+    subscribeInfo.qos = MQTTQoS0;
+    subscribeInfo.pTopicFilter = s_topic_cmd;
+    subscribeInfo.topicFilterLength = (uint16_t)strlen(s_topic_cmd);
+    subscribeArgs.pSubscribeInfo = &subscribeInfo;
+    subscribeArgs.numSubscriptions = 1U;
+    subscribeArgs.pProperties = NULL;
+
+    commandInfo.cmdCompleteCallback = prvSubscribeCmdComplete;
+    commandInfo.pCmdCompleteCallbackContext = (MQTTAgentCommandContext_t *)xTaskGetCurrentTaskHandle();
+    commandInfo.blockTimeMs = 5000;
+
+    if (MQTTAgent_Subscribe(&s_agent, &subscribeArgs, &commandInfo) != MQTTSuccess) {
+        log_error("[AWS] subscribe enqueue '%s' FAIL", s_topic_cmd);
+        SubscriptionManager_RemoveSubscription(s_topic_cmd, (uint16_t)strlen(s_topic_cmd));
+        return;
+    }
+    /* Wait (best-effort) for the SUBACK so an early command is not missed. */
+    if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(5000)) != 0) {
+        log_info("[AWS] subscribed '%s'", s_topic_cmd);
+    } else {
+        log_info("[AWS] subscribe '%s' (no SUBACK within 5s)", s_topic_cmd);
+    }
+}
+
+static void aws_telemetry_task(void *param)
+{
+    uint32_t seq = 0;
+    int wasConnected = 0;
+    (void)param;
+
+    for (;;) {
+        if (!s_connected) {
+            wasConnected = 0;
+            vTaskDelay(pdMS_TO_TICKS(500));
+            continue;
+        }
+
+        /* On a fresh connection, (re)subscribe the command topic. */
+        if (!wasConnected) {
+            prvSubscribeCommandTopic();
+            wasConnected = 1;
+        }
+
         {
-            uint32_t seq = 0;
-            MQTTStatus_t st = MQTTSuccess;
-            TickType_t nextPub = xTaskGetTickCount();
+            char payload[160];
+            MQTTPublishInfo_t pub;
+            MQTTAgentPublishArgs_t pubArgs;
+            MQTTAgentCommandInfo_t commandInfo = { 0 };
+            int n = snprintf(payload, sizeof(payload),
+                             "{\"thing\":\"%s\",\"fw\":\"%s\",\"seq\":%u,\"uptime_ms\":%u,\"heap\":%u}",
+                             s_mac, AT_FW_VERSION, (unsigned)seq,
+                             (unsigned)prvGetTimeMs(),
+                             (unsigned)xPortGetFreeHeapSize());
 
-            for (;;) {
-                if (xTaskGetTickCount() >= nextPub) {
-                    char payload[160];
-                    MQTTPublishInfo_t pub;
-                    int n = snprintf(payload, sizeof(payload),
-                                     "{\"thing\":\"%s\",\"fw\":\"%s\",\"seq\":%u,\"uptime_ms\":%u,\"heap\":%u}",
-                                     mac, AT_FW_VERSION, (unsigned)seq,
-                                     (unsigned)prvGetTimeMs(),
-                                     (unsigned)xPortGetFreeHeapSize());
-                    memset(&pub, 0, sizeof(pub));
-                    pub.qos = MQTTQoS0;   /* QoS0: fire-and-forget telemetry, no QoS state records */
-                    pub.pTopicName = topic_tele;
-                    pub.topicNameLength = (uint16_t)strlen(topic_tele);
-                    pub.pPayload = payload;
-                    pub.payloadLength = (size_t)n;
+            memset(&pub, 0, sizeof(pub));
+            pub.qos = MQTTQoS0;
+            pub.pTopicName = s_topic_tele;
+            pub.topicNameLength = (uint16_t)strlen(s_topic_tele);
+            pub.pPayload = payload;
+            pub.payloadLength = (size_t)n;
+            pubArgs.pPublishInfo = &pub;
+            pubArgs.pProperties = NULL;
 
-                    st = MQTT_Publish(&mqtt, &pub, MQTT_GetPacketId(&mqtt), NULL);
-                    if (st != MQTTSuccess) {
-                        log_error("[AWS] publish FAIL (%d) - reconnecting", (int)st);
-                        break;
-                    }
-                    log_info("[AWS] TX %s %s", topic_tele, payload);
+            /* Even for QoS0 we BLOCK on completion: the publishInfo + payload[] live on this
+             * task's stack and MUST stay in scope until the agent has serialised the publish
+             * (the agent only copies into the network buffer when it processes the command).
+             * The completion callback notifies us; cmdCtx is this task's handle. */
+            commandInfo.cmdCompleteCallback = prvSubscribeCmdComplete; /* generic notify-on-complete */
+            commandInfo.pCmdCompleteCallbackContext = (MQTTAgentCommandContext_t *)xTaskGetCurrentTaskHandle();
+            commandInfo.blockTimeMs = 1000;
+
+            if (MQTTAgent_Publish(&s_agent, &pubArgs, &commandInfo) == MQTTSuccess) {
+                /* Wait for the agent to consume the command (publish serialised). */
+                if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(5000)) != 0) {
+                    log_info("[AWS] TX %s %s", s_topic_tele, payload);
                     seq++;
-                    nextPub = xTaskGetTickCount() + pdMS_TO_TICKS(AWS_TELEMETRY_PERIOD_MS);
+                } else {
+                    log_error("[AWS] publish '%s' no completion within 5s", s_topic_tele);
                 }
-
-                st = MQTT_ProcessLoop(&mqtt);
-                if (st != MQTTSuccess && st != MQTTNeedMoreBytes) {
-                    log_info("[AWS] ProcessLoop status %d - reconnecting", (int)st);
-                    break;
-                }
-                vTaskDelay(pdMS_TO_TICKS(50));
+            } else {
+                log_error("[AWS] publish enqueue FAIL");
             }
         }
 
-        MQTT_Disconnect(&mqtt, NULL, 0);
-        TLS_FreeRTOS_Disconnect(&net);
-        log_info("[AWS] disconnected; will reconnect");
-        vTaskDelay(pdMS_TO_TICKS(AWS_BACKOFF_BASE_MS));
+        vTaskDelay(pdMS_TO_TICKS(AWS_TELEMETRY_PERIOD_MS));
     }
 }
 
 void aws_iot_demo_start(void)
 {
-    /* 8K-word (32 KB) stack: enough for the mbedTLS handshake, while leaving the shared
-     * FreeRTOS heap room for the per-connection TLS record buffers (a 64 KB stack starved the
-     * heap -> vApplicationMallocFailedHook during the handshake). */
-    if (xTaskCreate(aws_mqtt_task, "aws_mqtt", 8192, NULL,
+    /* The OTA close-file path (mbedTLS x509 parse + ECDSA verify) and the TLS handshake
+     * are the heavy stack users; 8K words for the agent task. The telemetry task is light. */
+    if (xTaskCreate(aws_agent_task, "aws_agent", 8192, NULL,
+                    tskIDLE_PRIORITY + 3, NULL) != pdPASS)
+        log_error("[AWS] xTaskCreate(aws_agent) FAILED");
+
+    if (xTaskCreate(aws_telemetry_task, "aws_tele", 2048, NULL,
                     tskIDLE_PRIORITY + 2, NULL) != pdPASS)
-        log_error("[AWS] xTaskCreate(aws_mqtt) FAILED");
+        log_error("[AWS] xTaskCreate(aws_tele) FAILED");
 }

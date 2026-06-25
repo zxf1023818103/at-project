@@ -346,6 +346,15 @@ if(AMEBAD_ENABLE_AWS_IOT)
         "${CMAKE_CURRENT_SOURCE_DIR}/aws_cli.c"                    # `set` / `blemac` console commands
         "${CMAKE_CURRENT_SOURCE_DIR}/ota_http.c"                  # `ota_http <url>` command (coreHTTP + llhttp)
         "${CMAKE_CURRENT_SOURCE_DIR}/ota_flash.c"                 # runtime OTA slot write/toggle/reboot
+        # AWS IoT OTA Agent over the shared coreMQTT-Agent: the agent foundation (queue/pool/
+        # subscription dispatch), the OTA PAL (ota_flash + mbedTLS code-sign verify), and the OTA
+        # app wiring (OtaInterfaces_t + OTA_EventProcessingTask). The OTA lib (aws_ota) already
+        # builds ota_mqtt.c + ota_os_freertos.c into its archive, so only these app/port TUs are listed.
+        "${CMAKE_CURRENT_SOURCE_DIR}/freertos_agent_message.c"    # MQTTAgentMessageInterface_t over a FreeRTOS queue
+        "${CMAKE_CURRENT_SOURCE_DIR}/freertos_command_pool.c"     # static MQTTAgentCommand_t pool
+        "${CMAKE_CURRENT_SOURCE_DIR}/subscription_manager.c"      # topic-filter -> incoming-publish dispatch
+        "${CMAKE_CURRENT_SOURCE_DIR}/ota_pal.c"                   # OTA PAL (slot write + signature verify)
+        "${CMAKE_CURRENT_SOURCE_DIR}/ota_app.c"                   # OTA agent wiring (OTA_Init + task)
         "${CMAKE_CURRENT_SOURCE_DIR}/urlparse.c"                  # vendored URL parser (from ngtcp2)
         "${CMAKE_SOURCE_DIR}/component/amebad/mbed/efuse_api.c")   # efuse_logical_read (BLE MAC @ 0x190); not built into amebad_mbed
     set_source_files_properties("${CMAKE_SOURCE_DIR}/component/amebad/mbed/efuse_api.c"
@@ -359,6 +368,22 @@ if(AMEBAD_ENABLE_AWS_IOT)
         "${CMAKE_SOURCE_DIR}/component/corehttp_config/corehttp/source/include"
         "${CMAKE_SOURCE_DIR}/component/corehttp_config/corehttp/source/interface"
         "${CMAKE_SOURCE_DIR}/component/corehttp_config/corehttp/source/dependency/3rdparty/llhttp/include")
+    # coreMQTT-Agent (thread-safe wrapper that lets the telemetry + OTA tasks share one MQTT
+    # connection) + the AWS IoT OTA Agent. Both are one-directional: coremqtt_agent calls
+    # coreMQTT, aws_ota reaches MQTT only through the consumer-supplied OtaMqttInterface_t — so
+    # they topo-sort ahead of the mbedTLS cross_refs group and link as ordinary libs. The OTA
+    # PAL's mbedTLS signature verify (x509/pk) is already satisfied by the _aws_grp archives.
+    target_link_libraries(target_img2_km4 PRIVATE coremqtt-agent_config ota_config)
+    target_include_directories(target_img2_km4 PRIVATE
+        "${CMAKE_SOURCE_DIR}/component/coremqtt-agent_config"
+        "${CMAKE_SOURCE_DIR}/component/coremqtt-agent_config/coremqtt-agent/source/include"
+        "${CMAKE_SOURCE_DIR}/component/ota_config"
+        "${CMAKE_SOURCE_DIR}/component/ota_config/ota/source/include"
+        "${CMAKE_SOURCE_DIR}/component/ota_config/ota/source/portable/os")
+    # The OTA lib (ota_mqtt.c stringBuilder) is the only caller of strncat in this image; newlib's
+    # strncat is not otherwise pulled, so resolve it to the ROM _strncat (string_rom_km4.ld),
+    # mirroring the global memcpy=_memcpy romalias above.
+    target_link_options(target_img2_km4 PRIVATE "-Wl,--defsym=strncat=_strncat")
     # FreeRTOS-Plus-CLI header for aws_cli.c (FreeRTOS_CLIRegisterCommand); the freertos_cli
     # archive is already in the link group via _diag_grp.
     target_include_directories(target_img2_km4 PRIVATE

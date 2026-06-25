@@ -22,6 +22,13 @@
 #ifndef CORE_MQTT_AGENT_CONFIG_H
 #define CORE_MQTT_AGENT_CONFIG_H
 
-/* Defaults are sufficient for a transport-agnostic build; add overrides below. */
+/* Error/Warn routed to the console as [MQTTAgent] lines (Info/Debug stay no-ops to keep
+ * the shared connection's hot path quiet). coreMQTT-Agent passes the format+args already
+ * parenthesised, so `printf message` works. */
+#include <stdio.h>
+#define LogError( message )    do { printf( "[MQTTAgent] ERR " ); printf message; printf( "\r\n" ); } while( 0 )
+#define LogWarn( message )     do { printf( "[MQTTAgent] WRN " ); printf message; printf( "\r\n" ); } while( 0 )
+#define LogInfo( message )
+#define LogDebug( message )
 
 #endif /* CORE_MQTT_AGENT_CONFIG_H */
