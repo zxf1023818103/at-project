@@ -212,8 +212,9 @@ static void aws_mqtt_task(void *param)
             certPath[sizeof(certPath) - 1] = '\0';
             break;
         }
-        log_info("[AWS] NOT provisioned (endpoint:%s cert:%s key:%s) - run: set endpoint <ep> / set cert <b64> / set key <b64>",
-               ep ? "ok" : "MISSING", cp ? "ok" : "MISSING", rk ? "MISSING" : "ok");
+        log_info("[AWS] NOT provisioned (endpoint:%s cert:%s key:%s, free heap %u) - run: set endpoint <ep> / set cert <b64> / set key <b64>",
+               ep ? "ok" : "MISSING", cp ? "ok" : "MISSING", rk ? "MISSING" : "ok",
+               (unsigned)xPortGetFreeHeapSize());
         vTaskDelay(pdMS_TO_TICKS(5000));
     }
     log_info("[AWS] provisioned: endpoint=%s certPath=%s key=%uB (free heap %u)",
