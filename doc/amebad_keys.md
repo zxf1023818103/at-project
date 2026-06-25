@@ -184,6 +184,8 @@ SWD 保护、debug-disable —— 全留空 = UART(`flash.ps1`) + JTAG/OpenOCD �
   注：本板 AWS endpoint+cert 在启用过程中随 LFS 重格式化丢了（ITS key 还在）→ 显示 NOT provisioned，要重新
   `set endpoint`+`set cert`（非 RSIP 问题）。
 - **副**：曾误把物理 `0x19[5]`（0x61→0x41）当 enable 烧了一次 → 无害（syscfg3 不变、WiFi+AWS 正常）。
+  **试图改回失败 = eFuse 是真 OTP 不是 EEPROM**：写 `0x19=0x61` 后 read-back 仍 `0x41`（MISMATCH）——
+  已烧成 0 的位不能 un-burn 回 1（与高区"写 0xff→0x7f 只能清位"一致）。误烧位不可逆但无功能影响。
 
 **烧录机制（DEBUG，默认不编，never-ship）**：`make EFUSE_DEBUG=ON` 才编进
 - `efuse_burn <addr> <hex> CONFIRM` 控制台命令（secure 写经 TF-M `AMEBAD_IOCTL_EFUSE_WRITE` → ROM
