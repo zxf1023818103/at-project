@@ -32,6 +32,10 @@ add_library(amebad_usrcfg_common STATIC
 )
 target_link_libraries(amebad_usrcfg_common PUBLIC amebad_sdk_includes)
 target_compile_options(amebad_usrcfg_common PRIVATE ${_usrcfg_warnings})
+# DEBUG bootloader log (Boot_Log_En in rtl8721d_bootcfg.c) is gated on AMEBAD_EFUSE_DEBUG.
+if(AMEBAD_EFUSE_DEBUG)
+    target_compile_definitions(amebad_usrcfg_common PRIVATE AMEBAD_EFUSE_DEBUG)
+endif()
 
 if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
     add_library(amebad_usrcfg_lp STATIC

@@ -864,9 +864,9 @@ int main(void)
 #endif
 #ifdef AMEBAD_SBOOT
     { extern void sboot_cli_register(void); sboot_cli_register(); } /* secure-boot Ed25519 self-test */
-#ifdef AMEBAD_TFM_STORAGE
-    { extern void efuse_burn_cli_register(void); efuse_burn_cli_register(); } /* DEBUG eFuse burn (provisioning) */
 #endif
+#if defined(AMEBAD_EFUSE_DEBUG) && defined(AMEBAD_TFM_STORAGE)
+    { extern void efuse_burn_cli_register(void); efuse_burn_cli_register(); } /* DEBUG eFuse burn (provisioning) */
 #endif
     /* Mount LittleFS + load the persisted environment (KV/) for ALL non-QUIC images, so the
      * WIFI_* / DHCP_* / NTP_SERVER (and the AWS endpoint/cert) env vars work everywhere - not just

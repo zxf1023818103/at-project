@@ -91,6 +91,9 @@ SBOOT      ?= ON           # DEFAULT-ON: Ed25519-sign image2 (boot-ROM secure-bo
                            #       in build/sboot/ (gitignored); for a fused board that key MUST match the
                            #       eFuse public key (back it up - the seed is in doc/test_device_keys.csv).
                            #       SBOOT=OFF for an unsigned image (only safe on a non-fused board).
+EFUSE_DEBUG ?= OFF         # ON -> DEBUG eFuse provisioning aids (NEVER ship): `efuse_burn` console cmd,
+                           #       boot-dump of all eFuse keys + MACs, and Boot_Log_En (verbose bootloader
+                           #       log). Default OFF; the signing (SBOOT) is independent and stays on.
 IMAGE      := $(REPO)/build/amebad/firmware.bin
 
 all: image
@@ -105,7 +108,8 @@ configure:
 	cd $(REPO) && cmake -S . -B build/km0 -G $(GEN) \
 	  -DAMEBAD_CHIP=amebad-km0 \
 	  $$([ -f build/km0/CMakeCache.txt ] || echo -DCMAKE_TOOLCHAIN_FILE=cmake/amebad-km0.cmake) \
-	  -DCMAKE_BUILD_TYPE=$(BUILD_TYPE)
+	  -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) \
+	  -DAMEBAD_EFUSE_DEBUG=$(EFUSE_DEBUG)
 	cd $(REPO) && cmake -S . -B build/km4 -G $(GEN) \
 	  -DAMEBAD_CHIP=amebad-km4 \
 	  $$([ -f build/km4/CMakeCache.txt ] || echo -DCMAKE_TOOLCHAIN_FILE=cmake/amebad-km4.cmake) \
@@ -122,7 +126,8 @@ configure:
 	  -DAMEBAD_TFM_STORAGE=$(STORAGE) \
 	  -DAMEBAD_VFS_SELFTEST=$(VFSTEST) \
 	  -DAMEBAD_CPP_SELFTEST=$(CPPTEST) \
-	  -DAMEBAD_SBOOT=$(SBOOT)
+	  -DAMEBAD_SBOOT=$(SBOOT) \
+	  -DAMEBAD_EFUSE_DEBUG=$(EFUSE_DEBUG)
 
 # build_image_all.py builds both cores (cmake --build, generator-agnostic — reuses
 # the Ninja trees configured above) and assembles the flashable image.

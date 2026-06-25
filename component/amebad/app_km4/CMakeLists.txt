@@ -430,7 +430,13 @@ if(AMEBAD_SBOOT)
     target_sources(target_img2_km4 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/sboot_cli.c")
     target_include_directories(target_img2_km4 PRIVATE "${CMAKE_SOURCE_DIR}/build/sboot")
     target_compile_definitions(target_img2_km4 PRIVATE AMEBAD_SBOOT)
-    # DEBUG eFuse-burn provisioning command - needs the TF-M secure world (EFUSE_WRITE IOCTL).
+endif()
+
+# DEBUG eFuse provisioning aids (make EFUSE_DEBUG=ON, never ship): the `efuse_burn` console command
+# + the boot-time dump of all eFuse keys + MACs (tfm_psa_selftest.c, gated on AMEBAD_EFUSE_DEBUG).
+# The burn command needs the TF-M secure world (EFUSE_WRITE IOCTL).
+if(AMEBAD_EFUSE_DEBUG)
+    target_compile_definitions(target_img2_km4 PRIVATE AMEBAD_EFUSE_DEBUG)
     if(AMEBAD_TFM_STORAGE)
         target_sources(target_img2_km4 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/efuse_burn_cli.c")
     endif()

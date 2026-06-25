@@ -59,6 +59,7 @@ void amebad_tfm_psa_selftest(void)
                    (int)r2, (int)info[0], info[1]);
     }
 
+#ifdef AMEBAD_EFUSE_DEBUG
     /* DEBUG: WiFi + BLE MAC from the (non-secure) eFuse logical map - read here, before WiFi is up
      * (wifi_get_mac_address needs the driver running). Same line format as the key dump below. */
     {
@@ -112,6 +113,7 @@ void amebad_tfm_psa_selftest(void)
             log_info("[KM4] eFuse %s RAW = %s (ret=%d, DEBUG/test-only)", regs[r2].label, hex, (int)rr);
         }
     }
+#endif /* AMEBAD_EFUSE_DEBUG */
 
     /* eFuse security-key probe (secure-side read): SBOOT public key (0x1A0), RSIP key (0x190) and
      * the protection/config word (0x1C0). Confirms whether Secure Boot / RSIP keys are still unfused

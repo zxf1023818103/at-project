@@ -120,6 +120,11 @@ option(AMEBAD_VFS_SELFTEST "Build + run the POSIX-fd VFS self-test (fopen/open/s
 # Non-destructive: proves the ROM verify path without burning eFuse. Declared here so app_km4 sees it.
 option(AMEBAD_SBOOT "Ed25519-sign image2 + on-device `sboot` secure-boot self-test (no eFuse burn)" OFF)
 
+# DEBUG eFuse provisioning aids (make EFUSE_DEBUG=ON) - NEVER ship: the `efuse_burn` console command,
+# the boot-time dump of all eFuse keys + MACs, and the verbose bootloader log (Boot_Log_En). Default
+# OFF; gates the NS callers (so the SPE eFuse read/write IOCTLs have no caller in a normal build).
+option(AMEBAD_EFUSE_DEBUG "DEBUG eFuse burn/dump aids + verbose boot log (never ship)" OFF)
+
 # wolfssl_config / ngtcp2_config / coremqtt_config / corehttp_config / freertos-cli_config
 # are added by the parent component/CMakeLists.txt (shared, consumer-coupled config dirs);
 # the in-tree consumers below (app_km4, ngtcp2 self-test, ...) just link the resulting targets.
