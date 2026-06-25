@@ -175,9 +175,14 @@ SWD 保护、debug-disable —— 全留空 = UART(`flash.ps1`) + JTAG/OpenOCD �
   本板 eFuse=`242dffb1…95f7` → `make RSIP_KEY=f7954f24be5a0e1756e852edb1ff2d24`。IV=`90acd34e…`（NDA）。
 - **实测**：逻辑写 0xE[2] 后未加密镜像启动变黑（OTF 把明文解成乱码）= RSIP 已开；签名+加密镜像（同 key）
   干净启动→WiFi+console 活=OTF 解密+secure boot 共同通过。`OTF EN` 同 `IMG2 SBOOT OK` 走 DBG_8195A 没被抓。
-- **坑/后续**：RSIP 开后**运行时写的数据区被 OTF 腐败**（LittleFS mount FAILED）——AN0405 §1.3：ITS/PS/LFS
-  这些区要进 `RSIP_Mask_Config`（`rtl8721d_bootcfg.c`）No-RSIP mask 才行；AWS+TF-M 镜像还需 IMG3(tfm_s
-  @0x0e400000) 也加密（当前 build 对 TFM+RSIP 直接 error 挡住）。本板现跑无-AWS 加密镜像（WiFi+console OK）。
+- **数据区 No-RSIP mask（commit 8235a7e，已解决）**：RSIP 开后运行时写的数据区会被 OTF 腐败（AN0405 §1.3）。
+  `RSIP_Mask_Config`（`rtl8721d_bootcfg.c`）加了 entry1=LittleFS `0x300000`(240页)、entry2=TF-M ITS/PS
+  `0x3F0000`(16页)→ 实测 **LittleFS mount OK + ITS/PS persistence PASS**。PS 自己做 HUK-AEAD，要看自己的密文。
+- **AWS+TF-M+RSIP 镜像（commit 8235a7e，实机通）**：build_image_all.py 去掉 TFM+RSIP 挡板，IMG3(tfm_s) 也
+  RSIP 加密 @ `0x0e400000`（无头、不签名，只加密）。`make AWS=ON RSIP=ON RSIP_KEY=f7954f24…` 实测：加密 flash
+  启动→TF-M ITS/PS PASS（tfm_s 解密通）+ LFS mount OK + WiFi 起。**完整生产配置（签名+加密+数据 mask）可用**。
+  注：本板 AWS endpoint+cert 在启用过程中随 LFS 重格式化丢了（ITS key 还在）→ 显示 NOT provisioned，要重新
+  `set endpoint`+`set cert`（非 RSIP 问题）。
 - **副**：曾误把物理 `0x19[5]`（0x61→0x41）当 enable 烧了一次 → 无害（syscfg3 不变、WiFi+AWS 正常）。
 
 **烧录机制（DEBUG，默认不编，never-ship）**：`make EFUSE_DEBUG=ON` 才编进
