@@ -41,7 +41,7 @@ struct NetworkContext
 #define SNTP_RECV_BLOCK_MS          ( 5000U )   /* Sntp_ReceiveTimeResponse block time */
 #define SNTP_SOCK_RCVTIMEO_MS       ( 50U )     /* per-recvFrom socket timeout (coreSNTP polls) */
 #define SNTP_RESYNC_PERIOD_MS       ( 3600U * 1000U )   /* re-sync every hour */
-#define SNTP_RETRY_MS               ( 3000U )   /* backoff after a failed round (the first round often
+#define SNTP_RETRY_MS               ( 1000U )   /* backoff after a failed round (the first round often
                                                  * drops the NTP packet; retry soon rather than stall) */
 
 static SntpServerInfo_t  s_env_server[ 1 ];
