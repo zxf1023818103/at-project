@@ -261,17 +261,24 @@ int aws_store_key(const char *b64, size_t len)
     fclose(f);
     if (wrote != der_len)
         return -3;
+    /* publish the key path as env var "key" (auto-persisted to KV/key by --wrap=setenv), exactly
+     * mirroring the cert's env "cert"; aws_load_key reads it back. */
+    if (setenv("key", AWS_KEY_PATH, 1) != 0)
+        return -4;
     return 0;
 }
 
 int aws_load_key(char *buf, size_t buf_len, size_t *out_len)
 {
+    const char *path = getenv("key");
     FILE  *f;
     size_t got;
 
     if (buf == NULL || buf_len == 0)
         return -1;
-    f = fopen(AWS_KEY_PATH, "r");
+    if (path == NULL || path[0] == '\0')
+        path = AWS_KEY_PATH;                 /* fall back to the fixed path if env "key" is unset */
+    f = fopen(path, "r");
     if (f == NULL)
         return -2;                          /* no file -> unprovisioned */
     got = fread(buf, 1, buf_len - 1, f);    /* leave room to NUL-terminate (mbedtls PEM autodetect) */
