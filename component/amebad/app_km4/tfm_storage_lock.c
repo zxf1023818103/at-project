@@ -51,28 +51,36 @@ extern void device_mutex_unlock(unsigned int device);
 extern void FLASH_Write_Lock(void);
 extern void FLASH_Write_Unlock(void);
 
+/* at-project: wfe-free KM0 XIP quiesce (rtl8721d_flash_ram.c). The vendored FLASH_Write_Lock above
+ * was intentionally NOT used here: its KM0 `wfe` HardFaults when woken out of PMU deep-sleep, so
+ * enabling it silently wedged (KM0 never set BIT_KM0_SLEEPSYS; post-mortem in
+ * doc/amebad_km0_scheduler_and_runtime_flash.md). spe_km0_park instead spins KM0 in a RAM-resident
+ * IPC handler (no wfe) and polls KM0's ack with a TIMEOUT, so it can never permanently wedge. This
+ * is the missing cross-core piece: it parks KM0 across the SPE flash program (+ its block-GC) so
+ * the wide page-programs don't collide with KM0 XIP and truncate the >1 KB key. */
+extern void spe_km0_park(void);
+extern void spe_km0_unpark(void);
+
 /* Lock FLASH then CRYPTO (consistent order); unlock in reverse. Skip pre-scheduler: the only
  * caller then is the boot storage self-test, single-threaded with no WiFi/crypto contention,
- * and a FreeRTOS mutex can't block before vTaskStartScheduler(). */
-static void hw_dev_lock(void)
+ * and a FreeRTOS mutex can't block before vTaskStartScheduler(). `quiesce_km0` (set only for the
+ * AWS key write) additionally parks KM0 across the secure flash program. */
+static void hw_dev_lock(int quiesce_km0)
 {
     if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED) {
         device_mutex_lock(DEV_LOCK_FLASH);    /* serialize vs NS flash tasks (LFS/WiFi) */
         device_mutex_lock(DEV_LOCK_CRYPTO);   /* serialize vs NS IPSEC HW-crypto */
-        /* NOTE: FLASH_Write_Lock() (cross-core KM0 quiesce) is intentionally NOT called. The
-         * runtime large-write fault is NOT KM0 XIP contention (OpenOCD post-mortem: KM0 parks
-         * fine in wfe, KM4 locks up INSIDE the SPE on a secure BusFault/INVTRAN — fixed by the
-         * Driver_Flash.c __DSB; a residual NS RAM-pointer corruption remains). Enabling
-         * FLASH_Write_Lock removes that NS corruption but then silently wedges (KM0 tickless
-         * deep-sleep never sets BIT_KM0_SLEEPSYS, so it spins). The SPE flash code itself is
-         * correct (boot-time 256 B replace + 1200 B writes PASS — stg_test_big). Runtime secure
-         * writes need Realtek SPIC/RSIP internals to fix; use boot-time provisioning instead.
-         * Full post-mortem: doc/amebad_km0_scheduler_and_runtime_flash.md. */
+        if (quiesce_km0) {
+            spe_km0_park();                   /* cross-core: park KM0 off the shared SPI flash */
+        }
     }
 }
-static void hw_dev_unlock(void)
+static void hw_dev_unlock(int quiesce_km0)
 {
     if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED) {
+        if (quiesce_km0) {
+            spe_km0_unpark();
+        }
         device_mutex_unlock(DEV_LOCK_CRYPTO);
         device_mutex_unlock(DEV_LOCK_FLASH);
     }
@@ -98,21 +106,21 @@ psa_status_t __wrap_psa_its_set(psa_storage_uid_t uid, size_t data_length,
                                 const void *p_data, psa_storage_create_flags_t create_flags)
 {
     psa_status_t s;
-    int mask = (uid == AWS_KEY_UID);   /* mask NS IRQs for the key write only */
-    hw_dev_lock();
+    int mask = (uid == AWS_KEY_UID);   /* mask NS IRQs + quiesce KM0 for the key write only */
+    hw_dev_lock(mask);
     if (mask) { g_tfm_ns_mask_irq = 1; }
     s = __real_psa_its_set(uid, data_length, p_data, create_flags);
     if (mask) { g_tfm_ns_mask_irq = 0; }
-    hw_dev_unlock();
+    hw_dev_unlock(mask);
     return s;
 }
 
 psa_status_t __wrap_psa_its_remove(psa_storage_uid_t uid)
 {
     psa_status_t s;
-    hw_dev_lock();
+    hw_dev_lock(0);
     s = __real_psa_its_remove(uid);
-    hw_dev_unlock();
+    hw_dev_unlock(0);
     return s;
 }
 
@@ -120,17 +128,17 @@ psa_status_t __wrap_psa_ps_set(psa_storage_uid_t uid, size_t data_length,
                                const void *p_data, psa_storage_create_flags_t create_flags)
 {
     psa_status_t s;
-    hw_dev_lock();
+    hw_dev_lock(0);
     s = __real_psa_ps_set(uid, data_length, p_data, create_flags);
-    hw_dev_unlock();
+    hw_dev_unlock(0);
     return s;
 }
 
 psa_status_t __wrap_psa_ps_remove(psa_storage_uid_t uid)
 {
     psa_status_t s;
-    hw_dev_lock();
+    hw_dev_lock(0);
     s = __real_psa_ps_remove(uid);
-    hw_dev_unlock();
+    hw_dev_unlock(0);
     return s;
 }

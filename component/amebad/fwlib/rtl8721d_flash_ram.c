@@ -19,6 +19,7 @@
 
 static u32 cpu_systick;
 static u32 lock_ticker;
+static u32 spe_q_systick;
 
 
 /**
@@ -139,7 +140,87 @@ void FLASH_Write_Unlock(void)
 	}
 
 	SysTick->CTRL = cpu_systick;//restore systick exception
-	asm volatile ("cpsie i" : : : "memory");	
+	asm volatile ("cpsie i" : : : "memory");
+}
+
+/* ===========================================================================================
+ * at-project: wfe-free KM0 XIP quiesce for SPE secure-storage flash writes (private IPC ch4).
+ *
+ * The vendored FLASH_Write_Lock / FLASH_Write_IPC_Int pair parks KM0 in `wfe` so the SPE can
+ * program the shared SPI flash without KM0 XIP-fetching it (AN0400 §18.1). That `wfe` path
+ * HardFaults KM0 when it is woken out of PMU deep-sleep
+ * (doc/amebad_km0_scheduler_and_runtime_flash.md), so tfm_storage_lock.c could not use it -> the
+ * >1 KB AWS private-key ITS write intermittently truncated (the ITS block-GC's wide 256-byte page
+ * programs collide with KM0 XIP -> partial program; the read-back verify reads the cached view so
+ * it passes, then the reboot reads the truncated flash).
+ *
+ * This is a `wfe`-FREE replacement: KM0 SPINS in this RAM-resident handler (no sleep, so no
+ * sleep/restore context to corrupt), and KM4 polls KM0's ack register with a TIMEOUT so it can
+ * never permanently wedge (worst case it proceeds without the quiesce = the old behavior).
+ * One private channel (ch4, a direct IPCx_USR register, no Messages[] indirection) carries both
+ * directions:  KM4 writes IPCM4_DEV->IPCx_USR[4]=REQ (KM0 reads it); KM0 writes
+ * IPCM0_DEV->IPCx_USR[4]=ACK (KM4 reads it). KM0 acks by writing its OWN reg directly (no
+ * IPC_INTRequest) so no spurious IRQ lands on the masked KM4.
+ * =========================================================================================== */
+#define SPE_QUIESCE_CH        4u
+#define SPE_QUIESCE_REQ       0x5350454bu   /* 'SPEK' : KM4 -> KM0 "park"     */
+#define SPE_QUIESCE_PARKED    0x4b4d3050u   /* 'KM0P' : KM0 -> KM4 "parked"   */
+#define SPE_QUIESCE_TIMEOUT   4000000u      /* poll-iter cap; KM4 proceeds unquiesced if KM0 never parks */
+
+/* KM0-side ch4 handler: spin in SRAM (NOT wfe) until KM4 clears its request register. RAM-resident
+ * so KM0 never fetches the shared SPI flash while parked; IRQs masked so no other KM0 ISR fetches
+ * it either. Registered on ch4 in rtl8721d_ipccfg.c (KM0 table). */
+IMAGE2_RAM_TEXT_SECTION
+void spe_flash_park_ipc_int(VOID *Data, u32 IrqStatus, u32 ChanNum)
+{
+	( void ) Data;
+	( void ) IrqStatus;
+	( void ) ChanNum;
+
+	asm volatile ("cpsid i" : : : "memory");
+	IPCM0_DEV->IPCx_USR[SPE_QUIESCE_CH] = SPE_QUIESCE_PARKED;   /* ack: parked (direct, no IRQ to KM4) */
+	asm volatile ("dsb" : : : "memory");
+	while (IPCM4_DEV->IPCx_USR[SPE_QUIESCE_CH] == SPE_QUIESCE_REQ) {
+		/* spin in SRAM - reads an MMIO reg, fetches no flash */
+	}
+	IPCM0_DEV->IPCx_USR[SPE_QUIESCE_CH] = 0u;                   /* ack: released */
+	asm volatile ("dsb" : : : "memory");
+	asm volatile ("cpsie i" : : : "memory");
+}
+
+/* KM4-side: park KM0, return once it is spinning (or the timeout elapsed). Freezes systick like
+ * FLASH_Write_Lock. Pair with spe_km0_unpark() around the SPE flash write. */
+IMAGE2_RAM_TEXT_SECTION
+void spe_km0_park(void)
+{
+	u32 to = 0;
+
+	spe_q_systick = SysTick->CTRL;
+	SysTick->CTRL = 0;
+	asm volatile ("cpsid i" : : : "memory");
+
+	IPCM4_DEV->IPCx_USR[SPE_QUIESCE_CH] = SPE_QUIESCE_REQ;
+	IPC_INTRequest(IPCM4_DEV, SPE_QUIESCE_CH);                  /* fire KM0's ch4 handler */
+	while (IPCM0_DEV->IPCx_USR[SPE_QUIESCE_CH] != SPE_QUIESCE_PARKED) {
+		if (++to > SPE_QUIESCE_TIMEOUT) {                      /* KM0 never parked - proceed unquiesced */
+			break;
+		}
+	}
+}
+
+IMAGE2_RAM_TEXT_SECTION
+void spe_km0_unpark(void)
+{
+	u32 to = 0;
+
+	IPCM4_DEV->IPCx_USR[SPE_QUIESCE_CH] = 0u;                   /* release (direct, no IRQ) - KM0 exits spin */
+	while (IPCM0_DEV->IPCx_USR[SPE_QUIESCE_CH] != 0u) {
+		if (++to > SPE_QUIESCE_TIMEOUT) {
+			break;
+		}
+	}
+	SysTick->CTRL = spe_q_systick;
+	asm volatile ("cpsie i" : : : "memory");
 }
 
   /**

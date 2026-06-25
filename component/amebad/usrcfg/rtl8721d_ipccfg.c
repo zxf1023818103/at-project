@@ -16,6 +16,10 @@
   */
 #include "ameba_soc.h"
 
+/* at-project: wfe-free KM0 XIP quiesce handler (rtl8721d_flash_ram.c) - registered on KM0 ch4
+ * below so the SPE can program flash for a secure-storage write without KM0 XIP-fetching it. */
+extern void spe_flash_park_ipc_int(VOID *Data, u32 IrqStatus, u32 ChanNum);
+
 #if defined (ARM_CORE_CM4)
 const IPC_INIT_TABLE  ipc_init_config[] =
 {
@@ -69,7 +73,7 @@ const IPC_INIT_TABLE  ipc_init_config[] =
 	{IPC_USER_DATA,		fw_flow_ipc_int,				(VOID*) IPCM4_DEV},//channel 1: IPC_INT_CHAN_WIFI_FW
 	{IPC_USER_DATA,		FLASH_Write_IPC_Int,		(VOID*) NULL},//channel 2: IPC_INT_CHAN_FLASHPG_REQ
 	{IPC_USER_DATA,		NULL,						(VOID*) NULL},//channel 3: Reserved for Realtek use
-	{IPC_USER_DATA,		NULL,						(VOID*) NULL},//channel 4: Reserved for Realtek use
+	{IPC_USER_DATA,		spe_flash_park_ipc_int,		(VOID*) NULL},//channel 4: at-project SPE flash-write KM0 quiesce
 	{IPC_USER_DATA,		NULL,						(VOID*) NULL},//channel 5: Reserved for Realtek use
 	{IPC_USER_DATA,		NULL,						(VOID*) NULL},//channel 6: Reserved for Realtek use
 	{IPC_USER_DATA,		NULL,						(VOID*) NULL},//channel 7: Reserved for Realtek use

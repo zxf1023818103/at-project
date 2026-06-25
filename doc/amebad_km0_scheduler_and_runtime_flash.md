@@ -8,6 +8,14 @@
 > **状态（2026-06-15）**
 > - (A) **✅ 已修**：KM0 关掉 `configUSE_TIMERS` → `xSchedulerRunning=1`，KM0 跑起来了。
 > - (B) **✅ 已修（2026-06-15）：把 SPE flash 驱动挪进 SPE RAM**。根因=AN0400 §18.2——操作 SPIC 的 program/erase 代码必须从 RAM 跑，不能从 XIP flash 跑（flash op 占着 SPIC 时设备没法服务 XIP 取指）。`Driver_Flash.c` 的 `ARM_Flash_ProgramData/EraseSector` 加 `.ramfunc`（`RAMFUNC` 宏 + helper `always_inline`），`region_defs.h` 定义 `S_RAM_CODE_START/SIZE`（从 128 KB 安全 SRAM 顶切 8 KB），TF-M `tfm_common_s.ld` 的 `.ER_CODE_SRAM` 段就把它们放进 `CODE_RAM`、CMSIS startup copy-table 开机拷过去。**实测：运行时 256/768/1200/1700 B ITS 写全 `status=0` OK，8× 1700 B 连写零故障、telemetry 不断**（之前任何 ≥256 B 运行时写都 secure-LOCKUP 硬死板）。残留：偶发一次可恢复的 NS HardFault（写仍成功、系统存活），压测里没复现。私钥改回**直接存 PEM**（1.7 KB < 2 KB ITS cap，省掉 DER 的 `mbedtls_pk_parse_key`——那个会爆 CLI 任务栈）。**唯一剩的口子=`set key` 把 PEM 流过控制台时丢字节**（WiFi 任务抢占 CLI 任务→小 RX FIFO 溢出→EOF 丢），是 host 工具/集成问题，与本 flash 修复无关。**(以下 B′ 段是修复前的诊断历程，保留。)**一句话：**SPE 的 flash 代码本身没问题**（boot 单线程下 256 B replace + 1200 B compaction 全 PASS — `tfm_storage_selftest.c::stg_test_big`），**这是纯运行时环境故障**。原始症状是 SPE 内 **secure 故障→LOCKUP**（CFSR=0x400 BusFault IMPRECISERR + SFSR=0x10 SecureFault INVTRAN → HFSR FORCED → 双故障锁死，PC=0xEFFFFFFE；KM0 此时**正确地** parked 在 wfe，与卡死无关）。`__DSB`（Driver_Flash.c）排掉 secure 锁死后，暴露一处 **NS 侧 RAM 码指针被写坏**（有效 0x0E… 码地址 bit25 被清成未映射 0x0C… → NS HardFault）；再加 `Cache_Flush`（I+D clean+invalidate，对齐 SDK）**不解决** → 不是 cache，是真·RAM 写坏；再叠 KM0 quiesce（`FLASH_Write_Lock`）能消掉那处 RAM 腐败（不再 HardFault），但它在 KM0 tickless 深睡下等 `BIT_KM0_SLEEPSYS` 等不到 → 静默卡死。**每个 mitigation 消一层、露下一层**。结论：运行时 secure 写要 Realtek SPIC/RSIP 内部细节（NDA AN）才能根治；**实务走 boot 期 provisioning（已证可行）或保持内嵌 key**。AWS demo 仍用内嵌 RSIP 加密凭据，端到端 CloudWatch 已验。
+> - (C) **✅ KM0 quiesce 翻案（2026-06-25）：wfe-free RAM-spin 版跑通**。旧 ch2 quiesce 判死的根因 = KM0
+>   handler 里的 `wfe`（深睡上下文恢复 HardFault）。换成 **私有 ch4 + KM0 在 RAM-resident handler 里自旋**
+>   等 KM4 清请求寄存器（不 `wfe`，故无睡眠/恢复上下文可坏），KM4 侧轮询 KM0 的 ack 寄存器 **带 timeout**
+>   （KM0 不响应就继续，永不死等）。握手走一条直连 `IPCx_USR[4]` 寄存器（KM4 写 `IPCM4_DEV` 当请求、KM0 写
+>   `IPCM0_DEV` 当 ack，KM0 直接写自己寄存器不触发 KM4 IRQ）。代码 `spe_flash_park_ipc_int` /
+>   `spe_km0_park`/`spe_km0_unpark`（`rtl8721d_flash_ram.c`）+ ch4 注册（`rtl8721d_ipccfg.c` KM0 表）+
+>   `tfm_storage_lock.c` 只在 AWS key 写时调。**实测：连线态重写 1193B key 8/8 干净**（旧版同场景 0/3），
+>   KM0 console 仍活、AWS telemetry 不断 → **RSA-size 运行时安全写现在可靠了**，不再只能 ECC-32B / boot-期。
 >   - 代码改动取舍：Driver_Flash.c `__DSB`+`Cache_Flush`（对齐 SDK，正确、改善 boot 健壮性，**保留**）；`stg_test_big`（boot 期大写回归证明，**保留**）；`tfm_storage_lock.c` 的 `FLASH_Write_Lock` 已**回退**（运行时静默卡死，比可见 NS fault 更难调）。
 
 相关：[`amebad_tfm_storage.md`](amebad_tfm_storage.md)、[`amebad_xip_layout_boot_hang.md`](amebad_xip_layout_boot_hang.md)、
