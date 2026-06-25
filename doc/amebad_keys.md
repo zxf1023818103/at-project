@@ -157,13 +157,28 @@ HUK 的接入见 [amebad_tfm_storage.md](amebad_tfm_storage.md) §8(`crypto_keys
 | HUK | `0x150` 32B | `577c9a71…a248`（CSPRNG 随机） | — TF-M PS 根，硬件 TZ-secure |
 | RDP key | `0x170` 16B | `ff…ff`（**空，未用**） | 否 |
 | SWD PWD | `0x180` 16B | `cba13dec…7743`（随机） | **否**（SWD 保护位没烧，仅占位） |
-| RSIP key | `0x190` 16B | `242dffb1…95f7`（随机） | **否**（RSIP 没启用，免 OTF 镜像砖） |
+| RSIP key | `0x190` 16B | `242dffb1…95f7`（随机） | **是**（2026-06-25 启用，见「RSIP 启用」） |
 | SBOOT PK | `0x1A0` 32B | `ff79674e…7358`（= build/sboot Ed25519 公钥） | 是（见下） |
 
 **启用的只有 image2 签名校验**：烧 `PROT 0x1C1 = 0x7f`，**只清 bit7**（= 字 bit15 = `Secure Img2 Enable`
 = bootloader 的 `BIT_SECURE_IMG2_DIS`，`boot_flash_hp.c:558`）；`0x1C0` 不动、其余保护位全留空白值。
-结果 `PROT` 字 `0xffff → 0x7fff`。**故意没烧**：IMG1 `Secure Boot Enable`(bit5)、RSIP enable、
+结果 `PROT` 字 `0xffff → 0x7fff`。**没烧**（与 RSIP 独立）：IMG1 `Secure Boot Enable`(bit5)、
 SWD 保护、debug-disable —— 全留空 = UART(`flash.ps1`) + JTAG/OpenOCD 恢复路都开着。
+
+**RSIP 启用（2026-06-25 实机验证，commit 5872112）**：RSIP + secure boot 在主板上实测共存可用。
+- **enable 位 = 逻辑 eFuse `0xE[2]`（AN0405），不是物理 `0x19[5]`**（otf.h 注释误导：实烧物理 0x19[5]
+  后 `syscfg3` 纹丝不动）。逻辑位要走 ROM 逻辑图写 `efuse_logical_write`（`EFUSE_LMAP_WRITE`，会重打包
+  物理段），不能裸物理烧。本板：`efuse_lwrite e 1c CONFIRM`（逻辑 0xE `0x18`→`0x1c`，置 bit2、保留 bit3/4）。
+- **加密镜像必须先签名再加密**（bootloader 验的是 OTF 解密后的明文 image2 + 从解密区读 SB_HEADER）：
+  build_image_all.py 改成 sign→EncTool 加密（CMake 只加密 bootloader）；旧「先加密再签名」必 IMG2 SBOOT FAIL。
+- **RSIP key 字节序**：build keystring 是 eFuse `0x190` 字节的**倒序**（AN0405：keystring 末字节→0x190）。
+  本板 eFuse=`242dffb1…95f7` → `make RSIP_KEY=f7954f24be5a0e1756e852edb1ff2d24`。IV=`90acd34e…`（NDA）。
+- **实测**：逻辑写 0xE[2] 后未加密镜像启动变黑（OTF 把明文解成乱码）= RSIP 已开；签名+加密镜像（同 key）
+  干净启动→WiFi+console 活=OTF 解密+secure boot 共同通过。`OTF EN` 同 `IMG2 SBOOT OK` 走 DBG_8195A 没被抓。
+- **坑/后续**：RSIP 开后**运行时写的数据区被 OTF 腐败**（LittleFS mount FAILED）——AN0405 §1.3：ITS/PS/LFS
+  这些区要进 `RSIP_Mask_Config`（`rtl8721d_bootcfg.c`）No-RSIP mask 才行；AWS+TF-M 镜像还需 IMG3(tfm_s
+  @0x0e400000) 也加密（当前 build 对 TFM+RSIP 直接 error 挡住）。本板现跑无-AWS 加密镜像（WiFi+console OK）。
+- **副**：曾误把物理 `0x19[5]`（0x61→0x41）当 enable 烧了一次 → 无害（syscfg3 不变、WiFi+AWS 正常）。
 
 **烧录机制（DEBUG，默认不编，never-ship）**：`make EFUSE_DEBUG=ON` 才编进
 - `efuse_burn <addr> <hex> CONFIRM` 控制台命令（secure 写经 TF-M `AMEBAD_IOCTL_EFUSE_WRITE` → ROM
