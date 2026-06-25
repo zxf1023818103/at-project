@@ -391,7 +391,7 @@ endif()
 # lib (no --start-group). No TLS / TF-M needed (auth-less SNTP). main.c's network-up hook starts the
 # async client (sntp_sync_start). Excluded only from QUIC (no console + XIP-layout-sensitive).
 if(NOT AMEBAD_ENABLE_QUIC)
-    target_link_libraries(target_img2_km4 PRIVATE coresntp_config)
+    target_link_libraries(target_img2_km4 PRIVATE coresntp_config backoffalgorithm_config)
     target_sources(target_img2_km4 PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/sntp_time.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/time_selftest.c"

@@ -27,6 +27,7 @@
 
 #include "core_sntp_client.h"
 #include "core_sntp_serializer.h"
+#include "backoff_algorithm.h"   /* truncated exp backoff-with-jitter for the retry loop */
 #include "syscalls.h"         /* amebad_set_unix_time */
 #include "at_log.h"              /* rxi log.c: log_info / log_error */
 
@@ -41,8 +42,9 @@ struct NetworkContext
 #define SNTP_RECV_BLOCK_MS          ( 5000U )   /* Sntp_ReceiveTimeResponse block time */
 #define SNTP_SOCK_RCVTIMEO_MS       ( 50U )     /* per-recvFrom socket timeout (coreSNTP polls) */
 #define SNTP_RESYNC_PERIOD_MS       ( 3600U * 1000U )   /* re-sync every hour */
-#define SNTP_RETRY_MS               ( 1000U )   /* backoff after a failed round (the first round often
-                                                 * drops the NTP packet; retry soon rather than stall) */
+#define SNTP_BACKOFF_BASE_MS        ( 1000U )   /* truncated binary exponential backoff-with-jitter on a
+                                                 * failed round: first retry ~0-1s, the cap doubles each */
+#define SNTP_BACKOFF_MAX_MS         ( 32000U )  /* consecutive failure up to this 32 s cap (uint16_t-bounded) */
 
 static SntpServerInfo_t  s_env_server[ 1 ];
 static char              s_env_server_name[ 64 ];
@@ -256,8 +258,12 @@ out:
 
 static void sntp_task( void * arg )
 {
+    BackoffAlgorithmContext_t backoff;
+
     ( void ) arg;
-    srand( ( unsigned ) xTaskGetTickCount() );
+    srand( ( unsigned ) xTaskGetTickCount() );   /* jitter source for BackoffAlgorithm_GetNextBackoff */
+    BackoffAlgorithm_InitializeParams( &backoff, SNTP_BACKOFF_BASE_MS, SNTP_BACKOFF_MAX_MS,
+                                       BACKOFF_ALGORITHM_RETRY_FOREVER );
     log_info( "[SNTP] client up" );
 
     for( ; ; )
@@ -266,12 +272,17 @@ static void sntp_task( void * arg )
 
         if( rc == 0 )
         {
-            vTaskDelay( pdMS_TO_TICKS( SNTP_RESYNC_PERIOD_MS ) );   /* synced; re-sync in ~1h */
+            /* synced: reset the backoff so the next outage starts from the base, re-sync in ~1h */
+            BackoffAlgorithm_InitializeParams( &backoff, SNTP_BACKOFF_BASE_MS, SNTP_BACKOFF_MAX_MS,
+                                               BACKOFF_ALGORITHM_RETRY_FOREVER );
+            vTaskDelay( pdMS_TO_TICKS( SNTP_RESYNC_PERIOD_MS ) );
         }
         else
         {
-            log_error( "[SNTP] round failed (%d); retry in %us", rc, SNTP_RETRY_MS / 1000U );
-            vTaskDelay( pdMS_TO_TICKS( SNTP_RETRY_MS ) );
+            uint16_t delay_ms = SNTP_BACKOFF_MAX_MS;
+            ( void ) BackoffAlgorithm_GetNextBackoff( &backoff, ( uint32_t ) rand(), &delay_ms );
+            log_error( "[SNTP] round failed (%d); retry in %ums (exp backoff)", rc, ( unsigned ) delay_ms );
+            vTaskDelay( pdMS_TO_TICKS( delay_ms ) );
         }
     }
 }
