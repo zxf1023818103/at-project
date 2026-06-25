@@ -85,6 +85,9 @@ endif
 endif
 VFSTEST    ?= OFF          # ON -> POSIX-fd VFS self-test (fopen/open/socket over LFS+sockets)
 CPPTEST    ?= OFF          # ON -> C++ std::filesystem/iostream self-test (cout/cin over LPUART, stderr LOGUART)
+SBOOT      ?= OFF          # ON -> Ed25519-sign image2 (boot-ROM secure-boot format) + `sboot` self-test cmd.
+                           #       NON-destructive: signs + proves the ROM verify, does NOT burn eFuse.
+                           #       Generates a throwaway key in build/sboot/ (gitignored).
 IMAGE      := $(REPO)/build/amebad/firmware.bin
 
 all: image
@@ -95,6 +98,7 @@ all: image
 configure:
 	@for c in km0 km4; do d=$(REPO)/build/$$c; \
 	  [ -f $$d/build.ninja ] || rm -rf $$d; done
+	@[ "$(SBOOT)" = "ON" ] && python3 $(REPO)/component/amebad/image_tool/sboot_keygen.py || true
 	cd $(REPO) && cmake -S . -B build/km0 -G $(GEN) \
 	  -DAMEBAD_CHIP=amebad-km0 \
 	  $$([ -f build/km0/CMakeCache.txt ] || echo -DCMAKE_TOOLCHAIN_FILE=cmake/amebad-km0.cmake) \
@@ -114,7 +118,8 @@ configure:
 	  -DAMEBAD_TFM_BOOT=$(TFM) \
 	  -DAMEBAD_TFM_STORAGE=$(STORAGE) \
 	  -DAMEBAD_VFS_SELFTEST=$(VFSTEST) \
-	  -DAMEBAD_CPP_SELFTEST=$(CPPTEST)
+	  -DAMEBAD_CPP_SELFTEST=$(CPPTEST) \
+	  -DAMEBAD_SBOOT=$(SBOOT)
 
 # build_image_all.py builds both cores (cmake --build, generator-agnostic — reuses
 # the Ninja trees configured above) and assembles the flashable image.

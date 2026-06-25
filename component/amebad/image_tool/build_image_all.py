@@ -106,6 +106,47 @@ def place(image, offset, blob, name):
           (name, offset, len(blob), end))
 
 
+# KM4 image2 XIP-maps to this VMA (image_addr field = IMG2_VMA + IMAGE_HEADER_LEN). The boot
+# ROM's BOOT_FLASH_Image2SignatureCheck (boot_flash_hp.c) and the on-device `sboot` self-test both
+# read the IMAGE_HEADER here.
+IMG2_VMA = 0x0E000000
+
+
+def sign_km4_image2(img2, priv_pem):
+    """Ed25519-sign the KM4 image2 exactly the way the boot ROM verifies it.
+
+    The ROM computes len = sb_header - IMG2_VMA - 0x20 and verifies the signature over the bytes
+    at [IMG2_VMA+0x20 .. sb_header) (the whole image2 payload, contiguous in the XIP-mapped flash),
+    with sb_header pointing at a 4 KB-padded SB_HEADER block appended after the payload (KM0
+    boot_flash_lp.c adds 0x1000 to the mapped size when sb_header != 0xFFFFFFFF). So:
+      - pad img2 (header+payload) to 4 KB  -> sb_off ; sb_vma = IMG2_VMA + sb_off
+      - sign  img2[0x20 : sb_off]
+      - SB_HEADER = reserved[48] + sig[64], padded to 0x1000, appended at sb_off
+      - patch IMAGE_HEADER.sb_header (header offset 0x10) = sb_vma
+    """
+    from cryptography.hazmat.primitives import serialization
+    with open(priv_pem, "rb") as f:
+        key = serialization.load_pem_private_key(f.read(), password=None)
+
+    padded = bytearray(img2)
+    if len(padded) % 0x1000:
+        padded.extend(b"\xff" * (0x1000 - (len(padded) % 0x1000)))
+    sb_off = len(padded)
+    sb_vma = IMG2_VMA + sb_off
+
+    sig = key.sign(bytes(padded[0x20:sb_off]))          # Ed25519 over the payload (RFC 8032)
+    assert len(sig) == 64
+
+    sb_block = bytearray(b"\x00" * 48 + sig)            # SB_HEADER: reserved[12] (48 B) + sb_sig[64]
+    sb_block.extend(b"\xff" * (0x1000 - len(sb_block)))  # pad the signature block to 4 KB
+
+    struct.pack_into("<I", padded, 0x10, sb_vma)         # IMAGE_HEADER.sb_header
+    signed = bytes(padded) + bytes(sb_block)
+    print("  [sboot] signed KM4 image2: payload 0x%x B, sb_header -> 0x%08x, +0x1000 sig block"
+          % (sb_off - 0x20, sb_vma))
+    return signed
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=os.path.join(REPO, "build", "amebad", "Image_All.bin"))
@@ -117,6 +158,7 @@ def main():
 
     tfm_boot = cache_bool(args.km4_build, "AMEBAD_TFM_BOOT")
     frtos_secure = cache_bool(args.km4_build, "AMEBAD_FREERTOS_SECURE")
+    sboot = cache_bool(args.km4_build, "AMEBAD_SBOOT")
 
     if not args.no_build:
         build(args.km0_build, ["target_loader_km0", "target_img2_km0"])
@@ -131,6 +173,12 @@ def main():
     km0_img2 = read(os.path.join(args.km0_build, KM0_IMG2))
     km4_boot = read(os.path.join(args.km4_build, KM4_BOOT))
     km4_img2 = read(os.path.join(args.km4_build, KM4_IMG2))
+
+    if sboot:
+        priv_pem = os.path.join(REPO, "build", "sboot", "sboot_priv.pem")
+        if not os.path.exists(priv_pem):
+            sys.exit("AMEBAD_SBOOT: %s not found (run sboot_keygen.py at configure)." % priv_pem)
+        km4_img2 = sign_km4_image2(km4_img2, priv_pem)
 
     # cross-core image2 merge (imagetool.sh RSIP-off branch is a plain cat)
     km0_km4_img2 = km0_img2 + km4_img2

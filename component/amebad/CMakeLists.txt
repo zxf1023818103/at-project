@@ -115,6 +115,11 @@ add_subdirectory(wifi)               # KM4-gated: host WiFi API + bring-up (ameb
 # call). Declared here so both subdirs see it.
 option(AMEBAD_VFS_SELFTEST "Build + run the POSIX-fd VFS self-test (fopen/open/socket over LFS+sockets)" OFF)
 
+# Ed25519 secure-boot self-test (make SBOOT=ON). build_image_all.py signs image2 in the boot-ROM's
+# SBOOT format; sboot_cli.c verifies the running signed image with the boot ROM's ed25519 verify.
+# Non-destructive: proves the ROM verify path without burning eFuse. Declared here so app_km4 sees it.
+option(AMEBAD_SBOOT "Ed25519-sign image2 + on-device `sboot` secure-boot self-test (no eFuse burn)" OFF)
+
 # wolfssl_config / ngtcp2_config / coremqtt_config / corehttp_config / freertos-cli_config
 # are added by the parent component/CMakeLists.txt (shared, consumer-coupled config dirs);
 # the in-tree consumers below (app_km4, ngtcp2 self-test, ...) just link the resulting targets.

@@ -862,6 +862,9 @@ int main(void)
 #ifdef AMEBAD_ENABLE_MINIZIP
     { extern void zip_cli_register(void);  zip_cli_register();  }   /* zip/unzip demo (non-AWS images) */
 #endif
+#ifdef AMEBAD_SBOOT
+    { extern void sboot_cli_register(void); sboot_cli_register(); } /* secure-boot Ed25519 self-test */
+#endif
     /* Mount LittleFS + load the persisted environment (KV/) for ALL non-QUIC images, so the
      * WIFI_* / DHCP_* / NTP_SERVER (and the AWS endpoint/cert) env vars work everywhere - not just
      * the AWS image. lfs_config_mount is idempotent (a singleton), so this is harmless when

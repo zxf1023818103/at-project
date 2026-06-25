@@ -421,6 +421,17 @@ if(AMEBAD_CPP_SELFTEST)
     target_sources(lfs_config PRIVATE "${CMAKE_SOURCE_DIR}/component/littlefs_config/cpp_selftest.cpp")
 endif()
 
+# Secure-boot (Ed25519) self-test (make SBOOT=ON). build_image_all.py signs the KM4 image2 in the
+# boot ROM's SBOOT format; sboot_keygen.py emits build/sboot/sboot_pk.h (the matching public key).
+# sboot_cli.c registers the `sboot` console command, which re-runs the boot ROM's
+# ed25519_verify_signature over the running signed image2. AMEBAD_SBOOT gates both sboot_cli.c and
+# the registration call in main.c.
+if(AMEBAD_SBOOT)
+    target_sources(target_img2_km4 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/sboot_cli.c")
+    target_include_directories(target_img2_km4 PRIVATE "${CMAKE_SOURCE_DIR}/build/sboot")
+    target_compile_definitions(target_img2_km4 PRIVATE AMEBAD_SBOOT)
+endif()
+
 # Upstream Mbed TLS for fs_cli's md5sum/sha*sum (component/mbedtls_config). Only the
 # console images that don't already pull mbedcrypto via a feature _grp need it (default /
 # MINIMAL / SNTP / HCI-alone); AWS/PKCS11/BENCH/NIMBLE list it in their own _grp, and QUIC
