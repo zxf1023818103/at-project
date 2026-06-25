@@ -53,9 +53,18 @@ AWS        ?= OFF          # ON -> AWS IoT Core MQTT/TLS demo (coreMQTT + mbedTL
 FW_VERSION ?= ota-A        # firmware version string stamped into the AWS image (printed + in telemetry); bump for an OTA target build, e.g. make AWS=ON FW_VERSION=ota-B
 # coreSNTP UTC time-sync is now default-on (every non-QUIC image) - no SNTP flag.
 ifeq ($(AWS),ON)
-# AWS=ON: the MQTT client private key lives in TF-M secure storage (implies STORAGE/TFM).
-# NOTE: no trailing comment on the assignment — a trailing-space value breaks the STORAGE ifeq below.
+# AWS=ON: the MQTT client private key lives in TF-M secure storage by default (implies STORAGE/TFM).
+# `make AWS=ON TFM=OFF` builds AWS WITHOUT the secure world; the key then falls back to a plain
+# LittleFS file (aws_provision.c / aws_cli.c, gated on AMEBAD_TFM_STORAGE). So only force STORAGE=ON
+# when TFM wasn't explicitly turned off on the command line.
+# NOTE: no trailing comment on the STORAGE := ON assignment — a trailing-space value breaks the ifeq.
+ifeq ($(origin TFM),command line)
+ifeq ($(TFM),ON)
 STORAGE    := ON
+endif
+else
+STORAGE    := ON
+endif
 endif
 # HW-GCM (HWGCM follows TFM above, so ON for these TF-M images) is verified end-to-end for BOTH QUIC
 # (picotls/PSA AEAD: ~7.1 Mbps DL / 2.9 UL, vs 1.7 / 1.2 with software GCM) and AWS IoT (mbedTLS

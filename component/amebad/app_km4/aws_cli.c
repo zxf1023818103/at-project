@@ -27,10 +27,12 @@
 #include "FreeRTOS_CLI.h"
 #include "ameba_soc.h"          /* LOGUART_Readable / LOGUART_GetChar / DiagPutChar / DiagPrintf */
 
+#ifdef AMEBAD_TFM_STORAGE
 #include "psa/protected_storage.h"
 #include "psa/internal_trusted_storage.h"
-#include "aws_provision.h"
 #include "section_config.h"     /* IMAGE2_RAM_TEXT_SECTION (place the SPIC probe in RAM) */
+#endif
+#include "aws_provision.h"
 
 /* `set cert`/`set key` take the credential's base64 BODY as one ordinary CLI argument (the
  * standard FreeRTOS+CLI path - FreeRTOS_CLIGetParameter, no raw LOGUART streaming). The host strips
@@ -117,7 +119,8 @@ static BaseType_t cmd_set(char *out, size_t outlen, const char *cmd)
             snprintf(out, outlen, "usage: set %s <base64-body>\r\n", is_key ? "key" : "cert");
             return pdFALSE;
         }
-        /* key -> TF-M ITS (secret); cert -> plain LittleFS DER file + env "cert" (path). */
+        /* key -> TF-M ITS (secret) when TF-M is built, else a plain LittleFS DER file (aws_provision.c
+         * picks the backend on AMEBAD_TFM_STORAGE); cert -> plain LittleFS DER file + env "cert". */
         rc = is_key ? aws_store_key(val, (size_t)l2) : aws_store_cert_file(val, (size_t)l2);
         snprintf(out, outlen, "set %s: %d b64 -> %s\r\n",
                  is_key ? "key" : "cert", (int)l2, (rc == 0) ? "OK" : "FAIL");
@@ -128,6 +131,8 @@ static BaseType_t cmd_set(char *out, size_t outlen, const char *cmd)
     return pdFALSE;
 }
 
+/* ---- TF-M PSA diagnostics (pstest / xiptest): only when the secure storage is built ---- */
+#ifdef AMEBAD_TFM_STORAGE
 /* --------------------------------------------------------------- pstest --- */
 /* Diagnostic: write <size> bytes to TF-M Protected Storage at runtime, retrying up to
  * <retries> times, and report whether/when it succeeds + status + elapsed ms. This probes
@@ -247,26 +252,31 @@ static BaseType_t cmd_xiptest(char *out, size_t outlen, const char *cmd)
     out[0] = '\0';
     return pdFALSE;
 }
+#endif /* AMEBAD_TFM_STORAGE (pstest / xiptest) */
 
 /* ----------------------------------------------------------- registration --- */
 void aws_cli_register(void)
 {
+#ifdef AMEBAD_TFM_STORAGE
+    /* TF-M-only PSA diagnostics. */
     static const CLI_Command_Definition_t cmd_xiptest_def = {
         "xiptest", "xiptest:\r\n RAM-resident: checksum NS XIP before/after a runtime ITS write\r\n",
         cmd_xiptest, 0
     };
+    static const CLI_Command_Definition_t cmd_pstest_def = {
+        "pstest", "pstest [size] [retries]:\r\n diagnostic: runtime PS write of <size> bytes, retried\r\n",
+        cmd_pstest, -1
+    };
     FreeRTOS_CLIRegisterCommand(&cmd_xiptest_def);
+    FreeRTOS_CLIRegisterCommand(&cmd_pstest_def);
+#endif
     static const CLI_Command_Definition_t cmd_blemac_def = {
         "blemac", "blemac:\r\n print the module BLE MAC (AWS Thing name)\r\n",
         cmd_blemac, 0
     };
     static const CLI_Command_Definition_t cmd_set_def = {
-        "set", "set <endpoint <ep>|cert <b64>|key <b64>>:\r\n provision AWS creds (endpoint->env, cert->LFS file, key->TF-M ITS)\r\n",
+        "set", "set <endpoint <ep>|cert <b64>|key <b64>>:\r\n provision AWS creds (endpoint->env, cert->LFS file, key->TF-M ITS or, with TF-M off, an LFS file)\r\n",
         cmd_set, -1
-    };
-    static const CLI_Command_Definition_t cmd_pstest_def = {
-        "pstest", "pstest [size] [retries]:\r\n diagnostic: runtime PS write of <size> bytes, retried\r\n",
-        cmd_pstest, -1
     };
     static const CLI_Command_Definition_t cmd_efusechk_def = {
         "secchk", "secchk:\r\n RSIP/Secure-Boot enable state from the eFuse autoload registers\r\n",
@@ -274,6 +284,5 @@ void aws_cli_register(void)
     };
     FreeRTOS_CLIRegisterCommand(&cmd_blemac_def);
     FreeRTOS_CLIRegisterCommand(&cmd_set_def);
-    FreeRTOS_CLIRegisterCommand(&cmd_pstest_def);
     FreeRTOS_CLIRegisterCommand(&cmd_efusechk_def);
 }

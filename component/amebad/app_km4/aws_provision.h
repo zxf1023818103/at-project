@@ -40,6 +40,11 @@
  * slurp the cert bytes as an env value). Published as the env var "cert". */
 #define AWS_CERT_PATH      "aws_cert.der"
 
+/* Fixed LittleFS path of the client-key DER, used ONLY when TF-M is OFF (no AMEBAD_TFM_STORAGE):
+ * the key then falls back to a plain LFS file instead of TrustZone-protected ITS. Same OUTSIDE-KV/
+ * placement as the cert. With TF-M on, the key lives in ITS and this path is unused. */
+#define AWS_KEY_PATH       "aws_key.der"
+
 /* Create the PSA-access mutex. Call once, pre-scheduler (single-threaded). */
 void aws_provision_init(void);
 

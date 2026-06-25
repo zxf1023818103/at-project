@@ -28,7 +28,9 @@
 #include "semphr.h"
 #include "task.h"
 
-#include "psa/internal_trusted_storage.h"
+#ifdef AMEBAD_TFM_STORAGE
+#include "psa/internal_trusted_storage.h"   /* key -> TrustZone-protected ITS (TF-M build) */
+#endif
 #include "mbedtls/base64.h"
 #include "aws_provision.h"
 
@@ -86,7 +88,10 @@ int aws_get_ble_mac(char *out, size_t out_len)
     return 0;
 }
 
-/* ----------------------------------------------------------- ITS helpers ---- */
+/* ----------------------------------------------------------- ITS helpers ---- *
+ * (TF-M build only; the non-TF-M build stores the key in a plain LittleFS file instead - see the
+ * #else aws_store_key/aws_load_key below.) */
+#ifdef AMEBAD_TFM_STORAGE
 static int its_store(psa_storage_uid_t uid, const char *data, size_t len, size_t cap)
 {
     /* Read-back verify buffer in .bss (not heap/stack - SPM whitelists NS SRAM, and a 2.5 KB
@@ -152,6 +157,7 @@ static int its_load(psa_storage_uid_t uid, char *buf, size_t buf_len, size_t *ou
         *out_len = got + 1;                         /* include NUL for mbedTLS parsing */
     return 0;
 }
+#endif /* AMEBAD_TFM_STORAGE (ITS helpers) */
 
 /* ---- base64 body (armor + newlines stripped by the host) -> DER --------------
  * The console path passes the credential's bare base64 body as a CLI argument, so the NS-side
@@ -161,8 +167,9 @@ static int its_load(psa_storage_uid_t uid, char *buf, size_t buf_len, size_t *ou
  * the TF-M SPM rejects an ITS write whose source buffer is outside the NS SRAM it whitelists
  * (e.g. a PSRAM/heap buffer), so the ITS write must marshal from .bss. The cert path reuses the
  * same buffer (the two `set` commands never run concurrently). */
-static unsigned char s_der[AWS_KEY_MAX];   /* AWS_KEY_MAX == AWS_CERT_MAX (2560) */
+static unsigned char s_der[AWS_KEY_MAX];   /* AWS_KEY_MAX == AWS_CERT_MAX (2560); cert (always) + key */
 
+#ifdef AMEBAD_TFM_STORAGE
 static int b64_store(psa_storage_uid_t uid, const char *b64, size_t len, size_t cap)
 {
     size_t der_len = 0;
@@ -188,6 +195,7 @@ static int der_load(psa_storage_uid_t uid, char *buf, size_t buf_len, size_t *ou
         (*out_len)--;
     return rc;
 }
+#endif /* AMEBAD_TFM_STORAGE (b64_store / der_load) */
 
 /* ----------------------------------------------------------- client cert ---- *
  * Not secret -> plain LittleFS. base64 body -> DER -> the file AWS_CERT_PATH, then publish the
@@ -218,7 +226,13 @@ int aws_store_cert_file(const char *b64, size_t len)
     return 0;
 }
 
-/* ----------------------------------------------------------- private key ---- */
+/* ----------------------------------------------------------- private key ---- *
+ * TF-M build: the key is the one secret that goes to TrustZone-protected ITS. Non-TF-M build: there
+ * is no secure storage, so the key falls back to a plain LittleFS DER file (AWS_KEY_PATH) - the same
+ * treatment as the cert. The file is NS-readable but, like the cert, RSIP-encrypted on flash at rest;
+ * this is the best available without the secure world. The DER write goes through stdio -> the VFS ->
+ * LittleFS (no NS-SRAM marshaling constraint, that is only for psa_its_set across the SPE boundary). */
+#ifdef AMEBAD_TFM_STORAGE
 int aws_store_key(const char *b64, size_t len)
 {
     return b64_store(AWS_KEY_UID, b64, len, AWS_KEY_MAX);
@@ -228,3 +242,45 @@ int aws_load_key(char *buf, size_t buf_len, size_t *out_len)
 {
     return der_load(AWS_KEY_UID, buf, buf_len, out_len);
 }
+#else  /* TF-M off: private key -> plain LittleFS file */
+int aws_store_key(const char *b64, size_t len)
+{
+    size_t der_len = 0, wrote;
+    FILE  *f;
+    int    r;
+
+    if (b64 == NULL || len == 0)
+        return -1;
+    r = mbedtls_base64_decode(s_der, sizeof(s_der), &der_len, (const unsigned char *)b64, len);
+    if (r != 0 || der_len == 0)
+        return -1;
+    f = fopen(AWS_KEY_PATH, "w");
+    if (f == NULL)
+        return -2;
+    wrote = fwrite(s_der, 1, der_len, f);
+    fclose(f);
+    if (wrote != der_len)
+        return -3;
+    return 0;
+}
+
+int aws_load_key(char *buf, size_t buf_len, size_t *out_len)
+{
+    FILE  *f;
+    size_t got;
+
+    if (buf == NULL || buf_len == 0)
+        return -1;
+    f = fopen(AWS_KEY_PATH, "r");
+    if (f == NULL)
+        return -2;                          /* no file -> unprovisioned */
+    got = fread(buf, 1, buf_len - 1, f);    /* leave room to NUL-terminate (mbedtls PEM autodetect) */
+    fclose(f);
+    if (got == 0)
+        return -3;
+    buf[got] = '\0';
+    if (out_len != NULL)
+        *out_len = got;                     /* exact DER length */
+    return 0;
+}
+#endif /* AMEBAD_TFM_STORAGE */
