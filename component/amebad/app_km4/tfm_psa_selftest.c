@@ -59,19 +59,23 @@ void amebad_tfm_psa_selftest(void)
                    (int)r2, (int)info[0], info[1]);
     }
 
-    /* DEBUG / test-device key inventory ONLY: dump RAW secret eFuse regions (HUK 0x150, SWD PWD
-     * 0x180) for the per-device key CSV. This deliberately defeats the never-leave-the-SPE property
-     * - NEVER ship: it exposes the device root key + debug password on the console. */
+    /* DEBUG / test-device key inventory ONLY: dump ALL the RAW secret eFuse key regions at boot so a
+     * provisioned board can be re-recorded / recovered from the console log. This deliberately
+     * defeats the never-leave-the-SPE property - NEVER ship: it exposes the device root key, RDP/RSIP
+     * keys, SWD debug password and the secure-boot public key on the console. */
     {
         static const char hexd[] = "0123456789abcdef";
         static const struct { uint32_t addr, size; const char *label; } regs[] = {
             { 0x150u, 32u, "HUK(0x150,32B)" },
+            { 0x170u, 16u, "RDP_KEY(0x170,16B)" },
             { 0x180u, 16u, "SWD_PWD(0x180,16B)" },
+            { 0x190u, 16u, "RSIP_KEY(0x190,16B)" },
+            { 0x1a0u, 32u, "SBOOT_PK(0x1A0,32B)" },
         };
         uint8_t  buf[32];
         char     hex[2 * 32 + 1];
         unsigned r2, k;
-        for (r2 = 0; r2 < 2u; r2++) {
+        for (r2 = 0; r2 < sizeof(regs) / sizeof(regs[0]); r2++) {
             uint32_t req[2] = { regs[r2].addr, regs[r2].size };
             psa_invec  inr = { .base = req, .len = sizeof(req) };
             psa_outvec ovr = { .base = buf, .len = sizeof(buf) };
