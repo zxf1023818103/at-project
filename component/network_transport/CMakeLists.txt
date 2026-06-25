@@ -37,6 +37,12 @@
 #   network_transport_mbedtls         STATIC — TLS via mbedTLS (PEM/DER creds).
 #   network_transport_mbedtls_pkcs11  STATIC — TLS via mbedTLS, client key in a PKCS#11 token.
 
+# The logging_stack.h macros put __FILE__ in every [PicotlsTransport]/[SocketsWrapper] log line,
+# which was the full build path (/home/.../component/network_transport/transport_picotls.c). Map this
+# dir prefix away so __FILE__ collapses to just the basename (transport_picotls.c). Applies to every
+# target defined below in this file (the .c sources all live in this dir).
+add_compile_options("-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=")
+
 # --- sockets layer: TCP_Sockets_* over FreeRTOS-Plus-TCP -----------------------------------
 # The base every transport sits on. tcp_sockets_wrapper.c calls FreeRTOS_socket / _connect /
 # _recv / _send / DNS directly (self-contained — it does NOT use the legacy sockets_wrapper).
