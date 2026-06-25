@@ -67,9 +67,13 @@ RSIP_MaskDef RSIP_Mask_Config[] = {
 	/*MaskAddr,		MaskSize*/
 	{AMEBAD_RSIP_MASK_ENTRY0_ADDR,	AMEBAD_RSIP_MASK_ENTRY0_PAGES},  //Entry 0: 4K system data & 4K backup
 
-	/* customer can set here */
-	{0xFFFFFFFF,	0xFF},  	//Entry 1: can be used by users
-	{0xFFFFFFFF,	0xFF}, 	//Entry 2: can be used by users
+	/* No-RSIP regions for our runtime-written DATA (must NOT be OTF-decrypted, else the plaintext we
+	 * wrote reads back as garbage — AN0405 §1.3). Flash layout: LittleFS @ 0x300000 (960 KB = 240*4 KB,
+	 * ends 0x3F0000) + TF-M ITS/PS @ 0x3F0000 (64 KB = 16*4 KB). PS does its own HUK-AEAD, so it must
+	 * see its own ciphertext, not an OTF re-"decryption". Harmless when RSIP is unfused (masks are only
+	 * applied when BIT_SYS_FLASH_ENCRYPT_EN is set). MaskSize unit = 4 KB pages (<= 255). */
+	{0x08300000,	240}, 	//Entry 1: LittleFS data region (0x300000..0x3F0000)
+	{0x083F0000,	16}, 	//Entry 2: TF-M ITS + PS secure storage (0x3F0000..0x400000)
 	{0xFFFFFFFF, 	0xFF}, 	//Entry 3: Reserved by Realtek. If RDP is not used, this entry can be used by users.
 
 	/* End */

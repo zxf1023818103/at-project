@@ -217,11 +217,8 @@ def main():
     # XIP 0x0c000000, km4 image2 at 0x0e000000 (AN0405 §3.2.2). Encrypting in CMake before this script
     # signed would have signed ciphertext -> IMG2 SBOOT FAIL on a secure-boot board.
     rsip = cache_bool(args.km4_build, "AMEBAD_RSIP_ENABLE")
+    rsip_key = rsip_iv = None
     if rsip:
-        if tfm_boot or frtos_secure:
-            sys.exit("AMEBAD_RSIP_ENABLE + TF-M/SECURE not supported: the IMG3 secure blob "
-                     "(tfm_s/freertos_s @ XIP 0x0E400000) would also need RSIP encryption, which this "
-                     "script does not yet do. Build the RSIP image without TF-M/SECURE.")
         rsip_key = cache_str(args.km4_build, "AMEBAD_RSIP_KEY")
         rsip_iv  = cache_str(args.km4_build, "AMEBAD_RSIP_IV")
         print("\nRSIP-encrypting image2 (sign-then-encrypt): key=%s.. iv=%s.." %
@@ -269,6 +266,12 @@ def main():
         secure_label = "freertos_s.bin (FreeRTOS TZ secure)"
 
     if secure_blob is not None:
+        # IMG3 (tfm_s / freertos_s) executes cached-XIP from 0x0E400000 with OTF on, so it must be
+        # RSIP-encrypted at that XIP base too (it is headerless + not signed, so just encrypt — no
+        # sign-then-encrypt ordering needed, unlike image2).
+        if rsip:
+            secure_blob = rsip_encrypt(secure_blob, "0x0e400000", rsip_key, rsip_iv)
+            print("RSIP-encrypted %s @ 0x0e400000" % secure_label)
         off_img3 = (len(image) + 0xFFF) & ~0xFFF        # 4 KB-aligned, right after image2
         if off_img3 + len(secure_blob) > OFF_OTA2:
             sys.exit("secure image (@0x%06x + %d B) overruns OTA2 @0x%06x — image2 too big"
