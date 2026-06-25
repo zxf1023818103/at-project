@@ -36,9 +36,10 @@
  * runtime), returning only NON-SECRET summaries {blank flag, folded fingerprint} + the (non-secret)
  * protection config word. Lets the OTA work confirm Secure Boot / RSIP keys are still unfused. */
 #define AMEBAD_IOCTL_EFUSE_SEC_INFO  ((tfm_platform_ioctl_req_t)0x8721E1)
-/* DEBUG / test-device key-inventory ONLY: return the RAW 32-byte HUK to NS. Deliberately defeats
- * the never-leave-the-SPE property above; for dev provisioning bookkeeping, NEVER ship. */
-#define AMEBAD_IOCTL_EFUSE_HUK_RAW   ((tfm_platform_ioctl_req_t)0x8721E2)
+/* DEBUG / test-device key-inventory ONLY: return RAW secure-eFuse bytes to NS (in_vec={addr,size}):
+ * HUK 0x150 / SWD PWD 0x180 / RDP 0x170 / ... Deliberately defeats the never-leave-the-SPE property
+ * above; for dev provisioning bookkeeping, NEVER ship. */
+#define AMEBAD_IOCTL_EFUSE_RAW       ((tfm_platform_ioctl_req_t)0x8721E2)
 
 /* HW-crypto KAT: run the IPSEC engine AES-128-ECB known-answer test from the
  * SECURE side. The crypto peripheral is security-attributed secure-only — the NS
@@ -113,15 +114,20 @@ enum tfm_platform_err_t tfm_platform_hal_ioctl(tfm_platform_ioctl_req_t request,
         out_vec->len = sizeof(out);
         return TFM_PLATFORM_ERR_SUCCESS;
     }
-    case AMEBAD_IOCTL_EFUSE_HUK_RAW: {
-        /* DEBUG / test-device key inventory ONLY: copy the raw 32-byte HUK (secure eFuse 0x150)
-         * to the NS output buffer. Exposes the device root key - never ship. */
-        if (out_vec == NULL || out_vec->base == NULL || out_vec->len < AMEBAD_EFUSE_HUK_SIZE) {
+    case AMEBAD_IOCTL_EFUSE_RAW: {
+        /* DEBUG / test-device key inventory ONLY: read in_vec={u32 addr, u32 size} bytes of secure
+         * eFuse into the NS out buffer. Exposes secret eFuse (HUK/SWD PWD/...) - never ship. */
+        uint32_t req[2];
+        if (in_vec == NULL || in_vec->base == NULL || in_vec->len != sizeof(req) ||
+            out_vec == NULL || out_vec->base == NULL) {
             return TFM_PLATFORM_ERR_INVALID_PARAM;
         }
-        amebad_secure_read_efuse(AMEBAD_EFUSE_HUK_ADDR, AMEBAD_EFUSE_HUK_SIZE,
-                                 (uint8_t *)out_vec->base);
-        out_vec->len = AMEBAD_EFUSE_HUK_SIZE;
+        memcpy(req, in_vec->base, sizeof(req));
+        if (req[1] == 0u || req[1] > 64u || req[1] > out_vec->len) {
+            return TFM_PLATFORM_ERR_INVALID_PARAM;
+        }
+        amebad_secure_read_efuse(req[0], req[1], (uint8_t *)out_vec->base);
+        out_vec->len = req[1];
         return TFM_PLATFORM_ERR_SUCCESS;
     }
     case AMEBAD_IOCTL_EFUSE_SEC_INFO: {

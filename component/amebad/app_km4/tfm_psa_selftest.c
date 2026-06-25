@@ -24,7 +24,7 @@
 #define AMEBAD_IOCTL_PING_XOR    (0x8721D000u)
 #define AMEBAD_IOCTL_EFUSE_HUK_INFO  ((tfm_platform_ioctl_req_t)0x8721E0)
 #define AMEBAD_IOCTL_EFUSE_SEC_INFO  ((tfm_platform_ioctl_req_t)0x8721E1)
-#define AMEBAD_IOCTL_EFUSE_HUK_RAW   ((tfm_platform_ioctl_req_t)0x8721E2)  /* DEBUG: raw HUK to NS */
+#define AMEBAD_IOCTL_EFUSE_RAW       ((tfm_platform_ioctl_req_t)0x8721E2)  /* DEBUG: raw secure eFuse to NS */
 #define AMEBAD_IOCTL_HWCRYPTO_KAT    ((tfm_platform_ioctl_req_t)0x8721F0)
 #define AMEBAD_IOCTL_HWCRYPTO_GCM    ((tfm_platform_ioctl_req_t)0x872200)
 #define AMEBAD_IOCTL_HWCRYPTO_GCM1200 ((tfm_platform_ioctl_req_t)0x872210)
@@ -59,23 +59,31 @@ void amebad_tfm_psa_selftest(void)
                    (int)r2, (int)info[0], info[1]);
     }
 
-    /* DEBUG / test-device key inventory ONLY: dump the RAW 32-byte HUK. This deliberately defeats
-     * the HUK's never-leave-the-SPE property to record it for the per-device key CSV. NEVER ship a
-     * build with this - it exposes the device root key on the console. */
+    /* DEBUG / test-device key inventory ONLY: dump RAW secret eFuse regions (HUK 0x150, SWD PWD
+     * 0x180) for the per-device key CSV. This deliberately defeats the never-leave-the-SPE property
+     * - NEVER ship: it exposes the device root key + debug password on the console. */
     {
         static const char hexd[] = "0123456789abcdef";
-        uint8_t  huk[32];
+        static const struct { uint32_t addr, size; const char *label; } regs[] = {
+            { 0x150u, 32u, "HUK(0x150,32B)" },
+            { 0x180u, 16u, "SWD_PWD(0x180,16B)" },
+        };
+        uint8_t  buf[32];
         char     hex[2 * 32 + 1];
-        unsigned k;
-        psa_outvec ovr = { .base = huk, .len = sizeof(huk) };
-        enum tfm_platform_err_t rr =
-            tfm_platform_ioctl(AMEBAD_IOCTL_EFUSE_HUK_RAW, NULL, &ovr);
-        for (k = 0; k < 32u; k++) {
-            hex[2 * k]     = hexd[huk[k] >> 4];
-            hex[2 * k + 1] = hexd[huk[k] & 0x0Fu];
+        unsigned r2, k;
+        for (r2 = 0; r2 < 2u; r2++) {
+            uint32_t req[2] = { regs[r2].addr, regs[r2].size };
+            psa_invec  inr = { .base = req, .len = sizeof(req) };
+            psa_outvec ovr = { .base = buf, .len = sizeof(buf) };
+            enum tfm_platform_err_t rr =
+                tfm_platform_ioctl(AMEBAD_IOCTL_EFUSE_RAW, &inr, &ovr);
+            for (k = 0; k < regs[r2].size; k++) {
+                hex[2 * k]     = hexd[buf[k] >> 4];
+                hex[2 * k + 1] = hexd[buf[k] & 0x0Fu];
+            }
+            hex[2 * regs[r2].size] = '\0';
+            log_info("[KM4] eFuse %s RAW = %s (ret=%d, DEBUG/test-only)", regs[r2].label, hex, (int)rr);
         }
-        hex[64] = '\0';
-        log_info("[KM4] eFuse HUK(0x150,32B) RAW = %s (ret=%d, DEBUG/test-only)", hex, (int)rr);
     }
 
     /* eFuse security-key probe (secure-side read): SBOOT public key (0x1A0), RSIP key (0x190) and
