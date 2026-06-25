@@ -78,6 +78,14 @@ static void hw_dev_unlock(void)
     }
 }
 
+/* NS-interrupt mask flag in the TF-M NS dispatch (tfm_ns_interface_rtos.c): set across the secure
+ * veneer call so no NS IRQ (SysTick, WiFi, ...) preempts the SPE while it programs the key into
+ * flash. Scoped to ONLY the AWS private-key write (one-time, idle) - masking every ITS write would
+ * stall the tick during the TLS handshake's entropy writes. The >1 KB key was the one corrupted by
+ * the preemption (truncated to e.g. 96 B); the small entropy/seed writes were never affected. */
+extern volatile uint32_t g_tfm_ns_mask_irq;
+#define AWS_KEY_UID   ((psa_storage_uid_t)0x4157535F4B455901ULL)   /* "AWS_KEY\1" (== aws_provision.c) */
+
 /* The real PSA implementations (tfm_its_api.c / tfm_ps_api.c), reached via --wrap. */
 psa_status_t __real_psa_its_set(psa_storage_uid_t uid, size_t data_length,
                                 const void *p_data, psa_storage_create_flags_t create_flags);
@@ -90,8 +98,11 @@ psa_status_t __wrap_psa_its_set(psa_storage_uid_t uid, size_t data_length,
                                 const void *p_data, psa_storage_create_flags_t create_flags)
 {
     psa_status_t s;
+    int mask = (uid == AWS_KEY_UID);   /* mask NS IRQs for the key write only */
     hw_dev_lock();
+    if (mask) { g_tfm_ns_mask_irq = 1; }
     s = __real_psa_its_set(uid, data_length, p_data, create_flags);
+    if (mask) { g_tfm_ns_mask_irq = 0; }
     hw_dev_unlock();
     return s;
 }
