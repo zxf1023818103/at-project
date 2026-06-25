@@ -85,9 +85,12 @@ endif
 endif
 VFSTEST    ?= OFF          # ON -> POSIX-fd VFS self-test (fopen/open/socket over LFS+sockets)
 CPPTEST    ?= OFF          # ON -> C++ std::filesystem/iostream self-test (cout/cin over LPUART, stderr LOGUART)
-SBOOT      ?= OFF          # ON -> Ed25519-sign image2 (boot-ROM secure-boot format) + `sboot` self-test cmd.
-                           #       NON-destructive: signs + proves the ROM verify, does NOT burn eFuse.
-                           #       Generates a throwaway key in build/sboot/ (gitignored).
+SBOOT      ?= ON           # DEFAULT-ON: Ed25519-sign image2 (boot-ROM secure-boot format) every build,
+                           #       so an image is always bootable on a secure-boot-FUSED board (a non-signed
+                           #       image is rejected -> IMG2 SBOOT FAIL dead-loop). Signs with the private key
+                           #       in build/sboot/ (gitignored); for a fused board that key MUST match the
+                           #       eFuse public key (back it up - the seed is in doc/test_device_keys.csv).
+                           #       SBOOT=OFF for an unsigned image (only safe on a non-fused board).
 IMAGE      := $(REPO)/build/amebad/firmware.bin
 
 all: image
