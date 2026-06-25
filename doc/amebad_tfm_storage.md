@@ -396,16 +396,18 @@ for (i=0;i<32;i++)                        /* EFUSERead8 secure ROM 别名 = 0x10
 
 ### 实机结果 & 状态
 
-`[KM4] eFuse HUK(0x150,32B): ret=0 blank=1 fingerprint=0x5b517625`
+最初（空白片）：`[KM4] eFuse HUK(0x150,32B): ret=0 blank=1 fingerprint=0x5b517625`
 - `ret=0`：SPE **能读 secure eFuse**（最不确定的硬件路径已验证）。
 - `blank=1`：这片 eFuse **空白**，HUK 暂时 = 全 `0xFF`（固定值，还不是真秘密）。
 - PS 仍 PASS，且 `PLATFORM_DEFAULT_CRYPTO_KEYS=OFF` 下成功链接 → **dummy 模板被排除，我们的
   eFuse `crypto_keys.c` 是唯一 HUK 提供者**（否则链接缺 `tfm_plat_builtin_key_get_*`）。
 - 改 HUK 源后旧 dummy-HUK 加密的 PS 数据解不开 → 首个 eFuse-HUK boot 自动 reformat，之后照常 PASS。
 
-> **烧 eFuse = 单独的、不可逆步骤**（写错可能损坏芯片）。要让 HUK 真正 device-unique，量产时往
-> `0x150` 烧 32 字节随机 HUK（`EFUSE_PMAP_WRITE8` / SDK `Secure_WriteEfuse`）——**代码不用改**，
-> 烧完 PS 就自动变设备唯一。当前**未烧**。
+> **✅ 已烧（2026-06-25，bench 板，见 `doc/amebad_keys.md` §五）**：`0x150` 已烧 32 字节随机 HUK
+> （`577c9a71…`），现在 `blank=0`、HUK 设备唯一。**代码没改**——`crypto_keys.c` 照读 `0x150`。
+> 实测正如上一条所料：首个 eFuse-HUK boot **PS 自动 reformat（first-boot），但 ITS 存活** → AWS 设备私钥
+> 没丢、MQTT 自动重连，不 brick、不用重新 provision（ITS 非 HUK 加密、PS 才是）。烧录走 `efuse_burn`
+> 控制台命令（`make EFUSE_DEBUG=ON`），细节见 keys 文档 §五。
 
 ---
 
@@ -419,7 +421,7 @@ for (i=0;i<32;i++)                        /* EFUSERead8 secure ROM 别名 = 0x10
 - **flash 区与 LittleFS 共存**（§2）：✅ 已解决 —— LFS 缩到 960 KB（止于 `0x3F0000`），
   顶部 64 KB 划给本存储区，生产 `Image_All.bin` 不再覆盖。改在 `component/littlefs_config` +
   `component/lfs_image`（跨平台统一）。缩 LFS 是 disk-format 变更，首个新固件 boot 会重格式化 LFS。
-- **eFuse 未烧 / entropy**：HUK 区（0x150）当前空白（§9），生产需烧随机 HUK；entropy 仍走
+- **eFuse HUK / entropy**：HUK 区（0x150）**已烧随机 HUK**（2026-06-25，§9 / keys §五）；entropy 仍走
   `CRYPTO_NV_SEED`（AmebaD 无暴露的 TRNG ROM 符号，初始 seed 由 dummy provisioning 给，非生产）。
 - **S_CODE 384 KB 冗余**：实际 SPE 仅 ~58 KB，可缩窗口。
 - 非-QUIC TFM 镜像偶发在 FreeRTOS-Plus-TCP RX 路径 Hard Fault（与 storage 无关，

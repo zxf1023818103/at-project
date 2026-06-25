@@ -145,6 +145,49 @@ HUK 的接入见 [amebad_tfm_storage.md](amebad_tfm_storage.md) §8(`crypto_keys
 
 ---
 
+## 五、本测试板实烧记录（2026-06-25，bench 板已 provisioned + secure boot 已启用）
+
+> ⚠️ 一次性不可逆，已实机落地（commit `4947406` 烧录 / `9a4b96d` 签名管线 / `afa7d38` DEBUG 门控）。
+> 烧录的真实值记在 [`doc/test_device_keys.csv`](test_device_keys.csv)（private repo，每片一行）。
+
+**烧进 eFuse 的值（全部 `efuse_burn` 写完即读回 MATCH）：**
+
+| 区 | eFuse | 值（本板） | 启用？ |
+|---|---|---|---|
+| HUK | `0x150` 32B | `577c9a71…a248`（CSPRNG 随机） | — TF-M PS 根，硬件 TZ-secure |
+| RDP key | `0x170` 16B | `ff…ff`（**空，未用**） | 否 |
+| SWD PWD | `0x180` 16B | `cba13dec…7743`（随机） | **否**（SWD 保护位没烧，仅占位） |
+| RSIP key | `0x190` 16B | `242dffb1…95f7`（随机） | **否**（RSIP 没启用，免 OTF 镜像砖） |
+| SBOOT PK | `0x1A0` 32B | `ff79674e…7358`（= build/sboot Ed25519 公钥） | 是（见下） |
+
+**启用的只有 image2 签名校验**：烧 `PROT 0x1C1 = 0x7f`，**只清 bit7**（= 字 bit15 = `Secure Img2 Enable`
+= bootloader 的 `BIT_SECURE_IMG2_DIS`，`boot_flash_hp.c:558`）；`0x1C0` 不动、其余保护位全留空白值。
+结果 `PROT` 字 `0xffff → 0x7fff`。**故意没烧**：IMG1 `Secure Boot Enable`(bit5)、RSIP enable、
+SWD 保护、debug-disable —— 全留空 = UART(`flash.ps1`) + JTAG/OpenOCD 恢复路都开着。
+
+**烧录机制（DEBUG，默认不编，never-ship）**：`make EFUSE_DEBUG=ON` 才编进
+- `efuse_burn <addr> <hex> CONFIRM` 控制台命令（secure 写经 TF-M `AMEBAD_IOCTL_EFUSE_WRITE` → ROM
+  `EFUSEWrite8` secure alias `0x10100b1d` + secure ctrl `0x40000810`；写完用 `EFUSE_RAW`(`0x8721E2`) 读回核对）；
+- 开机 dump 全 eFuse 密钥 + WiFi/BLE MAC（恢复用）；
+- `Boot_Log_En`（bootloader 详细日志）。
+默认 `EFUSE_DEBUG=OFF`：这些全不在镜像里（NS 调用方没了 → SPE 的 EFUSE_RAW/WRITE IOCTL 无人能调）。
+
+**secure boot 强制力实锤（非破坏性反证）**：用**错误密钥**签的镜像（pub≠eFuse）被 bootloader 拒、
+**卡死在 `IMG1 ENTER` 到不了 main**；正确密钥（build/sboot = eFuse PK）正常 `IMG2 ENTRY → main → AWS`。
+"看不到 `IMG2 SBOOT OK`"只是它走 `DBG_8195A` 没被串口抓、**不是没验签**。死循环后 UART 重烧签名镜像即恢复
+（ROM 下载在验签之前）。
+
+**签名私钥管理（关键）**：这把 Ed25519 私钥 = `build/sboot/`（gitignored），种子备份在 CSV `sboot_privkey`
+列（`6937e25c…`）。`Makefile SBOOT ?= ON` 默认开 → 每次 `make` 自动签（熔丝板上未签名镜像 = `IMG2 SBOOT
+FAIL` 死循环）。换机 / `distclean` 后 keygen 会拍**新随机 key**（熔丝板不认）→ 先跑
+`python3 component/amebad/image_tool/sboot_restore.py`（读 CSV 种子重建 `build/sboot/`）**再** `make`。
+生产应把这把私钥归 **HSM**，别只靠 `build/sboot/`。
+
+**HUK 换根副作用**：烧 HUK 后首次重启 TF-M **PS 重格式化**（first-boot），但 **ITS 存活** → AWS 设备私钥
+没丢、MQTT 自动重连，**不 brick、不用重新 provision**（ITS 非 HUK 加密、PS 才是）。
+
+---
+
 ## 已核实来源 / 待精确化
 
 - **Secure Boot = AN0410 已核实**:Ed25519、公钥本体 32B@`0x1A0`、ROM 校验失败死循环、三方流程、
@@ -159,5 +202,7 @@ HUK 的接入见 [amebad_tfm_storage.md](amebad_tfm_storage.md) §8(`crypto_keys
   LittleFS 这种运行时写的数据**必须 No-RSIP = 明文**。要数据落盘机密性,仍得 PS/app 软件加密(根在 HUK)。
 - 本端 secure-boot 由 **Ameba ROM**(IMG1 校验)负责,TF-M 的 `BL2=OFF`,所以 TF-M ROTPK/MCUboot
   这套不参与;镜像真伪根在第二类(Ed25519)。
-- 烧任何 eFuse 都是**一次性不可逆**,写错 API/区域**可能损坏芯片**(SDK 警告);烧 HUK/RSIP/SBOOT 前
-  务必先在可改写的样片上验证流程。
+- 烧任何 eFuse 都是**一次性不可逆**,写错 API/区域**可能损坏芯片**(SDK 警告)。
+- **本测试板已实烧完成并验证**(2026-06-25,见 §五):HUK/SWD/RSIP key/SBOOT PK 已烧、image2 secure boot
+  已启用并实测强制(错误密钥镜像被拒)、私钥可从 CSV 种子用 `sboot_restore.py` 重建。RSIP/SWD 保护/debug
+  关闭**故意未启用**(留恢复路)。
