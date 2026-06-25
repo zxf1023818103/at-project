@@ -300,6 +300,10 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
     else
     {
         log_info( "[KM4] ==== network DOWN ====" );
+        /* Forget the DHCP-learned NTP server (option 42): the next association re-derives it from
+         * that network's DHCP. Without this, a stale value from a previous network would shadow the
+         * SNTP ntp.aliyun.com fallback when the new network advertises no NTP. */
+        ulDHCPNtpServerAddress = 0U;
     }
 }
 

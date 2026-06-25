@@ -164,7 +164,11 @@ static size_t pick_servers( const SntpServerInfo_t ** out )
     }
     else
     {
+        /* Neither an explicit NTP_SERVER nor a DHCP-advertised one (option 42): fall back to the
+         * fixed default ntp.aliyun.com (reachable on the networks here; the public pool / time.google
+         * / time.cloudflare time out). */
         strncpy( s_env_server_name, "ntp.aliyun.com", sizeof( s_env_server_name ) - 1 );
+        log_info( "[SNTP] no NTP_SERVER / DHCP NTP - using default ntp.aliyun.com" );
     }
     s_env_server_name[ sizeof( s_env_server_name ) - 1 ] = '\0';
     s_env_server[ 0 ].pServerName   = s_env_server_name;
