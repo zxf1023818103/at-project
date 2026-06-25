@@ -51,7 +51,7 @@ HWGCM      ?= $(TFM)       # default = TFM: route AES-GCM + ChaCha20-Poly1305 to
 STORAGE    ?= OFF          # ON -> TF-M PSA secure storage (ITS + PS) + NS storage self-test; implies TFM=ON
 AWS        ?= OFF          # ON -> AWS IoT Core MQTT/TLS demo (coreMQTT + mbedTLS); cert/endpoint->LFS, private key->TF-M PS
 FW_VERSION ?= ota-A        # firmware version string stamped into the AWS image (printed + in telemetry); bump for an OTA target build, e.g. make AWS=ON FW_VERSION=ota-B
-SNTP       ?= OFF          # ON -> coreSNTP UTC sync -> newlib _gettimeofday (time_base.c) -> [TIME] date/time self-test
+# coreSNTP UTC time-sync is now default-on (every non-QUIC image) - no SNTP flag.
 ifeq ($(AWS),ON)
 # AWS=ON: the MQTT client private key lives in TF-M secure storage (implies STORAGE/TFM).
 # NOTE: no trailing comment on the assignment — a trailing-space value breaks the STORAGE ifeq below.
@@ -101,7 +101,6 @@ configure:
 	  -DAMEBAD_ENABLE_AWS_IOT=$(AWS) \
 	  -DAMEBAD_FW_VERSION=$(FW_VERSION) \
 	  -DAMEBAD_TLS_BACKEND=$(TLS_BACKEND) \
-	  -DAMEBAD_ENABLE_SNTP=$(SNTP) \
 	  -DAMEBAD_MBEDTLS_HW_GCM=$(HWGCM) \
 	  -DAMEBAD_TFM_BOOT=$(TFM) \
 	  -DAMEBAD_TFM_STORAGE=$(STORAGE) \

@@ -274,17 +274,17 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
          * are not linked in this image). */
         extern void quic_test_start( void );
         quic_test_start();
-#elif defined(AT_PROJECT_AWS_IOT)
+#else
+        /* coreSNTP UTC time-sync is default-on in every non-QUIC image: an async background task
+         * that fetches UTC over SNTP and backs newlib's _gettimeofday (time_base.c), so the logs
+         * (and TLS / OTA) see real wall-clock time. (Excluded from the layout-sensitive QUIC image.) */
+        { extern void sntp_sync_start( void ); sntp_sync_start(); }
+#if defined(AT_PROJECT_AWS_IOT)
         /* AWS IoT Core MQTT/TLS demo: connect to AWS IoT over mutually-authenticated
          * TLS and publish telemetry. Credentials: endpoint+cert from LittleFS, the
          * private key from TF-M Protected Storage (provisioned via `set ...`). */
         extern void aws_iot_demo_start( void );
         aws_iot_demo_start();
-#elif defined(AT_PROJECT_SNTP)
-        /* coreSNTP UTC time-sync -> newlib _gettimeofday (time_base.c) -> the [TIME]
-         * date/time self-test runs once the first sync lands. */
-        extern void sntp_sync_start( void );
-        sntp_sync_start();
 #elif defined(AT_PROJECT_IPERF)
         /* Default throughput probe: device -> host TCP TX (the device-as-client
          * upload that exercises the WiFi TX path). The UDP TX/RX + TCP-sink probes
@@ -294,6 +294,7 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
         ( void ) iperf_udp_client_start;
         ( void ) iperf_udp_server_start;
         ( void ) iperf_server_start;
+#endif
 #endif
     }
     else
@@ -468,11 +469,12 @@ static void wifi_bringup_thread( void *param )
     /* Throughput: run KM4 at max clock (default may be lower for power). */
     SystemSetCpuClk( CLK_KM4_200M );
 
-#ifdef AT_PROJECT_SNTP
+#ifndef AT_PROJECT_QUIC
     /* Seed the wall clock from the hardware RTC: if a prior SNTP sync wrote it and
      * the RTC survived (warm reset / deep sleep), time() reads real local time from
      * here on, so the [KM4] WiFi logs below are already timestamped with wall-clock
-     * before SNTP re-syncs. A cold boot leaves the RTC at ~1970 -> seed is skipped. */
+     * before SNTP re-syncs. A cold boot leaves the RTC at ~1970 -> seed is skipped.
+     * (SNTP is default-on in every non-QUIC image; see the network-up hook.) */
     {
         extern int rtc_time_seed( void );
         rtc_time_seed();
