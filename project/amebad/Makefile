@@ -94,11 +94,14 @@ SBOOT      ?= ON           # DEFAULT-ON: Ed25519-sign image2 (boot-ROM secure-bo
 EFUSE_DEBUG ?= OFF         # ON -> DEBUG eFuse provisioning aids (NEVER ship): `efuse_burn` console cmd,
                            #       boot-dump of all eFuse keys + MACs, and Boot_Log_En (verbose bootloader
                            #       log). Default OFF; the signing (SBOOT) is independent and stays on.
-RSIP       ?= OFF          # ON -> EncTool-encrypt km0/km4 boot + image2 with AMEBAD_RSIP_KEY/IV. Only
-                           #       boots on a board with the RSIP key fused @0x190 + the RSIP-enable eFuse
-                           #       bit set (otherwise garbage). Key/IV default in image_tool/CMakeLists.txt.
-RSIP_KEY   ?= 32982100546871a0aa983b2987560000   # build key string; eFuse 0x190 holds its REVERSE byte
-RSIP_IV    ?= 90acd34ec70a53fa6eba8ca400000000   # order (AN0405). Override for a board's actual fused key.
+RSIP       ?= ON           # DEFAULT-ON for the RSIP-FUSED bench board: EncTool-encrypt km0/km4 boot +
+                           #       image2 + IMG3 with AMEBAD_RSIP_KEY/IV every build, so the image is
+                           #       bootable (an unencrypted image on a fused board reads as garbage).
+                           #       RSIP=OFF for a plain image (only boots on a board WITHOUT RSIP fused).
+RSIP_KEY   ?= f7954f24be5a0e1756e852edb1ff2d24   # THIS board's key: the build key string is the REVERSE
+                           #       byte order of eFuse 0x190 (=242dffb1…95f7, AN0405). It IS the flash
+                           #       encryption key (in-repo like doc/test_device_keys.csv); override per board.
+RSIP_IV    ?= 90acd34ec70a53fa6eba8ca400000000   # NDA Realtek FAE IV (same for all boards).
 IMAGE      := $(REPO)/build/amebad/firmware.bin
 
 all: image
