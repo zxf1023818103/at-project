@@ -69,6 +69,9 @@ static NetworkEndPoint_t  xEndPoint;
  * silent driver autoreconnect. s_wifiConnected is *set* by the eNetworkUp hook (the reliable
  * "connected" cue, since FOURWAY_HANDSHAKE_DONE is flaky on the driver's autoreconnect). */
 static volatile int s_wifiConnected = 1;
+/* wifi_monitor_thread's handle, so wifi_event_task can wake it the instant a DISCONNECT lands (instead
+ * of the monitor polling every 3 s). */
+static TaskHandle_t s_monitorTask = NULL;
 extern void FreeRTOS_NetworkDown( NetworkInterface_t * pxNetworkInterface );
 
 /* Single consumer of the driver's WiFi events, blocked on the wifi_ind EventGroup (replacing three
@@ -93,6 +96,8 @@ static void wifi_event_task( void * param )
             {
                 s_wifiConnected = 0;
                 FreeRTOS_NetworkDown( &xInterface );
+                if( s_monitorTask != NULL )
+                    xTaskNotifyGive( s_monitorTask );   /* wake the re-associate monitor immediately */
             }
         }
         if( b & WIFI_EVENT_BIT( WIFI_EVENT_FOURWAY_HANDSHAKE_DONE ) )
@@ -855,18 +860,18 @@ wifi_connect_attempt:
      * monitor only re-runs wifi_connect (cached-channel re-associate) on a link drop, so it needs a
      * far smaller stack than the bring-up path (initial all-channel scan + 4-way + crypto bench). */
     if( xTaskCreate( wifi_monitor_thread, "wifi_mon", 1536, NULL,
-                     tskIDLE_PRIORITY + 3, NULL ) != pdPASS )
+                     tskIDLE_PRIORITY + 3, &s_monitorTask ) != pdPASS )
         log_error( "[KM4] xTaskCreate(wifi_mon) failed" );
     vTaskDelete( NULL );
 }
 
-/* WiFi reconnect monitor - its own small task (the bring-up task hands off here and exits). The
- * driver's autoreconnect is only FINITE (wifi_set_autoreconnect(1)) so it gives up after a longer AP
- * outage, and nothing else re-runs wifi_connect - the device would wedge (the agent task spins
- * retrying TLS with no link). Poll the link every 3 s; on a drop re-associate with the cached
- * channel, then FreeRTOS_NetworkDown(&xInterface) so the IP task re-runs DHCP -> eNetworkUp -> the
- * network-up hook (aws_iot_demo_start's once-guard makes the re-entry a no-op; the running agent task
- * reconnects MQTT itself - the path that pre-b3c848b spawned a duplicate aws_agent + HardFaulted). */
+/* WiFi reconnect monitor - its own small task (the bring-up task hands off here and exits). The driver's
+ * autoreconnect is disabled and nothing else re-runs wifi_connect, so without this the device would wedge
+ * (the agent task spins retrying TLS with no link). It blocks until wifi_event_task signals a DISCONNECT,
+ * then re-associates with the cached channel and FreeRTOS_NetworkDown(&xInterface) so the IP task re-runs
+ * DHCP -> eNetworkUp -> the network-up hook (aws_iot_demo_start's once-guard makes the re-entry a no-op;
+ * the running agent task reconnects MQTT itself - the path that pre-b3c848b spawned a duplicate aws_agent
+ * + HardFaulted). */
 static void wifi_monitor_thread( void * param )
 {
     extern void rltk_wlan_tx_deauth( unsigned char b_broadcast, unsigned char key_type );
@@ -875,8 +880,9 @@ static void wifi_monitor_thread( void * param )
 
     for( ;; )
     {
-        vTaskDelay( pdMS_TO_TICKS( 3000 ) );
-        if( s_wifiConnected )      /* event-driven (wifi_ind) - reliable, unlike wifi_is_connected_to_ap() */
+        /* Block until wifi_event_task notifies a DISCONNECT (right after it drops the IP stack). */
+        ( void ) ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
+        if( s_wifiConnected )      /* already recovered before we ran - nothing to do */
             continue;
 
         /* The driver's own autoreconnect is disabled, so there is nothing to wait for - re-associate
