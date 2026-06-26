@@ -306,7 +306,9 @@ void sntp_sync_start( void )
      * xTaskCreate(sntp_selftest_task, ...) call (the notify in sntp_set_time is gated on
      * s_selftest_task, so it stays a no-op while this is off). */
     ( void ) sntp_selftest_task;
-    if( xTaskCreate( sntp_task, "sntp", 4096, NULL,
+    /* 1024 words (4 KB): the task only does a DNS lookup + a 48-byte SNTP round + set_time in a
+     * loop - 4096 (16 KB) was ~5x over. */
+    if( xTaskCreate( sntp_task, "sntp", 1024, NULL,
                      tskIDLE_PRIORITY + 2, NULL ) != pdPASS )
     {
         log_error( "[SNTP] xTaskCreate(sntp) FAILED" );
