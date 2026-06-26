@@ -354,12 +354,13 @@ static void prvSubscribeCommandTopic(void)
         SubscriptionManager_RemoveSubscription(s_topic_cmd, (uint16_t)strlen(s_topic_cmd));
         return;
     }
-    /* Wait (best-effort) for the SUBACK so an early command is not missed. */
-    if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(5000)) != 0) {
-        log_info("[AWS] subscribed '%s'", s_topic_cmd);
-    } else {
-        log_info("[AWS] subscribe '%s' (no SUBACK within 5s)", s_topic_cmd);
-    }
+    /* Wait WITHOUT a timeout. subscribeArgs/subscribeInfo are stack locals the queued command holds
+     * by POINTER, so they MUST outlive the command. A premature timeout let this return (reusing the
+     * stack) while the SUBSCRIBE was still queued -> the agent later dereferenced a stale subscribeInfo
+     * (garbage pTopicFilter) -> strncmp bus fault in validateSubscribeUnsubscribeParams on a busy
+     * reconnect. Never hangs: the agent runs the command, or CancelAll on disconnect fires the callback. */
+    ( void ) ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
+    log_info("[AWS] subscribed '%s'", s_topic_cmd);
 }
 
 static void aws_telemetry_task(void *param)
@@ -419,13 +420,14 @@ static void aws_telemetry_task(void *param)
             commandInfo.blockTimeMs = 1000;
 
             if (MQTTAgent_Publish(&s_agent, &pubArgs, &commandInfo) == MQTTSuccess) {
-                /* Wait for the agent to consume the command (publish serialised). */
-                if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(5000)) != 0) {
-                    log_info("[AWS] TX %s %s", s_topic_tele, payload);
-                    seq++;
-                } else {
-                    log_error("[AWS] publish '%s' no completion within 5s", s_topic_tele);
-                }
+                /* Wait WITHOUT a timeout: pub + payload[] are stack locals the queued command holds by
+                 * POINTER, so they must outlive the command. A premature timeout returned here (reusing
+                 * the stack) while the publish was still queued -> the agent dereferenced a stale pub
+                 * (same class of bug as the subscribe path). Always resolves: the agent serialises it,
+                 * or CancelAll on disconnect fires the callback. */
+                ( void ) ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
+                log_info("[AWS] TX %s %s", s_topic_tele, payload);
+                seq++;
             } else {
                 log_error("[AWS] publish enqueue FAIL");
             }
@@ -457,7 +459,8 @@ void aws_iot_demo_start(void)
                     tskIDLE_PRIORITY + 3, NULL) != pdPASS)
         log_error("[AWS] xTaskCreate(aws_agent) FAILED");
 
-    if (xTaskCreate(aws_telemetry_task, "aws_tele", 2048, NULL,
+    /* 1024 words (4 KB): `tasks` high-water shows the telemetry task only ever used ~1.7 KB. */
+    if (xTaskCreate(aws_telemetry_task, "aws_tele", 1024, NULL,
                     tskIDLE_PRIORITY + 2, NULL) != pdPASS)
         log_error("[AWS] xTaskCreate(aws_tele) FAILED");
 }

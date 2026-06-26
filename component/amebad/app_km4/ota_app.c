@@ -596,8 +596,15 @@ static void prvCmdCompleteCb( MQTTAgentCommandContext_t * pCmdCtx,
 
 static bool prvWaitForCmd( OtaMqttCmdCtx_t * pCtx )
 {
-    /* The completion callback runs in the agent task; ulTaskNotifyTake clears on exit. */
-    return ( ulTaskNotifyTake( pdTRUE, pdMS_TO_TICKS( OTA_AGENT_CMD_TIMEOUT_MS ) ) != 0 ) ? true : false;
+    ( void ) pCtx;
+    /* Wait WITHOUT a timeout. The caller's MQTTAgentSubscribeArgs_t / MQTTSubscribeInfo_t / OtaMqttCmdCtx_t
+     * are stack locals that the queued agent command holds by POINTER, so they MUST stay alive until the
+     * command resolves. A premature timeout let the caller return (reusing that stack) while the command was
+     * still queued, so the agent later dereferenced a stale pTopicFilter (=0x01010102) -> strncmp bus fault
+     * in validateSubscribeUnsubscribeParams - hit on the busy OTA_Resume reconnect where the subscribe can't
+     * complete within 10s. This never hangs: the agent either runs the command (completion callback fires) or,
+     * on disconnect, MQTTAgent_CancelAll fires the callback - both do prvCmdCompleteCb -> xTaskNotifyGive. */
+    return ( ulTaskNotifyTake( pdTRUE, portMAX_DELAY ) != 0 ) ? true : false;
 }
 
 /* --------------------------------------------- incoming-publish dispatcher ---- */

@@ -300,6 +300,14 @@ static void sntp_selftest_task( void * arg )
 
 void sntp_sync_start( void )
 {
+    /* Start ONCE. The network-up hook calls this on every "network UP" (incl. WiFi reconnects), but
+     * the sntp task already re-syncs periodically on its own - without this guard each reconnect
+     * leaked another 4 KB sntp task (caught in `tasks`: two "sntp" entries after one kick reconnect). */
+    static int s_started = 0;
+    if( s_started )
+        return;
+    s_started = 1;
+
     /* The [TIME]/[DST] newlib date-time self-test demo (time_selftest_run via sntp_selftest_task)
      * is disabled: it repeatedly switches TZ (CST/PST/UTC/...), which makes the per-line log
      * timestamp jump around and clutters the operational log. Re-enable by restoring the
