@@ -18,6 +18,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "wifi_conf.h"            /* wifi_on / wifi_connect / wifi_get_mac_address */
+#include "wifi_ind.h"             /* wifi_reg_event_handler: driver link-state events (wifi_ind.c) */
 #include "FreeRTOS_IP.h"
 #include "FreeRTOS_Routing.h"     /* NetworkInterface_t / NetworkEndPoint_t / FillEndPoint */
 #include "backoff_algorithm.h"    /* truncated exp backoff-with-jitter for the WiFi reconnect loop */
@@ -55,12 +56,61 @@ extern void iperf_udp_server_start(void);
 /* WiFi reconnect backoff: 1 s base, 8 s cap, RETRY_FOREVER (keep re-associating until the AP is back). */
 #define WIFI_RECONNECT_BACKOFF_BASE_MS  ( 1000U )
 #define WIFI_RECONNECT_BACKOFF_MAX_MS   ( 8000U )
+/* How long the monitor lets the driver's own autoreconnect try (success or RECONNECTION_FAIL) before
+ * taking over anyway - covers the driver's ~8x5 s FINITE window plus margin, in case it gives up
+ * silently (RECONNECTION_FAIL not always fired) and would otherwise leave the monitor waiting forever. */
+#define WIFI_DRIVER_GIVEUP_TIMEOUT_MS   ( 45000U )
 
 static NetworkInterface_t xInterface;
 static void wifi_monitor_thread( void * param );   /* small reconnect-monitor task (defined below) */
 /* NB: OpenOCD's FreeRTOS awareness needs the `uxTopUsedPriority` symbol - the kernel already exports
  * it (tasks.c), so we don't redefine it here. -rtos FreeRTOS is set in scripts/amebad_openocd.cfg. */
 static NetworkEndPoint_t  xEndPoint;
+
+/* WiFi link state, driven by the driver's event indication (wifi_ind.c / wifi_reg_event_handler) -
+ * far more reliable than polling wifi_is_connected_to_ap(), which stays "not connected" even after a
+ * silent driver autoreconnect. Set on FOURWAY_HANDSHAKE_DONE, cleared on DISCONNECT. */
+static volatile int s_wifiConnected = 1;
+/* Set by WIFI_EVENT_RECONNECTION_FAIL when the driver's own FINITE autoreconnect gives up - the cue for
+ * wifi_monitor_thread to take over. Until then the monitor holds off, so it never races the driver's
+ * still-in-progress autoreconnect (that race left a redundant network DOWN/UP at reconnect). */
+static volatile int s_driverGaveUp = 0;
+extern void FreeRTOS_NetworkDown( NetworkInterface_t * pxNetworkInterface );
+
+/* Fired by the driver at the actual link drop -> mark the IP stack down HERE so eNetworkDown
+ * ("==== network DOWN ====") logs at the real disconnect, not at reconnect. Kept light (just an
+ * IP-task event); the heavy re-associate is left to wifi_monitor_thread. Guarded so repeated
+ * disconnect indications during the outage don't keep restarting DHCP. */
+static void wifi_event_disconnect_hdl( char *buf, int buf_len, int flags, void *user_data )
+{
+    ( void ) buf; ( void ) buf_len; ( void ) flags; ( void ) user_data;
+    s_driverGaveUp = 0;   /* the driver begins its own autoreconnect now */
+    if( s_wifiConnected )
+    {
+        s_wifiConnected = 0;
+        FreeRTOS_NetworkDown( &xInterface );
+    }
+}
+
+/* Fired when the driver's own FINITE autoreconnect has exhausted its retries -> release the monitor. */
+static void wifi_event_reconnect_fail_hdl( char *buf, int buf_len, int flags, void *user_data )
+{
+    ( void ) buf; ( void ) buf_len; ( void ) flags; ( void ) user_data;
+    s_driverGaveUp = 1;
+}
+
+/* Fired once the 4-way handshake is done (data can flow) - whether the driver's own autoreconnect or
+ * wifi_monitor_thread re-associated. Re-kick DHCP for a prompt eNetworkUp; the hook's s_downLogged
+ * keeps this 2nd FreeRTOS_NetworkDown from re-printing "network DOWN". */
+static void wifi_event_connect_hdl( char *buf, int buf_len, int flags, void *user_data )
+{
+    ( void ) buf; ( void ) buf_len; ( void ) flags; ( void ) user_data;
+    if( !s_wifiConnected )
+    {
+        s_wifiConnected = 1;
+        FreeRTOS_NetworkDown( &xInterface );
+    }
+}
 
 /* DHCP-only by default (0.0.0.0). The cached DHCP_* lease, when present, is loaded into these as
  * the endpoint's prior address so FreeRTOS+TCP DHCP REQUESTs it (INIT-REBOOT) instead of a cold
@@ -227,9 +277,20 @@ static void wifi_autodetect_country( void )
  * ipconfigIPv4_BACKWARD_COMPATIBLE=1 -> single-arg hook. */
 void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
 {
+    /* Print "network DOWN" once per down->up cycle: the WiFi DISCONNECT event drops the IP stack (real
+     * timing), and the FOURWAY_HANDSHAKE_DONE event calls FreeRTOS_NetworkDown again to re-DHCP - only
+     * the first should print. */
+    static int s_downLogged = 0;
+
     if( eNetworkEvent == eNetworkUp )
     {
         uint32_t ulIP = 0, ulMask = 0, ulGW = 0, ulDNS = 0;
+        s_downLogged = 0;
+        /* Network fully up (DHCP done) -> link is connected. This is the reliable "connected" cue: the
+         * FOURWAY_HANDSHAKE_DONE event is flaky on the driver's own autoreconnect, but eNetworkUp always
+         * fires once the DHCP started at DISCONNECT completes. Clears the monitor's wait without a
+         * redundant takeover. */
+        s_wifiConnected = 1;
         FreeRTOS_GetAddressConfiguration( &ulIP, &ulMask, &ulGW, &ulDNS );
         /* IPs are in network byte order; byte 0 = first octet. */
         log_info( "[KM4] ==== network UP ====" );
@@ -307,7 +368,11 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
     }
     else
     {
-        log_info( "[KM4] ==== network DOWN ====" );
+        if( !s_downLogged )
+        {
+            s_downLogged = 1;
+            log_info( "[KM4] ==== network DOWN ====" );
+        }
         /* Forget the DHCP-learned NTP server (option 42): the next association re-derives it from
          * that network's DHCP. Without this, a stale value from a previous network would shadow the
          * SNTP ntp.aliyun.com fallback when the new network advertises no NTP. */
@@ -820,6 +885,14 @@ wifi_connect_attempt:
 #endif
 #endif /* !AT_PROJECT_QUIC && !AT_PROJECT_PKCS11 */
 
+    /* Register the driver link-state event handlers now that the WiFi is up: DISCONNECT marks the IP
+     * stack down at the real drop (-> "network DOWN" on time), FOURWAY_HANDSHAKE_DONE re-DHCPs on
+     * (re)connect. These drive s_wifiConnected, which the monitor polls instead of the unreliable
+     * wifi_is_connected_to_ap(). */
+    wifi_reg_event_handler( WIFI_EVENT_DISCONNECT, wifi_event_disconnect_hdl, NULL );
+    wifi_reg_event_handler( WIFI_EVENT_FOURWAY_HANDSHAKE_DONE, wifi_event_connect_hdl, NULL );
+    wifi_reg_event_handler( WIFI_EVENT_RECONNECTION_FAIL, wifi_event_reconnect_fail_hdl, NULL );
+
     /* Hand off to a dedicated reconnect-monitor task, then free this 16 KB bring-up stack: the
      * monitor only re-runs wifi_connect (cached-channel re-associate) on a link drop, so it needs a
      * far smaller stack than the bring-up path (initial all-channel scan + 4-way + crypto bench). */
@@ -838,7 +911,6 @@ wifi_connect_attempt:
  * reconnects MQTT itself - the path that pre-b3c848b spawned a duplicate aws_agent + HardFaulted). */
 static void wifi_monitor_thread( void * param )
 {
-    extern void FreeRTOS_NetworkDown( NetworkInterface_t * pxNetworkInterface );
     extern void rltk_wlan_tx_deauth( unsigned char b_broadcast, unsigned char key_type );
 
     ( void ) param;
@@ -846,10 +918,25 @@ static void wifi_monitor_thread( void * param )
     for( ;; )
     {
         vTaskDelay( pdMS_TO_TICKS( 3000 ) );
-        if( wifi_is_connected_to_ap() == RTW_SUCCESS )
+        if( s_wifiConnected )      /* event-driven (wifi_ind) - reliable, unlike wifi_is_connected_to_ap() */
             continue;
 
-        log_info( "[KM4] WiFi link down - re-associating..." );
+        log_info( "[KM4] WiFi link down..." );
+        /* Let the driver's own FINITE autoreconnect try first; only re-associate ourselves once it
+         * either succeeds (s_wifiConnected) or gives up (s_driverGaveUp via WIFI_EVENT_RECONNECTION_FAIL).
+         * This keeps our wifi_connect from racing the still-in-progress driver autoreconnect, which left
+         * a redundant network DOWN/UP at reconnect. */
+        {
+            int waited = 0;
+            while( !s_wifiConnected && !s_driverGaveUp && waited < WIFI_DRIVER_GIVEUP_TIMEOUT_MS )
+            {
+                vTaskDelay( pdMS_TO_TICKS( 500 ) );
+                waited += 500;
+            }
+        }
+        if( s_wifiConnected )
+            continue;
+        log_info( "[KM4] driver autoreconnect gave up - re-associating ourselves..." );
         {
             const char    *ssid = getenv( "WIFI_SSID" );
             const char    *pass = getenv( "WIFI_PASSWORD" );
@@ -857,7 +944,6 @@ static void wifi_monitor_thread( void * param )
             rtw_security_t sec  = wifi_sec_from_str( getenv( "WIFI_SECURITY" ) );
             u8             ch   = ( ce != NULL && ce[ 0 ] != '\0' ) ? (u8) atoi( ce ) : 0;
             BackoffAlgorithmContext_t backoff;
-            int            ok = 0;
 
             if( ssid == NULL )                 ssid = "AIoT";
             if( pass == NULL )                 pass = "123456789";
@@ -869,7 +955,10 @@ static void wifi_monitor_thread( void * param )
             BackoffAlgorithm_InitializeParams( &backoff, WIFI_RECONNECT_BACKOFF_BASE_MS,
                                                WIFI_RECONNECT_BACKOFF_MAX_MS,
                                                BACKOFF_ALGORITHM_RETRY_FOREVER );
-            while( !ok )
+            /* Stop the instant s_wifiConnected goes true - whether the driver's own autoreconnect or our
+             * wifi_connect won the race - so we never double-associate. The FOURWAY_HANDSHAKE_DONE event
+             * (which sets s_wifiConnected) re-DHCPs, so the monitor itself never touches the IP layer. */
+            while( !s_wifiConnected )
             {
                 uint16_t nextBackoff = WIFI_RECONNECT_BACKOFF_MAX_MS;
                 rltk_wlan_tx_deauth( 1, 0 );
@@ -881,10 +970,7 @@ static void wifi_monitor_thread( void * param )
                 }
                 if( wifi_connect( (char *) ssid, sec, (char *) pass,
                                   (int) strlen( ssid ), (int) strlen( pass ), 0, NULL ) == RTW_SUCCESS )
-                {
-                    ok = 1;
-                    break;
-                }
+                    break;   /* connected; FOURWAY_HANDSHAKE_DONE sets s_wifiConnected + re-DHCPs */
                 /* Tick count is the per-attempt jitter seed (RETRY_FOREVER never returns Exhausted). */
                 ( void ) BackoffAlgorithm_GetNextBackoff( &backoff, ( uint32_t ) xTaskGetTickCount(),
                                                           &nextBackoff );
@@ -893,8 +979,7 @@ static void wifi_monitor_thread( void * param )
             }
             wifi_set_power_mode( 0, 0 );
             wifi_disable_powersave();
-            log_info( "[KM4] WiFi re-associated - re-acquiring DHCP" );
-            FreeRTOS_NetworkDown( &xInterface );
+            log_info( "[KM4] WiFi re-associated" );
         }
     }
 }
