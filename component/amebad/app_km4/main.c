@@ -290,6 +290,7 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
      * timing), and the FOURWAY_HANDSHAKE_DONE event calls FreeRTOS_NetworkDown again to re-DHCP - only
      * the first should print. */
     static int s_downLogged = 0;
+    static int s_everUp = 0;     /* gates "network DOWN" to a real drop, not the boot DHCP re-kick below */
 
     if( eNetworkEvent == eNetworkUp )
     {
@@ -307,6 +308,7 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
             return;
         }
         s_downLogged = 0;
+        s_everUp = 1;
         /* Real lease -> link is connected. The reliable "connected" cue (the FOURWAY_HANDSHAKE_DONE event
          * is flaky on the driver's autoreconnect); clears the monitor's wait without a redundant takeover. */
         s_wifiConnected = 1;
@@ -387,7 +389,7 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
     }
     else
     {
-        if( !s_downLogged )
+        if( s_everUp && !s_downLogged )
         {
             s_downLogged = 1;
             log_info( "[KM4] ==== network DOWN ====" );
@@ -873,6 +875,12 @@ wifi_connect_attempt:
         wifi_get_rssi( &rssi );
         log_info( "[KM4] associated; power-save off; RSSI %d dBm; waiting for DHCP...", rssi );
     }
+    /* DHCP was started at FreeRTOS_IPInit_Multi() above, while the link was still down, so its first
+     * DISCOVER was lost and the next retransmit is ~5 s out (slow first lease). Now that we are
+     * associated, restart DHCP so a fresh DISCOVER goes out immediately -> lease in ~1 s. The eNetworkDown
+     * this raises is silent (s_everUp is still 0 - the network has never been up), so no boot "network
+     * DOWN" is printed. */
+    FreeRTOS_NetworkDown( &xInterface );
 
     /* Upstream Mbed TLS v3.6.4 microbenchmark ([MCB] scores) - the apples-to-apples
      * successor to the removed wolfCrypt [WCB] bench. Runs here at 200 MHz, after
