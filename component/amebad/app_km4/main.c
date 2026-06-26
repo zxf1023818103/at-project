@@ -246,13 +246,13 @@ static void wifi_autodetect_country( void )
         return;   /* regulatory domain already provisioned - leave it alone */
 
     memset( &t, 0, sizeof( t ) );
-    ssid = getenv( "WIFI_SSID" );
-    if( ssid == NULL ) ssid = "AIoT";
+    ssid = getenv( "WIFI_SSID" );   /* may be NULL -> broadcast probe; still hears every AP's Country IE */
 
     /* The scan buffer carries every AP heard regardless of the probed SSID, so one scan tallies all
      * surrounding Country IEs. */
     rltk_wlan_enable_scan_with_extended_countryinfo( 1 );
-    wifi_scan_networks_with_ssid( country_scan_handler, &t, 1000, (char *) ssid, (int) strlen( ssid ) );
+    wifi_scan_networks_with_ssid( country_scan_handler, &t, 1000,
+                                  (char *) ssid, ssid ? (int) strlen( ssid ) : 0 );
     rltk_wlan_enable_scan_with_extended_countryinfo( 0 );
 
     for( i = 0; i < t.num; i++ )
@@ -707,22 +707,28 @@ static void wifi_bringup_thread( void *param )
     }
 #endif
 
-    /* Connect to "AIoT" the explicit way (wifi_connect_simple leaves security
+    /* Connect to the provisioned WIFI_SSID the explicit way (wifi_connect_simple leaves security
      * UNKNOWN and pscan-restricts its own scan): FIRST do a directed FULL
      * all-channel scan (no pscan set yet) so we reliably find the AP + its real
      * channel + security, PRINT every result, THEN pscan that channel and connect
      * with the discovered security type. */
     {
-        /* Boot-default connection from env: WIFI_SSID / WIFI_PASSWORD (fall back to the built-in
-         * defaults if unset). If WIFI_CHANNEL + WIFI_SECURITY were cached on a prior connect, skip
-         * the multi-second scan and go straight to pscan + connect. */
+        /* Boot connection from the provisioned env: WIFI_SSID / WIFI_PASSWORD. With no built-in
+         * default credential, an unprovisioned device stays offline until WIFI_SSID/WIFI_PASSWORD are
+         * set over the console or a `wps pbc` supplies them. If WIFI_CHANNEL + WIFI_SECURITY were
+         * cached on a prior connect, skip the multi-second scan and go straight to pscan + connect. */
         const char *kSsid = getenv( "WIFI_SSID" );
         const char *kPass = getenv( "WIFI_PASSWORD" );
         found_ap_t  fa = { 0, 0, RTW_SECURITY_OPEN, 0 };
         u8 ch;
         int need_scan = 1;
-        if( kSsid == NULL ) kSsid = "AIoT";
-        if( kPass == NULL ) kPass = "123456789";
+        if( kSsid == NULL || kPass == NULL )
+        {
+            log_warn( "[KM4] no WIFI_SSID/PASSWORD provisioned - staying offline "
+                      "(setenv WIFI_SSID/WIFI_PASSWORD or run `wps pbc`)" );
+            vTaskDelete( NULL );
+            return;
+        }
         {
             const char    *ce = getenv( "WIFI_CHANNEL" );
             rtw_security_t sc = wifi_sec_from_str( getenv( "WIFI_SECURITY" ) );
@@ -922,7 +928,6 @@ static void wifi_monitor_thread( void * param )
         /* The driver's own autoreconnect is disabled, so there is nothing to wait for - re-associate
          * immediately (no hold-off). The eNetworkDown raised by the DISCONNECT event already logged
          * "network DOWN"; below we re-associate and re-DHCP. */
-        log_info( "[KM4] WiFi link down - re-associating..." );
         {
             const char    *ssid = getenv( "WIFI_SSID" );
             const char    *pass = getenv( "WIFI_PASSWORD" );
@@ -931,9 +936,14 @@ static void wifi_monitor_thread( void * param )
             u8             ch   = ( ce != NULL && ce[ 0 ] != '\0' ) ? (u8) atoi( ce ) : 0;
             BackoffAlgorithmContext_t backoff;
 
-            if( ssid == NULL )                 ssid = "AIoT";
-            if( pass == NULL )                 pass = "123456789";
-            if( sec == RTW_SECURITY_UNKNOWN )  sec  = RTW_SECURITY_WPA2_AES_PSK;
+            /* No built-in default credential: only re-associate when the network is fully provisioned. */
+            if( ssid == NULL || pass == NULL || sec == RTW_SECURITY_UNKNOWN )
+            {
+                log_warn( "[KM4] WiFi not provisioned - not re-associating "
+                          "(setenv WIFI_SSID/WIFI_PASSWORD/WIFI_SECURITY or run `wps pbc`)" );
+                continue;
+            }
+            log_info( "[KM4] WiFi link down - re-associating..." );
 
             /* Truncated exponential backoff-with-jitter between re-associate attempts, RETRY_FOREVER:
              * keep trying until the AP returns, but back off (1->8 s) instead of hammering wifi_connect
