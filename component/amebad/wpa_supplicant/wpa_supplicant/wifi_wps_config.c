@@ -287,13 +287,13 @@ static unsigned char wps_stop_notified = 0;
 
 void wps_check_and_show_connection_info(void)
 {
-	rtw_wifi_setting_t setting;	
 #if CONFIG_LWIP_LAYER 
 	/* Start DHCP Client */
 	LwIP_DHCP(0, DHCP_START);		
 #endif	
-	wifi_get_setting(WLAN0_NAME, &setting);
-	wifi_show_setting(WLAN0_NAME, &setting);
+	/* at-project: wifi_get_setting()/wifi_show_setting() removed here - wifi_show_setting() is a raw
+	 * SDK dump of the connection info (including the password); wps_cli.c already reads the
+	 * credential with wifi_get_setting() and logs/persists it after a successful WPS connect. */
 
 #if defined(CONFIG_INIC_CMD_RSP) && CONFIG_INIC_CMD_RSP
 	inic_c2h_wifi_info("ATWW", RTW_SUCCESS);
