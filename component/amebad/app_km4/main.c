@@ -287,15 +287,16 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
     if( eNetworkEvent == eNetworkUp )
     {
         uint32_t ulIP = 0, ulMask = 0, ulGW = 0, ulDNS = 0;
-        /* Reject the DHCP "give-up" fallback. When DHCP cannot reach a server (the link is really down),
-         * FreeRTOS+TCP reverts to the endpoint's static IP (eNotUsingLeasedAddress) and STILL fires
-         * eNetworkUp - a false "network up". Honouring it would set s_wifiConnected and mask the outage,
-         * so the device never re-associates (the bug behind "prints network UP without reconnecting").
-         * Only a real DHCP lease (eLeasedAddress) counts; on the fallback, stay down and let the monitor
-         * re-associate (it then restarts DHCP, which the fallback had stopped). */
-        if( eGetDHCPState( &xEndPoint ) == eNotUsingLeasedAddress )
+        FreeRTOS_GetAddressConfiguration( &ulIP, &ulMask, &ulGW, &ulDNS );
+        /* This hook fires for every endpoint that comes up. Two of those are NOT a real IPv4 connection
+         * and must be ignored: (1) the IPv6 link-local endpoint, which comes up at FreeRTOS_IPInit_Multi()
+         * before WiFi even connects, and (2) the DHCP "give-up" fallback, where DHCP cannot reach a server
+         * so FreeRTOS+TCP reverts the IPv4 endpoint to its (zero) static IP yet STILL fires eNetworkUp.
+         * Both leave the IPv4 address 0.0.0.0, so a non-zero leased IPv4 is the test. Honouring a false up
+         * would set s_wifiConnected (masking the outage, so the monitor never re-associates) and s_everUp
+         * (which un-silences the boot DHCP re-kick's "network DOWN") - that is the spurious extra UP/DOWN. */
+        if( ulIP == 0U )
         {
-            log_info( "[KM4] DHCP got no lease (link still down) - ignoring fallback network-up" );
             return;
         }
         s_downLogged = 0;
@@ -303,7 +304,6 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
         /* Real lease -> link is connected. The reliable "connected" cue (the FOURWAY_HANDSHAKE_DONE event
          * is flaky on the driver's autoreconnect); clears the monitor's wait without a redundant takeover. */
         s_wifiConnected = 1;
-        FreeRTOS_GetAddressConfiguration( &ulIP, &ulMask, &ulGW, &ulDNS );
         /* IPs are in network byte order; byte 0 = first octet. */
         log_info( "[KM4] ==== network UP ====" );
         log_info( "[KM4] DHCP IP   %d.%d.%d.%d",
