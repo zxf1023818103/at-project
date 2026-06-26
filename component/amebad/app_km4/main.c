@@ -856,11 +856,6 @@ wifi_connect_attempt:
         wifi_get_rssi( &rssi );
         log_info( "[KM4] associated; power-save off; RSSI %d dBm; waiting for DHCP...", rssi );
     }
-#if ( ipconfigUSE_IPv6 != 0 )
-    /* Now associated: register the IPv6 multicast groups with the driver so RAs + Neighbor
-     * Solicitations reach us (an STA drops multicast otherwise) -> SLAAC can complete. */
-    { extern void amebad_ipv6_register_multicast( void ); amebad_ipv6_register_multicast(); }
-#endif
     /* DHCP was started at FreeRTOS_IPInit_Multi() above, while the link was still down, so its first
      * DISCOVER was lost and the next retransmit is ~5 s out (slow first lease). Now that we are
      * associated, restart DHCP so a fresh DISCOVER goes out immediately -> lease in ~1 s. The eNetworkDown

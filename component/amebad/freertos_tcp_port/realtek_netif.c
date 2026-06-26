@@ -331,40 +331,11 @@ void netif_create_ip6_linklocal_address( struct netif * netif, unsigned char fro
     amebad_ipv6_init();
 }
 
-/* Register the IPv6 multicast groups the device must RECEIVE with the Realtek driver's MAC filter -
- * an STA otherwise drops them, so the Router Advertisement (ff02::1) and the router's Neighbor
- * Solicitations (solicited-node ff02::1:ffXX:XXXX) never arrive and SLAAC stalls. Call once the chip is
- * associated. The driver maps the IPv6 address to its 33:33:.. multicast MAC. */
-void amebad_ipv6_register_multicast( void )
-{
-    extern int wifi_register_multicast_address( void * mac );   /* rtw_mac_t* == 6 bytes */
-    static BaseType_t   xDone = pdFALSE;
-    NetworkEndPoint_t * pxIPv4;
-    unsigned char       mc[ 6 ];
-
-    if( ( xDone != pdFALSE ) || ( pxMyInterface == NULL ) )
-    {
-        return;
-    }
-    pxIPv4 = FreeRTOS_FirstEndPoint( pxMyInterface );
-    if( pxIPv4 == NULL )
-    {
-        return;
-    }
-
-    /* all-nodes ff02::1 -> 33:33:00:00:00:01 (Router Advertisements). */
-    mc[ 0 ] = 0x33; mc[ 1 ] = 0x33; mc[ 2 ] = 0x00; mc[ 3 ] = 0x00; mc[ 4 ] = 0x00; mc[ 5 ] = 0x01;
-    ( void ) wifi_register_multicast_address( mc );
-
-    /* solicited-node for our EUI-64 addresses ff02::1:ffXX:XXXX -> 33:33:ff:MAC[3]:MAC[4]:MAC[5]. */
-    mc[ 2 ] = 0xff;
-    mc[ 3 ] = pxIPv4->xMACAddress.ucBytes[ 3 ];
-    mc[ 4 ] = pxIPv4->xMACAddress.ucBytes[ 4 ];
-    mc[ 5 ] = pxIPv4->xMACAddress.ucBytes[ 5 ];
-    ( void ) wifi_register_multicast_address( mc );
-
-    xDone = pdTRUE;
-}
+/* NB: the Realtek driver does NOT support multicast-MAC registration - wifi_register_multicast_address()
+ * returns -95 (ENOTSUP, "ioctl[RTKIOCDEVPRIVATE] error"). So IPv6 multicast RX (unsolicited RAs + the
+ * router's solicited-node Neighbor Solicitations) cannot be opened from here; the device forms its SLAAC
+ * address from the unicast solicited RA but stays unreachable inbound over IPv6. Left unimplemented on
+ * purpose - re-adding the registration only spams the error. */
 
 #endif /* ( ipconfigUSE_IPv6 != 0 ) */
 
