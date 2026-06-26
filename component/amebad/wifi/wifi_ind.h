@@ -30,7 +30,9 @@
  *  @{
  */
  
-#include "wifi_conf.h"  
+#include "wifi_conf.h"
+#include "FreeRTOS.h"
+#include "event_groups.h"
 
 #ifdef __cplusplus
   extern "C" {
@@ -93,6 +95,26 @@ extern void wifi_reg_event_handler(unsigned int event_cmds, rtw_event_handler_t 
  * @return  RTW_ERROR : if an error occurred.
  */
 extern void wifi_unreg_event_handler(unsigned int event_cmds, rtw_event_handler_t handler_func);
+
+/* ---- FreeRTOS EventGroup notification (multi-waiter, decoupled from the driver thread) ----
+ * wifi_indication() also sets bit (1<<event) in a shared EventGroup, so any number of tasks can block
+ * on WiFi events via xEventGroupWaitBits / wifi_event_wait(). Unlike the 3-slot callback list above -
+ * which runs each handler inline in the driver's own thread (must stay light) and caps at 3 listeners
+ * per event - the EventGroup is pull-style: unlimited waiters, each woken in its own task context.
+ * WIFI_EVENT_MAX(=22) <= 24 usable bits (configUSE_16_BIT_TICKS=0). The callback list is retained
+ * because the SDK's own wifi_conf.c handlers depend on it. */
+#define WIFI_EVENT_BIT( evt )   ( ( EventBits_t ) 1u << ( evt ) )
+
+/* Handle of the shared WiFi-event group (created at wifi init); NULL before that. */
+EventGroupHandle_t wifi_event_group_handle( void );
+
+/* Block until any/all of `bits` are set. timeout_ms == 0xFFFFFFFF -> wait forever. Returns the bits
+ * set at unblock (0 on timeout, or before the group exists). Thin wrapper over xEventGroupWaitBits. */
+EventBits_t wifi_event_wait( EventBits_t bits, BaseType_t clearOnExit, BaseType_t waitForAll, uint32_t timeout_ms );
+
+/* Clear / read group bits (e.g. a waiter resetting its own state). 0 if the group does not exist yet. */
+EventBits_t wifi_event_clear( EventBits_t bits );
+EventBits_t wifi_event_get( void );
 
 #ifdef __cplusplus
   }

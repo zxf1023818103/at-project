@@ -22,6 +22,9 @@ static event_list_elem_t     event_callback_list[WIFI_EVENT_MAX][WIFI_EVENT_MAX_
 #if CONFIG_WIFI_IND_USE_THREAD
 static rtw_worker_thread_t          wifi_worker_thread;
 #endif
+/* Shared EventGroup: wifi_indication() sets bit (1<<event); tasks block on it via wifi_event_wait().
+ * Created once at wifi init (init_event_callback_list / wifi_manager_init), both single-threaded. */
+static EventGroupHandle_t    wifi_event_group = NULL;
 
 //----------------------------------------------------------------------------//
 #if CONFIG_WIFI_IND_USE_THREAD
@@ -224,6 +227,12 @@ void wifi_indication( rtw_event_indicate_t event, char *buf, int buf_len, int fl
 #else
 	rtw_indicate_event_handle(event, buf, buf_len, flags);
 #endif
+
+	/* Multi-task notification: wake any task blocked on this event in wifi_event_wait(). Called from
+	 * the driver's thread context (the sync/worker paths above assume the same), so the task-level set
+	 * is correct - no FromISR needed. */
+	if(wifi_event_group != NULL && event < WIFI_EVENT_MAX)
+		xEventGroupSetBits(wifi_event_group, WIFI_EVENT_BIT(event));
 }
 
 void wifi_reg_event_handler(unsigned int event_cmds, rtw_event_handler_t handler_func, void *handler_user_data)
@@ -261,14 +270,38 @@ void wifi_unreg_event_handler(unsigned int event_cmds, rtw_event_handler_t handl
 
 void init_event_callback_list(void){
 	memset(event_callback_list, 0, sizeof(event_callback_list));
+	if(wifi_event_group == NULL)
+		wifi_event_group = xEventGroupCreate();
+}
+
+/* ---- EventGroup multi-task notification API (see wifi_ind.h) ---- */
+EventGroupHandle_t wifi_event_group_handle(void){
+	return wifi_event_group;
+}
+
+EventBits_t wifi_event_wait(EventBits_t bits, BaseType_t clearOnExit, BaseType_t waitForAll, uint32_t timeout_ms){
+	if(wifi_event_group == NULL)
+		return 0;
+	return xEventGroupWaitBits(wifi_event_group, bits, clearOnExit, waitForAll,
+				(timeout_ms == 0xFFFFFFFFu) ? portMAX_DELAY : pdMS_TO_TICKS(timeout_ms));
+}
+
+EventBits_t wifi_event_clear(EventBits_t bits){
+	return (wifi_event_group != NULL) ? xEventGroupClearBits(wifi_event_group, bits) : 0;
+}
+
+EventBits_t wifi_event_get(void){
+	return (wifi_event_group != NULL) ? xEventGroupGetBits(wifi_event_group) : 0;
 }
 
 int wifi_manager_init(void)
 {
+	if(wifi_event_group == NULL)
+		wifi_event_group = xEventGroupCreate();
 #if CONFIG_WIFI_IND_USE_THREAD
-	rtw_create_worker_thread(&wifi_worker_thread, 
-							WIFI_MANAGER_PRIORITY, 
-							WIFI_MANAGER_STACKSIZE, 
+	rtw_create_worker_thread(&wifi_worker_thread,
+							WIFI_MANAGER_PRIORITY,
+							WIFI_MANAGER_STACKSIZE,
 							WIFI_MANAGER_Q_SZ);
 #endif
 	return 0;

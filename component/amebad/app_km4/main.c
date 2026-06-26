@@ -18,7 +18,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "wifi_conf.h"            /* wifi_on / wifi_connect / wifi_get_mac_address */
-#include "wifi_ind.h"             /* wifi_reg_event_handler: driver link-state events (wifi_ind.c) */
+#include "wifi_ind.h"             /* wifi_ind EventGroup: wifi_event_wait / WIFI_EVENT_BIT (wifi_ind.c) */
 #include "FreeRTOS_IP.h"
 #include "FreeRTOS_Routing.h"     /* NetworkInterface_t / NetworkEndPoint_t / FillEndPoint */
 #include "backoff_algorithm.h"    /* truncated exp backoff-with-jitter for the WiFi reconnect loop */
@@ -67,48 +67,51 @@ static void wifi_monitor_thread( void * param );   /* small reconnect-monitor ta
  * it (tasks.c), so we don't redefine it here. -rtos FreeRTOS is set in scripts/amebad_openocd.cfg. */
 static NetworkEndPoint_t  xEndPoint;
 
-/* WiFi link state, driven by the driver's event indication (wifi_ind.c / wifi_reg_event_handler) -
+/* WiFi link state, fed by the driver's event indication via the wifi_ind EventGroup (wifi_ind.c) -
  * far more reliable than polling wifi_is_connected_to_ap(), which stays "not connected" even after a
- * silent driver autoreconnect. Set on FOURWAY_HANDSHAKE_DONE, cleared on DISCONNECT. */
+ * silent driver autoreconnect. s_wifiConnected is *set* by the eNetworkUp hook (the reliable
+ * "connected" cue, since FOURWAY_HANDSHAKE_DONE is flaky on the driver's autoreconnect). */
 static volatile int s_wifiConnected = 1;
-/* Set by WIFI_EVENT_RECONNECTION_FAIL when the driver's own FINITE autoreconnect gives up - the cue for
+/* Set when the driver's own FINITE autoreconnect gives up (WIFI_EVENT_RECONNECTION_FAIL) - the cue for
  * wifi_monitor_thread to take over. Until then the monitor holds off, so it never races the driver's
  * still-in-progress autoreconnect (that race left a redundant network DOWN/UP at reconnect). */
 static volatile int s_driverGaveUp = 0;
 extern void FreeRTOS_NetworkDown( NetworkInterface_t * pxNetworkInterface );
 
-/* Fired by the driver at the actual link drop -> mark the IP stack down HERE so eNetworkDown
- * ("==== network DOWN ====") logs at the real disconnect, not at reconnect. Kept light (just an
- * IP-task event); the heavy re-associate is left to wifi_monitor_thread. Guarded so repeated
- * disconnect indications during the outage don't keep restarting DHCP. */
-static void wifi_event_disconnect_hdl( char *buf, int buf_len, int flags, void *user_data )
+/* Single consumer of the driver's WiFi events, blocked on the wifi_ind EventGroup (replacing three
+ * callbacks that ran inline in the driver's own thread). Runs in its own task context, so the work is
+ * off the driver stack:
+ *   DISCONNECT             -> drop the IP stack at the real link loss ("==== network DOWN ====" on time)
+ *   FOURWAY_HANDSHAKE_DONE -> re-kick DHCP for a prompt eNetworkUp
+ *   RECONNECTION_FAIL      -> driver gave up; release the monitor
+ * This is the multi-task notification path: any other task can likewise wait on the same group. */
+static void wifi_event_task( void * param )
 {
-    ( void ) buf; ( void ) buf_len; ( void ) flags; ( void ) user_data;
-    s_driverGaveUp = 0;   /* the driver begins its own autoreconnect now */
-    if( s_wifiConnected )
-    {
-        s_wifiConnected = 0;
-        FreeRTOS_NetworkDown( &xInterface );
-    }
-}
+    const EventBits_t mask = WIFI_EVENT_BIT( WIFI_EVENT_DISCONNECT )
+                           | WIFI_EVENT_BIT( WIFI_EVENT_FOURWAY_HANDSHAKE_DONE )
+                           | WIFI_EVENT_BIT( WIFI_EVENT_RECONNECTION_FAIL );
+    ( void ) param;
 
-/* Fired when the driver's own FINITE autoreconnect has exhausted its retries -> release the monitor. */
-static void wifi_event_reconnect_fail_hdl( char *buf, int buf_len, int flags, void *user_data )
-{
-    ( void ) buf; ( void ) buf_len; ( void ) flags; ( void ) user_data;
-    s_driverGaveUp = 1;
-}
-
-/* Fired once the 4-way handshake is done (data can flow) - whether the driver's own autoreconnect or
- * wifi_monitor_thread re-associated. Re-kick DHCP for a prompt eNetworkUp; the hook's s_downLogged
- * keeps this 2nd FreeRTOS_NetworkDown from re-printing "network DOWN". */
-static void wifi_event_connect_hdl( char *buf, int buf_len, int flags, void *user_data )
-{
-    ( void ) buf; ( void ) buf_len; ( void ) flags; ( void ) user_data;
-    if( !s_wifiConnected )
+    for( ;; )
     {
-        s_wifiConnected = 1;
-        FreeRTOS_NetworkDown( &xInterface );
+        EventBits_t b = wifi_event_wait( mask, pdTRUE /*clearOnExit*/, pdFALSE /*any*/, 0xFFFFFFFFu );
+
+        if( b & WIFI_EVENT_BIT( WIFI_EVENT_DISCONNECT ) )
+        {
+            s_driverGaveUp = 0;                  /* the driver begins its own autoreconnect now */
+            if( s_wifiConnected )
+            {
+                s_wifiConnected = 0;
+                FreeRTOS_NetworkDown( &xInterface );
+            }
+        }
+        if( b & WIFI_EVENT_BIT( WIFI_EVENT_FOURWAY_HANDSHAKE_DONE ) )
+        {
+            if( !s_wifiConnected )
+                FreeRTOS_NetworkDown( &xInterface );   /* re-kick DHCP; eNetworkUp sets s_wifiConnected */
+        }
+        if( b & WIFI_EVENT_BIT( WIFI_EVENT_RECONNECTION_FAIL ) )
+            s_driverGaveUp = 1;
     }
 }
 
@@ -885,13 +888,12 @@ wifi_connect_attempt:
 #endif
 #endif /* !AT_PROJECT_QUIC && !AT_PROJECT_PKCS11 */
 
-    /* Register the driver link-state event handlers now that the WiFi is up: DISCONNECT marks the IP
-     * stack down at the real drop (-> "network DOWN" on time), FOURWAY_HANDSHAKE_DONE re-DHCPs on
-     * (re)connect. These drive s_wifiConnected, which the monitor polls instead of the unreliable
-     * wifi_is_connected_to_ap(). */
-    wifi_reg_event_handler( WIFI_EVENT_DISCONNECT, wifi_event_disconnect_hdl, NULL );
-    wifi_reg_event_handler( WIFI_EVENT_FOURWAY_HANDSHAKE_DONE, wifi_event_connect_hdl, NULL );
-    wifi_reg_event_handler( WIFI_EVENT_RECONNECTION_FAIL, wifi_event_reconnect_fail_hdl, NULL );
+    /* Start the consumer of the driver's link-state events. It blocks on the wifi_ind EventGroup
+     * (set by wifi_indication for every event) - DISCONNECT marks the IP stack down at the real drop
+     * (-> "network DOWN" on time), FOURWAY_HANDSHAKE_DONE re-DHCPs, RECONNECTION_FAIL releases the
+     * monitor. The group is created in wifi_manager_init() (called earlier in this thread). */
+    if( xTaskCreate( wifi_event_task, "wifi_evt", 512, NULL, tskIDLE_PRIORITY + 4, NULL ) != pdPASS )
+        log_error( "[KM4] xTaskCreate(wifi_evt) failed" );
 
     /* Hand off to a dedicated reconnect-monitor task, then free this 16 KB bring-up stack: the
      * monitor only re-runs wifi_connect (cached-channel re-associate) on a link drop, so it needs a
