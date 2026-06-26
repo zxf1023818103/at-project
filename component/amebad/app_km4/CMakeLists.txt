@@ -484,6 +484,11 @@ if(AMEBAD_ENABLE_WPS)
         "${CMAKE_SOURCE_DIR}/component/amebad/wpa_supplicant/src"
         "${CMAKE_SOURCE_DIR}/platform/ameba-rtos-d/component/common/drivers/wlan/realtek/src/osdep")
     target_compile_definitions(target_img2_km4 PRIVATE AMEBAD_ENABLE_WPS)
+    # Shorten __FILE__ in wifi_wps_config.c's at_log output to the basename (its printf were converted to
+    # log_*; without this map the rxi_log line shows the full absolute path, unlike the other sources).
+    set_property(SOURCE "${CMAKE_SOURCE_DIR}/component/amebad/wpa_supplicant/wpa_supplicant/wifi_wps_config.c"
+        APPEND PROPERTY COMPILE_OPTIONS
+        "-fmacro-prefix-map=${CMAKE_SOURCE_DIR}/component/amebad/wpa_supplicant/wpa_supplicant/=")
 endif()
 
 # DEBUG eFuse provisioning aids (make EFUSE_DEBUG=ON, never ship): the `efuse_burn` console command
