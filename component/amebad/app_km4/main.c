@@ -64,11 +64,23 @@ static void wifi_monitor_thread( void * param );   /* small reconnect-monitor ta
  * it (tasks.c), so we don't redefine it here. -rtos FreeRTOS is set in scripts/amebad_openocd.cfg. */
 static NetworkEndPoint_t  xEndPoint;
 
-/* WiFi link state, fed by the driver's event indication via the wifi_ind EventGroup (wifi_ind.c) -
- * far more reliable than polling wifi_is_connected_to_ap(), which stays "not connected" even after a
- * silent driver autoreconnect. s_wifiConnected is *set* by the eNetworkUp hook (the reliable
- * "connected" cue, since FOURWAY_HANDSHAKE_DONE is flaky on the driver's autoreconnect). */
-static volatile int s_wifiConnected = 1;
+/* WiFi link state lives in the wifi_ind EventGroup (WIFI_CONNECTED_BIT) rather than a standalone flag,
+ * so the same group the driver-event indication feeds is the single source of truth. It is SET by the
+ * eNetworkUp hook (the reliable "connected" cue - FOURWAY_HANDSHAKE_DONE is flaky on the driver's
+ * autoreconnect, and polling wifi_is_connected_to_ap() stays "not connected" after a silent
+ * autoreconnect) and CLEARED by the DISCONNECT event. It starts clear: the first real DHCP lease is then
+ * a true transition, and the IPv6 endpoints coming up later don't re-fire "network UP". */
+static int wifi_link_up( void )
+{
+    return ( wifi_event_get() & WIFI_CONNECTED_BIT ) != 0;
+}
+static void wifi_link_set( int up )
+{
+    if( up != 0 )
+        ( void ) xEventGroupSetBits( wifi_event_group_handle(), WIFI_CONNECTED_BIT );
+    else
+        ( void ) wifi_event_clear( WIFI_CONNECTED_BIT );
+}
 /* wifi_monitor_thread's handle, so wifi_event_task can wake it the instant a DISCONNECT lands (instead
  * of the monitor polling every 3 s). */
 static TaskHandle_t s_monitorTask = NULL;
@@ -124,9 +136,9 @@ static void wifi_event_task( void * param )
 
         if( b & WIFI_EVENT_BIT( WIFI_EVENT_DISCONNECT ) )
         {
-            if( s_wifiConnected )
+            if( wifi_link_up() )
             {
-                s_wifiConnected = 0;
+                wifi_link_set( 0 );
                 FreeRTOS_NetworkDown( &xInterface );
                 if( s_monitorTask != NULL )
                     xTaskNotifyGive( s_monitorTask );   /* wake the re-associate monitor immediately */
@@ -134,8 +146,8 @@ static void wifi_event_task( void * param )
         }
         if( b & WIFI_EVENT_BIT( WIFI_EVENT_FOURWAY_HANDSHAKE_DONE ) )
         {
-            if( !s_wifiConnected )
-                FreeRTOS_NetworkDown( &xInterface );   /* re-kick DHCP; eNetworkUp sets s_wifiConnected */
+            if( !wifi_link_up() )
+                FreeRTOS_NetworkDown( &xInterface );   /* re-kick DHCP; eNetworkUp sets WIFI_CONNECTED_BIT */
         }
     }
 }
@@ -293,17 +305,25 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
          * before WiFi even connects, and (2) the DHCP "give-up" fallback, where DHCP cannot reach a server
          * so FreeRTOS+TCP reverts the IPv4 endpoint to its (zero) static IP yet STILL fires eNetworkUp.
          * Both leave the IPv4 address 0.0.0.0, so a non-zero leased IPv4 is the test. Honouring a false up
-         * would set s_wifiConnected (masking the outage, so the monitor never re-associates) and s_everUp
+         * would set WIFI_CONNECTED_BIT (masking the outage, so the monitor never re-associates) and s_everUp
          * (which un-silences the boot DHCP re-kick's "network DOWN") - that is the spurious extra UP/DOWN. */
         if( ulIP == 0U )
         {
             return;
         }
+        /* Already up -> a duplicate up for the same lease, not a new connection: the IPv6 global endpoint
+         * comes up later (after SLAAC) and fires this same endpoint-less hook, as would a DHCP renewal.
+         * WIFI_CONNECTED_BIT is cleared only by a real DISCONNECT, so a genuine reconnect still passes.
+         * (This was the 2nd spurious "network UP" once IPv6 was enabled.) */
+        if( wifi_link_up() )
+        {
+            return;
+        }
         s_downLogged = 0;
         s_everUp = 1;
-        /* Real lease -> link is connected. The reliable "connected" cue (the FOURWAY_HANDSHAKE_DONE event
-         * is flaky on the driver's autoreconnect); clears the monitor's wait without a redundant takeover. */
-        s_wifiConnected = 1;
+        /* Real lease -> link is connected. The reliable "connected" cue (FOURWAY_HANDSHAKE_DONE is flaky
+         * on the driver's autoreconnect); clears the monitor's wait without a redundant takeover. */
+        wifi_link_set( 1 );
         /* IPs are in network byte order; byte 0 = first octet. */
         log_info( "[KM4] ==== network UP ====" );
         log_info( "[KM4] DHCP IP   %d.%d.%d.%d",
@@ -926,7 +946,7 @@ static void wifi_monitor_thread( void * param )
     {
         /* Block until wifi_event_task notifies a DISCONNECT (right after it drops the IP stack). */
         ( void ) ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
-        if( s_wifiConnected )      /* already recovered before we ran - nothing to do */
+        if( wifi_link_up() )       /* already recovered before we ran - nothing to do */
             continue;
         if( s_wifiForget )         /* `wifi forget` was issued - stay down, never re-associate */
             continue;
@@ -957,10 +977,10 @@ static void wifi_monitor_thread( void * param )
             BackoffAlgorithm_InitializeParams( &backoff, WIFI_RECONNECT_BACKOFF_BASE_MS,
                                                WIFI_RECONNECT_BACKOFF_MAX_MS,
                                                BACKOFF_ALGORITHM_RETRY_FOREVER );
-            /* Stop the instant s_wifiConnected goes true - whether the driver's own autoreconnect or our
+            /* Stop the instant WIFI_CONNECTED_BIT goes true - whether the driver's own autoreconnect or our
              * wifi_connect won the race - so we never double-associate. The FOURWAY_HANDSHAKE_DONE event
-             * (which sets s_wifiConnected) re-DHCPs, so the monitor itself never touches the IP layer. */
-            while( !s_wifiConnected )
+             * (which sets WIFI_CONNECTED_BIT) re-DHCPs, so the monitor itself never touches the IP layer. */
+            while( !wifi_link_up() )
             {
                 uint16_t nextBackoff = WIFI_RECONNECT_BACKOFF_MAX_MS;
                 rltk_wlan_tx_deauth( 1, 0 );
@@ -972,7 +992,7 @@ static void wifi_monitor_thread( void * param )
                 }
                 if( wifi_connect( (char *) ssid, sec, (char *) pass,
                                   (int) strlen( ssid ), (int) strlen( pass ), 0, NULL ) == RTW_SUCCESS )
-                    break;   /* connected; FOURWAY_HANDSHAKE_DONE sets s_wifiConnected + re-DHCPs */
+                    break;   /* connected; FOURWAY_HANDSHAKE_DONE sets WIFI_CONNECTED_BIT + re-DHCPs */
                 /* Tick count is the per-attempt jitter seed (RETRY_FOREVER never returns Exhausted). */
                 ( void ) BackoffAlgorithm_GetNextBackoff( &backoff, ( uint32_t ) xTaskGetTickCount(),
                                                           &nextBackoff );
@@ -983,7 +1003,7 @@ static void wifi_monitor_thread( void * param )
             wifi_disable_powersave();
             log_info( "[KM4] WiFi re-associated" );
             /* The earlier DHCP fallback (eNotUsingLeasedAddress) stopped the DHCP timer, so kick it again
-             * now that we hold a real link - this drives a real lease -> eNetworkUp -> s_wifiConnected.
+             * now that we hold a real link - this drives a real lease -> eNetworkUp -> WIFI_CONNECTED_BIT.
              * (No-op'd by the hook's s_downLogged so it does not re-print "network DOWN".) */
             FreeRTOS_NetworkDown( &xInterface );
         }

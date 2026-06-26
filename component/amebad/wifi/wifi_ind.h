@@ -116,8 +116,10 @@ EventBits_t wifi_event_wait( EventBits_t bits, BaseType_t clearOnExit, BaseType_
 EventBits_t wifi_event_clear( EventBits_t bits );
 EventBits_t wifi_event_get( void );
 
-/* Synthetic group bit, above the driver events (WIFI_EVENT_MAX=22). */
+/* Synthetic group bits, above the driver events (WIFI_EVENT_MAX=22). */
 #define WIFI_INIT_DONE_BIT   ( ( EventBits_t ) 1u << 23 )   /* WLAN driver init-done callback fired */
+#define WIFI_CONNECTED_BIT   ( ( EventBits_t ) 1u << 22 )   /* link is up with a real DHCP lease: SET by */
+                                                            /* the eNetworkUp hook, CLEARED on DISCONNECT */
 
 /* WLAN init-done signalling over the EventGroup (replaces the old g_wifi_init_done_sema): the prebuilt
  * driver calls p_wlan_init_done_callback when WLAN init completes. wifi_arm_init_done() installs that
