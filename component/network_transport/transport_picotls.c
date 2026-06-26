@@ -935,12 +935,18 @@ TlsTransportStatus_t TLS_FreeRTOS_Connect( NetworkContext_t * pNetworkContext,
 
     /* Pre-reserve a full TLS record (16 KB) up front, while the heap is least fragmented. Otherwise
      * the decrypt path reallocs rxPlain up to ~16 KB mid-stream, and that large realloc fails in a
-     * fragmented heap during a big transfer (e.g. an OTA download), aborting the connection. */
-    if( ptls_buffer_reserve( &p->rxPlain, 16640 ) != 0 )
+     * fragmented heap during a big transfer (e.g. an OTA download), aborting the connection.
+     * A caller may pass a smaller rxReserveSize (e.g. a concurrent OTA HTTPS download with tiny 4 KB
+     * records) to save heap; 0 keeps the full-record default. */
+    {
+        size_t rxReserve = ( pNetworkCredentials->rxReserveSize != 0 )
+                           ? pNetworkCredentials->rxReserveSize : 16640;
+    if( ptls_buffer_reserve( &p->rxPlain, rxReserve ) != 0 )
     {
         LogError( ( "rxPlain pre-reserve failed" ) );
         status = TLS_TRANSPORT_INSUFFICIENT_MEMORY;
         goto Cleanup;
+    }
     }
 
     if( pNetworkCredentials->disableSni == pdFALSE )

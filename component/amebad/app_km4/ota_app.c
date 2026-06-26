@@ -34,12 +34,32 @@
 #include "core_mqtt_agent.h"
 #include "subscription_manager.h"
 
+/* HTTP data plane (presigned-S3 download over HTTPS): coreHTTP request builder + Send/parse,
+ * the shared TLS transport (picotls/mbedTLS), plain FreeRTOS+TCP for http://, and the vendored
+ * URL parser. Mirrors ota_http.c's transport setup; here it feeds the OTA agent file blocks. */
+#include "core_http_client.h"
+#include "transport_tls.h"          /* TLS_FreeRTOS_*, NetworkCredentials_t, TlsTransportParams_t */
+#include "transport_interface.h"
+#include "urlparse.h"
+
+#include "FreeRTOS_IP.h"
+#include "FreeRTOS_Sockets.h"
+#include "FreeRTOS_DNS.h"
+
 #include "ota_app.h"
+#include "ota_http_interface.h"
 #include "at_log.h"
 
 /* Use the app's flushed at_log (printf is fully-buffered per-task on the LOGUART, so [OTA] printf
  * lines never surface). The first vararg is always a string literal, so the "[OTA] " concat works. */
 #define OTA_APP_LOG( ... )    log_info( "[OTA] " __VA_ARGS__ )
+
+/* The TLS transport leaves struct NetworkContext incomplete; each consumer defines it (ota_http.c /
+ * the AWS demo do the same). It holds just the TlsTransportParams_t the transport functions use. */
+struct NetworkContext
+{
+    TlsTransportParams_t * pParams;
+};
 
 /* The PAL interface getter (ota_pal.c). */
 extern const OtaPalInterface_t * ota_pal_get_interface( void );
@@ -64,6 +84,14 @@ const AppVersion32_t appFirmwareVersion =
     .u.x.build = APP_VERSION_BUILD,
 };
 
+/* True while an OTA file download is in progress (CreatingFile..ClosingFile). The telemetry task
+ * uses this to go quiet so its publish churn doesn't fragment the heap under the OTA HTTPS TLS. */
+int ota_app_is_active( void )
+{
+    OtaState_t st = OTA_GetState();
+    return ( ( st > OtaAgentStateWaitingForJob ) && ( st < OtaAgentStateSuspended ) ) ? 1 : 0;
+}
+
 /* ------------------------------------------------------------- buffers -------- */
 /* OtaAppBuffer_t static backing (sizes per the task brief). */
 static uint8_t s_updateFilePath[ 256 ];
@@ -71,12 +99,21 @@ static uint8_t s_certFilePath[ 256 ];
 static uint8_t s_streamName[ 64 ];
 static uint8_t s_decodeMem[ OTA_FILE_BLOCK_SIZE ];     /* otaconfigLOG2_FILE_BLOCK_SIZE=12 -> 4096 */
 static uint8_t s_fileBitmap[ OTA_MAX_BLOCK_BITMAP_SIZE ]; /* 128 */
+/* HTTP data plane: the OTA library copies the job's presigned-S3 URL here (pUpdateUrlPath) and the
+ * "Connect:" auth scheme there. SigV4 presigned URLs run ~500-1500 chars (OTA_REQUEST_URL_MAX_SIZE). */
+static char s_otaUrl[ 1536 ];
+static char s_otaAuthScheme[ 48 ];
 
 /* OTA event-data buffer pool: the MQTT incoming-publish callback wraps a received
  * job-doc / file-block payload in one of these before OTA_SignalEvent(). The OTA agent
  * marks bufferUsed=false again once processed; we recycle from this pool. */
+/* 1 buffer (each is OTA_DATA_BLOCK_SIZE = 4096+1500+30 = 5.6 KB of .bss): the HTTP data plane opens a
+ * SECOND TLS context alongside the AWS MQTT TLS and the heap is very tight, so we trade buffers for
+ * heap. HTTP is fully sequential (http.request fetches + feeds ONE block, the agent processes it,
+ * recycles, then the next request) and the job-doc phase precedes the data phase, so one buffer
+ * round-trips cleanly. (Dropped from 2 to free ~5.6 KB for the OTA HTTPS handshake working set.) */
 #ifndef OTA_APP_NUM_EVENT_BUFFERS
-#define OTA_APP_NUM_EVENT_BUFFERS    ( 4U )
+#define OTA_APP_NUM_EVENT_BUFFERS    ( 1U )
 #endif
 static OtaEventData_t s_eventBuffers[ OTA_APP_NUM_EVENT_BUFFERS ];
 static SemaphoreHandle_t s_bufferMutex = NULL;
@@ -117,6 +154,417 @@ static OtaEventData_t * prvEventBufferGet( void )
     }
 
     return pBuf;
+}
+
+/* ============================================================ HTTP data plane ==
+ * Download file blocks over HTTPS (or HTTP) from the presigned-S3 URL in the job document,
+ * instead of the MQTT/CBOR data plane. The OTA library drives this via the OtaHttpInterface_t:
+ *   init(pUrl)              - parse the URL + open the connection (kept open for the transfer).
+ *   request(start, end)     - GET the byte range, expect 206, feed the BODY to the agent.
+ *   deinit()               - close + reset.
+ *
+ * Data-feed mechanism (confirmed against decodeFileBlock_Http / ota.c processDataHandler):
+ *   the agent passes pEventData->data + pEventData->dataLength straight to decodeFileBlock_Http,
+ *   which just memcpy()s the raw bytes (no CBOR decode). So request() copies the raw 206 response
+ *   body into a prvEventBufferGet() OtaEventData_t, sets dataLength, eventId =
+ *   OtaAgentEventReceivedFileBlock, and OTA_SignalEvent()s - identical to the MQTT path's
+ *   prvOtaIncomingPublish(), but with the raw HTTP body in place of the stream-CBOR payload. */
+
+static OtaHttpStatus_t prvOtaHttpDeinit( void );
+
+#define OTA_HTTP_RECV_TMO_MS    15000u
+#define OTA_HTTP_SEND_TMO_MS    10000u
+/* rxPlain reserve for the OTA HTTPS connection. Must match the working ota_http.c (16640): S3's
+ * handshake Certificate record is larger than a 6 KB reserve, and pinning it too small fails the
+ * handshake (err 4). Heap headroom for this 2nd TLS comes from the freed event buffers + the AWS
+ * MQTT TLS now reserving only 8 KB. */
+/* 8192: holds S3's handshake records + a 4 KB body record without a realloc, while keeping the
+ * handshake PEAK (rxPlain + txbuf + mbedTLS cert-verify working set) well under the ~78 KB free - the
+ * 16640 reserve pushed the peak over (malloc fail at 17.8 KB free even though idle heap is healthy). */
+#define OTA_HTTP_RXRESERVE      8192u
+/* coreHTTP response buffer: holds the WHOLE response (coreHTTP is not streaming) = 4 KB block +
+ * status line + headers. Measured S3 206 headers are only ~480 B, so 1 KB of header room is ample
+ * (the earlier HTTPPartialResponse was the body not arriving, not header overflow). Keep it lean to
+ * leave heap for the 2nd TLS. */
+#define OTA_HTTP_RESP_BUF       ( OTA_FILE_BLOCK_SIZE + 1024u )
+/* Request header buffer: the request LINE alone is "GET <path> HTTP/1.1" and the S3 presigned-URL
+ * path carries the full SigV4 query (~1000+ chars), so 512 overflows (HTTPInsufficientMemory). Size
+ * it to hold the long path + Host + Range + Connection. */
+#define OTA_HTTP_REQ_BUF        2048u
+#define OTA_HTTP_PATH_BUF       1408u           /* path + ?query (SigV4 presigned URLs are long) */
+#define OTA_HTTP_HOST_BUF       128u
+
+/* Amazon Root CA 1 - the trust anchor for *.s3*.amazonaws.com (and most AWS endpoints).
+ * (Same anchor ota_http.c uses for the console `ota_http` command.) */
+static const char OTA_AMAZON_ROOT_CA1[] =
+    "-----BEGIN CERTIFICATE-----\n"
+    "MIIDQTCCAimgAwIBAgITBmyfz5m/jAo54vB4ikPmljZbyjANBgkqhkiG9w0BAQsF\n"
+    "ADA5MQswCQYDVQQGEwJVUzEPMA0GA1UEChMGQW1hem9uMRkwFwYDVQQDExBBbWF6\n"
+    "b24gUm9vdCBDQSAxMB4XDTE1MDUyNjAwMDAwMFoXDTM4MDExNzAwMDAwMFowOTEL\n"
+    "MAkGA1UEBhMCVVMxDzANBgNVBAoTBkFtYXpvbjEZMBcGA1UEAxMQQW1hem9uIFJv\n"
+    "b3QgQ0EgMTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALJ4gHHKeNXj\n"
+    "ca9HgFB0fW7Y14h29Jlo91ghYPl0hAEvrAIthtOgQ3pOsqTQNroBvo3bSMgHFzZM\n"
+    "9O6II8c+6zf1tRn4SWiw3te5djgdYZ6k/oI2peVKVuRF4fn9tBb6dNqcmzU5L/qw\n"
+    "IFAGbHrQgLKm+a/sRxmPUDgH3KKHOVj4utWp+UhnMJbulHheb4mjUcAwhmahRWa6\n"
+    "VOujw5H5SNz/0egwLX0tdHA114gk957EWW67c4cX8jJGKLhD+rcdqsq08p8kDi1L\n"
+    "93FcXmn/6pUCyziKrlA4b9v7LWIbxcceVOF34GfID5yHI9Y/QCB/IIDEgEw+OyQm\n"
+    "jgSubJrIqg0CAwEAAaNCMEAwDwYDVR0TAQH/BAUwAwEB/zAOBgNVHQ8BAf8EBAMC\n"
+    "AYYwHQYDVR0OBBYEFIQYzIU07LwMlJQuCFmcx7IQTgoIMA0GCSqGSIb3DQEBCwUA\n"
+    "A4IBAQCY8jdaQZChGsV2USggNiMOruYou6r4lK5IpDB/G/wkjUu0yKGX9rbxenDI\n"
+    "U5PMCCjjmCXPI6T53iHTfIUJrU6adTrCC2qJeHZERxhlbI1Bjjt/msv0tadQ1wUs\n"
+    "N+gDS63pYaACbvXy8MWy7Vu33PqUXHeeE6V/Uq2V8viTO96LXFvKWlJbYK8U90vv\n"
+    "o/ufQJVtMVT8QtPHRh8jrdkPSHCa2XV4cdFyQzR1bldZwgJcJmApzyMZFo6IQ6XU\n"
+    "5MsI+yMRQ+hDKXJioaldXgjUkK642M4UwtBV8ob2xJNDd2ZhwLnoQdeXeGADbkpy\n"
+    "rqXRfboQnoZsG4q5WTP468SQvvG5\n"
+    "-----END CERTIFICATE-----\n";
+
+/* Open connection state (one OTA at a time). */
+static struct
+{
+    int                  inUse;
+    int                  isHttps;
+    /* https: */
+    NetworkContext_t     netCtx;
+    TlsTransportParams_t tlsParams;
+    /* http: */
+    Socket_t             sock;
+    /* parsed target */
+    char                 host[ OTA_HTTP_HOST_BUF ];
+    char                 path[ OTA_HTTP_PATH_BUF ];
+    uint16_t             port;
+} s_http;
+
+/* TransportInterface_t glue: route coreHTTP's send/recv to the open connection (TLS or TCP). */
+static int32_t prvHttpTransportSend( NetworkContext_t * pCtx, const void * pBuf, size_t len )
+{
+    ( void ) pCtx;
+    if( s_http.isHttps )
+    {
+        return TLS_FreeRTOS_send( &s_http.netCtx, pBuf, len );
+    }
+    return ( int32_t ) FreeRTOS_send( s_http.sock, pBuf, len, 0 );
+}
+
+static int32_t prvHttpTransportRecv( NetworkContext_t * pCtx, void * pBuf, size_t len )
+{
+    ( void ) pCtx;
+    if( s_http.isHttps )
+    {
+        return TLS_FreeRTOS_recv( &s_http.netCtx, pBuf, len );
+    }
+    return ( int32_t ) FreeRTOS_recv( s_http.sock, pBuf, len, 0 );
+}
+
+/* Parse pUrl into s_http.host / s_http.path / s_http.port / s_http.isHttps. 0 on success. */
+static int prvHttpParseUrl( const char * pUrl )
+{
+    urlparse_url u;
+    size_t urllen = strlen( pUrl );
+    int isHttps;
+    uint16_t port;
+
+    if( ( urlparse_parse_url( pUrl, urllen, 0, &u ) != 0 ) ||
+        !( u.field_set & ( 1 << URLPARSE_HOST ) ) )
+    {
+        OTA_APP_LOG( "http: bad URL" );
+        return -1;
+    }
+
+    {
+        size_t hl = u.field_data[ URLPARSE_HOST ].len;
+        size_t ho = u.field_data[ URLPARSE_HOST ].off;
+        if( ( hl == 0 ) || ( hl >= sizeof( s_http.host ) ) )
+        {
+            OTA_APP_LOG( "http: host too long" );
+            return -1;
+        }
+        memcpy( s_http.host, pUrl + ho, hl );
+        s_http.host[ hl ] = '\0';
+    }
+
+    isHttps = ( u.field_set & ( 1 << URLPARSE_SCHEMA ) ) &&
+              ( u.field_data[ URLPARSE_SCHEMA ].len == 5 ) &&
+              ( strncmp( pUrl + u.field_data[ URLPARSE_SCHEMA ].off, "https", 5 ) == 0 );
+    port = ( u.field_set & ( 1 << URLPARSE_PORT ) ) ? u.port : ( isHttps ? 443 : 80 );
+
+    if( u.field_set & ( 1 << URLPARSE_PATH ) )
+    {
+        size_t po = u.field_data[ URLPARSE_PATH ].off;
+        size_t pl = urllen - po;                       /* path + ?query (+#frag) */
+        char * frag = memchr( pUrl + po, '#', pl );
+        if( frag != NULL )
+        {
+            pl = ( size_t ) ( frag - ( pUrl + po ) );
+        }
+        if( pl >= sizeof( s_http.path ) )
+        {
+            OTA_APP_LOG( "http: path too long" );
+            return -1;
+        }
+        memcpy( s_http.path, pUrl + po, pl );
+        s_http.path[ pl ] = '\0';
+    }
+    else
+    {
+        s_http.path[ 0 ] = '/';
+        s_http.path[ 1 ] = '\0';
+    }
+
+    s_http.isHttps = isHttps;
+    s_http.port = port;
+    return 0;
+}
+
+/* OtaHttpInterface_t.init: parse the presigned URL and open the connection. */
+/* (Re)open the transport to the already-parsed s_http.host:port. Used by init AND by request()'s
+ * self-healing reconnect (S3 drops the keep-alive after a few hundred KB of ranged GETs). On success
+ * s_http.inUse=1; on failure the partial state is freed (leak-safe) and inUse stays 0. */
+static OtaHttpStatus_t prvHttpOpenConn( void )
+{
+    if( s_http.isHttps )
+    {
+        NetworkCredentials_t creds;
+
+        memset( &creds, 0, sizeof( creds ) );
+        creds.pRootCa        = ( const uint8_t * ) OTA_AMAZON_ROOT_CA1;
+        creds.rootCaSize     = sizeof( OTA_AMAZON_ROOT_CA1 );   /* incl. NUL, as mbedTLS PEM wants */
+        creds.rxReserveSize  = OTA_HTTP_RXRESERVE;
+        s_http.netCtx.pParams = &s_http.tlsParams;
+
+        if( TLS_FreeRTOS_Connect( &s_http.netCtx, s_http.host, s_http.port, &creds,
+                                  OTA_HTTP_RECV_TMO_MS, OTA_HTTP_SEND_TMO_MS ) != TLS_TRANSPORT_SUCCESS )
+        {
+            OTA_APP_LOG( "http: TLS connect to %s:%u FAIL", s_http.host, ( unsigned ) s_http.port );
+            /* CRITICAL: free what TLS_FreeRTOS_Connect allocated before failing - a transient
+             * handshake failure (recv -6) otherwise leaks ~tens of KB and the retry OOMs. */
+            TLS_FreeRTOS_Disconnect( &s_http.netCtx );
+            return OtaHttpInitFailed;
+        }
+    }
+    else
+    {
+        struct freertos_sockaddr addr;
+        uint32_t ip;
+        TickType_t rt = pdMS_TO_TICKS( OTA_HTTP_RECV_TMO_MS );
+        TickType_t wt = pdMS_TO_TICKS( OTA_HTTP_SEND_TMO_MS );
+
+        ip = FreeRTOS_gethostbyname( s_http.host );
+        if( ip == 0 )
+        {
+            OTA_APP_LOG( "http: DNS lookup of %s FAIL", s_http.host );
+            return OtaHttpInitFailed;
+        }
+        s_http.sock = FreeRTOS_socket( FREERTOS_AF_INET, FREERTOS_SOCK_STREAM, FREERTOS_IPPROTO_TCP );
+        if( s_http.sock == FREERTOS_INVALID_SOCKET )
+        {
+            OTA_APP_LOG( "http: socket() FAIL" );
+            s_http.sock = NULL;
+            return OtaHttpInitFailed;
+        }
+        FreeRTOS_setsockopt( s_http.sock, 0, FREERTOS_SO_RCVTIMEO, &rt, sizeof( rt ) );
+        FreeRTOS_setsockopt( s_http.sock, 0, FREERTOS_SO_SNDTIMEO, &wt, sizeof( wt ) );
+        memset( &addr, 0, sizeof( addr ) );
+        addr.sin_family = FREERTOS_AF_INET;
+        addr.sin_port   = FreeRTOS_htons( s_http.port );
+        addr.sin_address.ulIP_IPv4 = ip;
+        if( FreeRTOS_connect( s_http.sock, &addr, sizeof( addr ) ) != 0 )
+        {
+            OTA_APP_LOG( "http: TCP connect to %s:%u FAIL", s_http.host, ( unsigned ) s_http.port );
+            FreeRTOS_closesocket( s_http.sock );
+            s_http.sock = NULL;
+            return OtaHttpInitFailed;
+        }
+    }
+
+    s_http.inUse = 1;
+    return OtaHttpSuccess;
+}
+
+/* Close the transport but KEEP the parsed s_http.host/path/port so request() can reopen. */
+static void prvHttpCloseConn( void )
+{
+    if( s_http.isHttps )
+    {
+        TLS_FreeRTOS_Disconnect( &s_http.netCtx );
+    }
+    else if( s_http.sock != NULL )
+    {
+        FreeRTOS_closesocket( s_http.sock );
+        s_http.sock = NULL;
+    }
+    s_http.inUse = 0;
+}
+
+static OtaHttpStatus_t prvOtaHttpInit( char * pUrl )
+{
+    if( ( pUrl == NULL ) || ( pUrl[ 0 ] == '\0' ) )
+    {
+        return OtaHttpInitFailed;
+    }
+
+    if( s_http.inUse )
+    {
+        /* A stale connection from an aborted job; close it before reopening. */
+        ( void ) prvOtaHttpDeinit();
+    }
+
+    memset( &s_http, 0, sizeof( s_http ) );
+
+    if( prvHttpParseUrl( pUrl ) != 0 )
+    {
+        return OtaHttpInitFailed;
+    }
+
+    OTA_APP_LOG( "http: %s host=%s port=%u", s_http.isHttps ? "https" : "http",
+                 s_http.host, ( unsigned ) s_http.port );
+
+    return prvHttpOpenConn();
+}
+
+/* Millisecond clock for coreHTTP's recv-retry budget (HTTPResponse_t.getTime). */
+static uint32_t prvHttpGetTimeMs( void )
+{
+    return ( uint32_t ) ( xTaskGetTickCount() * portTICK_PERIOD_MS );
+}
+
+/* OtaHttpInterface_t.request: GET [rangeStart,rangeEnd], expect 206, feed the body to the agent. */
+static OtaHttpStatus_t prvOtaHttpRequest( uint32_t rangeStart, uint32_t rangeEnd )
+{
+    TransportInterface_t transport;
+    HTTPRequestInfo_t    reqInfo;
+    HTTPRequestHeaders_t reqHdr;
+    HTTPResponse_t       response;
+    HTTPStatus_t         hs;
+    static uint8_t       s_reqBuf[ OTA_HTTP_REQ_BUF ];
+    static uint8_t       s_respBuf[ OTA_HTTP_RESP_BUF ];
+    OtaEventMsg_t        eventMsg = { 0 };
+    OtaEventData_t *     pData;
+
+    /* Self-healing: if a prior request tore the connection down (S3 keep-alive drop / transient
+     * handshake -6), reopen it here. The OTA agent's block RequestTimer drives these retries. */
+    if( !s_http.inUse )
+    {
+        if( prvHttpOpenConn() != OtaHttpSuccess )
+        {
+            return OtaHttpRequestFailed;
+        }
+    }
+
+    /* Build the GET request with coreHTTP, add the byte Range header. */
+    memset( &reqInfo, 0, sizeof( reqInfo ) );
+    reqInfo.pMethod   = "GET";          reqInfo.methodLen = 3;
+    reqInfo.pPath     = s_http.path;    reqInfo.pathLen   = strlen( s_http.path );
+    reqInfo.pHost     = s_http.host;    reqInfo.hostLen   = strlen( s_http.host );
+    reqInfo.reqFlags  = HTTP_REQUEST_KEEP_ALIVE_FLAG;   /* one connection, many ranged GETs */
+
+    memset( &reqHdr, 0, sizeof( reqHdr ) );
+    reqHdr.pBuffer    = s_reqBuf;
+    reqHdr.bufferLen  = sizeof( s_reqBuf );
+
+    hs = HTTPClient_InitializeRequestHeaders( &reqHdr, &reqInfo );
+    if( hs != HTTPSuccess )
+    {
+        OTA_APP_LOG( "http: init request headers FAIL (%s)", HTTPClient_strerror( hs ) );
+        return OtaHttpRequestFailed;
+    }
+
+    hs = HTTPClient_AddRangeHeader( &reqHdr, ( int32_t ) rangeStart, ( int32_t ) rangeEnd );
+    if( hs != HTTPSuccess )
+    {
+        OTA_APP_LOG( "http: add Range header FAIL (%s)", HTTPClient_strerror( hs ) );
+        return OtaHttpRequestFailed;
+    }
+
+    transport.pNetworkContext = &s_http.netCtx;   /* unused by our send/recv (state is in s_http) */
+    transport.send            = prvHttpTransportSend;
+    transport.recv            = prvHttpTransportRecv;
+
+    memset( &response, 0, sizeof( response ) );
+    response.pBuffer   = s_respBuf;
+    response.bufferLen = sizeof( s_respBuf );
+    /* Without a clock, coreHTTP's recv loop has a 0 ms budget and bails the instant transport.recv
+     * returns 0 (no data yet) - so the body record (which arrives just after the headers) is never
+     * read (bodyLen=0). Give it a ms clock to wait for the body. */
+    response.getTime   = prvHttpGetTimeMs;
+
+    hs = HTTPClient_Send( &transport, &reqHdr, NULL, 0, &response, 0 );
+    if( hs != HTTPSuccess )
+    {
+        OTA_APP_LOG( "http: GET [%u,%u] FAIL (%s) status=%u bodyLen=%u - reopening",
+                     ( unsigned ) rangeStart, ( unsigned ) rangeEnd, HTTPClient_strerror( hs ),
+                     ( unsigned ) response.statusCode, ( unsigned ) response.bodyLen );
+        /* S3 drops the keep-alive after a few hundred KB of ranged GETs. Tear the dead connection
+         * down (inUse=0) so the OTA agent's next block request reopens it via the self-healing top -
+         * critically, this stops the dead netCtx being reused (which Hard Faulted). */
+        prvHttpCloseConn();
+        return OtaHttpRequestFailed;
+    }
+
+    /* A ranged GET should yield 206 Partial Content; 200 (whole file) is also acceptable. */
+    if( ( response.statusCode != 206 ) && ( response.statusCode != 200 ) )
+    {
+        OTA_APP_LOG( "http: GET [%u,%u] -> HTTP %u (expected 206)", ( unsigned ) rangeStart,
+                     ( unsigned ) rangeEnd, ( unsigned ) response.statusCode );
+        return OtaHttpRequestFailed;
+    }
+
+    if( ( response.pBody == NULL ) || ( response.bodyLen == 0 ) )
+    {
+        OTA_APP_LOG( "http: GET [%u,%u] -> empty body", ( unsigned ) rangeStart, ( unsigned ) rangeEnd );
+        return OtaHttpRequestFailed;
+    }
+
+    /* Hand the raw body to the OTA agent as a file block (decodeFileBlock_Http memcpy()s it as-is). */
+    pData = prvEventBufferGet();
+    if( pData == NULL )
+    {
+        OTA_APP_LOG( "http: no free event buffer - dropping block [%u,%u]",
+                     ( unsigned ) rangeStart, ( unsigned ) rangeEnd );
+        return OtaHttpRequestFailed;
+    }
+
+    if( response.bodyLen > sizeof( pData->data ) )
+    {
+        OTA_APP_LOG( "http: body %u > buffer %u - dropping", ( unsigned ) response.bodyLen,
+                     ( unsigned ) sizeof( pData->data ) );
+        pData->bufferUsed = false;
+        return OtaHttpRequestFailed;
+    }
+
+    memcpy( pData->data, response.pBody, response.bodyLen );
+    pData->dataLength = ( uint32_t ) response.bodyLen;
+
+    eventMsg.pEventData = pData;
+    eventMsg.eventId    = OtaAgentEventReceivedFileBlock;
+
+    if( OTA_SignalEvent( &eventMsg ) == false )
+    {
+        pData->bufferUsed = false;
+        OTA_APP_LOG( "http: OTA_SignalEvent FAIL - buffer released" );
+        return OtaHttpRequestFailed;
+    }
+
+    return OtaHttpSuccess;
+}
+
+/* OtaHttpInterface_t.deinit: close the connection + reset state. */
+static OtaHttpStatus_t prvOtaHttpDeinit( void )
+{
+    if( s_http.isHttps )
+    {
+        if( s_http.netCtx.pParams != NULL )
+        {
+            TLS_FreeRTOS_Disconnect( &s_http.netCtx );
+        }
+    }
+    else if( s_http.sock != NULL )
+    {
+        FreeRTOS_shutdown( s_http.sock, FREERTOS_SHUT_RDWR );
+        FreeRTOS_closesocket( s_http.sock );
+    }
+
+    memset( &s_http, 0, sizeof( s_http ) );
+    return OtaHttpSuccess;
 }
 
 /* ---------------------------------------------- MQTT-Agent command helpers ---- */
@@ -448,7 +896,11 @@ int ota_app_init( MQTTAgentContext_t * pAgent, const char * pThingName )
     s_otaBuffer.decodeMemorySize   = sizeof( s_decodeMem );
     s_otaBuffer.pFileBitmap        = s_fileBitmap;
     s_otaBuffer.fileBitmapSize     = sizeof( s_fileBitmap );
-    /* URL / auth-scheme buffers stay NULL: MQTT data plane only (no HTTP). */
+    /* HTTP data plane: the OTA library copies the job's presigned URL + auth scheme here. */
+    s_otaBuffer.pUrl               = ( uint8_t * ) s_otaUrl;
+    s_otaBuffer.urlSize            = sizeof( s_otaUrl );
+    s_otaBuffer.pAuthScheme        = ( uint8_t * ) s_otaAuthScheme;
+    s_otaBuffer.authSchemeSize     = sizeof( s_otaAuthScheme );
 
     /* OTA interfaces. */
     memset( &s_otaInterfaces, 0, sizeof( s_otaInterfaces ) );
@@ -467,7 +919,11 @@ int ota_app_init( MQTTAgentContext_t * pAgent, const char * pThingName )
     s_otaInterfaces.mqtt.unsubscribe = prvOtaMqttUnsubscribe;
     s_otaInterfaces.mqtt.publish     = prvOtaMqttPublish;
 
-    /* http interface left zeroed (unused: MQTT data plane). */
+    /* HTTP data interface: download file blocks over HTTPS from the presigned S3 URL. The job's
+     * "protocols":["HTTP"] + this non-NULL interface make setDataInterface pick HTTP (ota_interface.c). */
+    s_otaInterfaces.http.init    = prvOtaHttpInit;
+    s_otaInterfaces.http.request = prvOtaHttpRequest;
+    s_otaInterfaces.http.deinit  = prvOtaHttpDeinit;
 
     s_otaInterfaces.pal = *ota_pal_get_interface();
 

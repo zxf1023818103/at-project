@@ -73,6 +73,16 @@ typedef struct NetworkCredentials
      * stays in secure storage.
      */
     const char * pClientCertPath;
+
+    /**
+     * @brief Optional override for the rxPlain pre-reserve size (bytes). 0 = the
+     * default full-TLS-record reserve (16640). A second concurrent TLS connection
+     * (e.g. the OTA HTTPS download alongside the AWS MQTT session) can pass a smaller
+     * value to save heap: its application records are tiny (4 KB OTA blocks), so a
+     * modest reserve (e.g. 6144) avoids holding a second 16 KB buffer. Only consumed
+     * by the picotls backend; ignored by mbedTLS.
+     */
+    size_t rxReserveSize;
 } NetworkCredentials_t;
 
 /**

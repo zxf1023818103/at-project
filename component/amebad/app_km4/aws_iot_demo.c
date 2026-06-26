@@ -115,10 +115,10 @@ static void prvIncomingPublishCallback(MQTTAgentContext_t *pAgentCtx,
                                        MQTTPublishInfo_t *pPublishInfo)
 {
     (void)pAgentCtx; (void)packetId;
-    bool routed = SubscriptionManager_HandleIncomingPublishes(pPublishInfo);
-    log_info("[AWS] RX publish topic=%.*s len=%u routed=%d",
-             (int)pPublishInfo->topicNameLength, pPublishInfo->pTopicName,
-             (unsigned)pPublishInfo->payloadLength, (int)routed);
+    if (SubscriptionManager_HandleIncomingPublishes(pPublishInfo) == false) {
+        log_info("[AWS] RX unrouted publish topic=%.*s",
+                 (int)pPublishInfo->topicNameLength, pPublishInfo->pTopicName);
+    }
 }
 
 /* The command topic handler (replaces the old prvEventCallback PUBLISH branch). */
@@ -245,6 +245,10 @@ static void aws_agent_task(void *param)
     s_creds.pPrivateKey = (const uint8_t *)s_key;
     s_creds.privateKeySize = s_keyLen;
     s_creds.disableSni = 0;
+    /* MQTT here only carries small messages (telemetry, OTA job docs <1 KB), so an 8 KB picotls
+     * rxPlain reserve is ample - it leaves ~8 KB more heap for the OTA HTTP data plane's 2nd TLS
+     * (the 16 KB default is only needed for bulk TLS reads, which the HTTPS download owns instead). */
+    s_creds.rxReserveSize = 6144;
 
     /* The command-pointer queue the agent + app tasks rendezvous on. */
     s_agentMsgCtx.queue = xQueueCreateStatic(AWS_AGENT_QUEUE_LEN,
@@ -368,6 +372,15 @@ static void aws_telemetry_task(void *param)
             continue;
         }
 
+        /* Pause telemetry while an OTA download is in progress: the data plane opens a 2nd TLS
+         * (HTTPS to S3) whose handshake needs a large contiguous heap block, and the periodic
+         * telemetry publish churn fragments the heap (intermittent handshake recv -6). Stay quiet
+         * until the OTA is back to idle. */
+        if (ota_app_is_active()) {
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            continue;
+        }
+
         /* On a fresh connection, (re)subscribe the command topic. */
         if (!wasConnected) {
             prvSubscribeCommandTopic();
@@ -423,7 +436,10 @@ void aws_iot_demo_start(void)
 {
     /* The OTA close-file path (mbedTLS x509 parse + ECDSA verify) and the TLS handshake
      * are the heavy stack users; 8K words for the agent task. The telemetry task is light. */
-    if (xTaskCreate(aws_agent_task, "aws_agent", 8192, NULL,
+    /* 5120 words (20 KB), not 8192/32 KB: this task runs MQTTAgent_CommandLoop + the one-shot TLS
+     * handshake (mbedTLS RSA-2048 cert-chain verify peaks ~12 KB of stack), so 32 KB was ~2.6x over.
+     * Reclaiming 12 KB of heap is what lets the OTA HTTPS data plane open its 2nd concurrent TLS. */
+    if (xTaskCreate(aws_agent_task, "aws_agent", 5120, NULL,
                     tskIDLE_PRIORITY + 3, NULL) != pdPASS)
         log_error("[AWS] xTaskCreate(aws_agent) FAILED");
 

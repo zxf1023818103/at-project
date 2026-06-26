@@ -11,13 +11,19 @@
 
 #include <stdio.h>
 
-/* ---- data plane: MQTT only (no HTTP) ----
- * Control + data both over MQTT; the HTTP interface is left zeroed in ota_app.c. The
- * defaults (configENABLED_CONTROL_PROTOCOL / configENABLED_DATA_PROTOCOLS /
- * configOTA_PRIMARY_DATA_PROTOCOL) are already MQTT-only, set explicitly for clarity. */
+/* ---- control plane: MQTT (jobs) ----
+ * The job control plane (notify-next / $next/get / UpdateJobExecution) is MQTT-only. */
 #define configENABLED_CONTROL_PROTOCOL     ( OTA_CONTROL_OVER_MQTT )
-#define configENABLED_DATA_PROTOCOLS       ( OTA_DATA_OVER_MQTT )
-#define configOTA_PRIMARY_DATA_PROTOCOL    ( OTA_DATA_OVER_MQTT )
+
+/* ---- data plane: MQTT + HTTP, HTTP preferred ----
+ * Both data protocols are compiled in (ota_app.c provides both the MQTT and HTTP interfaces).
+ * setDataInterface() (ota_interface.c) then picks per the job document's "protocols" array:
+ * a job created with --protocols HTTP offers only "HTTP", so the library uses the HTTP data
+ * plane (presigned-S3 download over HTTPS) instead of the MQTT/CBOR stream. The firmware
+ * DOWNLOAD therefore rides HTTPS; MQTT stays available as a fallback if a job offers only MQTT.
+ * Primary = HTTP so HTTP wins when a job lists both. */
+#define configENABLED_DATA_PROTOCOLS       ( OTA_DATA_OVER_MQTT | OTA_DATA_OVER_HTTP )
+#define configOTA_PRIMARY_DATA_PROTOCOL    ( OTA_DATA_OVER_HTTP )
 
 /* ---- block size ----
  * 2^12 = 4096-byte file blocks (matches the ota_pal decode buffer s_decodeMem). */

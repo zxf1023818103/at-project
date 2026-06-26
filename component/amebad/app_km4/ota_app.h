@@ -30,4 +30,11 @@ int ota_app_init( MQTTAgentContext_t * pAgent, const char * pThingName );
  */
 void ota_app_on_mqtt_connected( void );
 
+/**
+ * @brief True while an OTA file download is in progress (CreatingFile..ClosingFile). The telemetry
+ *        task goes quiet during this window so its publish churn doesn't fragment the heap that the
+ *        OTA HTTPS (2nd TLS) handshake/records need.
+ */
+int ota_app_is_active( void );
+
 #endif /* OTA_APP_H */
