@@ -159,6 +159,23 @@ static int16_t prvWriteBlock( OtaFileContext_t * const pFileContext,
 }
 
 /* ------------------------------------------------ signature verify (close) --- */
+/* The at-project OTA code-signing certificate (ECDSA P-256), embedded so no LFS cert provisioning is
+ * needed. The OTA job's certfile field is ignored; the AWS Signer signature is verified against this
+ * public key. Matches the ACM cert imported for the 'atProjectOta' Signer profile. */
+static const char s_otaSignerCertPem[] =
+    "-----BEGIN CERTIFICATE-----\n"
+    "MIIBtDCCAVqgAwIBAgIUUwqQPh5f4VOCEwv6MgnnvUXTBygwCgYIKoZIzj0EAwIw\n"
+    "JTEjMCEGA1UEAwwaYXQtcHJvamVjdCBPVEEgY29kZSBzaWduZXIwHhcNMjYwNjI2\n"
+    "MDAxMDI2WhcNMzYwNjIzMDAxMDI2WjAlMSMwIQYDVQQDDBphdC1wcm9qZWN0IE9U\n"
+    "QSBjb2RlIHNpZ25lcjBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABGmXBRO3KdqI\n"
+    "eAfjRCkxonL7QDNtdLXv6jyxRjcaOiw/S4MKdbzYS01c4h2op/ywKdyeDC/tA7TG\n"
+    "o7US8O4iTaKjaDBmMB0GA1UdDgQWBBQqD8y08yV90fospXSRsCjBPcou1DAfBgNV\n"
+    "HSMEGDAWgBQqD8y08yV90fospXSRsCjBPcou1DAPBgNVHRMBAf8EBTADAQH/MBMG\n"
+    "A1UdJQQMMAoGCCsGAQUFBwMDMAoGCCqGSM49BAMCA0gAMEUCIQDaBfe+7XR7isMJ\n"
+    "fqN9rjY3Cf54woRjDhMEVHZSZyN5UQIgE1Tx8ReOF70MJmnPccPilYxuzakFcnfJ\n"
+    "ZBLWLzi7u/Y=\n"
+    "-----END CERTIFICATE-----\n";
+
 static OtaPalStatus_t prvVerifySignature( OtaFileContext_t * const pFileContext )
 {
     int rc;
@@ -171,11 +188,7 @@ static OtaPalStatus_t prvVerifySignature( OtaFileContext_t * const pFileContext 
         OTA_PAL_LOG( "verify: no signature in job" );
         return OTA_PAL_COMBINE_ERR( OtaPalSignatureCheckFailed, 0 );
     }
-    if( pFileContext->pCertFilepath == NULL )
-    {
-        OTA_PAL_LOG( "verify: no cert filepath in job" );
-        return OTA_PAL_COMBINE_ERR( OtaPalBadSignerCert, 0 );
-    }
+    ( void ) pFileContext->pCertFilepath;   /* ignored: the code-sign cert is embedded above */
 
     /* Finalize the rolling hash over the downloaded image. */
     if( mbedtls_sha256_finish( &s_sha, hash ) != 0 )
@@ -184,13 +197,13 @@ static OtaPalStatus_t prvVerifySignature( OtaFileContext_t * const pFileContext 
         return OTA_PAL_COMBINE_ERR( OtaPalSignatureCheckFailed, 0 );
     }
 
-    /* Read the code-signing cert PEM from the LFS VFS (newlib fopen -> _open -> LFS). */
+    /* Parse the EMBEDDED code-signing cert (no LFS provisioning needed). */
     mbedtls_x509_crt_init( &crt );
-    rc = mbedtls_x509_crt_parse_file( &crt, ( const char * ) pFileContext->pCertFilepath );
+    rc = mbedtls_x509_crt_parse( &crt, ( const unsigned char * ) s_otaSignerCertPem,
+                                 sizeof( s_otaSignerCertPem ) );
     if( rc != 0 )
     {
-        OTA_PAL_LOG( "verify: x509_crt_parse_file('%s') FAIL -0x%04x",
-                     pFileContext->pCertFilepath, ( unsigned ) -rc );
+        OTA_PAL_LOG( "verify: x509_crt_parse(embedded) FAIL -0x%04x", ( unsigned ) -rc );
         mbedtls_x509_crt_free( &crt );
         return OTA_PAL_COMBINE_ERR( OtaPalBadSignerCert, ( uint32_t ) ( -rc ) );
     }

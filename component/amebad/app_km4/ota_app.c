@@ -55,7 +55,7 @@ extern const OtaPalInterface_t * ota_pal_get_interface( void );
 #define APP_VERSION_MINOR    9
 #endif
 #ifndef APP_VERSION_BUILD
-#define APP_VERSION_BUILD    0
+#define APP_VERSION_BUILD    1
 #endif
 const AppVersion32_t appFirmwareVersion =
 {
@@ -225,6 +225,28 @@ static OtaMqttStatus_t prvOtaMqttSubscribe( const char * pTopicFilter,
         OTA_APP_LOG( "subscribe: subscription table full for '%.*s'",
                      ( int ) topicFilterLength, pTopicFilter );
         return OtaMqttSubscribeFailed;
+    }
+
+    /* The OTA library only SUBSCRIBES to '.../jobs/notify-next', but AWS auto-delivers the
+     * $next/get job-document response on '.../jobs/$next/get/accepted' (sent to the requester
+     * without a separate subscription). Register the OTA handler for that response topic too, so
+     * the job document routes (otherwise the agent stalls at WaitingForJob). */
+    {
+        static char s_getAcceptedTopic[ 96 ];
+        const char * pNN = "notify-next";
+        size_t nnLen = strlen( pNN );
+        if( ( topicFilterLength > nnLen ) &&
+            ( strncmp( &pTopicFilter[ topicFilterLength - nnLen ], pNN, nnLen ) == 0 ) )
+        {
+            uint16_t prefixLen = ( uint16_t ) ( topicFilterLength - nnLen );  /* '$aws/things/<t>/jobs/' */
+            int n = snprintf( s_getAcceptedTopic, sizeof( s_getAcceptedTopic ),
+                              "%.*s$next/get/accepted", ( int ) prefixLen, pTopicFilter );
+            if( ( n > 0 ) && ( n < ( int ) sizeof( s_getAcceptedTopic ) ) )
+            {
+                ( void ) SubscriptionManager_AddSubscription( s_getAcceptedTopic, ( uint16_t ) n,
+                                                              prvOtaIncomingPublish, NULL );
+            }
+        }
     }
 
     memset( &subscribeInfo, 0, sizeof( subscribeInfo ) );

@@ -115,10 +115,10 @@ static void prvIncomingPublishCallback(MQTTAgentContext_t *pAgentCtx,
                                        MQTTPublishInfo_t *pPublishInfo)
 {
     (void)pAgentCtx; (void)packetId;
-    if (SubscriptionManager_HandleIncomingPublishes(pPublishInfo) == false) {
-        log_info("[AWS] RX unrouted publish topic=%.*s",
-                 (int)pPublishInfo->topicNameLength, pPublishInfo->pTopicName);
-    }
+    bool routed = SubscriptionManager_HandleIncomingPublishes(pPublishInfo);
+    log_info("[AWS] RX publish topic=%.*s len=%u routed=%d",
+             (int)pPublishInfo->topicNameLength, pPublishInfo->pTopicName,
+             (unsigned)pPublishInfo->payloadLength, (int)routed);
 }
 
 /* The command topic handler (replaces the old prvEventCallback PUBLISH branch). */

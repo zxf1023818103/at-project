@@ -26,7 +26,7 @@
 /* Number of blocks requested per data-plane request. Keep small: the AmebaD PAL streams
  * blocks sequentially to ota_flash_feed (a sequential consumer), and a modest in-flight
  * window keeps the data plane ordered + the RAM use bounded. */
-#define otaconfigMAX_NUM_BLOCKS_REQUEST    ( 4U )
+#define otaconfigMAX_NUM_BLOCKS_REQUEST    ( 1U )
 
 /* ---- thing name ----
  * The Thing name = BLE MAC string (e.g. "AABBCCDDEEFF" / "AA:BB:CC:DD:EE:FF"), well under 64. */
@@ -36,7 +36,7 @@
  * OTA_EventProcessingTask stack (in words) + priority. The agent's heaviest stack user is
  * the closeFile path (mbedTLS x509 parse + ECDSA verify), so size generously. Priority sits
  * just under the telemetry/agent tasks. */
-#define otaconfigSTACK_SIZE                ( 4096U )
+#define otaconfigSTACK_SIZE                ( 2560U )
 #define otaconfigAGENT_PRIORITY            ( tskIDLE_PRIORITY + 2 )
 
 /* ---- self-test ----
