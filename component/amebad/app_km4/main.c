@@ -121,9 +121,7 @@ static void wifi_event_task( void * param )
     }
 }
 
-/* DHCP-only by default (0.0.0.0). The cached DHCP_* lease, when present, is loaded into these as
- * the endpoint's prior address so FreeRTOS+TCP DHCP REQUESTs it (INIT-REBOOT) instead of a cold
- * DISCOVER — non-const so wifi_bringup_thread can seed them from env before FreeRTOS_FillEndPoint. */
+/* DHCP-only: the endpoint default IPv4 stays 0.0.0.0 (the DHCP lease is the only address). */
 static uint8_t ucIPAddress[ 4 ]    = { 0, 0, 0, 0 };
 static uint8_t ucNetMask[ 4 ]      = { 255, 255, 255, 0 };
 static uint8_t ucGatewayAddress[4] = { 0, 0, 0, 0 };
@@ -154,31 +152,6 @@ static const char *wifi_sec_to_str( rtw_security_t sec )
         case RTW_SECURITY_WPA2_TKIP_PSK: return "WPA2_TKIP";
         default:                         return "WPA2_AES";   /* WPA2/WPA3 AES */
     }
-}
-
-/* "a.b.c.d" -> out[4]; returns 1 on success. Hand-rolled (no sscanf: in main.c the stdio family is
- * the ROM _rtl_* which rejects several conversions). */
-static int parse_ipv4( const char *s, uint8_t out[ 4 ] )
-{
-    int i;
-    if( s == NULL || s[ 0 ] == '\0' )
-        return 0;
-    for( i = 0; i < 4; i++ )
-    {
-        char         *end;
-        unsigned long v = strtoul( s, &end, 10 );
-        if( end == s || v > 255 )
-            return 0;
-        out[ i ] = (uint8_t) v;
-        s = end;
-        if( i < 3 )
-        {
-            if( *s != '.' )
-                return 0;
-            s++;
-        }
-    }
-    return 1;
 }
 
 /* FreeRTOS+TCP IPv4 (network byte order, octet 0 = first) -> "a.b.c.d" in buf (>= 16 bytes). Uses
@@ -324,16 +297,6 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
         log_info( "[KM4] gateway   %d.%d.%d.%d",
                     (int)( ulGW & 0xff ), (int)( ( ulGW >> 8 ) & 0xff ),
                     (int)( ( ulGW >> 16 ) & 0xff ), (int)( ( ulGW >> 24 ) & 0xff ) );
-        /* Cache this lease for the next boot (DHCP_IP/GATEWAY/NETMASK/SERVER). Written only on
-         * change (env_set_if_changed), so the IP task does not rewrite KV/LFS on every renew. */
-        {
-            char b[ 16 ];
-            fmt_ipv4( ulIP,   b, sizeof( b ) );  env_set_if_changed( "DHCP_IP",      b );
-            fmt_ipv4( ulGW,   b, sizeof( b ) );  env_set_if_changed( "DHCP_GATEWAY", b );
-            fmt_ipv4( ulMask, b, sizeof( b ) );  env_set_if_changed( "DHCP_NETMASK", b );
-            fmt_ipv4( xEndPoint.xDHCPData.ulDHCPServerAddress, b, sizeof( b ) );
-            env_set_if_changed( "DHCP_SERVER", b );
-        }
         /* DHCP-provided DNS server list (endpoint settings) + NTP server (DHCP option 42, captured by
          * the FreeRTOS_DHCP.c at-project patch into ulDHCPNtpServerAddress). */
         {
@@ -707,21 +670,9 @@ static void wifi_bringup_thread( void *param )
      * returns the real MAC), then bring up FreeRTOS+TCP BEFORE associating. */
     amebad_register_wlan_netif( WLAN_STA_IDX, mac );
     pxRealtek_FillInterfaceDescriptor( WLAN_STA_IDX, &xInterface );
-    /* Seed the endpoint's default IPv4 from the cached DHCP_* lease, if any. FreeRTOS+TCP uses it as
-     * the fallback when DHCP times out (instant last-known-good instead of staying at 0.0.0.0); DHCP
-     * still runs + validates on the happy path, so a stale lease is harmless. (A real "skip DHCP"
-     * fast path would need ipconfigUSE_DHCP_HOOK; see the network-up hook note.) */
-    {
-        uint8_t ip[ 4 ], gw[ 4 ], mask[ 4 ];
-        if( parse_ipv4( getenv( "DHCP_IP" ), ip ) )
-        {
-            memcpy( ucIPAddress, ip, 4 );
-            if( parse_ipv4( getenv( "DHCP_GATEWAY" ), gw ) )   memcpy( ucGatewayAddress, gw, 4 );
-            if( parse_ipv4( getenv( "DHCP_NETMASK" ), mask ) ) memcpy( ucNetMask, mask, 4 );
-            log_info( "[KM4] DHCP cache: seeded prior IP %u.%u.%u.%u (fallback)",
-                        ip[ 0 ], ip[ 1 ], ip[ 2 ], ip[ 3 ] );
-        }
-    }
+    /* DHCP-only: endpoint default IPv4 stays 0.0.0.0 (no cached-lease seeding). The old seed was only
+     * ever the static-IP fallback on DHCP timeout, which the network-up hook now rejects anyway, and
+     * FreeRTOS+TCP only DISCOVERs (never REQUESTs a prior IP) so it bought no fast path. */
     FreeRTOS_FillEndPoint( &xInterface, &xEndPoint, ucIPAddress, ucNetMask,
                            ucGatewayAddress, ucDNSServer, mac );
     xEndPoint.bits.bWantDHCP = pdTRUE;
