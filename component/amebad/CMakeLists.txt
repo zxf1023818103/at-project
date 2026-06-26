@@ -13,12 +13,13 @@
 #                    lacks), ram_lp (rtl8721dlp_* — KM0 clk/pinmap/startup/...),
 #                    ram_hp (rtl8721dhp_* — KM4 audio/i2s/sd/...). (Merge of the
 #                    former fwlib_headers/ + ram/.)
-#   sdk_headers      Holds the 4 SDK platform headers vendored flat (platform/)
-#                    AND defines the amebad_sdk_includes INTERFACE target — the
-#                    chip-aware bundle of the remaining SDK header search paths
-#                    (most still in-place at platform/ameba-rtos-d/). Picks
-#                    app_km0 vs. app_km4 based on AMEBAD_CHIP. (Was the separate
-#                    sdk_includes component, now folded in here.)
+#   (amebad_sdk_includes / amebad_freertos_headers)
+#                    The chip-aware bundle of the SDK header search paths +
+#                    the FreeRTOS header bundle, defined INLINE in this file
+#                    (between the header-only components it links and usrcfg).
+#                    Was the separate sdk_headers/ subdir; folded in here once it
+#                    held only its CMakeLists (the SDK platform headers it once
+#                    carried had moved to their owners).
 #
 #   usrcfg           Board config, one chip-gated CMakeLists over a flat folder;
 #                    the SDK filename infix selects the lib: usrcfg_common
@@ -30,7 +31,7 @@
 #                    (freertos_heap5_config.c -> vPortDefineHeapRegions). The upstream
 #                    FreeRTOS-Kernel (-> `FreeRTOS`) + per-core port/heap is built by
 #                    component/freertos-kernel_config; the kernel/glue header bundle +
-#                    the freertos_config <- amebad_sdk_includes attach live in sdk_headers.
+#                    the freertos_config <- amebad_sdk_includes attach are inline below.
 #   monitor          AmebaD debug monitor / shell (shell_init_ram), vendored
 #                    from SDK app/monitor. One chip-gated CMakeLists builds
 #                    amebad_monitor_common (shared) + amebad_monitor (per-core
@@ -87,7 +88,158 @@ add_subdirectory(string_rom)         # ROM swlib-string headers (amebad_string_r
 add_subdirectory(cmsis_rom)          # CMSIS core/DSP/mpu headers (amebad_cmsis_rom) + cmsis_rom_km{4,0}.ld; linked by sdk_includes below
 add_subdirectory(dlist)              # header-only doubly-linked-list (amebad_dlist); linked by sdk_includes below (must precede sdk_headers)
 add_subdirectory(platform_stdlib)    # header-only libc-retarget header (amebad_platform_stdlib: platform_stdlib_rtl8721d.h); linked by sdk_includes below (must precede sdk_headers)
-add_subdirectory(sdk_headers)        # defines amebad_sdk_includes (aggregates fwlib_headers/xmodem/string_rom/cmsis_rom/dlist/platform_stdlib + SDK include paths); consumed by the ram HAL libs (forward ref) and app/boot
+# ============================================================================================
+# amebad_sdk_includes + amebad_freertos_headers  (folded in from the former sdk_headers/ subdir,
+# which by then held only this CMakeLists - the SDK platform headers it once carried had already
+# moved to their owners). All paths are absolute (${CMAKE_SOURCE_DIR}/...), so no relocation was
+# needed. Sits here (after the header-only components it links, before usrcfg) to keep the same
+# target-definition order; the forward refs to later components (osdep/monitor/pmu/...) resolve
+# at generate time as before.
+# ============================================================================================
+# amebad_sdk_includes — chip-aware INTERFACE bundle of the SDK include paths the
+# AmebaD vendored headers still expect on the search path.
+#
+# Pruned to the LOAD-BEARING set only: the broad out-of-tree
+# (platform/ameba-rtos-d) header dirs that ameba_soc.h + the os abstraction +
+# the project config genuinely drag in. The dead/replaceable ones were dropped —
+# WLAN driver (minus the one include/ that holds the global autoconf.h), lwip
+# v1.4.1, INIC, polarssl, the SDK's mbedtls-2.4.0 (replaced with the SHARED
+# component/mbedtls_config/mbedtls), test/example/utilities, api/wifi, api/network,
+# mbed HAL (moved onto the wifi target, its only consumer). lwip is fully removed
+# (IP stack = FreeRTOS-Plus-TCP); the residual driver/netif ABI shim is
+# component/amebad/freertos_tcp_port/netif_shim.h (target amebad_netif_shim).
+#
+# In-tree members (NOT out-of-tree): amebad_fwlib_headers (69 chip/HAL headers),
+# our freertos/config override, the upstream freertos-kernel headers, shared
+# mbedtls/include. (The old platform/ header bundle that lived here is gone:
+# platform_stdlib_rtl8721d.h + time64.h moved to the syscalls component, dlist.h
+# became the amebad_dlist component, and the platform_stdlib.h dispatcher was
+# deleted — only 8721d was ever selected.)
+#
+# What remains out-of-tree (the irreducible SDK header surface — would need
+# vendoring those headers in-tree to remove): os + os/freertos + os_dep, soc
+# cmsis/monitor/xmodem/swlib/misc, and the wlan component's headers (just for
+# autoconf.h; lib_wlan.a/lib_wps.a live there).
+#
+# The per-core project config (base FreeRTOSConfig.h + platform_opts/autoconf +
+# main.h) is now in-tree, owned by the app component: app_km0 (KM0) /
+# app_km4 (KM4). Chip-gated below via _proj_cfg_inc.
+
+# amebad_freertos_headers — the FreeRTOS HEADER bundle for AmebaD (moved here from
+# component/amebad/freertos_port, which is now just the heap_5 glue lib): the upstream kernel's
+# FreeRTOS.h (include/) + portmacro.h (per-core port dir) + the freertos_port glue headers
+# (freertos_service.h / freertos_heap5_config.h). INTERFACE so it carries only include dirs —
+# linking the kernel STATIC would cycle back via freertos_config. Per-core port path
+# (km0 = ARMv6-M CM0; km4 image2 = ARMv8-M CM33, no-TrustZone non-secure).
+if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
+    set(_frt_port_path "GCC/ARM_CM0")
+else()
+    set(_frt_port_path "GCC/ARM_CM33_NTZ/non_secure")
+endif()
+set(_frt_src "${CMAKE_SOURCE_DIR}/component/freertos-kernel_config/freertos-kernel")
+add_library(amebad_freertos_headers INTERFACE)
+target_include_directories(amebad_freertos_headers SYSTEM INTERFACE
+    "${CMAKE_SOURCE_DIR}/component/amebad/freertos_port"   # freertos_service.h / freertos_heap5_config.h
+    "${_frt_src}/include"
+    "${_frt_src}/portable/${_frt_port_path}")
+
+add_library(amebad_sdk_includes INTERFACE)
+# The entire SDK header surface comes via each owner's header INTERFACE target —
+# header deps through target_link_libraries, NOT a pile of raw
+# target_include_directories. Each *_headers INTERFACE is defined before its
+# component's chip gate, so it exists on both cores (the headers are needed KM0+KM4
+# even where the component's compiled lib is KM4-only). The per-core port / project
+# config that used to be computed here now lives with its owner (amebad_freertos_headers
+# picks the kernel port path per core; amebad_proj_config is defined by the matching app).
+target_link_libraries(amebad_sdk_includes INTERFACE
+    # in-tree header-only components (own + expose their own dir)
+    amebad_fwlib_headers
+    amebad_xmodem
+    amebad_string_rom
+    amebad_cmsis_rom
+    amebad_dlist
+    amebad_platform_stdlib
+    freertos_config_common
+    # SDK header surface (replaces the old raw target_include_directories block):
+    amebad_freertos_headers       # upstream FreeRTOS.h + portmacro.h + the freertos glue headers
+    amebad_proj_config            # per-core platform_opts / Kconfig autoconf / main.h
+    amebad_osdep_headers          # os + os/freertos + os_dep
+    amebad_monitor_headers        # shell / monitor_rom / rtl_trace
+    amebad_pmu_headers            # rtl8721d_freertos_pmu.h (pulled by ameba_soc.h)
+    amebad_syscall_port_headers   # time64.h
+    amebad_at_cmd_headers         # log_service.h / atcmd_*.h
+    amebad_wlan_headers           # autoconf.h (global Kconfig)
+    amebad_mbedtls_headers        # shared upstream mbedtls/version.h
+)
+
+# OTA region — base addresses for the two image2 partitions. Default
+# values match SDK upstream (rtl8721d_ota.h #define defaults). Override
+# on the cmake line when relocating image2:
+#   cmake -DAMEBAD_OTA1_ADDR=0x080xx000 -DAMEBAD_OTA2_ADDR=0x081xx000 ...
+#
+# Notes:
+#   - 4 KB aligned (RSIP mask granularity).
+#   - KM0 and KM4 image2 are combined into one blob; only KM0's start
+#     address needs setting (KM4 follows immediately after).
+#   - Consumed everywhere via SDK macro LS_IMG2_OTA{1,2}_ADDR:
+#       * boot stage:   usrcfg_common/src/rtl8721d_bootcfg.c (OTA_Region[])
+#       * image2 stage: SDK misc/rtl8721d_ota.c (OtaTargetHdr lookup, etc.)
+#     fwlib/rtl8721d_ota.h provides the default via #ifndef so
+#     the CMake -D injection below cleanly overrides it (no -Wmacro-redefined).
+#
+# Lives in sdk_includes (not usrcfg_common) because the macro reaches
+# beyond board config — image2-stage SDK code references the same macro.
+set(AMEBAD_OTA1_ADDR "0x08006000" CACHE STRING
+    "AmebaD KM0 IMG2 OTA1 partition start address (4K-aligned)")
+set(AMEBAD_OTA2_ADDR "0x08183000" CACHE STRING
+    "AmebaD KM0 IMG2 OTA2 partition start address (4K-aligned)")
+target_compile_definitions(amebad_sdk_includes INTERFACE
+    "LS_IMG2_OTA1_ADDR=${AMEBAD_OTA1_ADDR}"
+    "LS_IMG2_OTA2_ADDR=${AMEBAD_OTA2_ADDR}"
+)
+
+# RSIP Mask entry 0 — covers the system-data region (BACKUP + XIPSYS,
+# 2*4K starting at 0x08002000 by default). SDK comment: "Entry 0 is
+# already used by System Data". Entries 1-3 are user-customizable
+# directly in usrcfg_common/src/rtl8721d_bootcfg.c (no cmake option
+# for those, they're meant to be hand-edited).
+#
+# Defaults match SDK upstream (bootcfg.c literal + layout.ld
+# BACKUP(0x08002000)+XIPSYS(0x08003000)). Override on the cmake line
+# when relocating system data:
+#   cmake -DAMEBAD_RSIP_MASK_ENTRY0_ADDR=0xXX \
+#         -DAMEBAD_RSIP_MASK_ENTRY0_PAGES=N ...
+#
+# Notes:
+#   - ADDR: 4K aligned. PAGES: count of 4K pages, max 255.
+#   - Consumed by usrcfg_common/src/rtl8721d_bootcfg.c RSIP_Mask_Config[0].
+#   - If you relocate ADDR, you also need to move BACKUP/XIPSYS in the
+#     layout.ld files (still hard-coded — see Wave 2 plan).
+#   - Lives in sdk_includes (not usrcfg_common) for parity with OTA
+#     option; any future layout-driven option goes here too.
+set(AMEBAD_RSIP_MASK_ENTRY0_ADDR "0x08002000" CACHE STRING
+    "AmebaD RSIP mask entry 0 start address (system data, 4K-aligned)")
+set(AMEBAD_RSIP_MASK_ENTRY0_PAGES "2" CACHE STRING
+    "AmebaD RSIP mask entry 0 size in 4K pages (max 255)")
+target_compile_definitions(amebad_sdk_includes INTERFACE
+    "AMEBAD_RSIP_MASK_ENTRY0_ADDR=${AMEBAD_RSIP_MASK_ENTRY0_ADDR}"
+    "AMEBAD_RSIP_MASK_ENTRY0_PAGES=${AMEBAD_RSIP_MASK_ENTRY0_PAGES}"
+)
+
+# (The former raw target_include_directories block — kernel include/port, freertos
+# glue, osdep, monitor, pmu, syscall_port, at_cmd, wlan, mbedtls — moved to each
+# owner's *_headers INTERFACE, linked above. See git history for the path list.)
+
+# The shared freertos_config (the kernel's FreeRTOSConfig.h carrier, defined in
+# component/freertos-kernel_config) needs AmebaD's platform_autoconf.h — pulled by
+# FreeRTOSConfig.h's CONFIG_PLATFORM_8721D branch. Attach our include bundle onto it so the kernel
+# and every freertos_config consumer resolve it. No cycle: amebad_sdk_includes reaches the FreeRTOS
+# kernel headers only through amebad_freertos_headers (include-only, no link edge back to the
+# kernel / freertos_config). (Moved here from component/amebad/freertos_port.)
+if(TARGET freertos_config)
+    target_link_libraries(freertos_config PUBLIC amebad_sdk_includes)
+endif()
+# ----------------------------------------- end folded sdk_headers -----------------------------
 add_subdirectory(usrcfg)             # chip-gated: usrcfg_common (+ _lp on KM0 / _hp on KM4)
 add_subdirectory(freertos_port)      # AmebaD heap_5 memory-map glue lib `freertos_port` (kernel built by freertos-kernel_config)
 add_subdirectory(monitor)            # chip-gated (image2 shell/monitor)
