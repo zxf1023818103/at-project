@@ -57,10 +57,13 @@ extern void iperf_udp_server_start(void);
 /* WiFi reconnect backoff: 1 s base, 8 s cap, RETRY_FOREVER (keep re-associating until the AP is back). */
 #define WIFI_RECONNECT_BACKOFF_BASE_MS  ( 1000U )
 #define WIFI_RECONNECT_BACKOFF_MAX_MS   ( 8000U )
-/* How long the monitor lets the driver's own autoreconnect try (success or RECONNECTION_FAIL) before
- * taking over anyway - covers the driver's ~8x5 s FINITE window plus margin, in case it gives up
- * silently (RECONNECTION_FAIL not always fired) and would otherwise leave the monitor waiting forever. */
-#define WIFI_DRIVER_GIVEUP_TIMEOUT_MS   ( 45000U )
+/* How long the monitor lets the driver's own autoreconnect try before taking over. A successful
+ * reconnect (auth+assoc+4-way, then DHCP -> s_wifiConnected) lands in a few seconds, so this only needs
+ * to be a brief grace period; past it the driver is usually not coming back (e.g. an AP disassoc/kick,
+ * where it does not even retry) and waiting out the ~35 s DHCP give-up just delays recovery. s_driverGaveUp
+ * / s_dhcpFellBack still cut the wait shorter when they fire first; s_wifiConnected ends it on a real
+ * reconnect. (Was 45 s, sized for the driver's full ~40 s FINITE window - too slow in practice.) */
+#define WIFI_DRIVER_GIVEUP_TIMEOUT_MS   ( 8000U )
 
 static NetworkInterface_t xInterface;
 static void wifi_monitor_thread( void * param );   /* small reconnect-monitor task (defined below) */
