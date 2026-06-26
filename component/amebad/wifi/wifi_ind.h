@@ -120,6 +120,8 @@ EventBits_t wifi_event_get( void );
 #define WIFI_INIT_DONE_BIT   ( ( EventBits_t ) 1u << 23 )   /* WLAN driver init-done callback fired */
 #define WIFI_CONNECTED_BIT   ( ( EventBits_t ) 1u << 22 )   /* link is up with a real DHCP lease: SET by */
                                                             /* the eNetworkUp hook, CLEARED on DISCONNECT */
+#define WIFI_REASSOC_PENDING_BIT ( ( EventBits_t ) 1u << 21 )  /* DISCONNECT seen, monitor re-associating: */
+                                                               /* the eNetworkUp hook drops ups while set */
 
 /* WLAN init-done signalling over the EventGroup (replaces the old g_wifi_init_done_sema): the prebuilt
  * driver calls p_wlan_init_done_callback when WLAN init completes. wifi_arm_init_done() installs that

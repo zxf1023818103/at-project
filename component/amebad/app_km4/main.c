@@ -81,14 +81,25 @@ static void wifi_link_set( int up )
     else
         ( void ) wifi_event_clear( WIFI_CONNECTED_BIT );
 }
+/* "DISCONNECT seen, the monitor is re-associating" (WIFI_REASSOC_PENDING_BIT). While set, the eNetworkUp
+ * hook drops every up: FreeRTOS_NetworkDown() re-evaluates the link off the briefly-stale
+ * wifi_is_connected_to_ap() and fires a premature eNetworkUp with the OLD lease ~1 ms after a deauth -
+ * honouring that would mask the outage and let the monitor skip the real re-associate. The monitor
+ * clears it once wifi_connect() actually succeeds, so only the genuine post-re-associate DHCP up wins. */
+static int wifi_reassoc_pending( void )
+{
+    return ( wifi_event_get() & WIFI_REASSOC_PENDING_BIT ) != 0;
+}
+static void wifi_reassoc_set( int pending )
+{
+    if( pending != 0 )
+        ( void ) xEventGroupSetBits( wifi_event_group_handle(), WIFI_REASSOC_PENDING_BIT );
+    else
+        ( void ) wifi_event_clear( WIFI_REASSOC_PENDING_BIT );
+}
 /* wifi_monitor_thread's handle, so wifi_event_task can wake it the instant a DISCONNECT lands (instead
  * of the monitor polling every 3 s). */
 static TaskHandle_t s_monitorTask = NULL;
-/* Set by the DISCONNECT event, cleared by the monitor once it has actually re-associated. While set, the
- * eNetworkUp hook ignores every up: FreeRTOS_NetworkDown() re-evaluates the link off the briefly-stale
- * wifi_is_connected_to_ap() and fires a premature eNetworkUp with the OLD lease ~1 ms after a deauth -
- * honouring that would mask the outage and let the monitor skip the real re-associate. */
-static volatile int s_reassocPending = 0;
 /* Set by `wifi forget` (wifi_cli.c) to permanently stop the reconnect monitor after a deliberate
  * disconnect - the monitor checks it on wake and stays down instead of re-associating. */
 static volatile int s_wifiForget = 0;
@@ -144,7 +155,7 @@ static void wifi_event_task( void * param )
             if( wifi_link_up() )
             {
                 wifi_link_set( 0 );
-                s_reassocPending = 1;   /* until the monitor really re-associates, drop premature ups */
+                wifi_reassoc_set( 1 );   /* until the monitor really re-associates, drop premature ups */
                 FreeRTOS_NetworkDown( &xInterface );
                 if( s_monitorTask != NULL )
                     xTaskNotifyGive( s_monitorTask );   /* wake the re-associate monitor immediately */
@@ -320,7 +331,7 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
         /* Recovering from a DISCONNECT: FreeRTOS_NetworkDown() fires a premature up off the briefly-stale
          * link status with the OLD lease before any re-associate. Ignore it - the monitor clears this once
          * wifi_connect() actually succeeds, so only the genuine post-re-associate DHCP up is honoured. */
-        if( s_reassocPending )
+        if( wifi_reassoc_pending() )
         {
             return;
         }
@@ -1015,7 +1026,7 @@ static void wifi_monitor_thread( void * param )
             wifi_set_power_mode( 0, 0 );
             wifi_disable_powersave();
             log_info( "[KM4] WiFi re-associated" );
-            s_reassocPending = 0;   /* really associated now -> honour the re-DHCP's genuine network-up */
+            wifi_reassoc_set( 0 );   /* really associated now -> honour the re-DHCP's genuine network-up */
             /* The earlier DHCP fallback (eNotUsingLeasedAddress) stopped the DHCP timer, so kick it again
              * now that we hold a real link - this drives a real lease -> eNetworkUp -> WIFI_CONNECTED_BIT.
              * (No-op'd by the hook's s_downLogged so it does not re-print "network DOWN".) */
