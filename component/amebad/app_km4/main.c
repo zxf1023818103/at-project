@@ -20,6 +20,7 @@
 #include "wifi_conf.h"            /* wifi_on / wifi_connect / wifi_get_mac_address */
 #include "FreeRTOS_IP.h"
 #include "FreeRTOS_Routing.h"     /* NetworkInterface_t / NetworkEndPoint_t / FillEndPoint */
+#include "backoff_algorithm.h"    /* truncated exp backoff-with-jitter for the WiFi reconnect loop */
 #include "at_log.h"                  /* rxi log.c: log_info / log_error (replaces printf / DiagPrintf) */
 #include "log_lock.h"             /* log_lock_init: FreeRTOS-mutex thread-safety for the logger */
 
@@ -50,6 +51,10 @@ extern void iperf_udp_client_start(void);
 extern void iperf_udp_server_start(void);
 
 #define WLAN_STA_IDX  0
+
+/* WiFi reconnect backoff: 1 s base, 8 s cap, RETRY_FOREVER (keep re-associating until the AP is back). */
+#define WIFI_RECONNECT_BACKOFF_BASE_MS  ( 1000U )
+#define WIFI_RECONNECT_BACKOFF_MAX_MS   ( 8000U )
 
 static NetworkInterface_t xInterface;
 static void wifi_monitor_thread( void * param );   /* small reconnect-monitor task (defined below) */
@@ -851,14 +856,22 @@ static void wifi_monitor_thread( void * param )
             const char    *ce   = getenv( "WIFI_CHANNEL" );
             rtw_security_t sec  = wifi_sec_from_str( getenv( "WIFI_SECURITY" ) );
             u8             ch   = ( ce != NULL && ce[ 0 ] != '\0' ) ? (u8) atoi( ce ) : 0;
-            int            attempt, ok = 0;
+            BackoffAlgorithmContext_t backoff;
+            int            ok = 0;
 
             if( ssid == NULL )                 ssid = "AIoT";
             if( pass == NULL )                 pass = "123456789";
             if( sec == RTW_SECURITY_UNKNOWN )  sec  = RTW_SECURITY_WPA2_AES_PSK;
 
-            for( attempt = 1; attempt <= 8 && !ok; attempt++ )
+            /* Truncated exponential backoff-with-jitter between re-associate attempts, RETRY_FOREVER:
+             * keep trying until the AP returns, but back off (1->8 s) instead of hammering wifi_connect
+             * at a fixed rate. Same backoffAlgorithm the AWS agent + SNTP retry loops use. */
+            BackoffAlgorithm_InitializeParams( &backoff, WIFI_RECONNECT_BACKOFF_BASE_MS,
+                                               WIFI_RECONNECT_BACKOFF_MAX_MS,
+                                               BACKOFF_ALGORITHM_RETRY_FOREVER );
+            while( !ok )
             {
+                uint16_t nextBackoff = WIFI_RECONNECT_BACKOFF_MAX_MS;
                 rltk_wlan_tx_deauth( 1, 0 );
                 vTaskDelay( pdMS_TO_TICKS( 80 ) );
                 if( ch != 0 )
@@ -868,21 +881,20 @@ static void wifi_monitor_thread( void * param )
                 }
                 if( wifi_connect( (char *) ssid, sec, (char *) pass,
                                   (int) strlen( ssid ), (int) strlen( pass ), 0, NULL ) == RTW_SUCCESS )
+                {
                     ok = 1;
-                else
-                    vTaskDelay( pdMS_TO_TICKS( 800 ) );
+                    break;
+                }
+                /* Tick count is the per-attempt jitter seed (RETRY_FOREVER never returns Exhausted). */
+                ( void ) BackoffAlgorithm_GetNextBackoff( &backoff, ( uint32_t ) xTaskGetTickCount(),
+                                                          &nextBackoff );
+                log_error( "[KM4] wifi_connect failed - retry in %u ms", ( unsigned ) nextBackoff );
+                vTaskDelay( pdMS_TO_TICKS( nextBackoff ) );
             }
-            if( ok )
-            {
-                wifi_set_power_mode( 0, 0 );
-                wifi_disable_powersave();
-                log_info( "[KM4] WiFi re-associated - re-acquiring DHCP" );
-                FreeRTOS_NetworkDown( &xInterface );
-            }
-            else
-            {
-                log_error( "[KM4] WiFi re-associate failed - will retry" );
-            }
+            wifi_set_power_mode( 0, 0 );
+            wifi_disable_powersave();
+            log_info( "[KM4] WiFi re-associated - re-acquiring DHCP" );
+            FreeRTOS_NetworkDown( &xInterface );
         }
     }
 }

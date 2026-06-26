@@ -416,6 +416,11 @@ if(AMEBAD_ENABLE_AWS_IOT)
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_MINIMAL)
 endif()
 
+# main.c's WiFi reconnect monitor (wifi_monitor_thread) uses backoffAlgorithm, so link it in EVERY
+# build - the SNTP block just below + the AWS block further down also pull it, but those are
+# non-QUIC / AWS-only, and the monitor is compiled unconditionally.
+target_link_libraries(target_img2_km4 PRIVATE backoffalgorithm_config)
+
 # coreSNTP UTC time-sync is DEFAULT-ON in every non-QUIC image: plain SNTPv4 over UDP/FreeRTOS-Plus-
 # TCP feeding newlib's wall clock (time_base.c via amebad_set_unix_time). coreSNTP is a leaf — it
 # reaches the network only through the UdpTransportInterface_t callbacks — so it links as an ordinary
