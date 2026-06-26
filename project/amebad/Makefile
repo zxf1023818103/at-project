@@ -51,6 +51,7 @@ HWGCM      ?= $(TFM)       # default = TFM: route AES-GCM + ChaCha20-Poly1305 to
 STORAGE    ?= OFF          # ON -> TF-M PSA secure storage (ITS + PS) + NS storage self-test; implies TFM=ON
 AWS        ?= OFF          # ON -> AWS IoT Core MQTT/TLS demo (coreMQTT + mbedTLS); cert/endpoint->LFS, private key->TF-M PS
 FW_VERSION ?= ota-A        # firmware version string stamped into the AWS image (printed + in telemetry); bump for an OTA target build, e.g. make AWS=ON FW_VERSION=ota-B
+APP_BUILD  ?= 1            # appFirmwareVersion build number (0.9.N) for the OTA self-test; an OTA target must be > the running image, e.g. make AWS=ON FW_VERSION=ota-E APP_BUILD=2
 # coreSNTP UTC time-sync is now default-on (every non-QUIC image) - no SNTP flag.
 ifeq ($(AWS),ON)
 # AWS=ON: the MQTT client private key lives in TF-M secure storage by default (implies STORAGE/TFM).
@@ -130,6 +131,7 @@ configure:
 	  -DAMEBAD_ENABLE_ROM_KAT=$(ROMKAT) -DAMEBAD_ENABLE_IPERF=$(IPERF) \
 	  -DAMEBAD_ENABLE_AWS_IOT=$(AWS) \
 	  -DAMEBAD_FW_VERSION=$(FW_VERSION) \
+	  -DAMEBAD_APP_BUILD=$(APP_BUILD) \
 	  -DAMEBAD_TLS_BACKEND=$(TLS_BACKEND) \
 	  -DAMEBAD_MBEDTLS_HW_GCM=$(HWGCM) \
 	  -DAMEBAD_TFM_BOOT=$(TFM) \

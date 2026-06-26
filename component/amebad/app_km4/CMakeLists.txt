@@ -398,6 +398,12 @@ if(AMEBAD_ENABLE_AWS_IOT)
     set(AMEBAD_FW_VERSION "ota-A" CACHE STRING "Firmware version string stamped into the AWS image")
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/aws_iot_demo.c"
                  APPEND PROPERTY COMPILE_DEFINITIONS "AT_FW_VERSION=\"${AMEBAD_FW_VERSION}\"")
+    # OTA self-test version (appFirmwareVersion build number, ota_app.c). The OTA library commits the
+    # new image only if its version is HIGHER than the running one, so an OTA TARGET build must bump
+    # this above the running image. Override: `make AWS=ON APP_BUILD=2` (-> -DAMEBAD_APP_BUILD).
+    set(AMEBAD_APP_BUILD "1" CACHE STRING "appFirmwareVersion build number for the OTA self-test")
+    set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/ota_app.c"
+                 APPEND PROPERTY COMPILE_DEFINITIONS "APP_VERSION_BUILD=${AMEBAD_APP_BUILD}")
     # AWS is a connect-and-run image: strip the boot diagnostics like MINIMAL — iperf / LFS
     # self-test / ROM-mbedTLS KAT and the TF-M HW-crypto KAT/GCM throughput bench (~40 s before
     # WiFi). The endpoint + client cert live in LittleFS (env var + plain file); only the private

@@ -258,6 +258,11 @@ static OtaPalStatus_t prvCloseFile( OtaFileContext_t * const pFileContext )
     }
 
     OTA_PAL_LOG( "closeFile: image written + armed (%u bytes downloaded)", ( unsigned ) s_consumed );
+    /* Mark the freshly-armed image as pending-commit so that after the activate-reboot
+     * getPlatformImageState() reports PendingCommit and the OTA library runs the self-test (else it
+     * rejects: "job in self-test state while platform is not"). Persisted in KV/LFS across reboot;
+     * cleared on Accepted/Rejected. */
+    ( void ) setenv( "OTA_SELFTEST", "1", 1 );
     s_active = 0;
     if( pFileContext != NULL ) { pFileContext->pFile = NULL; }
     return OTA_PAL_COMBINE_ERR( OtaPalSuccess, 0 );
@@ -291,15 +296,28 @@ static OtaPalStatus_t prvSetPlatformImageState( OtaFileContext_t * const pFileCo
                                                 OtaImageState_t eState )
 {
     ( void ) pFileContext;
-    OTA_PAL_LOG( "setPlatformImageState(%d) - no-op (no self-test)", ( int ) eState );
+    /* Self-test outcome: clear the pending-commit flag so the next boot reports Valid (committed).
+     * (No A/B rollback here - a Rejected image stays armed; ota_flash has no rollback path.) */
+    if( ( eState == OtaImageStateAccepted ) || ( eState == OtaImageStateRejected ) ||
+        ( eState == OtaImageStateAborted ) )
+    {
+        ( void ) setenv( "OTA_SELFTEST", "0", 1 );
+        OTA_PAL_LOG( "setPlatformImageState(%d): self-test flag cleared (%s)", ( int ) eState,
+                     ( eState == OtaImageStateAccepted ) ? "committed" : "rejected/aborted" );
+    }
     return OTA_PAL_COMBINE_ERR( OtaPalSuccess, 0 );
 }
 
 static OtaPalImageState_t prvGetPlatformImageState( OtaFileContext_t * const pFileContext )
 {
+    const char * v = getenv( "OTA_SELFTEST" );
     ( void ) pFileContext;
-    /* Always report Valid: the running image is whatever the bootloader selected and
-     * we do not implement pending-commit. */
+    /* A freshly-OTA'd image (closeFile set OTA_SELFTEST=1) reports PendingCommit until the self-test
+     * commits it (-> setPlatformImageState clears the flag); any other boot is committed -> Valid. */
+    if( ( v != NULL ) && ( v[ 0 ] == '1' ) )
+    {
+        return OtaPalImageStatePendingCommit;
+    }
     return OtaPalImageStateValid;
 }
 
