@@ -15,7 +15,8 @@
 /* Use the legacy (single-interface) FreeRTOS_IPInit() API. */
 #define ipconfigIPv4_BACKWARD_COMPATIBLE        1
 
-#define ipconfigUSE_IPv6                        0
+#define ipconfigUSE_IPv6                        1
+#define ipconfigUSE_RA                          1       /* Router Advertisement -> SLAAC (stateless IPv6) */
 #define ipconfigUSE_TCP                         1       /* iperf throughput test */
 #define ipconfigUSE_DHCP                        1
 

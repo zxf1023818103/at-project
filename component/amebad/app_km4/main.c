@@ -694,6 +694,12 @@ static void wifi_bringup_thread( void *param )
     FreeRTOS_FillEndPoint( &xInterface, &xEndPoint, ucIPAddress, ucNetMask,
                            ucGatewayAddress, ucDNSServer, mac );
     xEndPoint.bits.bWantDHCP = pdTRUE;
+#if ( ipconfigUSE_IPv6 != 0 )
+    /* IPv6 + SLAAC: register the fe80:: link-local + a bWantRA global endpoint now that the interface
+     * exists. (The SDK's wifi_conf.c also calls netif_create_ip6_linklocal_address() from wifi_on, but
+     * that runs before the interface is registered; this call is the effective one.) */
+    { extern void amebad_ipv6_init( void ); amebad_ipv6_init(); }
+#endif
     log_info( "[KM4] FreeRTOS_IPInit_Multi..." );
     FreeRTOS_IPInit_Multi();
     amebad_freertos_tcp_set_ready();
@@ -850,6 +856,11 @@ wifi_connect_attempt:
         wifi_get_rssi( &rssi );
         log_info( "[KM4] associated; power-save off; RSSI %d dBm; waiting for DHCP...", rssi );
     }
+#if ( ipconfigUSE_IPv6 != 0 )
+    /* Now associated: register the IPv6 multicast groups with the driver so RAs + Neighbor
+     * Solicitations reach us (an STA drops multicast otherwise) -> SLAAC can complete. */
+    { extern void amebad_ipv6_register_multicast( void ); amebad_ipv6_register_multicast(); }
+#endif
     /* DHCP was started at FreeRTOS_IPInit_Multi() above, while the link was still down, so its first
      * DISCOVER was lost and the next retransmit is ~5 s out (slow first lease). Now that we are
      * associated, restart DHCP so a fresh DISCOVER goes out immediately -> lease in ~1 s. The eNetworkDown

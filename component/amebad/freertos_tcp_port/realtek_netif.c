@@ -214,15 +214,17 @@ int amebad_tcp_is_valid_ip( int idx, const unsigned char * ip_dest )
         ulMask  = pxEP->ipv4_settings.ulNetMask;
     }
 
-    if( ulOurIP == 0 )                       return 1;   /* no IP yet -> accept */
-    if( ulDest == ulOurIP )                  return 1;   /* unicast to us */
-    if( ( ip_dest[ 0 ] & 0xF0 ) == 0xE0 )    return 1;   /* 224.0.0.0/4 multicast */
-    if( ulDest == 0xFFFFFFFFu )              return 1;   /* 255.255.255.255 */
-    if( ( ulMask != 0 ) && ( ( ulDest | ulMask ) == 0xFFFFFFFFu ) )
-    {
-        return 1;                                        /* directed (subnet) broadcast */
-    }
-    return 0;
+    /* ip_dest is only 4 bytes with no address family, so this hook cannot tell an IPv6 unicast or
+     * multicast destination (which we must accept - the RA/NDP and our own global traffic) from an
+     * IPv4 address. The driver's MAC-level RX filter already gates frames by destination MAC
+     * (unicast-to-us + broadcast + subscribed multicast), so everything reaching here is for us:
+     * accept it and let the FreeRTOS+TCP IP task do the real per-endpoint routing. (Previously this
+     * returned 0 for anything not matching our IPv4 address/broadcast/multicast, which silently
+     * dropped all IPv6 - SLAAC RAs never arrived and the device was unreachable over IPv6.) */
+    ( void ) ulDest;
+    ( void ) ulOurIP;
+    ( void ) ulMask;
+    return 1;
 }
 
 /* kind: 0=IP 1=GW 2=MASK. Returns a pointer to a 4-byte (network-order) address;
@@ -256,6 +258,115 @@ unsigned char * amebad_tcp_get_addr( int idx, int kind )
     }
     return ( unsigned char * ) &ulAddrCache[ kind ];
 }
+
+#if ( ipconfigUSE_IPv6 != 0 )
+
+/* lwIP-API shim the SDK's wifi_conf.c calls on connect (netif_create_ip6_linklocal_address(&xnetif[0],
+ * 1)) as its IPv6 bring-up. Under FreeRTOS+TCP this registers two endpoints on our interface:
+ *   - the fe80::(EUI-64) link-local, derived from the 48-bit MAC (the RA process uses it as the
+ *     Router-Solicitation source - see FreeRTOS_RA.c xGetLinkLocalAddress), and
+ *   - a global endpoint with bWantRA, which autoconfigures its address + gateway from the Router
+ *     Advertisement (stateless address autoconfiguration / SLAAC).
+ * The MAC is taken from the already-filled IPv4 endpoint, so the opaque lwIP `netif` arg is unused.
+ * Idempotent (registers the pair once); the RA/DAD starts on the next network-up - the bring-up's
+ * post-connect FreeRTOS_NetworkDown() re-kick processes the new endpoints. */
+void amebad_ipv6_init( void )
+{
+    static NetworkEndPoint_t xEndPoint6_LinkLocal;
+    static NetworkEndPoint_t xEndPoint6_Global;
+    static BaseType_t        xDone = pdFALSE;
+    NetworkEndPoint_t      * pxIPv4;
+    IPv6_Address_t           xLinkLocal, xLLPrefix, xGlobal, xGlobalPrefix, xGateway;
+    const uint8_t          * mac;
+
+    if( ( xDone != pdFALSE ) || ( pxMyInterface == NULL ) )
+    {
+        return;
+    }
+    pxIPv4 = FreeRTOS_FirstEndPoint( pxMyInterface );
+    if( pxIPv4 == NULL )
+    {
+        return;
+    }
+    mac = pxIPv4->xMACAddress.ucBytes;
+
+    /* fe80::(EUI-64): insert ff:fe in the middle of the 48-bit MAC, flip the U/L bit. */
+    ( void ) memset( xLinkLocal.ucBytes, 0, ipSIZE_OF_IPv6_ADDRESS );
+    xLinkLocal.ucBytes[ 0 ]  = 0xfeU;
+    xLinkLocal.ucBytes[ 1 ]  = 0x80U;
+    xLinkLocal.ucBytes[ 8 ]  = ( uint8_t ) ( mac[ 0 ] ^ 0x02U );
+    xLinkLocal.ucBytes[ 9 ]  = mac[ 1 ];
+    xLinkLocal.ucBytes[ 10 ] = mac[ 2 ];
+    xLinkLocal.ucBytes[ 11 ] = 0xffU;
+    xLinkLocal.ucBytes[ 12 ] = 0xfeU;
+    xLinkLocal.ucBytes[ 13 ] = mac[ 3 ];
+    xLinkLocal.ucBytes[ 14 ] = mac[ 4 ];
+    xLinkLocal.ucBytes[ 15 ] = mac[ 5 ];
+    ( void ) memset( xLLPrefix.ucBytes, 0, ipSIZE_OF_IPv6_ADDRESS );
+    xLLPrefix.ucBytes[ 0 ] = 0xfeU;
+    xLLPrefix.ucBytes[ 1 ] = 0x80U;
+    FreeRTOS_FillEndPoint_IPv6( pxMyInterface, &xEndPoint6_LinkLocal, &xLinkLocal, &xLLPrefix,
+                                10U, NULL, NULL, mac );
+
+    /* Global endpoint: address + prefix + gateway are learned from the Router Advertisement. */
+    ( void ) memset( xGlobal.ucBytes, 0, ipSIZE_OF_IPv6_ADDRESS );
+    ( void ) memset( xGlobalPrefix.ucBytes, 0, ipSIZE_OF_IPv6_ADDRESS );
+    ( void ) memset( xGateway.ucBytes, 0, ipSIZE_OF_IPv6_ADDRESS );
+    FreeRTOS_FillEndPoint_IPv6( pxMyInterface, &xEndPoint6_Global, &xGlobal, &xGlobalPrefix,
+                                64U, &xGateway, NULL, mac );
+    xEndPoint6_Global.bits.bWantRA = pdTRUE_UNSIGNED;   /* SLAAC */
+
+    xDone = pdTRUE;
+}
+
+/* SDK lwIP-API name: wifi_conf.c calls netif_create_ip6_linklocal_address(&xnetif[0], 1) from wifi_on.
+ * That runs before pxRealtek_FillInterfaceDescriptor(), so amebad_ipv6_init() early-returns there; the
+ * bring-up calls amebad_ipv6_init() again once the interface exists. Forwarding keeps the SDK call
+ * site working (and harmless) without dereferencing the opaque lwIP netif. */
+struct netif;
+void netif_create_ip6_linklocal_address( struct netif * netif, unsigned char from_mac_48bit )
+{
+    ( void ) netif;
+    ( void ) from_mac_48bit;
+    amebad_ipv6_init();
+}
+
+/* Register the IPv6 multicast groups the device must RECEIVE with the Realtek driver's MAC filter -
+ * an STA otherwise drops them, so the Router Advertisement (ff02::1) and the router's Neighbor
+ * Solicitations (solicited-node ff02::1:ffXX:XXXX) never arrive and SLAAC stalls. Call once the chip is
+ * associated. The driver maps the IPv6 address to its 33:33:.. multicast MAC. */
+void amebad_ipv6_register_multicast( void )
+{
+    extern int wifi_register_multicast_address( void * mac );   /* rtw_mac_t* == 6 bytes */
+    static BaseType_t   xDone = pdFALSE;
+    NetworkEndPoint_t * pxIPv4;
+    unsigned char       mc[ 6 ];
+
+    if( ( xDone != pdFALSE ) || ( pxMyInterface == NULL ) )
+    {
+        return;
+    }
+    pxIPv4 = FreeRTOS_FirstEndPoint( pxMyInterface );
+    if( pxIPv4 == NULL )
+    {
+        return;
+    }
+
+    /* all-nodes ff02::1 -> 33:33:00:00:00:01 (Router Advertisements). */
+    mc[ 0 ] = 0x33; mc[ 1 ] = 0x33; mc[ 2 ] = 0x00; mc[ 3 ] = 0x00; mc[ 4 ] = 0x00; mc[ 5 ] = 0x01;
+    ( void ) wifi_register_multicast_address( mc );
+
+    /* solicited-node for our EUI-64 addresses ff02::1:ffXX:XXXX -> 33:33:ff:MAC[3]:MAC[4]:MAC[5]. */
+    mc[ 2 ] = 0xff;
+    mc[ 3 ] = pxIPv4->xMACAddress.ucBytes[ 3 ];
+    mc[ 4 ] = pxIPv4->xMACAddress.ucBytes[ 4 ];
+    mc[ 5 ] = pxIPv4->xMACAddress.ucBytes[ 5 ];
+    ( void ) wifi_register_multicast_address( mc );
+
+    xDone = pdTRUE;
+}
+
+#endif /* ( ipconfigUSE_IPv6 != 0 ) */
 
 /* ===== Application hooks the stack requires ================================ */
 

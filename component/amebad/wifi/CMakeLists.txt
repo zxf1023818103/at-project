@@ -57,6 +57,12 @@ target_link_libraries(amebad_wifi PUBLIC
     FreeRTOS
 )
 
+# IPv6: enable wifi_conf.c's on-connect netif_create_ip6_linklocal_address(&xnetif[0], 1) call (its
+# only other LWIP_IPV6 use, matter_check_valid_ipv6, is CONFIG_MATTER-gated = off). The function is
+# implemented for FreeRTOS+TCP in component/amebad/freertos_tcp_port/realtek_netif.c (fe80::EUI-64
+# link-local + a bWantRA global endpoint for SLAAC).
+target_compile_definitions(amebad_wifi PRIVATE LWIP_IPV6=1)
+
 # Vendor code — quiet the warnings we don't own. -fcommon: the legacy Realtek
 # headers declare globals (uart_buf, ...) without `extern`, so every TU that
 # includes them emits a tentative definition. The SDK builds with the old GCC
