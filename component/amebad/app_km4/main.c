@@ -77,6 +77,10 @@ static volatile int s_wifiConnected = 1;
  * wifi_monitor_thread to take over. Until then the monitor holds off, so it never races the driver's
  * still-in-progress autoreconnect (that race left a redundant network DOWN/UP at reconnect). */
 static volatile int s_driverGaveUp = 0;
+/* Set when DHCP gives up to its bogus static-IP fallback (eGetDHCPState==eNotUsingLeasedAddress) - a
+ * positive "the link is really down" signal that lets the monitor take over at once instead of waiting
+ * out the full driver-giveup timeout. Cleared at each fresh DISCONNECT. */
+static volatile int s_dhcpFellBack = 0;
 extern void FreeRTOS_NetworkDown( NetworkInterface_t * pxNetworkInterface );
 
 /* Single consumer of the driver's WiFi events, blocked on the wifi_ind EventGroup (replacing three
@@ -100,6 +104,7 @@ static void wifi_event_task( void * param )
         if( b & WIFI_EVENT_BIT( WIFI_EVENT_DISCONNECT ) )
         {
             s_driverGaveUp = 0;                  /* the driver begins its own autoreconnect now */
+            s_dhcpFellBack = 0;
             if( s_wifiConnected )
             {
                 s_wifiConnected = 0;
@@ -298,6 +303,7 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
         if( eGetDHCPState( &xEndPoint ) == eNotUsingLeasedAddress )
         {
             log_info( "[KM4] DHCP got no lease (link still down) - ignoring fallback network-up" );
+            s_dhcpFellBack = 1;   /* link confirmed down -> release the monitor's wait immediately */
             return;
         }
         s_downLogged = 0;
@@ -935,12 +941,14 @@ static void wifi_monitor_thread( void * param )
 
         log_info( "[KM4] WiFi link down..." );
         /* Let the driver's own FINITE autoreconnect try first; only re-associate ourselves once it
-         * either succeeds (s_wifiConnected) or gives up (s_driverGaveUp via WIFI_EVENT_RECONNECTION_FAIL).
-         * This keeps our wifi_connect from racing the still-in-progress driver autoreconnect, which left
-         * a redundant network DOWN/UP at reconnect. */
+         * either succeeds (s_wifiConnected), gives up (s_driverGaveUp via WIFI_EVENT_RECONNECTION_FAIL),
+         * or DHCP gives up to its fallback (s_dhcpFellBack - a ~35 s "link is really down" signal that
+         * beats the full timeout). This keeps our wifi_connect from racing the still-in-progress driver
+         * autoreconnect, which left a redundant network DOWN/UP at reconnect. */
         {
             int waited = 0;
-            while( !s_wifiConnected && !s_driverGaveUp && waited < WIFI_DRIVER_GIVEUP_TIMEOUT_MS )
+            while( !s_wifiConnected && !s_driverGaveUp && !s_dhcpFellBack &&
+                   waited < WIFI_DRIVER_GIVEUP_TIMEOUT_MS )
             {
                 vTaskDelay( pdMS_TO_TICKS( 500 ) );
                 waited += 500;
