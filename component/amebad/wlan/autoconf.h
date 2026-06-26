@@ -878,7 +878,9 @@ extern unsigned int g_ap_sta_num;
 #define TIME_THRES	20
 
 #ifndef LONG_PERIOD_TICKLESS
-/* 80211 - K V R */
+/* 80211 - K V R. Left OFF: the prebuilt lib_wlan*.a (all variants) were compiled without roaming, so
+ * enabling these only makes wifi_util.c reference set_roam_on_btm / rtw_enable_80211k / rtw_wnm_* which
+ * the lib does not provide -> link error. Roaming needs a roaming-enabled Realtek driver lib/source. */
 //#define CONFIG_IEEE80211K
 //#define CONFIG_LAYER2_ROAMING
 #endif
