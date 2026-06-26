@@ -468,6 +468,23 @@ if(AMEBAD_SBOOT)
     target_compile_definitions(target_img2_km4 PRIVATE AMEBAD_SBOOT)
 endif()
 
+# WPS connect test (make WPS=ON): wps_cli.c registers the `wps` console command (cmd_wps-style), driving
+# the SDK WPS glue wifi_wps_config.c (wps_start). amebad_wpa_supplicant gives that glue its include
+# surface (utils/os.h, wps/wps_defs.h, ...); the WPS protocol core is lib_wps.a (amebad_wps, already in
+# the link group). Gates the sources, the supplicant includes, and the main.c registration.
+if(AMEBAD_ENABLE_WPS)
+    target_sources(target_img2_km4 PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/wps_cli.c"
+        "${CMAKE_SOURCE_DIR}/component/amebad/wpa_supplicant/wpa_supplicant/wifi_wps_config.c")
+    target_link_libraries(target_img2_km4 PRIVATE amebad_wpa_supplicant)
+    # src root so wifi_wps_config.c's "utils/os.h" / "wps/wps_defs.h" resolve (INTERFACE only has the subdirs);
+    # the SDK osdep root resolves os.h's "freertos/wrapper.h" (supplicant util was never compiled in-tree).
+    target_include_directories(target_img2_km4 PRIVATE
+        "${CMAKE_SOURCE_DIR}/component/amebad/wpa_supplicant/src"
+        "${CMAKE_SOURCE_DIR}/platform/ameba-rtos-d/component/common/drivers/wlan/realtek/src/osdep")
+    target_compile_definitions(target_img2_km4 PRIVATE AMEBAD_ENABLE_WPS)
+endif()
+
 # DEBUG eFuse provisioning aids (make EFUSE_DEBUG=ON, never ship): the `efuse_burn` console command
 # + the boot-time dump of all eFuse keys + MACs (tfm_psa_selftest.c, gated on AMEBAD_EFUSE_DEBUG).
 # The burn command needs the TF-M secure world (EFUSE_WRITE IOCTL).

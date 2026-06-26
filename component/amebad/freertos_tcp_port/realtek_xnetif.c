@@ -42,3 +42,8 @@ static unsigned char ucZeroAddr[ 4 ] = { 0, 0, 0, 0 };
 unsigned char * LwIP_GetIP( struct netif * pnetif )   { ( void ) pnetif; return ucZeroAddr; }
 unsigned char * LwIP_GetGW( struct netif * pnetif )   { ( void ) pnetif; return ucZeroAddr; }
 unsigned char * LwIP_GetMASK( struct netif * pnetif ) { ( void ) pnetif; return ucZeroAddr; }
+
+/* The SDK WPS path (wifi_wps_config.c) calls LwIP_DHCP(0, DHCP_START) to start the lwIP DHCP client
+ * after a WPS connect. Under FreeRTOS+TCP the DHCP is driven by the link-up path (the connect's
+ * FOURWAY event re-DHCPs), so this is a no-op that just satisfies the SDK call. */
+unsigned char LwIP_DHCP( unsigned char idx, unsigned char dhcp_state ) { ( void ) idx; ( void ) dhcp_state; return 0; }

@@ -6,8 +6,7 @@
 #include "main.h"
 #include "queue.h"
 #include "utils/os.h"
-#include <netif_shim.h>
-#include <lwip/netif.h>
+#include <netif_shim.h>    /* at-project: FreeRTOS+TCP shim provides struct netif (was <lwip/netif.h>) */
 #include "wifi/wifi_conf.h"
 #include "wps/wps_defs.h"
 #include "platform_stdlib_rtl8721d.h"

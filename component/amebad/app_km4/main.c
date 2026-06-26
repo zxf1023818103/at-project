@@ -990,6 +990,9 @@ int main(void)
 #ifdef AMEBAD_SBOOT
     { extern void sboot_cli_register(void); sboot_cli_register(); } /* secure-boot Ed25519 self-test */
 #endif
+#ifdef AMEBAD_ENABLE_WPS
+    { extern void wps_cli_register(void); wps_cli_register(); }     /* WPS (PBC/PIN) connect test */
+#endif
 #if defined(AMEBAD_EFUSE_DEBUG) && defined(AMEBAD_TFM_STORAGE)
     { extern void efuse_burn_cli_register(void); efuse_burn_cli_register(); } /* DEBUG eFuse burn (provisioning) */
 #endif

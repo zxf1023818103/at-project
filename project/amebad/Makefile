@@ -42,6 +42,7 @@ BENCH      ?= OFF          # ON -> upstream Mbed TLS v3.6.4 crypto microbenchmar
 MINIMAL    ?= OFF          # ON -> strip diagnostics (iperf / KAT / HW-crypto bench); WiFi-connect only (pairs with TFM=ON)
 ROMKAT     ?= OFF          # ON -> ROM mbedTLS 2.4.0 / HW-crypto self-tests (no upstream mbedTLS; drops fs_cli md5sum/sha*sum)
 IPERF      ?= OFF          # ON -> `iperf` console command over upstream iperf3 + BSD-sockets shim (syscall_config)
+WPS        ?= OFF          # ON -> `wps` console command (WPS PBC/PIN connect test; compiles wifi_wps_config.c, links lib_wps.a)
 TFM        ?= OFF          # ON -> build + boot in-tree TF-M SPE (app_km4 becomes the NS side)
 TLS_BACKEND ?= picotls     # AWS TLS-over-TCP backend (default: picotls — TLS 1.3 only; ~112 KB smaller flash + ~24 KB less heap; shares the QUIC TLS stack). Set mbedtls for TLS 1.2 compatibility / broader server support (1.2+1.3, mature, native X.509). Switch wiring: component/network_transport/transport_tls.h.
 ifeq ($(filter $(TLS_BACKEND),mbedtls picotls),)
@@ -139,6 +140,7 @@ configure:
 	  -DAMEBAD_VFS_SELFTEST=$(VFSTEST) \
 	  -DAMEBAD_CPP_SELFTEST=$(CPPTEST) \
 	  -DAMEBAD_SBOOT=$(SBOOT) \
+	  -DAMEBAD_ENABLE_WPS=$(WPS) \
 	  -DAMEBAD_EFUSE_DEBUG=$(EFUSE_DEBUG) \
 	  -DAMEBAD_RSIP_ENABLE=$(RSIP) \
 	  -DAMEBAD_RSIP_KEY=$(RSIP_KEY) -DAMEBAD_RSIP_IV=$(RSIP_IV)
