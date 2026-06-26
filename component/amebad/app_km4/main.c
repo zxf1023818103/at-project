@@ -812,7 +812,67 @@ wifi_connect_attempt:
 #endif
 #endif /* !AT_PROJECT_QUIC && !AT_PROJECT_PKCS11 */
 
-    vTaskDelete( NULL );
+    /* WiFi reconnect monitor. The bring-up task USED to vTaskDelete here, leaving the device with
+     * no app-level reconnect: on a WiFi drop the driver's autoreconnect is only FINITE
+     * (wifi_set_autoreconnect(1)) so it gives up after a longer AP outage, and nothing re-runs
+     * wifi_connect - the device wedges (the agent task just spins retrying TLS with no link).
+     * Instead, stay alive and poll the link every 3 s; on a drop, re-associate using the cached
+     * channel, then FreeRTOS_NetworkDown(&xInterface) so the IP task re-runs DHCP -> eNetworkUp ->
+     * the network-up hook fires again. aws_iot_demo_start()'s once-guard makes that re-entry a
+     * no-op (the running agent task reconnects MQTT itself), which is exactly the path that used to
+     * spawn a duplicate aws_agent and HardFault in picotls before commit b3c848b. */
+    {
+        extern void FreeRTOS_NetworkDown( NetworkInterface_t * pxNetworkInterface );
+        extern void rltk_wlan_tx_deauth( unsigned char b_broadcast, unsigned char key_type );
+
+        for( ;; )
+        {
+            vTaskDelay( pdMS_TO_TICKS( 3000 ) );
+            if( wifi_is_connected_to_ap() == RTW_SUCCESS )
+                continue;
+
+            log_info( "[KM4] WiFi link down - re-associating..." );
+            {
+                const char    *ssid = getenv( "WIFI_SSID" );
+                const char    *pass = getenv( "WIFI_PASSWORD" );
+                const char    *ce   = getenv( "WIFI_CHANNEL" );
+                rtw_security_t sec  = wifi_sec_from_str( getenv( "WIFI_SECURITY" ) );
+                u8             ch   = ( ce != NULL && ce[ 0 ] != '\0' ) ? (u8) atoi( ce ) : 0;
+                int            attempt, ok = 0;
+
+                if( ssid == NULL )                 ssid = "AIoT";
+                if( pass == NULL )                 pass = "123456789";
+                if( sec == RTW_SECURITY_UNKNOWN )  sec  = RTW_SECURITY_WPA2_AES_PSK;
+
+                for( attempt = 1; attempt <= 8 && !ok; attempt++ )
+                {
+                    rltk_wlan_tx_deauth( 1, 0 );
+                    vTaskDelay( pdMS_TO_TICKS( 80 ) );
+                    if( ch != 0 )
+                    {
+                        u8 c = ch, ps = PSCAN_ENABLE;
+                        wifi_set_pscan_chan( &c, &ps, 1 );
+                    }
+                    if( wifi_connect( (char *) ssid, sec, (char *) pass,
+                                      (int) strlen( ssid ), (int) strlen( pass ), 0, NULL ) == RTW_SUCCESS )
+                        ok = 1;
+                    else
+                        vTaskDelay( pdMS_TO_TICKS( 800 ) );
+                }
+                if( ok )
+                {
+                    wifi_set_power_mode( 0, 0 );
+                    wifi_disable_powersave();
+                    log_info( "[KM4] WiFi re-associated - re-acquiring DHCP" );
+                    FreeRTOS_NetworkDown( &xInterface );
+                }
+                else
+                {
+                    log_error( "[KM4] WiFi re-associate failed - will retry" );
+                }
+            }
+        }
+    }
 }
 
 int main(void)
