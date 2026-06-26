@@ -21,6 +21,7 @@
 #include "wifi_ind.h"             /* wifi_ind EventGroup: wifi_event_wait / WIFI_EVENT_BIT (wifi_ind.c) */
 #include "FreeRTOS_IP.h"
 #include "FreeRTOS_Routing.h"     /* NetworkInterface_t / NetworkEndPoint_t / FillEndPoint */
+#include "FreeRTOS_DHCP.h"        /* eGetDHCPState / eNotUsingLeasedAddress: reject DHCP fallback-up */
 #include "backoff_algorithm.h"    /* truncated exp backoff-with-jitter for the WiFi reconnect loop */
 #include "at_log.h"                  /* rxi log.c: log_info / log_error (replaces printf / DiagPrintf) */
 #include "log_lock.h"             /* log_lock_init: FreeRTOS-mutex thread-safety for the logger */
@@ -288,11 +289,20 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
     if( eNetworkEvent == eNetworkUp )
     {
         uint32_t ulIP = 0, ulMask = 0, ulGW = 0, ulDNS = 0;
+        /* Reject the DHCP "give-up" fallback. When DHCP cannot reach a server (the link is really down),
+         * FreeRTOS+TCP reverts to the endpoint's static IP (eNotUsingLeasedAddress) and STILL fires
+         * eNetworkUp - a false "network up". Honouring it would set s_wifiConnected and mask the outage,
+         * so the device never re-associates (the bug behind "prints network UP without reconnecting").
+         * Only a real DHCP lease (eLeasedAddress) counts; on the fallback, stay down and let the monitor
+         * re-associate (it then restarts DHCP, which the fallback had stopped). */
+        if( eGetDHCPState( &xEndPoint ) == eNotUsingLeasedAddress )
+        {
+            log_info( "[KM4] DHCP got no lease (link still down) - ignoring fallback network-up" );
+            return;
+        }
         s_downLogged = 0;
-        /* Network fully up (DHCP done) -> link is connected. This is the reliable "connected" cue: the
-         * FOURWAY_HANDSHAKE_DONE event is flaky on the driver's own autoreconnect, but eNetworkUp always
-         * fires once the DHCP started at DISCONNECT completes. Clears the monitor's wait without a
-         * redundant takeover. */
+        /* Real lease -> link is connected. The reliable "connected" cue (the FOURWAY_HANDSHAKE_DONE event
+         * is flaky on the driver's autoreconnect); clears the monitor's wait without a redundant takeover. */
         s_wifiConnected = 1;
         FreeRTOS_GetAddressConfiguration( &ulIP, &ulMask, &ulGW, &ulDNS );
         /* IPs are in network byte order; byte 0 = first octet. */
@@ -982,6 +992,10 @@ static void wifi_monitor_thread( void * param )
             wifi_set_power_mode( 0, 0 );
             wifi_disable_powersave();
             log_info( "[KM4] WiFi re-associated" );
+            /* The earlier DHCP fallback (eNotUsingLeasedAddress) stopped the DHCP timer, so kick it again
+             * now that we hold a real link - this drives a real lease -> eNetworkUp -> s_wifiConnected.
+             * (No-op'd by the hook's s_downLogged so it does not re-print "network DOWN".) */
+            FreeRTOS_NetworkDown( &xInterface );
         }
     }
 }
