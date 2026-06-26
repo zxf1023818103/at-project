@@ -12,6 +12,7 @@
  */
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>          /* setenv (KV-backed, --wrap=setenv) */
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -24,11 +25,51 @@
 static char           s_wps_pin[16];
 static unsigned short s_wps_cfg;
 
+/* rtw_security_t -> the WIFI_SECURITY env string the reconnect monitor reads back (wifi_sec_from_str). */
+static const char * wps_sec_to_str( rtw_security_t sec )
+{
+    switch( sec )
+    {
+        case RTW_SECURITY_OPEN:          return "OPEN";
+        case RTW_SECURITY_WEP_PSK:       return "WEP";
+        case RTW_SECURITY_WPA2_TKIP_PSK: return "WPA2_TKIP";
+        default:                         return "WPA2_AES";   /* WPA/WPA2/WPA3 AES */
+    }
+}
+
+/* On a successful WPS connect, read the negotiated credential with wifi_get_setting() and persist it to
+ * WIFI_SSID/PASSWORD/CHANNEL/SECURITY (KV-backed env) so the reconnect monitor + the next boot use it. */
+static void wps_save_setting_to_env( void )
+{
+    rtw_wifi_setting_t s;
+    char               chbuf[ 8 ];
+
+    memset( &s, 0, sizeof( s ) );
+    if( wifi_get_setting( WLAN0_NAME, &s ) != 0 )
+    {
+        log_error( "[WPS] wifi_get_setting failed - credential not saved" );
+        return;
+    }
+    setenv( "WIFI_SSID",     ( char * ) s.ssid, 1 );
+    setenv( "WIFI_PASSWORD", ( char * ) s.password, 1 );
+    snprintf( chbuf, sizeof( chbuf ), "%d", ( int ) s.channel );
+    setenv( "WIFI_CHANNEL",  chbuf, 1 );
+    setenv( "WIFI_SECURITY", wps_sec_to_str( s.security_type ), 1 );
+    log_info( "[WPS] credential saved: WIFI_SSID=%s WIFI_CHANNEL=%d WIFI_SECURITY=%s",
+              s.ssid, ( int ) s.channel, wps_sec_to_str( s.security_type ) );
+}
+
 static void wps_thread( void * param )
 {
     ( void ) param;
     int rc = wps_start( s_wps_cfg, ( s_wps_pin[ 0 ] != '\0' ) ? s_wps_pin : NULL, 0, NULL );
     log_info( "[WPS] wps_start rc=%d -> %s", rc, ( rc == 0 ) ? "CONNECTED" : "failed/timeout" );
+    if( rc == 0 )
+    {
+        extern void wifi_reconnect_enable( void );   /* main.c: clear any prior `wifi forget` */
+        wps_save_setting_to_env();
+        wifi_reconnect_enable();
+    }
     vTaskDelete( NULL );
 }
 

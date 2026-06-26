@@ -94,7 +94,8 @@ if(NOT AMEBAD_ENABLE_QUIC)
     target_sources(target_img2_km4 PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/fs_cli.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/time_cli.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/env_cli.c")
+        "${CMAKE_CURRENT_SOURCE_DIR}/env_cli.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/wifi_cli.c")
     target_include_directories(target_img2_km4 PRIVATE
         "${CMAKE_SOURCE_DIR}/component/freertos-cli_config/freertos-cli")
     # env.c (syscall_config) persists every setenv() to KV/<name> via this link-time wrap; main.c

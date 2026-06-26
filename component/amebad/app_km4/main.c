@@ -72,7 +72,39 @@ static volatile int s_wifiConnected = 1;
 /* wifi_monitor_thread's handle, so wifi_event_task can wake it the instant a DISCONNECT lands (instead
  * of the monitor polling every 3 s). */
 static TaskHandle_t s_monitorTask = NULL;
+/* Set by `wifi forget` (wifi_cli.c) to permanently stop the reconnect monitor after a deliberate
+ * disconnect - the monitor checks it on wake and stays down instead of re-associating. */
+static volatile int s_wifiForget = 0;
 extern void FreeRTOS_NetworkDown( NetworkInterface_t * pxNetworkInterface );
+
+/* Console `wifi forget`: disconnect, stop reconnection, and erase the cached connection info from the
+ * KV store - the credential (WIFI_SSID/PASSWORD/CHANNEL/SECURITY) and the DHCP lease cache
+ * (DHCP_IP/GATEWAY/NETMASK/SERVER) - so the next boot does not re-use any of it. */
+void wifi_forget( void )
+{
+    extern int env_save( const char * name );
+    static const char * const keys[] = {
+        "WIFI_SSID", "WIFI_PASSWORD", "WIFI_CHANNEL", "WIFI_SECURITY",   /* connection credential */
+        "DHCP_IP", "DHCP_GATEWAY", "DHCP_NETMASK", "DHCP_SERVER",        /* cached DHCP lease */
+    };
+    unsigned i;
+
+    s_wifiForget = 1;
+    wifi_disconnect();         /* DISCONNECT -> "network DOWN"; the monitor wakes but stays down */
+    for( i = 0; i < sizeof( keys ) / sizeof( keys[ 0 ] ); i++ )
+    {
+        unsetenv( keys[ i ] );     /* drop from environ */
+        env_save( keys[ i ] );     /* getenv()==NULL -> removes KV/<name> (persistent erase) */
+    }
+    log_info( "[KM4] WiFi forgotten: disconnected, reconnect disabled, credentials + DHCP cache erased" );
+}
+
+/* Re-enable the reconnect monitor after a `wifi forget` - e.g. a fresh WPS connect supplied a new
+ * network, so the monitor should resume re-associating on the next drop. */
+void wifi_reconnect_enable( void )
+{
+    s_wifiForget = 0;
+}
 
 /* Single consumer of the driver's WiFi events, blocked on the wifi_ind EventGroup (replacing three
  * callbacks that ran inline in the driver's own thread). Runs in its own task context, so the work is
@@ -884,6 +916,8 @@ static void wifi_monitor_thread( void * param )
         ( void ) ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
         if( s_wifiConnected )      /* already recovered before we ran - nothing to do */
             continue;
+        if( s_wifiForget )         /* `wifi forget` was issued - stay down, never re-associate */
+            continue;
 
         /* The driver's own autoreconnect is disabled, so there is nothing to wait for - re-associate
          * immediately (no hold-off). The eNetworkDown raised by the DISCONNECT event already logged
@@ -984,6 +1018,7 @@ int main(void)
     { extern void fs_cli_register(void);   fs_cli_register();   }
     { extern void time_cli_register(void); time_cli_register(); }
     { extern void env_cli_register(void);  env_cli_register();  }   /* setenv/getenv/env (all images) */
+    { extern void wifi_cli_register(void); wifi_cli_register(); }   /* wifi forget (disconnect + erase) */
 #ifdef AMEBAD_ENABLE_MINIZIP
     { extern void zip_cli_register(void);  zip_cli_register();  }   /* zip/unzip demo (non-AWS images) */
 #endif
