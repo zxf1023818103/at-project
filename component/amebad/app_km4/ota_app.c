@@ -980,3 +980,29 @@ void ota_app_on_mqtt_connected( void )
         ( void ) OTA_SignalEvent( &eventMsg );
     }
 }
+
+void ota_app_on_mqtt_disconnected( void )
+{
+    OtaState_t state;
+
+    if( !s_initialised )
+    {
+        return;
+    }
+
+    /* Suspend the OTA agent while the MQTT link is down. Without this, on reconnect the agent is
+     * still in a running state (e.g. WaitingForJob) so ota_app_on_mqtt_connected() hits the else
+     * branch and re-sends OtaAgentEventStart - invalid in that state ("Received unexpected event:
+     * ... Start"), and worse the job/stream subscriptions are silently gone (cleanSession=true)
+     * so the OTA goes deaf. Suspending here means the reconnect lands in OtaAgentStateSuspended ->
+     * OTA_Resume(), which re-subscribes the job topics. The reconnect's TLS handshake gives the
+     * OTA task ample time to process the suspend before the next connect. */
+    state = OTA_GetState();
+    if( ( state != OtaAgentStateStopped ) &&
+        ( state != OtaAgentStateSuspended ) &&
+        ( state != OtaAgentStateInit ) )
+    {
+        OTA_APP_LOG( "MQTT disconnected -> OTA_Suspend (state %d)", ( int ) state );
+        ( void ) OTA_Suspend();
+    }
+}

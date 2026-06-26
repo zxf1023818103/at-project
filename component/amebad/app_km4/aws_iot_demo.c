@@ -300,6 +300,9 @@ static void aws_agent_task(void *param)
         /* Loop returned: connection is down. Tear down + reconnect. */
         s_connected = 0;
         log_info("[AWS] command loop exited (%d) - disconnecting", (int)loopStatus);
+        if (s_otaStarted) {
+            ota_app_on_mqtt_disconnected();   /* OTA_Suspend -> reconnect OTA_Resume's (re-subscribes) */
+        }
         TLS_FreeRTOS_Disconnect(&s_net);
 
         /* Cancel any commands queued while the loop was not running so their

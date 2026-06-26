@@ -31,6 +31,13 @@ int ota_app_init( MQTTAgentContext_t * pAgent, const char * pThingName );
 void ota_app_on_mqtt_connected( void );
 
 /**
+ * @brief Notify the OTA agent that the MQTT-Agent connection dropped, so it suspends (stops
+ *        issuing job/stream MQTT ops against the dead link). The matching ota_app_on_mqtt_connected()
+ *        then OTA_Resume()s on reconnect, which re-subscribes the job topics (lost with cleanSession).
+ */
+void ota_app_on_mqtt_disconnected( void );
+
+/**
  * @brief True while an OTA file download is in progress (CreatingFile..ClosingFile). The telemetry
  *        task goes quiet during this window so its publish churn doesn't fragment the heap that the
  *        OTA HTTPS (2nd TLS) handshake/records need.
