@@ -434,8 +434,19 @@ static void aws_telemetry_task(void *param)
 
 void aws_iot_demo_start(void)
 {
-    /* The OTA close-file path (mbedTLS x509 parse + ECDSA verify) and the TLS handshake
-     * are the heavy stack users; 8K words for the agent task. The telemetry task is light. */
+    /* Start ONCE. The network-up hook (main.c) calls this on EVERY "network UP" - including a WiFi
+     * reconnect - but the agent task already owns reconnection internally (its CommandLoop returns on
+     * disconnect and the for(;;) re-runs prvAgentConnect once the link is back). Without this guard a
+     * reconnect spawned a SECOND aws_agent task that raced the first on the shared s_agent / picotls
+     * transport, corrupting the TLS send buffer -> HardFault in picotls buffer_push_encrypted_records
+     * (confirmed on HW via OpenOCD: faulted task "aws_agent", CFSR=0x400 imprecise bus fault). */
+    static int s_started = 0;
+    if (s_started) {
+        log_info("[AWS] already started; ignoring extra network-up (agent task handles reconnects)");
+        return;
+    }
+    s_started = 1;
+
     /* 5120 words (20 KB), not 8192/32 KB: this task runs MQTTAgent_CommandLoop + the one-shot TLS
      * handshake (mbedTLS RSA-2048 cert-chain verify peaks ~12 KB of stack), so 32 KB was ~2.6x over.
      * Reclaiming 12 KB of heap is what lets the OTA HTTPS data plane open its 2nd concurrent TLS. */
