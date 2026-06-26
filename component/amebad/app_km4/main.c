@@ -57,13 +57,6 @@ extern void iperf_udp_server_start(void);
 /* WiFi reconnect backoff: 1 s base, 8 s cap, RETRY_FOREVER (keep re-associating until the AP is back). */
 #define WIFI_RECONNECT_BACKOFF_BASE_MS  ( 1000U )
 #define WIFI_RECONNECT_BACKOFF_MAX_MS   ( 8000U )
-/* How long the monitor lets the driver's own autoreconnect try before taking over. A successful
- * reconnect (auth+assoc+4-way, then DHCP -> s_wifiConnected) lands in a few seconds, so this only needs
- * to be a brief grace period; past it the driver is usually not coming back (e.g. an AP disassoc/kick,
- * where it does not even retry) and waiting out the ~35 s DHCP give-up just delays recovery. s_driverGaveUp
- * / s_dhcpFellBack still cut the wait shorter when they fire first; s_wifiConnected ends it on a real
- * reconnect. (Was 45 s, sized for the driver's full ~40 s FINITE window - too slow in practice.) */
-#define WIFI_DRIVER_GIVEUP_TIMEOUT_MS   ( 8000U )
 
 static NetworkInterface_t xInterface;
 static void wifi_monitor_thread( void * param );   /* small reconnect-monitor task (defined below) */
@@ -76,14 +69,6 @@ static NetworkEndPoint_t  xEndPoint;
  * silent driver autoreconnect. s_wifiConnected is *set* by the eNetworkUp hook (the reliable
  * "connected" cue, since FOURWAY_HANDSHAKE_DONE is flaky on the driver's autoreconnect). */
 static volatile int s_wifiConnected = 1;
-/* Set when the driver's own FINITE autoreconnect gives up (WIFI_EVENT_RECONNECTION_FAIL) - the cue for
- * wifi_monitor_thread to take over. Until then the monitor holds off, so it never races the driver's
- * still-in-progress autoreconnect (that race left a redundant network DOWN/UP at reconnect). */
-static volatile int s_driverGaveUp = 0;
-/* Set when DHCP gives up to its bogus static-IP fallback (eGetDHCPState==eNotUsingLeasedAddress) - a
- * positive "the link is really down" signal that lets the monitor take over at once instead of waiting
- * out the full driver-giveup timeout. Cleared at each fresh DISCONNECT. */
-static volatile int s_dhcpFellBack = 0;
 extern void FreeRTOS_NetworkDown( NetworkInterface_t * pxNetworkInterface );
 
 /* Single consumer of the driver's WiFi events, blocked on the wifi_ind EventGroup (replacing three
@@ -91,13 +76,11 @@ extern void FreeRTOS_NetworkDown( NetworkInterface_t * pxNetworkInterface );
  * off the driver stack:
  *   DISCONNECT             -> drop the IP stack at the real link loss ("==== network DOWN ====" on time)
  *   FOURWAY_HANDSHAKE_DONE -> re-kick DHCP for a prompt eNetworkUp
- *   RECONNECTION_FAIL      -> driver gave up; release the monitor
  * This is the multi-task notification path: any other task can likewise wait on the same group. */
 static void wifi_event_task( void * param )
 {
     const EventBits_t mask = WIFI_EVENT_BIT( WIFI_EVENT_DISCONNECT )
-                           | WIFI_EVENT_BIT( WIFI_EVENT_FOURWAY_HANDSHAKE_DONE )
-                           | WIFI_EVENT_BIT( WIFI_EVENT_RECONNECTION_FAIL );
+                           | WIFI_EVENT_BIT( WIFI_EVENT_FOURWAY_HANDSHAKE_DONE );
     ( void ) param;
 
     for( ;; )
@@ -106,8 +89,6 @@ static void wifi_event_task( void * param )
 
         if( b & WIFI_EVENT_BIT( WIFI_EVENT_DISCONNECT ) )
         {
-            s_driverGaveUp = 0;                  /* the driver begins its own autoreconnect now */
-            s_dhcpFellBack = 0;
             if( s_wifiConnected )
             {
                 s_wifiConnected = 0;
@@ -119,8 +100,6 @@ static void wifi_event_task( void * param )
             if( !s_wifiConnected )
                 FreeRTOS_NetworkDown( &xInterface );   /* re-kick DHCP; eNetworkUp sets s_wifiConnected */
         }
-        if( b & WIFI_EVENT_BIT( WIFI_EVENT_RECONNECTION_FAIL ) )
-            s_driverGaveUp = 1;
     }
 }
 
@@ -280,7 +259,6 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
         if( eGetDHCPState( &xEndPoint ) == eNotUsingLeasedAddress )
         {
             log_info( "[KM4] DHCP got no lease (link still down) - ignoring fallback network-up" );
-            s_dhcpFellBack = 1;   /* link confirmed down -> release the monitor's wait immediately */
             return;
         }
         s_downLogged = 0;
@@ -868,8 +846,8 @@ wifi_connect_attempt:
 
     /* Start the consumer of the driver's link-state events. It blocks on the wifi_ind EventGroup
      * (set by wifi_indication for every event) - DISCONNECT marks the IP stack down at the real drop
-     * (-> "network DOWN" on time), FOURWAY_HANDSHAKE_DONE re-DHCPs, RECONNECTION_FAIL releases the
-     * monitor. The group is created in wifi_manager_init() (called earlier in this thread). */
+     * (-> "network DOWN" on time), FOURWAY_HANDSHAKE_DONE re-DHCPs. The group is created in
+     * wifi_manager_init() (called earlier in this thread). */
     if( xTaskCreate( wifi_event_task, "wifi_evt", 512, NULL, tskIDLE_PRIORITY + 4, NULL ) != pdPASS )
         log_error( "[KM4] xTaskCreate(wifi_evt) failed" );
 
@@ -901,24 +879,10 @@ static void wifi_monitor_thread( void * param )
         if( s_wifiConnected )      /* event-driven (wifi_ind) - reliable, unlike wifi_is_connected_to_ap() */
             continue;
 
-        log_info( "[KM4] WiFi link down..." );
-        /* Let the driver's own FINITE autoreconnect try first; only re-associate ourselves once it
-         * either succeeds (s_wifiConnected), gives up (s_driverGaveUp via WIFI_EVENT_RECONNECTION_FAIL),
-         * or DHCP gives up to its fallback (s_dhcpFellBack - a ~35 s "link is really down" signal that
-         * beats the full timeout). This keeps our wifi_connect from racing the still-in-progress driver
-         * autoreconnect, which left a redundant network DOWN/UP at reconnect. */
-        {
-            int waited = 0;
-            while( !s_wifiConnected && !s_driverGaveUp && !s_dhcpFellBack &&
-                   waited < WIFI_DRIVER_GIVEUP_TIMEOUT_MS )
-            {
-                vTaskDelay( pdMS_TO_TICKS( 500 ) );
-                waited += 500;
-            }
-        }
-        if( s_wifiConnected )
-            continue;
-        log_info( "[KM4] driver autoreconnect gave up - re-associating ourselves..." );
+        /* The driver's own autoreconnect is disabled, so there is nothing to wait for - re-associate
+         * immediately (no hold-off). The eNetworkDown raised by the DISCONNECT event already logged
+         * "network DOWN"; below we re-associate and re-DHCP. */
+        log_info( "[KM4] WiFi link down - re-associating..." );
         {
             const char    *ssid = getenv( "WIFI_SSID" );
             const char    *pass = getenv( "WIFI_PASSWORD" );
