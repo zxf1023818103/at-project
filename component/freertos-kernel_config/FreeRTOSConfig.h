@@ -45,6 +45,7 @@ extern uint32_t SystemCoreClock;
 #define configUSE_TIMERS                        1
 #define configMAX_CO_ROUTINE_PRIORITIES         ( 2 )
 #define configUSE_TRACE_FACILITY                1
+#define configRECORD_STACK_HIGH_ADDRESS         1   /* TCB.pxEndOfStack -> gdb/OpenOCD exact stack bounds */
 #define configUSE_STATS_FORMATTING_FUNCTIONS    1
 #define configCHECK_FOR_STACK_OVERFLOW          2
 #define configUSE_TICK_HOOK                     0

@@ -53,6 +53,8 @@ extern void iperf_udp_server_start(void);
 
 static NetworkInterface_t xInterface;
 static void wifi_monitor_thread( void * param );   /* small reconnect-monitor task (defined below) */
+/* NB: OpenOCD's FreeRTOS awareness needs the `uxTopUsedPriority` symbol - the kernel already exports
+ * it (tasks.c), so we don't redefine it here. -rtos FreeRTOS is set in scripts/amebad_openocd.cfg. */
 static NetworkEndPoint_t  xEndPoint;
 
 /* DHCP-only by default (0.0.0.0). The cached DHCP_* lease, when present, is loaded into these as
