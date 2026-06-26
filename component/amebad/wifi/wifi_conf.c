@@ -1893,20 +1893,9 @@ int wifi_rf_off(void)
 }
 
 //----------------------------------------------------------------------------//
-/* WLAN init-done signalling. The prebuilt driver invokes
- * p_wlan_init_done_callback (a global fn-ptr in lib_wlan.a) once WLAN init
- * completes; we wake wifi_on() off that instead of polling rltk_wlan_running()
- * once a second — removing up to ~1 s of bring-up latency from the 1 Hz poll
- * granularity. The semaphore is persistent (lazy-created, drained each arm), so
- * the failure/early-return paths need no cleanup. (p_wlan_init_done_callback is
- * declared in wifi_fast_connect.h, included at the top.) */
-static _sema g_wifi_init_done_sema = NULL;
-static int wifi_internal_init_done_cb( void )
-{
-	if( g_wifi_init_done_sema )
-		rtw_up_sema( &g_wifi_init_done_sema );
-	return 0;
-}
+/* WLAN init-done signalling lives in wifi_ind.c now: the driver's p_wlan_init_done_callback sets the
+ * EventGroup WIFI_INIT_DONE_BIT, and wifi_on() blocks on it via wifi_arm_init_done()/wifi_wait_init_done()
+ * instead of polling rltk_wlan_running() at 1 Hz - replaces the former g_wifi_init_done_sema. */
 
 int wifi_on(rtw_mode_t mode)
 {
@@ -1936,13 +1925,9 @@ int wifi_on(rtw_mode_t mode)
 	wifi_set_mib();
 	RTW_API_INFO("\n\rInitializing WIFI ...");
 
-	/* Arm the init-done callback before kicking off the driver init, so a fast
-	 * init can't complete before we're listening. Drain any stale signal first. */
-	if( g_wifi_init_done_sema == NULL )
-		rtw_init_sema( &g_wifi_init_done_sema, 0 );
-	while( rtw_down_timeout_sema( &g_wifi_init_done_sema, 0 ) == _SUCCESS )
-		;
-	p_wlan_init_done_callback = wifi_internal_init_done_cb;
+	/* Arm the init-done signal (clears stale + installs the driver callback) before driver init, so a
+	 * fast init can't complete before we're listening. (EventGroup-backed; see wifi_ind.c.) */
+	wifi_arm_init_done();
 
 	for(idx=0;idx<devnum;idx++){
 		ret = rltk_wlan_init(idx, mode);
@@ -1968,8 +1953,7 @@ int wifi_on(rtw_mode_t mode)
 	/* Block on the driver's init-done callback instead of polling
 	 * rltk_wlan_running() every second. Fall back to the running flag if the
 	 * callback never fires (defensive — preserves the original 20 s ceiling). */
-	if( ( rtw_down_timeout_sema( &g_wifi_init_done_sema, 20000 ) == _SUCCESS )
-	    || rltk_wlan_running( devnum - 1 ) ) {
+	if( wifi_wait_init_done( 20000 ) || rltk_wlan_running( devnum - 1 ) ) {
 		RTW_API_INFO("\n\rWIFI initialized\n");
 		wifi_set_country_code();
 	} else {

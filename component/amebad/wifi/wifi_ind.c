@@ -3,6 +3,7 @@
 #include "wifi/wifi_conf.h"
 #include "osdep_service.h"
 #include "platform_stdlib_rtl8721d.h"
+#include "wifi_fast_connect.h"    /* wlan_init_done_ptr / p_wlan_init_done_callback (lib_wlan.a) */
 
 /******************************************************
  *                    Constants
@@ -292,6 +293,28 @@ EventBits_t wifi_event_clear(EventBits_t bits){
 
 EventBits_t wifi_event_get(void){
 	return (wifi_event_group != NULL) ? xEventGroupGetBits(wifi_event_group) : 0;
+}
+
+/* ---- WLAN init-done over the EventGroup (replaces wifi_conf.c's g_wifi_init_done_sema) ----
+ * The prebuilt driver invokes p_wlan_init_done_callback once WLAN init completes; wifi_on() blocks on
+ * the WIFI_INIT_DONE_BIT instead of polling rltk_wlan_running() at 1 Hz, saving up to ~1 s of bring-up
+ * latency. The bit is cleared on arm, so the early-return paths in wifi_on() need no cleanup. */
+static int wifi_init_done_cb(void){
+	if(wifi_event_group != NULL)
+		xEventGroupSetBits(wifi_event_group, WIFI_INIT_DONE_BIT);
+	return 0;
+}
+
+void wifi_arm_init_done(void){
+	/* Clear any stale signal, then install the driver callback before driver init is kicked off so a
+	 * fast init cannot complete before we are listening. */
+	if(wifi_event_group != NULL)
+		(void)xEventGroupClearBits(wifi_event_group, WIFI_INIT_DONE_BIT);
+	p_wlan_init_done_callback = wifi_init_done_cb;
+}
+
+int wifi_wait_init_done(uint32_t timeout_ms){
+	return (wifi_event_wait(WIFI_INIT_DONE_BIT, pdTRUE, pdFALSE, timeout_ms) & WIFI_INIT_DONE_BIT) ? 1 : 0;
 }
 
 int wifi_manager_init(void)
