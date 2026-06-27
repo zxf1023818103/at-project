@@ -93,64 +93,117 @@ BaseType_t TCP_Sockets_Connect( Socket_t * pTcpSocket,
                                 uint32_t sendTimeoutMs )
 {
     Socket_t tcpSocket = FREERTOS_INVALID_SOCKET;
-    BaseType_t socketStatus = 0;
-    struct freertos_sockaddr serverAddress = { 0 };
+    BaseType_t socketStatus = FREERTOS_SOCKETS_WRAPPER_NETWORK_ERROR;
     TickType_t transportTimeout = 0;
+    struct freertos_addrinfo   hints;
+    struct freertos_addrinfo * pxOrder[ 2 ] = { NULL, NULL };   /* [0] = IPv6 (preferred), [1] = IPv4 */
+    const BaseType_t           xFamily[ 2 ] = { FREERTOS_AF_INET6, FREERTOS_AF_INET };
+    struct freertos_addrinfo * ai;
+    size_t uxIdx;
 
     configASSERT( pTcpSocket != NULL );
     configASSERT( pHostName != NULL );
 
-    /* Create a new TCP socket. */
-    tcpSocket = FreeRTOS_socket( FREERTOS_AF_INET, FREERTOS_SOCK_STREAM, FREERTOS_IPPROTO_TCP );
-
-    if( tcpSocket == FREERTOS_INVALID_SOCKET )
+    /* Test/diagnostic override: AWS_IP6=<ipv6 literal> connects over IPv6 directly, bypassing DNS.
+     * An iOS Personal Hotspot's DNS forwarder (172.20.10.1) frequently does not return AAAA records,
+     * so this proves the IPv6 transport path to AWS independently of the local resolver. */
     {
-        LogError( ( "Failed to create new socket." ) );
-        socketStatus = FREERTOS_SOCKETS_WRAPPER_NETWORK_ERROR;
+        const char *   pcIp6 = getenv( "AWS_IP6" );
+        IPv6_Address_t xIp6;
+
+        if( ( pcIp6 != NULL ) && ( pcIp6[ 0 ] != '\0' ) &&
+            ( FreeRTOS_inet_pton6( pcIp6, xIp6.ucBytes ) == 1 ) )
+        {
+            tcpSocket = FreeRTOS_socket( FREERTOS_AF_INET6, FREERTOS_SOCK_STREAM, FREERTOS_IPPROTO_TCP );
+
+            if( tcpSocket != FREERTOS_INVALID_SOCKET )
+            {
+                struct freertos_sockaddr addr6;
+
+                ( void ) memset( &addr6, 0, sizeof( addr6 ) );
+                addr6.sin_family = FREERTOS_AF_INET6;
+                addr6.sin_len = ( uint8_t ) sizeof( addr6 );
+                addr6.sin_port = FreeRTOS_htons( port );
+                ( void ) memcpy( addr6.sin_address.xIP_IPv6.ucBytes, xIp6.ucBytes, ipSIZE_OF_IPv6_ADDRESS );
+
+                LogInfo( ( "Connecting to %s over IPv6 (forced %s) ...", pHostName, pcIp6 ) );
+
+                if( FreeRTOS_connect( tcpSocket, &addr6, sizeof( addr6 ) ) == 0 )
+                {
+                    transportTimeout = pdMS_TO_TICKS( receiveTimeoutMs );
+                    ( void ) FreeRTOS_setsockopt( tcpSocket, 0, FREERTOS_SO_RCVTIMEO, &transportTimeout, sizeof( TickType_t ) );
+                    transportTimeout = pdMS_TO_TICKS( sendTimeoutMs );
+                    ( void ) FreeRTOS_setsockopt( tcpSocket, 0, FREERTOS_SO_SNDTIMEO, &transportTimeout, sizeof( TickType_t ) );
+                    *pTcpSocket = tcpSocket;
+                    LogInfo( ( "Established TCP connection with %s (forced IPv6).", pHostName ) );
+                    return 0;
+                }
+
+                LogError( ( "Forced IPv6 connect failed; falling back to DNS." ) );
+                ( void ) FreeRTOS_closesocket( tcpSocket );
+                tcpSocket = FREERTOS_INVALID_SOCKET;
+            }
+        }
     }
-    else
-    {
-        LogDebug( ( "Created new TCP socket." ) );
 
-        /* Connection parameters. */
-        serverAddress.sin_family = FREERTOS_AF_INET;
+    /* Resolve AAAA (IPv6) and A (IPv4) separately -- FreeRTOS_getaddrinfo resolves one family per
+     * call. AWS IoT publishes both, so on an IPv6-capable network (e.g. an iPad Personal Hotspot)
+     * we connect over IPv6 (pxOrder[0]) and fall back to IPv4 (pxOrder[1]) elsewhere. */
+    for( uxIdx = 0; uxIdx < 2U; uxIdx++ )
+    {
+        BaseType_t xRc;
+        ( void ) memset( &hints, 0, sizeof( hints ) );
+        hints.ai_family = xFamily[ uxIdx ];
+        xRc = FreeRTOS_getaddrinfo( pHostName, NULL, &hints, &( pxOrder[ uxIdx ] ) );
+        LogInfo( ( "DNS %s for %s: rc=%d %s",
+                   ( xFamily[ uxIdx ] == FREERTOS_AF_INET6 ) ? "AAAA" : "A",
+                   pHostName, ( int ) xRc,
+                   ( pxOrder[ uxIdx ] != NULL ) ? "resolved" : "no-record" ) );
+    }
+
+    if( ( pxOrder[ 0 ] == NULL ) && ( pxOrder[ 1 ] == NULL ) )
+    {
+        LogError( ( "Failed to connect to server: DNS resolution failed: Hostname=%s.", pHostName ) );
+        return FREERTOS_SOCKETS_WRAPPER_NETWORK_ERROR;
+    }
+
+    for( uxIdx = 0; uxIdx < 2U; uxIdx++ )
+    {
+        struct freertos_sockaddr serverAddress;
+
+        ai = pxOrder[ uxIdx ];
+        if( ai == NULL )
+        {
+            continue;
+        }
+
+        tcpSocket = FreeRTOS_socket( ai->ai_family, FREERTOS_SOCK_STREAM, FREERTOS_IPPROTO_TCP );
+        if( tcpSocket == FREERTOS_INVALID_SOCKET )
+        {
+            LogError( ( "Failed to create new socket." ) );
+            continue;
+        }
+
+        ( void ) memcpy( &serverAddress, ai->ai_addr, sizeof( serverAddress ) );
         serverAddress.sin_port = FreeRTOS_htons( port );
-        serverAddress.sin_len = ( uint8_t ) sizeof( serverAddress );
 
-        #if defined( ipconfigIPv4_BACKWARD_COMPATIBLE ) && ( ipconfigIPv4_BACKWARD_COMPATIBLE == 0 )
-            serverAddress.sin_address.ulIP_IPv4 = ( uint32_t ) FreeRTOS_gethostbyname( pHostName );
+        LogInfo( ( "Connecting to %s over %s ...", pHostName,
+                   ( ai->ai_family == FREERTOS_AF_INET6 ) ? "IPv6" : "IPv4" ) );
 
-            /* Check for errors from DNS lookup. */
-            if( serverAddress.sin_address.ulIP_IPv4 == 0U )
-        #else
-            serverAddress.sin_addr = ( uint32_t ) FreeRTOS_gethostbyname( pHostName );
-
-            /* Check for errors from DNS lookup. */
-            if( serverAddress.sin_addr == 0U )
-        #endif /* defined( ipconfigIPv4_BACKWARD_COMPATIBLE ) && ( ipconfigIPv4_BACKWARD_COMPATIBLE == 0 ) */
-
+        if( FreeRTOS_connect( tcpSocket, &serverAddress, sizeof( serverAddress ) ) == 0 )
         {
-            LogError( ( "Failed to connect to server: DNS resolution failed: Hostname=%s.",
-                        pHostName ) );
-            socketStatus = FREERTOS_SOCKETS_WRAPPER_NETWORK_ERROR;
+            socketStatus = 0;
+            break;
         }
+
+        LogError( ( "Connect over %s failed; trying next.",
+                    ( ai->ai_family == FREERTOS_AF_INET6 ) ? "IPv6" : "IPv4" ) );
+        ( void ) FreeRTOS_closesocket( tcpSocket );
+        tcpSocket = FREERTOS_INVALID_SOCKET;
     }
 
-    if( socketStatus == 0 )
-    {
-        /* Establish connection. */
-        LogDebug( ( "Creating TCP Connection to %s.", pHostName ) );
-        socketStatus = FreeRTOS_connect( tcpSocket, &serverAddress, sizeof( serverAddress ) );
-
-        if( socketStatus != 0 )
-        {
-            LogError( ( "Failed to connect to server: FreeRTOS_Connect failed: ReturnCode=%d,"
-                        " Hostname=%s, Port=%u.",
-                        socketStatus,
-                        pHostName,
-                        port ) );
-        }
-    }
+    if( pxOrder[ 0 ] != NULL ) { FreeRTOS_freeaddrinfo( pxOrder[ 0 ] ); }
+    if( pxOrder[ 1 ] != NULL ) { FreeRTOS_freeaddrinfo( pxOrder[ 1 ] ); }
 
     if( socketStatus == 0 )
     {
