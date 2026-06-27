@@ -48,7 +48,12 @@ target_compile_definitions(freertos_config PUBLIC
 )
 # Kernel include dirs as directory strings (TARGET_PROPERTY, not a link) so no cycle
 # forms (freertos_kernel_include links back to freertos_config for FreeRTOSConfig.h).
+# Use freertos_kernel_port_headers (the INTERFACE headers target FreeRTOS-Kernel V11
+# added) instead of freertos_kernel_port: V11 made the latter an OBJECT library, and an
+# OBJECT target inside the freertos_config<->freertos_kernel usage cycle makes CMake's
+# generate step fail ("strongly connected component"). The INTERFACE headers target
+# carries the same port include dirs without the OBJECT-in-a-cycle problem.
 target_include_directories(freertos_config SYSTEM PRIVATE
     $<TARGET_PROPERTY:freertos_kernel_include,INTERFACE_INCLUDE_DIRECTORIES>
-    $<TARGET_PROPERTY:freertos_kernel_port,INTERFACE_INCLUDE_DIRECTORIES>
+    $<TARGET_PROPERTY:freertos_kernel_port_headers,INTERFACE_INCLUDE_DIRECTORIES>
 )
