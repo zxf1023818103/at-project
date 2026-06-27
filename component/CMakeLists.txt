@@ -1,19 +1,49 @@
-# component/ — the component-subtree parent. Entered from the root CMakeLists.txt for
-# whichever platform is active (BOUFFALO_CHIP or AMEBAD_CHIP). Each platform owns its
-# own branch below, so the tree stays STRICT: a directory only add_subdirectory()s things
-# beneath it — never a sibling reached via an absolute "${CMAKE_SOURCE_DIR}/component/..."
-# path + explicit binary dir. The consumer-coupled cross-platform *_config components that
-# the AmebaD KM4 image links (freertos-plus-tcp / wolfssl / ngtcp2 / coremqtt / corehttp /
-# freertos-cli / nimble / syscall) used to be reached that way from component/amebad; they
-# now live in the AmebaD branch here as proper children of component/.
+# component/ — the component-subtree parent. Entered from the root CMakeLists.txt for whichever
+# platform is active (BOUFFALO_CHIP or AMEBAD_CHIP). Two parts:
 #
-# The universal *_config components that EVERY build needs (zlib, cjson, littlefs, console,
-# tlsf_config, freertos-kernel, freertos-posix) are added one level up in the root
-# CMakeLists.txt, before src/. By the time we get here `FreeRTOS` / `freertos_config` /
-# `at_console` / `littlefs` already exist, so the AmebaD config dirs below can link them.
+#   1. The cross-platform config components (component/*_config + network_transport) are added
+#      UNCONDITIONALLY. They are EXCLUDE_FROM_ALL, so they cost nothing for a platform that never
+#      links them; defining the targets up front (before the in-tree consumers below) is what keeps
+#      every target_link_libraries(... <config>) resolvable on either platform.
+#
+#   2. The platform subtrees (component/bouffalo_sdk, component/amebad) are gated on
+#      BOUFFALO_CHIP / AMEBAD_CHIP — each owns its own branch + the chip-specific companions.
+#
+# The universal *_config that EVERY build needs (zlib, cjson, littlefs, console, tlsf_config,
+# freertos-kernel, freertos-posix) are added one level up in the root CMakeLists, before src/ — so
+# FreeRTOS / freertos_config / at_console / littlefs already exist by the time we get here.
+
+# QUIC self-test option (ngtcp2 + picotls/mbedTLS TLS 1.3 — wolfSSL was retired). AmebaD app_km4
+# reads it; ngtcp2_config builds its crypto only when ON. Declared before the block that consumes it.
+option(AMEBAD_ENABLE_QUIC "Build the ngtcp2 + picotls/mbedTLS QUIC client self-test" OFF)
 
 # =====================================================================
-# Bouffalo Lab BL602 / BL616 / BL616CL
+# Cross-platform config components — unconditional (all EXCLUDE_FROM_ALL,
+# built only when a platform consumer links them). Ordering matters:
+#   freertos-plus-tcp_config  before  syscall_config   (syscall PRIVATE-links it)
+#   mbedtls_config            before  ngtcp2_config / picotls_config (they link mbedcrypto)
+# =====================================================================
+add_subdirectory(freertos-plus-tcp_config)  # FreeRTOS-Plus-TCP V4.0.0 core stack + FreeRTOSIPConfig.h
+add_subdirectory(ngtcp2_config)             # ngtcp2 QUIC + the picotls crypto binding (built only when AMEBAD_ENABLE_QUIC)
+add_subdirectory(coremqtt_config)           # coreMQTT v5.0.2 static lib + core_mqtt_config.h
+add_subdirectory(coremqtt-agent_config)     # coreMQTT-Agent v2.0.0 (thread-safe wrapper) — links coremqtt_config
+add_subdirectory(backoffalgorithm_config)   # backoffAlgorithm v1.4.2 (reconnect backoff-with-jitter)
+add_subdirectory(corehttp_config)           # coreHTTP v3.1.3 static lib + core_http_config.h
+add_subdirectory(corejson_config)           # coreJSON parser (OTA job-document parsing) — ota_config dep
+add_subdirectory(tinycbor_config)           # TinyCBOR (OTA MQTT data-plane block decode) — ota_config dep
+add_subdirectory(ota_config)                # AWS IoT OTA Agent v3.3.0 — links corejson_config + tinycbor_config + freertos_config
+add_subdirectory(coresntp_config)           # coreSNTP SNTPv4 client static lib + core_sntp_config.h
+add_subdirectory(freertos-cli_config)       # FreeRTOS-Plus-CLI V202212.00 static lib
+add_subdirectory(nimble_config)             # INTERFACE: NimBLE syscfg + upstream include surface
+add_subdirectory(syscall_config)            # newlib retarget OBJECT lib (VFS + malloc + byte-order); PRIVATE-links freertos-plus-tcp_config + at_console
+add_subdirectory(rxi_log_config)            # rxi log.c (leveled logger) + FreeRTOS-mutex lock via log_set_lock
+add_subdirectory(mbedtls_config)            # upstream Mbed TLS v3.6.4 -> mbedcrypto / mbedx509 / mbedtls
+add_subdirectory(corepkcs11_config)         # PKCS#11 software token over mbedcrypto/mbedx509 (PAL consumer-supplied)
+add_subdirectory(picotls_config)            # TLS 1.3 core + mbedTLS/PSA backend (picotls_mbedtls) for ngtcp2 QUIC
+add_subdirectory(network_transport)         # TransportInterface_t impls over mbedtls_config + freertos-plus-tcp_config — coreMQTT TLS transport
+
+# =====================================================================
+# Platform: Bouffalo Lab BL602 / BL616 / BL616CL
 # =====================================================================
 #
 #   bouffalo_sdk         the Bouffalo Lab SDK extraction (HAL + chip-std
@@ -84,48 +114,13 @@ if(BOUFFALO_CHIP)
 endif()
 
 # =====================================================================
-# Realtek Ameba D (RTL8721D) — dual-core (KM0 LP + KM4 HP)
+# Platform: Realtek Ameba D (RTL8721D) — dual-core (KM0 LP + KM4 HP)
 # =====================================================================
 #
-# Entered when a chip toolchain file (cmake/amebad-km{0,4}.cmake) has set AMEBAD_CHIP.
-# We add the consumer-coupled cross-platform config components the KM4 image links FIRST
-# (as direct children of component/), THEN the in-tree AmebaD subtree (component/amebad)
-# whose ports/app link those targets. Defining the config targets before add_subdirectory(amebad)
-# is what keeps the in-tree consumers' target_link_libraries(... <config>) resolvable.
+# Entered when a chip toolchain file (cmake/amebad-km{0,4}.cmake) has set AMEBAD_CHIP. The AmebaD
+# subtree (fwlib + per-core HAL + FreeRTOS port + wifi/BT + bootloaders + image2 apps); its in-tree
+# ports (freertos_tcp_port / nimble_port / syscall_port / ...) and the app_km{0,4} images consume
+# the cross-platform config targets added unconditionally above.
 if(AMEBAD_CHIP MATCHES "^amebad-km[04]$")
-    # QUIC self-test option (ngtcp2 + picotls TLS 1.3 on the mbedTLS/PSA backend — wolfSSL
-    # was retired). Read by component/amebad/app_km4. ngtcp2's crypto is built only when ON.
-    option(AMEBAD_ENABLE_QUIC "Build the ngtcp2 + picotls/mbedTLS QUIC client self-test" OFF)
-
-    # Cross-platform config components the AmebaD KM4 image links. All EXCLUDE_FROM_ALL
-    # until a consumer (the in-tree amebad ports/app, added below) links them. Ordering:
-    #   freertos-plus-tcp_config  before  syscall_config   (syscall PRIVATE-links it)
-    #   mbedtls_config            before  ngtcp2_config/picotls_config (they link mbedcrypto)
-    add_subdirectory(freertos-plus-tcp_config)  # FreeRTOS-Plus-TCP V4.0.0 core stack + FreeRTOSIPConfig.h (freertos_plus_tcp / freertos-plus-tcp_config)
-    add_subdirectory(ngtcp2_config)             # ngtcp2 QUIC + the picotls crypto binding (built only when AMEBAD_ENABLE_QUIC)
-    add_subdirectory(coremqtt_config)           # coreMQTT v5.0.2 static lib + core_mqtt_config.h
-    add_subdirectory(coremqtt-agent_config)     # coreMQTT-Agent v2.0.0 (thread-safe wrapper; shared MQTT conn for telemetry + OTA) — links coremqtt_config
-    add_subdirectory(backoffalgorithm_config)   # backoffAlgorithm v1.4.2 (reconnect backoff-with-jitter) — coreMQTT companion
-    add_subdirectory(corehttp_config)           # coreHTTP v3.1.3 static lib + core_http_config.h
-    add_subdirectory(corejson_config)           # coreJSON parser (OTA job-document parsing) — ota_config dep
-    add_subdirectory(tinycbor_config)           # TinyCBOR (OTA MQTT data-plane block decode) — ota_config dep
-    add_subdirectory(ota_config)                # AWS IoT OTA Agent v3.3.0 (aws_ota; MQTT/HTTP/PAL injected by consumer) — links corejson_config + tinycbor_config + freertos_config
-    add_subdirectory(coresntp_config)           # coreSNTP SNTPv4 client static lib + core_sntp_config.h (built only when AMEBAD_ENABLE_SNTP)
-    add_subdirectory(freertos-cli_config)       # FreeRTOS-Plus-CLI V202212.00 static lib (config via FreeRTOSConfig.h)
-    add_subdirectory(nimble_config)             # INTERFACE: NimBLE syscfg + upstream include surface
-    add_subdirectory(syscall_config)            # newlib retarget OBJECT lib (VFS + malloc + byte-order); PRIVATE-links freertos-plus-tcp_config + at_console
-    add_subdirectory(rxi_log_config)            # rxi log.c (leveled logger, default fprintf->stderr) + FreeRTOS-mutex lock via log_set_lock (log_lock_init)
-    # Upstream Mbed TLS v3.6.4 software crypto (the AmebaD config/threading/entropy port lives
-    # in component/amebad/mbedtls_port, added with the amebad subtree below; it attaches the config
-    # onto these targets at generate). Modern backend for corePKCS11 (and the planned
-    # picotls/ngtcp2 QUIC stack). Coexists with the ROM mbedTLS 2.4.0 path.
-    add_subdirectory(mbedtls_config)            # -> mbedcrypto / mbedx509 / mbedtls (EXCLUDE_FROM_ALL)
-    add_subdirectory(corepkcs11_config)         # PKCS#11 software token over mbedcrypto/mbedx509 (PAL is consumer-supplied)
-    add_subdirectory(picotls_config)            # TLS 1.3 core + mbedTLS/PSA backend (picotls_mbedtls) — wolfSSL replacement for ngtcp2 QUIC
-    add_subdirectory(network_transport)         # TransportInterface_t impls (network_transport_mbedtls/_bio/_sockets) over mbedtls_config + freertos-plus-tcp_config — coreMQTT TLS transport
-
-    # The AmebaD subtree itself (fwlib + per-core HAL + FreeRTOS port + wifi/BT + bootloaders
-    # + image2 apps). Its in-tree ports (freertos_tcp_port / nimble_port / syscall_port / ...)
-    # and the app_km{0,4} images consume the config targets added just above.
     add_subdirectory(amebad)
 endif()
