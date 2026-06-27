@@ -59,9 +59,30 @@ static volatile int      s_first_sync_done;
 
 static bool sntp_resolve_dns( const SntpServerInfo_t * srv, uint32_t * ip )
 {
-    *ip = FreeRTOS_gethostbyname( srv->pServerName );   /* network-order IPv4, 0 on failure;
-                                                         * already handles a dotted-decimal IP (a
-                                                         * DHCP-learned NTP server) via inet_addr. */
+    /* Dotted-decimal literal first (fast, no DNS round-trip). FreeRTOS+TCP V4.4.x does not
+     * short-circuit a literal IP in this config -- both gethostbyname and getaddrinfo DNS-query
+     * "192.168.4.1" (5 s timeout, then SntpErrorDnsFailure), and a DHCP-learned NTP server is
+     * always a literal here. getaddrinfo (the modern resolver) handles real hostnames + IPv6. */
+    *ip = FreeRTOS_inet_addr( srv->pServerName );           /* network-order IPv4, 0 if not a literal */
+
+    if( *ip == 0U )
+    {
+        struct freertos_addrinfo   hints;
+        struct freertos_addrinfo * res = NULL;
+
+        ( void ) memset( &hints, 0, sizeof( hints ) );
+        hints.ai_family = FREERTOS_AF_INET;                 /* SNTP here is IPv4 */
+
+        if( ( FreeRTOS_getaddrinfo( srv->pServerName, NULL, &hints, &res ) == 0 ) &&
+            ( res != NULL ) && ( res->ai_addr != NULL ) )
+        {
+            *ip = res->ai_addr->sin_address.ulIP_IPv4;      /* network-order IPv4 */
+        }
+        if( res != NULL )
+        {
+            FreeRTOS_freeaddrinfo( res );
+        }
+    }
     return ( *ip != 0U );
 }
 
@@ -242,6 +263,14 @@ int sntp_sync_once( void )
     if( st == SntpSuccess )
     {
         st = Sntp_ReceiveTimeResponse( &ctx, SNTP_RECV_BLOCK_MS );   /* sntp_set_time sets the clock */
+        if( st != SntpSuccess )
+        {
+            log_error( "[SNTP] no/invalid response from %s (Sntp err %d)", s_env_server_name, ( int ) st );
+        }
+    }
+    else
+    {
+        log_error( "[SNTP] send/resolve failed for %s (Sntp err %d)", s_env_server_name, ( int ) st );
     }
     FreeRTOS_closesocket( netctx.sock );
     rc = ( st == SntpSuccess ) ? 0 : -2;
