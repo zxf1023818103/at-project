@@ -22,6 +22,7 @@
 #include "FreeRTOS_IP.h"
 #include "FreeRTOS_Routing.h"     /* NetworkInterface_t / NetworkEndPoint_t / FillEndPoint */
 #include "FreeRTOS_DHCP.h"        /* eGetDHCPState / eNotUsingLeasedAddress: reject DHCP fallback-up */
+#include "NetworkBufferManagement.h"  /* pxGetNetworkBufferWithDescriptor: hand-crafted MLDv2 report TX */
 #include "backoff_algorithm.h"    /* truncated exp backoff-with-jitter for the WiFi reconnect loop */
 #include "at_log.h"                  /* rxi log.c: log_info / log_error (replaces printf / DiagPrintf) */
 #include "log_lock.h"             /* log_lock_init: FreeRTOS-mutex thread-safety for the logger */
@@ -340,6 +341,108 @@ static int ipv6_global_set( void )
         }
     }
     return 0;
+}
+
+/* The fe80:: link-local endpoint (with its valid address), or NULL. */
+static NetworkEndPoint_t * ipv6_linklocal_endpoint( void )
+{
+    NetworkEndPoint_t * px;
+    for( px = FreeRTOS_FirstEndPoint( NULL ); px != NULL; px = FreeRTOS_NextEndPoint( NULL, px ) )
+    {
+        const uint8_t * a = px->ipv6_settings.xIPAddress.ucBytes;
+        if( ( px->bits.bIPv6 != 0 ) && ( a[ 0 ] == 0xfeU ) && ( ( a[ 1 ] & 0xc0U ) == 0x80U ) )
+        {
+            return px;
+        }
+    }
+    return NULL;
+}
+
+/* IPv6 + MLD-snooping interop. The router's bridge does MLD snooping: it forwards an IPv6 multicast
+ * group only to ports that announced membership via MLD. FreeRTOS+TCP has no MLD, so the bridge never
+ * learns we listen on our solicited-node group and drops the router's Neighbor Solicitation for us ->
+ * the router can't resolve our MAC -> inbound ping is 100% loss. (The device DOES receive multicast and
+ * answers NS fine - proven: ping works the instant the bridge's MLD snooping is disabled.) Fix:
+ * periodically emit an MLDv2 Multicast Listener Report announcing the solicited-node + all-nodes groups
+ * so the snooping bridge forwards the NS (and the router's RAs) to us. Hand-crafted (FreeRTOS+TCP has no
+ * MLD): IPv6 + a Hop-by-Hop Router-Alert option (mandatory for MLD) + ICMPv6 type 143, to ff02::16. */
+static uint16_t icmpv6_checksum( const uint8_t * src, const uint8_t * dst, const uint8_t * msg, uint16_t len )
+{
+    uint32_t sum = 0;
+    int i;
+    for( i = 0; i < 16; i += 2 ) { sum += ( ( uint32_t ) src[ i ] << 8 ) | src[ i + 1 ]; }
+    for( i = 0; i < 16; i += 2 ) { sum += ( ( uint32_t ) dst[ i ] << 8 ) | dst[ i + 1 ]; }
+    sum += len;          /* upper-layer length (high 16 bits are 0 here) */
+    sum += 58U;          /* next header = ICMPv6 */
+    for( i = 0; ( i + 1 ) < ( int ) len; i += 2 ) { sum += ( ( uint32_t ) msg[ i ] << 8 ) | msg[ i + 1 ]; }
+    if( ( len & 1U ) != 0U ) { sum += ( uint32_t ) msg[ len - 1 ] << 8; }
+    while( ( sum >> 16 ) != 0U ) { sum = ( sum & 0xffffU ) + ( sum >> 16 ); }
+    return ( uint16_t ) ( ~sum );
+}
+
+static void send_mld_report( void )
+{
+    NetworkEndPoint_t *          px = ipv6_linklocal_endpoint();
+    NetworkBufferDescriptor_t *  pxBuf;
+    static const uint8_t FF02_16[ 16 ] = { 0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x16 };
+    const uint16_t icmp_len = 8U + 20U * 2U;   /* MLDv2 hdr(8) + 2 group records(20 each) */
+    const uint16_t plen     = 8U + icmp_len;   /* Hop-by-Hop(8) + ICMPv6 */
+    const uint16_t total    = 14U + 40U + plen;
+    const uint8_t * ll;
+    uint8_t *       b;
+    uint16_t        ck;
+
+    if( ( px == NULL ) || ( px->pxNetworkInterface == NULL ) ) { return; }
+    pxBuf = pxGetNetworkBufferWithDescriptor( total, 0 );
+    if( pxBuf == NULL ) { return; }
+    ll = px->ipv6_settings.xIPAddress.ucBytes;
+    b  = pxBuf->pucEthernetBuffer;
+    ( void ) memset( b, 0, total );
+
+    /* Ethernet: dst 33:33:00:00:00:16, src our MAC, ethertype IPv6 */
+    b[ 0 ] = 0x33; b[ 1 ] = 0x33; b[ 5 ] = 0x16;
+    ( void ) memcpy( &b[ 6 ], px->xMACAddress.ucBytes, 6 );
+    b[ 12 ] = 0x86; b[ 13 ] = 0xdd;
+    /* IPv6: ver 6, payload len, next=Hop-by-Hop(0), hop limit 1, src LL, dst ff02::16 */
+    b[ 14 ] = 0x60;
+    b[ 18 ] = ( uint8_t ) ( plen >> 8 ); b[ 19 ] = ( uint8_t ) plen;
+    b[ 20 ] = 0; b[ 21 ] = 1;
+    ( void ) memcpy( &b[ 22 ], ll, 16 );
+    ( void ) memcpy( &b[ 38 ], FF02_16, 16 );
+    /* Hop-by-Hop: next=ICMPv6(58), len 0; Router-Alert(type5,len2,val0=MLD); PadN(type1,len0) */
+    b[ 54 ] = 58; b[ 56 ] = 5; b[ 57 ] = 2; b[ 60 ] = 1;
+    /* ICMPv6 MLDv2 report @62: type 143, code 0, cksum@64-65, reserved, num records=2 @68-69 */
+    b[ 62 ] = 143; b[ 69 ] = 2;
+    /* record 0 @70: CHANGE_TO_EXCLUDE(4), 0 sources, solicited-node group ff02::1:ffXX:XXXX */
+    b[ 70 ] = 4; b[ 74 ] = 0xff; b[ 75 ] = 0x02; b[ 85 ] = 0x01; b[ 86 ] = 0xff;
+    b[ 87 ] = ll[ 13 ]; b[ 88 ] = ll[ 14 ]; b[ 89 ] = ll[ 15 ];
+    /* record 1 @90: CHANGE_TO_EXCLUDE(4), 0 sources, all-nodes ff02::1 */
+    b[ 90 ] = 4; b[ 94 ] = 0xff; b[ 95 ] = 0x02; b[ 109 ] = 0x01;
+    /* ICMPv6 checksum over the pseudo-header + the ICMPv6 message @62 */
+    ck = icmpv6_checksum( ll, FF02_16, &b[ 62 ], icmp_len );
+    b[ 64 ] = ( uint8_t ) ( ck >> 8 ); b[ 65 ] = ( uint8_t ) ck;
+
+    pxBuf->xDataLength = total;
+    pxBuf->pxEndPoint  = px;
+    ( void ) px->pxNetworkInterface->pfOutput( px->pxNetworkInterface, pxBuf, pdTRUE );
+}
+
+static void ipv6_mld_task( void * pvArg )
+{
+    int n = 0;
+    ( void ) pvArg;
+    for( ; ; )
+    {
+        if( wifi_link_up() && ( ipv6_linklocal_endpoint() != NULL ) )
+        {
+            send_mld_report();
+            if( ++n == 1 )
+            {
+                log_info( "[KM4] IPv6 MLDv2 report -> ff02::16 (join solicited-node + all-nodes; snooping bridge now forwards NS/RA)" );
+            }
+        }
+        vTaskDelay( pdMS_TO_TICKS( ( n < 3 ) ? 2000 : 60000 ) );   /* burst 3x@2s, then 60s upkeep */
+    }
 }
 #endif /* ipconfigUSE_IPv6 */
 
@@ -798,6 +901,9 @@ static void wifi_bringup_thread( void *param )
      * exists. (The SDK's wifi_conf.c also calls netif_create_ip6_linklocal_address() from wifi_on, but
      * that runs before the interface is registered; this call is the effective one.) */
     { extern void amebad_ipv6_init( void ); amebad_ipv6_init(); }
+    /* Periodic MLDv2 reports (see ipv6_mld_task) so the router's MLD-snooping bridge forwards the
+     * solicited-node NS / the router's RAs to us - otherwise inbound IPv6 is unreachable. */
+    ( void ) xTaskCreate( ipv6_mld_task, "ip6mld", 512, NULL, tskIDLE_PRIORITY + 1, NULL );
 #endif
     log_info( "[KM4] FreeRTOS_IPInit_Multi..." );
     FreeRTOS_IPInit_Multi();
