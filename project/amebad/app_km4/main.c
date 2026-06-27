@@ -23,6 +23,7 @@
 #include "FreeRTOS_Routing.h"     /* NetworkInterface_t / NetworkEndPoint_t / FillEndPoint */
 #include "FreeRTOS_DHCP.h"        /* eGetDHCPState / eNotUsingLeasedAddress: reject DHCP fallback-up */
 #include "NetworkBufferManagement.h"  /* pxGetNetworkBufferWithDescriptor: hand-crafted MLDv2 report TX */
+#include "FreeRTOS_ND.h"              /* vRAProcess: restart SLAAC once the MLD join lets RAs through */
 #include "backoff_algorithm.h"    /* truncated exp backoff-with-jitter for the WiFi reconnect loop */
 #include "at_log.h"                  /* rxi log.c: log_info / log_error (replaces printf / DiagPrintf) */
 #include "log_lock.h"             /* log_lock_init: FreeRTOS-mutex thread-safety for the logger */
@@ -358,6 +359,20 @@ static NetworkEndPoint_t * ipv6_linklocal_endpoint( void )
     return NULL;
 }
 
+/* The bWantRA global (SLAAC) endpoint, or NULL. */
+static NetworkEndPoint_t * ipv6_ra_endpoint( void )
+{
+    NetworkEndPoint_t * px;
+    for( px = FreeRTOS_FirstEndPoint( NULL ); px != NULL; px = FreeRTOS_NextEndPoint( NULL, px ) )
+    {
+        if( ( px->bits.bIPv6 != 0 ) && ( px->bits.bWantRA != 0 ) )
+        {
+            return px;
+        }
+    }
+    return NULL;
+}
+
 /* IPv6 + MLD-snooping interop. The router's bridge does MLD snooping: it forwards an IPv6 multicast
  * group only to ports that announced membership via MLD. FreeRTOS+TCP has no MLD, so the bridge never
  * learns we listen on our solicited-node group and drops the router's Neighbor Solicitation for us ->
@@ -380,12 +395,15 @@ static uint16_t icmpv6_checksum( const uint8_t * src, const uint8_t * dst, const
     return ( uint16_t ) ( ~sum );
 }
 
-static void send_mld_report( void )
+/* Emit one MLDv2 report (a single group record, CHANGE_TO_EXCLUDE = join) for `group`, to ff02::16.
+ * One group per report (vs a multi-record report) because RouterOS's MLD snooping only honours the
+ * first record - a 3-record report only registered the first group. */
+static void send_one_mld( const uint8_t group[ 16 ] )
 {
     NetworkEndPoint_t *          px = ipv6_linklocal_endpoint();
     NetworkBufferDescriptor_t *  pxBuf;
     static const uint8_t FF02_16[ 16 ] = { 0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x16 };
-    const uint16_t icmp_len = 8U + 20U * 2U;   /* MLDv2 hdr(8) + 2 group records(20 each) */
+    const uint16_t icmp_len = 8U + 20U;        /* MLDv2 hdr(8) + 1 group record(20) */
     const uint16_t plen     = 8U + icmp_len;   /* Hop-by-Hop(8) + ICMPv6 */
     const uint16_t total    = 14U + 40U + plen;
     const uint8_t * ll;
@@ -399,32 +417,47 @@ static void send_mld_report( void )
     b  = pxBuf->pucEthernetBuffer;
     ( void ) memset( b, 0, total );
 
-    /* Ethernet: dst 33:33:00:00:00:16, src our MAC, ethertype IPv6 */
-    b[ 0 ] = 0x33; b[ 1 ] = 0x33; b[ 5 ] = 0x16;
-    ( void ) memcpy( &b[ 6 ], px->xMACAddress.ucBytes, 6 );
-    b[ 12 ] = 0x86; b[ 13 ] = 0xdd;
-    /* IPv6: ver 6, payload len, next=Hop-by-Hop(0), hop limit 1, src LL, dst ff02::16 */
-    b[ 14 ] = 0x60;
-    b[ 18 ] = ( uint8_t ) ( plen >> 8 ); b[ 19 ] = ( uint8_t ) plen;
-    b[ 20 ] = 0; b[ 21 ] = 1;
-    ( void ) memcpy( &b[ 22 ], ll, 16 );
-    ( void ) memcpy( &b[ 38 ], FF02_16, 16 );
-    /* Hop-by-Hop: next=ICMPv6(58), len 0; Router-Alert(type5,len2,val0=MLD); PadN(type1,len0) */
-    b[ 54 ] = 58; b[ 56 ] = 5; b[ 57 ] = 2; b[ 60 ] = 1;
-    /* ICMPv6 MLDv2 report @62: type 143, code 0, cksum@64-65, reserved, num records=2 @68-69 */
-    b[ 62 ] = 143; b[ 69 ] = 2;
-    /* record 0 @70: CHANGE_TO_EXCLUDE(4), 0 sources, solicited-node group ff02::1:ffXX:XXXX */
-    b[ 70 ] = 4; b[ 74 ] = 0xff; b[ 75 ] = 0x02; b[ 85 ] = 0x01; b[ 86 ] = 0xff;
-    b[ 87 ] = ll[ 13 ]; b[ 88 ] = ll[ 14 ]; b[ 89 ] = ll[ 15 ];
-    /* record 1 @90: CHANGE_TO_EXCLUDE(4), 0 sources, all-nodes ff02::1 */
-    b[ 90 ] = 4; b[ 94 ] = 0xff; b[ 95 ] = 0x02; b[ 109 ] = 0x01;
-    /* ICMPv6 checksum over the pseudo-header + the ICMPv6 message @62 */
+    b[ 0 ] = 0x33; b[ 1 ] = 0x33; b[ 5 ] = 0x16;                      /* Eth dst 33:33:00:00:00:16 */
+    ( void ) memcpy( &b[ 6 ], px->xMACAddress.ucBytes, 6 );           /* Eth src our MAC */
+    b[ 12 ] = 0x86; b[ 13 ] = 0xdd;                                  /* ethertype IPv6 */
+    b[ 14 ] = 0x60;                                                  /* IPv6 ver 6 */
+    b[ 18 ] = ( uint8_t ) ( plen >> 8 ); b[ 19 ] = ( uint8_t ) plen;  /* payload length */
+    b[ 20 ] = 0; b[ 21 ] = 1;                                        /* next=Hop-by-Hop, hop limit 1 */
+    ( void ) memcpy( &b[ 22 ], ll, 16 );                             /* src LL */
+    ( void ) memcpy( &b[ 38 ], FF02_16, 16 );                        /* dst ff02::16 */
+    b[ 54 ] = 58; b[ 56 ] = 5; b[ 57 ] = 2; b[ 60 ] = 1;            /* Hop-by-Hop Router-Alert(MLD)+PadN */
+    b[ 62 ] = 143; b[ 69 ] = 1;                                      /* MLDv2 report, 1 record */
+    b[ 70 ] = 4;                                                     /* record: CHANGE_TO_EXCLUDE, 0 src */
+    ( void ) memcpy( &b[ 74 ], group, 16 );                          /* multicast address */
     ck = icmpv6_checksum( ll, FF02_16, &b[ 62 ], icmp_len );
     b[ 64 ] = ( uint8_t ) ( ck >> 8 ); b[ 65 ] = ( uint8_t ) ck;
 
     pxBuf->xDataLength = total;
     pxBuf->pxEndPoint  = px;
     ( void ) px->pxNetworkInterface->pfOutput( px->pxNetworkInterface, pxBuf, pdTRUE );
+}
+
+/* Announce our IPv6 multicast group memberships (one MLD report each) so the snooping bridge forwards
+ * the matching traffic to us: solicited-node (Neighbor Solicitations), all-nodes ff02::1 (Router
+ * Advertisements -> SLAAC global), and ff02::fb (v6 mDNS). */
+static void send_mld_report( void )
+{
+    NetworkEndPoint_t *  px = ipv6_linklocal_endpoint();
+    const uint8_t *      ll;
+    uint8_t              solnode[ 16 ]  = { 0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01, 0xff, 0, 0, 0 };
+    static const uint8_t allnodes[ 16 ] = { 0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01 };
+    static const uint8_t mdns[ 16 ]     = { 0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xfb };
+
+    if( px == NULL ) { return; }
+    ll = px->ipv6_settings.xIPAddress.ucBytes;
+    solnode[ 13 ] = ll[ 13 ]; solnode[ 14 ] = ll[ 14 ]; solnode[ 15 ] = ll[ 15 ];
+    /* Space the three sends: pfOutput releases the buffer only after the async driver TX, so three
+     * back-to-back pxGetNetworkBufferWithDescriptor() can starve the pool and silently drop the 2nd/3rd. */
+    send_one_mld( solnode );
+    vTaskDelay( pdMS_TO_TICKS( 500 ) );
+    send_one_mld( allnodes );
+    vTaskDelay( pdMS_TO_TICKS( 500 ) );
+    send_one_mld( mdns );
 }
 
 static void ipv6_mld_task( void * pvArg )
@@ -438,7 +471,18 @@ static void ipv6_mld_task( void * pvArg )
             send_mld_report();
             if( ++n == 1 )
             {
-                log_info( "[KM4] IPv6 MLDv2 report -> ff02::16 (join solicited-node + all-nodes; snooping bridge now forwards NS/RA)" );
+                log_info( "[KM4] IPv6 MLDv2 report -> ff02::16 (join solicited-node + all-nodes + mDNS; snooping bridge now forwards NS/RA/mDNS)" );
+            }
+            else if( n == 2 )
+            {
+                /* The bridge has learned our groups now -> re-run SLAAC so the router's RA reaches us and
+                 * the global address forms (the first RA process timed out before the MLD join). */
+                NetworkEndPoint_t * ep = ipv6_ra_endpoint();
+                if( ep != NULL ) { vRAProcess( pdTRUE, ep ); }
+            }
+            else if( n == 3 )
+            {
+                log_ipv6( "after SLAAC restart" );   /* should now show a real-prefix global */
             }
         }
         vTaskDelay( pdMS_TO_TICKS( ( n < 3 ) ? 2000 : 60000 ) );   /* burst 3x@2s, then 60s upkeep */

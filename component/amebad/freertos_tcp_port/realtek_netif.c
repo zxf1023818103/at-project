@@ -22,6 +22,10 @@
 #include "FreeRTOS_IP_Private.h"      /* IPStackEvent_t / xSendEventStructToIPTask */
 #include "FreeRTOS_Routing.h"         /* NetworkInterface_t / FreeRTOS_AddNetworkInterface */
 #include "NetworkBufferManagement.h"
+#include <stdlib.h>                   /* getenv (HOSTNAME) */
+#include <stdio.h>                    /* snprintf (hostname default) */
+#include <string.h>                   /* strncpy / strlen */
+#include <strings.h>                  /* strcasecmp / strncasecmp (mDNS name match) */
 
 /* ---- Realtek driver glue (mirror of component/amebad/wlan/osdep/lwip_intf.h) -- */
 struct eth_drv_sg { unsigned int buf; unsigned int len; };
@@ -370,7 +374,47 @@ uint32_t ulApplicationGetNextSequenceNumber( uint32_t ulSourceAddress,
     return prvRand32();
 }
 
+/* Hostname for mDNS (<hostname>.local) / DHCP. The HOSTNAME env var (KV-backed, console-settable) wins;
+ * otherwise default to "amebad_<BLE-MAC last 3 bytes>" (efuse 0x190), e.g. amebad_b70edb. */
 const char * pcApplicationHostnameHook( void )
 {
-    return "amebad";
+    static char dflt[ 24 ] = { 0 };
+    static char host[ 32 ];
+    const char * env;
+
+    if( dflt[ 0 ] == '\0' )
+    {
+        uint8_t mac[ 6 ] = { 0 };
+        extern int efuse_logical_read( uint16_t addr, uint16_t size, uint8_t * pbuf );
+        ( void ) efuse_logical_read( 0x190U, 6U, mac );   /* 0x190 = BT/BLE MAC */
+        ( void ) snprintf( dflt, sizeof( dflt ), "amebad_%02x%02x%02x", mac[ 3 ], mac[ 4 ], mac[ 5 ] );
+    }
+
+    env = getenv( "HOSTNAME" );
+    if( ( env != NULL ) && ( env[ 0 ] != '\0' ) )
+    {
+        ( void ) strncpy( host, env, sizeof( host ) - 1U );
+        host[ sizeof( host ) - 1U ] = '\0';
+        return host;
+    }
+    return dflt;
+}
+
+/* mDNS / LLMNR responder: answer a query iff its name is ours - "<hostname>" or "<hostname>.local"
+ * (case-insensitive, per RFC 6762). pcApplicationHostnameHook() is the live hostname (HOSTNAME env or
+ * the amebad_<ble> default). */
+BaseType_t xApplicationDNSQueryHook( const char * pcName )
+{
+    const char * h  = pcApplicationHostnameHook();
+    size_t       hl = strlen( h );
+
+    if( strcasecmp( pcName, h ) == 0 )
+    {
+        return pdPASS;
+    }
+    if( ( strncasecmp( pcName, h, hl ) == 0 ) && ( strcasecmp( &pcName[ hl ], ".local" ) == 0 ) )
+    {
+        return pdPASS;
+    }
+    return pdFAIL;
 }

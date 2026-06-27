@@ -41,6 +41,7 @@
 #define ipconfigDHCP_REGISTER_HOSTNAME          0
 #define ipconfigUSE_DNS                         1       /* FreeRTOS_gethostbyname: resolve the AWS IoT endpoint (tcp_sockets_wrapper) */
 #define ipconfigUSE_LLMNR                       0
+#define ipconfigUSE_MDNS                        1       /* <hostname>.local responder (A + AAAA), via pcApplicationHostnameHook */
 #define ipconfigUSE_NBNS                        0
 
 #define ipconfigUSE_NETWORK_EVENT_HOOK          1       /* vApplicationIPNetworkEventHook -> print IP */
