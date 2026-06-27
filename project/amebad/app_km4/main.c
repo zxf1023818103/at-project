@@ -458,6 +458,24 @@ static void send_mld_report( void )
     send_one_mld( allnodes );
     vTaskDelay( pdMS_TO_TICKS( 500 ) );
     send_one_mld( mdns );
+
+    /* Once the SLAAC global has formed, join ITS solicited-node group too (the global has a different,
+     * random IID -> a different ff02::1:ffXX:XXXX group than the link-local), so the router can resolve
+     * and reach the global address, not just the link-local. */
+    {
+        NetworkEndPoint_t * pxg = ipv6_ra_endpoint();
+        if( pxg != NULL )
+        {
+            const uint8_t * g = pxg->ipv6_settings.xIPAddress.ucBytes;
+            if( ( g[ 0 ] | g[ 1 ] ) != 0U )   /* a real (non-zero-prefix) global */
+            {
+                uint8_t gsol[ 16 ] = { 0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01, 0xff, 0, 0, 0 };
+                gsol[ 13 ] = g[ 13 ]; gsol[ 14 ] = g[ 14 ]; gsol[ 15 ] = g[ 15 ];
+                vTaskDelay( pdMS_TO_TICKS( 500 ) );
+                send_one_mld( gsol );
+            }
+        }
+    }
 }
 
 static void ipv6_mld_task( void * pvArg )
