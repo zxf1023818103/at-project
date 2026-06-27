@@ -213,6 +213,9 @@ BaseType_t TCP_Sockets_Connect( Socket_t * pTcpSocket,
                     ( res != NULL ) && ( res->ai_addr != NULL ) )
                 {
                     ( void ) memcpy( &( resolved[ uxIdx ] ), res->ai_addr, sizeof( resolved[ uxIdx ] ) );
+                    /* FreeRTOS_getaddrinfo sets res->ai_family but leaves the embedded sockaddr's
+                     * sin_family at 0; FreeRTOS_socket( 0 ) then fails. Carry the queried family in. */
+                    resolved[ uxIdx ].sin_family = ( uint8_t ) xFamily[ uxIdx ];
                     have[ uxIdx ] = pdTRUE;
                 }
                 if( res != NULL ) { FreeRTOS_freeaddrinfo( res ); }
@@ -245,8 +248,17 @@ BaseType_t TCP_Sockets_Connect( Socket_t * pTcpSocket,
 
         resolved[ uxIdx ].sin_port = FreeRTOS_htons( port );
 
-        LogInfo( ( "Connecting to %s over %s ...", pHostName,
-                   ( resolved[ uxIdx ].sin_family == FREERTOS_AF_INET6 ) ? "IPv6" : "IPv4" ) );
+        if( resolved[ uxIdx ].sin_family == FREERTOS_AF_INET6 )
+        {
+            LogInfo( ( "Connecting to %s over IPv6 ...", pHostName ) );
+        }
+        else
+        {
+            uint32_t _ip = resolved[ uxIdx ].sin_address.ulIP_IPv4;   /* network order */
+            LogInfo( ( "Connecting to %s [%u.%u.%u.%u] over IPv4 ...", pHostName,
+                       ( unsigned ) ( _ip & 0xffU ),         ( unsigned ) ( ( _ip >> 8 ) & 0xffU ),
+                       ( unsigned ) ( ( _ip >> 16 ) & 0xffU ), ( unsigned ) ( ( _ip >> 24 ) & 0xffU ) ) );
+        }
 
         if( FreeRTOS_connect( tcpSocket, &( resolved[ uxIdx ] ), sizeof( resolved[ uxIdx ] ) ) == 0 )
         {
