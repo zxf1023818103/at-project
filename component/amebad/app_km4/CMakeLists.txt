@@ -260,7 +260,7 @@ endif()
 # AT-command / monitor shell libs: linked by default, dropped from the QUIC
 # image (shell init is gated off in main.c under AT_PROJECT_QUIC). Removing them
 # changes the KM4 image2 XIP relative layout (boot-hang dodge) and shrinks it.
-set(_diag_grp ",amebad_at_cmd,amebad_monitor,amebad_monitor_common,freertos_cli")
+set(_diag_grp ",amebad_monitor,amebad_monitor_common,freertos_cli")
 
 set(_quic_grp "")
 if(AMEBAD_ENABLE_QUIC)

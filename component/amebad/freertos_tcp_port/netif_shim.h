@@ -42,6 +42,15 @@
 #define NETIF_MAX_HWADDR_LEN 6
 #endif
 
+/* WLAN VIF interface names (formerly in the deleted wifi/main.h): wifi_conf.c + every
+ * wifi_get_setting()/wifi_*(WLANx_NAME, ...) caller needs them. */
+#ifndef WLAN0_NAME
+#define WLAN0_NAME  "wlan0"
+#endif
+#ifndef WLAN1_NAME
+#define WLAN1_NAME  "wlan1"
+#endif
+
 /* Layout-compatible minimal netif — only the two fields the driver touches are
  * named; everything else is padding to the exact 72-byte array stride. */
 struct netif {
@@ -70,8 +79,6 @@ void wifi_rx_beacon_hdl( char* buf, int buf_len, int flags, void* userdata);
 void rtw_wakelock_timeout(u32 timeoutms);
 
 /* Exported functions ------------------------------------------------------- */
-void LwIP_Init(void);
-uint8_t LwIP_DHCP(uint8_t idx, uint8_t dhcp_state);
 void LwIP_ReleaseIP(uint8_t idx);
 uint8_t* LwIP_GetMAC(struct netif *pnetif);
 uint8_t* LwIP_GetIP(struct netif *pnetif);

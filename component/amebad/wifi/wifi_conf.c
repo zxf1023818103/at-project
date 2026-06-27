@@ -1,7 +1,6 @@
 //----------------------------------------------------------------------------//
 //#include <flash/stm32_flash.h>
 #if !defined(CONFIG_MBED_ENABLED) && !defined(CONFIG_PLATFOMR_CUSTOMER_RTOS)
-#include "main.h"
 #include <netif_shim.h>   /* lwip-free: vendored struct netif + LwIP_*/netif_* decls */
 #include "wifi_fast_connect.h"  /* wlan-lib fast-connect API: struct wlan_fast_reconnect + p_*_callback / psk_* (lib_wlan.a) */
 /* lwip removed: <lwip/sockets.h> (keepalive offload — gated off below),
@@ -1999,7 +1998,6 @@ int wifi_off(void)
 	//TODO
 #else
 	dhcps_deinit();
-	LwIP_DHCP(0, DHCP_STOP);
 	netif_set_down(&xnetif[0]);
 	netif_set_down(&xnetif[1]);
 #endif
@@ -2046,7 +2044,6 @@ int wifi_off_fastly(void)
 	//TODO
 #else
 	dhcps_deinit();
-	LwIP_DHCP(0, DHCP_STOP);
 #endif	
 #endif	
 	//RTW_API_INFO("\n\rDeinitializing WIFI ...");
@@ -3740,8 +3737,6 @@ int wifi_restart_ap(
 									NULL);	
 #if defined(CONFIG_DHCP_CLIENT) && CONFIG_DHCP_CLIENT
 		if(ret == RTW_SUCCESS) {
-			/* Start DHCPClient */
-			LwIP_DHCP(0, DHCP_START);
 		}
 #endif
 	}
@@ -3852,7 +3847,6 @@ static void wifi_autoreconnect_thread(void *param)
 			else
 #endif
 			{
-				LwIP_DHCP(0, DHCP_START);
 #if LWIP_AUTOIP
 #if CONFIG_BRIDGE
 				uint8_t *ip = LwIP_GetIP(&xnetif[NET_IF_NUM - 1]);

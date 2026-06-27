@@ -3,7 +3,6 @@
 #include "task.h"
 #include "serial_api.h"
 #include "semphr.h"
-#include "log_service.h"
 #include <stdbool.h>
 #include "hci_uart.h"
 #include "osdep_service.h"

@@ -167,7 +167,6 @@ target_link_libraries(amebad_sdk_includes INTERFACE
     amebad_monitor_headers        # shell / monitor_rom / rtl_trace
     amebad_pmu_headers            # rtl8721d_freertos_pmu.h (pulled by ameba_soc.h)
     amebad_syscall_port_headers   # time64.h
-    amebad_at_cmd_headers         # log_service.h / atcmd_*.h
     amebad_wlan_headers           # autoconf.h (global Kconfig)
     amebad_mbedtls_headers        # shared upstream mbedtls/version.h
 )
@@ -245,7 +244,6 @@ add_subdirectory(freertos_port)      # AmebaD heap_5 memory-map glue lib `freert
 add_subdirectory(monitor)            # chip-gated (image2 shell/monitor)
 add_subdirectory(osdep)              # KM4-gated internally (osdep/os abstraction)
 add_subdirectory(mbed)               # KM4-gated: flattened mbed HAL (amebad_mbed: flash_api.c + headers), consumed by wifi
-add_subdirectory(at_cmd)             # KM4-gated internally (basic AT log/command service)
 add_subdirectory(mbedtls_rom)        # KM4-gated: headers to call ROM mbedTLS 2.4.0 as SW (no build)
 add_subdirectory(mbedtls_port)            # KM4-gated: AmebaD port of upstream mbedTLS v3.6.4 (config + FreeRTOS threading-alt + entropy) attached onto mbedcrypto/mbedx509 (added by component/CMakeLists.txt); umbrella `amebad_mbedtls`
 # FreeRTOS+TCP: the portable core stack + config (freertos-plus-tcp_config) is added by
