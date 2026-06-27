@@ -39,6 +39,7 @@
 #include "FreeRTOS_IP.h"
 #include "FreeRTOS_Sockets.h"
 #include "FreeRTOS_DNS.h"
+#include "FreeRTOS_Routing.h"
 
 /* Logging configuration for the Sockets. */
 #ifndef LIBRARY_LOG_NAME
@@ -86,6 +87,35 @@ extern void vLoggingPrintf( const char * pcFormatString,
  *
  * @return Non-zero value on error, 0 on success.
  */
+/* True when this device has a routable (global, non-link-local) IPv6 address -- i.e. an IPv6
+ * connection has a chance of succeeding. Used to skip the IPv6 attempt on IPv4-only links so it
+ * does not block ~20 s timing out before the IPv4 fallback. */
+static BaseType_t prvHasGlobalIPv6( void )
+{
+    #if ( ipconfigUSE_IPv6 != 0 )
+        NetworkEndPoint_t * px;
+
+        for( px = FreeRTOS_FirstEndPoint( NULL ); px != NULL; px = FreeRTOS_NextEndPoint( NULL, px ) )
+        {
+            const uint8_t * a = px->ipv6_settings.xIPAddress.ucBytes;
+
+            if( px->bits.bIPv6 == 0U )
+            {
+                continue;
+            }
+            if( ( a[ 0 ] == 0xfeU ) && ( ( a[ 1 ] & 0xc0U ) == 0x80U ) )
+            {
+                continue;   /* link-local fe80::/10 -- not routable off-link */
+            }
+            if( ( a[ 0 ] | a[ 1 ] ) != 0U )
+            {
+                return pdTRUE;   /* non-zero, non-link-local = a global address */
+            }
+        }
+    #endif /* ipconfigUSE_IPv6 */
+    return pdFALSE;
+}
+
 BaseType_t TCP_Sockets_Connect( Socket_t * pTcpSocket,
                                 const char * pHostName,
                                 uint16_t port,
@@ -152,6 +182,15 @@ BaseType_t TCP_Sockets_Connect( Socket_t * pTcpSocket,
     for( uxIdx = 0; uxIdx < 2U; uxIdx++ )
     {
         BaseType_t xRc;
+
+        /* Skip the IPv6 (AAAA) attempt when there is no routable global IPv6 address on this link:
+         * otherwise the IPv6 connect below blocks ~20 s timing out before the IPv4 fallback (e.g. a
+         * network that resolves AAAA but has no IPv6 internet route). */
+        if( ( xFamily[ uxIdx ] == FREERTOS_AF_INET6 ) && ( prvHasGlobalIPv6() == pdFALSE ) )
+        {
+            continue;
+        }
+
         ( void ) memset( &hints, 0, sizeof( hints ) );
         hints.ai_family = xFamily[ uxIdx ];
         xRc = FreeRTOS_getaddrinfo( pHostName, NULL, &hints, &( pxOrder[ uxIdx ] ) );
