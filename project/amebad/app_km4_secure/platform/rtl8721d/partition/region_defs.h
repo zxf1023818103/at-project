@@ -1,7 +1,7 @@
 /*
  * RTL8721D (Ameba-D) KM4 — TF-M region definitions (BL2 OFF / TF-M = IMG3).
  *
- * Memory map (from component/amebad/app_km4/rlx8721d_layout_is.ld + hal_platform.h):
+ * Memory map (from project/amebad/app_km4/rlx8721d_layout_is.ld + hal_platform.h):
  *   SRAM  0x10000000..0x10080000 (512 KB). Low 0x10005000 reserved by ROM
  *         (ROMBSS/RSVD/MSP_NS). Attribution is by ADDRESS (no separate S/NS
  *         alias on SRAM): NS in the low range, Secure in the high range.
@@ -84,7 +84,7 @@
  * computes it at runtime and programs the RSIP entry, so no S_CODE_FLASH_PHYS. */
 
 /* ---- Non-secure code : NS app ----
- * Bring-up NSPE is a tiny RAM-resident NS stub (component/amebad/app_km4_secure/ns_stub),
+ * Bring-up NSPE is a tiny RAM-resident NS stub (project/amebad/app_km4_secure/ns_stub),
  * copied by the bootloader to NS SRAM. SPM reads its vector table here (MSP=[0],
  * entry=[1]) and BLXNS-es to it. 0x10010000 is inside the SAU Non-Secure SRAM
  * region (0x10000000..S_CODE_START-1) and is 0x400-aligned for VTOR_NS. */

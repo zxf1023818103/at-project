@@ -4,7 +4,7 @@ Minimal QUIC handshake server for the AmebaD ngtcp2 + wolfSSL client self-test.
 
 Listens on UDP 4433 (all interfaces), advertises ALPN "hq-interop", and logs
 every QUIC handshake completion / teardown. It does no application protocol —
-the device-side test (component/amebad/app_km4/quic_test.c) only proves the QUIC
+the device-side test (project/amebad/app_km4/quic_test.c) only proves the QUIC
 v1 + TLS 1.3 handshake, then sends CONNECTION_CLOSE.
 
 Run (after `sudo apt install -y python3-aioquic`):

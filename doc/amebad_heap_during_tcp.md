@@ -77,5 +77,5 @@
 ## 关键文件
 - 堆上报:临时仪表(已 revert),挂点 `app_km4/main.c` / `app_km0/main.c` 的
   `main()`(见上方 §方法 的任务体)。
-- 流量:`component/amebad/app_km4/iperf_client.c`(device→host TCP TX,常驻)。
+- 流量:`project/amebad/app_km4/iperf_client.c`(device→host TCP TX,常驻)。
 - 吞吐天花板背景:[[amebad_throughput_results]]

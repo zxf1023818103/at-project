@@ -22,5 +22,5 @@ target_link_libraries(amebad_lfs_port PUBLIC  littlefs lfs_config)
 target_link_libraries(amebad_lfs_port PRIVATE amebad_sdk_includes amebad_mbed)
 
 # (The LittleFS self-test gates that attach onto the shared lfs_config — VFS + C++ — moved to the
-# consumer that owns the options, component/amebad/app_km4, per littlefs_config's design comment.
+# consumer that owns the options, project/amebad/app_km4, per littlefs_config's design comment.
 # lfs_port stays a pure library: just the diskio callbacks + mount wrappers.)

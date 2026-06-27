@@ -16,7 +16,7 @@ MEMORY
 	XIPSYS (r) :			ORIGIN = 0x08003000, LENGTH = 0x1000	/* XIPSYS: 4K system data in flash */
 	KM4_BOOT (rx)  :		ORIGIN = 0x08004000+0x20, LENGTH = 0x02000-0x20	/* XIPBOOT: 8k, 32 Bytes resvd for header*/
 	/* CMAKE_PATCH: KM0_BOOT2 flash region for the optional KM0 2nd-stage
-	 * bootloader (component/amebad/bootloader_km0_2nd/). Only referenced
+	 * bootloader (project/amebad/bootloader_km0_2nd/). Only referenced
 	 * by boot_2nd.ld — stage 1's boot.ld ignores it, so adding this
 	 * region keeps stage 1 byte-identical. Overlaps KM0_IMG2 OTA1
 	 * (0x08006000) — enabling 2nd boot requires relocating OTA1

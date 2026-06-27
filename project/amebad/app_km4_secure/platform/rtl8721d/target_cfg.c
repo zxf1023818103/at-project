@@ -7,7 +7,7 @@
  * attributed, while the TF-M SPE regions stay Secure.
  *
  * The IDAU/SAU/NVIC programming mirrors the SDK's secure bootloader
- * (component/amebad/bootloader_km4/boot_trustzone_hp.c :: BOOT_RAM_TZCfg) — the
+ * (project/amebad/bootloader_km4/boot_trustzone_hp.c :: BOOT_RAM_TZCfg) — the
  * authoritative RTL8721D recipe — but the region table below reflects THIS port's
  * partition (region_defs.h) instead of the SDK's IMG3/RDP layout:
  *

@@ -8,7 +8,7 @@
 #
 # Sources and linker scripts are project-local copies of the SDK (flat in this
 # folder). Resync with the submodule when its pointer moves:
-#   diff -q component/amebad/bootloader_km4/boot_ram_hp.c \
+#   diff -q project/amebad/bootloader_km4/boot_ram_hp.c \
 #           platform/ameba-rtos-d/component/soc/realtek/amebad/bootloader/boot_ram_hp.c
 #
 # Headers + IFLAGS via amebad_sdk_includes (KM4 branch selects app_km4

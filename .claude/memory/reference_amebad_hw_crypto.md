@@ -11,7 +11,7 @@ metadata:
 
 事实链(实机 + 源码 `fwlib/crypto/rtl8721dhp_crypto_ram.c` 验证):
 - **没被 fuse 掉**:efuse probe(`EFUSE_PMAP_READ8` 读 0x1C0/0x1C1 安全配置 + 0x190 的 16B RSIP key)全是 0xFF = 空白未 provision 的开发片;silicon block 在。
-- **ROM API 在**:`CRYPTO_*` / `rtl_crypto_aes/des/3des/sha`(IPSEC 引擎)+ mbedtls 2.4.0(297 个函数)都在 ROM。symbol 地址在 `bootloader_km4/rlx8721d_rom_symbol_acut_boot.ld`,我抽成 `component/amebad/app_km4/rom_symbol_crypto.ld`(60 条 PROVIDE;CRYPTO_Init=0x10104a49、CRYPTO_Reset=0x10104829、rtl_crypto_aes_ecb_init=0x10103d19…)——该文件留在磁盘但**已从 build 撤线**。
+- **ROM API 在**:`CRYPTO_*` / `rtl_crypto_aes/des/3des/sha`(IPSEC 引擎)+ mbedtls 2.4.0(297 个函数)都在 ROM。symbol 地址在 `bootloader_km4/rlx8721d_rom_symbol_acut_boot.ld`,我抽成 `project/amebad/app_km4/rom_symbol_crypto.ld`(60 条 PROVIDE;CRYPTO_Init=0x10104a49、CRYPTO_Reset=0x10104829、rtl_crypto_aes_ecb_init=0x10103d19…)——该文件留在磁盘但**已从 build 撤线**。
 - **init 成功、首次跑 AES 挂死**:`rtl_cryptoEngine_init()`=`CRYPTO_Init(NULL)` 返回 0;但随后 `rtl_crypto_aes_ecb_*` 第一次进 process 路径就 hang(实机:打印 "init=0" 后静默)。
 - **机理**:`CRYPTO_Init`→`CRYPTO_Reset` 只对引擎基址做**纯写**(RST_ISR_CON/SWAP_BURST/DEBUG,DEBUG 含 ENGINE_CLK_EN|ARBITER_MODE),写被 buffer 吞掉所以"看起来成功";真正的**首次寄存器读**在 process 路径(`CRYPTO_ClearAllINT` 读 RST_ISR_CON、`CRYPTO_SetSrcDesc` 自旋读 SDSR)——读一个总线侧没起来的从设备→AHB 永不 ready→hang,软件 timeout 救不了。
 - 所有 ROM crypto 函数都用 `TrustZone_IsSecure()` 选基址:secure→`CRYPTOS_REG_BASE=0x50022000`,non-secure→`CRYPTO_REG_BASE=0x40022000`(注意:不是文档泛指的 0x5007/0x4007)。init 与 process 选址逻辑一致,所以**不是 init/use 基址错配**。

@@ -286,22 +286,12 @@ add_subdirectory(nimble_port)        # KM4-gated: NimBLE host stack (`nimble` li
 add_subdirectory(syscall_port)       # KM4-gated: AmebaD console backend (amebad_syscall_port OBJECT lib: console_loguart/lpuart) + vfs_lfs_mount via lfs_port
 add_subdirectory(lfs_port)           # KM4-gated: AmebaD flash adapter for LittleFS (amebad_lfs_port; diskio over flash_api + mount) + attaches the AmebaD LittleFS self-test gates onto lfs_config
 
-add_subdirectory(image_tool)         # defines amebad_make_{boot,image2}_all_bin*(...)
-                                     #   + amebad_make_image_all_bin() (-> target
-                                     #     amebad_image_all, wraps build_image_all.py)
-add_subdirectory(common_ld_script)   # shared KM0-image ld fragments + path vars
+add_subdirectory(image_tool)         # defines amebad_make_{boot,image2}_all_bin*(...) + amebad_make_image_all_bin()
+                                     #   (-> target amebad_image_all, wraps build_image_all.py). Build HELPER
+                                     #   (CMake functions, global) - kept on the lib side; the executables in
+                                     #   project/amebad call these functions.
+add_subdirectory(common_ld_script)   # shared KM0-image ld fragments + AMEBAD_COMMON_*_LD cache vars (global)
 
-if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
-    add_subdirectory(bootloader_km0)
-    add_subdirectory(bootloader_km0_2nd)   # opt-in via AMEBAD_ENABLE_2ND_BOOT
-    add_subdirectory(app_km0)              # KM0 LP application image (image2)
-elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
-    add_subdirectory(bootloader_km4)
-    add_subdirectory(app_km4)              # KM4 HP application image (image2)
-    add_subdirectory(app_km4_secure)       # KM4 secure-world: TF-M SPE (ExternalProject), opt-in AMEBAD_TFM_BOOT
-endif()
-
-# Cross-core final image. `cmake --build <km0-or-km4-build-dir> -t amebad_image_all`
-# runs build_image_all.py to (re)build both cores and assemble the flashable
-# Image_All.bin. Defined in both core configures; invoke from either.
-amebad_make_image_all_bin()
+# The executable-producing dirs (bootloader_km{0,4}, app_km{0,4}, app_km4_secure) live in project/amebad
+# now (lib/executable split); the root CMakeLists add_subdirectory(project/amebad) after this component
+# subtree, so they see image_tool's functions + common_ld_script's vars + every lib target defined above.

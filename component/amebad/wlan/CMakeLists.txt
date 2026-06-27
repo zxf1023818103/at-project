@@ -4,7 +4,7 @@
 # (lib_wlan*.a + lib_wps.a — KM4/HP binary blobs, no source).
 #
 # NOTE: this is the HOST DRIVER layer, distinct from the on-chip WiFi MAC
-# *firmware* blob (component/amebad/app_km0/lib_wifi_fw.a, KM0). lib_wifi_fw.a's
+# *firmware* blob (project/amebad/app_km0/lib_wifi_fw.a, KM0). lib_wifi_fw.a's
 # 515 symbols are firmware internals and have ~zero overlap with these headers;
 # lib_wlan*.a/lib_wps.a are what actually implement the wifi_* API the headers
 # declare. They are KM4-only (project_hp/asdk/lib/application).

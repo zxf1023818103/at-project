@@ -5,7 +5,7 @@
 (Cortex-M33 @200 MHz) 上，用**相同算法、相同 512 KB 负载、相同 SysTick 周期计数器**，
 对比 Mbed TLS 3.6.4 (`[MCB]`) 与 wolfCrypt v5.9.1。
 
-- mbedTLS 跑分：[component/amebad/app_km4/mbedtls_bench.c](../component/amebad/app_km4/mbedtls_bench.c)（`make BENCH=ON`，日志 `[MCB]`），**实机实测（本文）**。
+- mbedTLS 跑分：[project/amebad/app_km4/mbedtls_bench.c](../project/amebad/app_km4/mbedtls_bench.c)（`make BENCH=ON`，日志 `[MCB]`），**实机实测（本文）**。
 - wolfCrypt 对称数：[amebad_crypto_rom_mbedtls_vs_wolfcrypt.md](amebad_crypto_rom_mbedtls_vs_wolfcrypt.md)（`[CCB]`）。
 - wolfCrypt 公钥数：[amebad_wolfssl_hwaccel_eval.md](amebad_wolfssl_hwaccel_eval.md)（`[WCB]`）。
 - 两边都是**软件实现**（无 RTL8720DN 硬件加密引擎——见 reference 记忆，那引擎在 driver-only 镜像里调不通）。

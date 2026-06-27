@@ -7,7 +7,7 @@ allowed-tools: [Bash, Read, Edit]
 
 # AmebaD QUIC LAN speed-test (Windows-native server)
 
-Drives the chip's ngtcp2 **"perf"** client (`component/amebad/app_km4/quic_test.c`) against a
+Drives the chip's ngtcp2 **"perf"** client (`project/amebad/app_km4/quic_test.c`) against a
 native-Windows **System.Net.Quic** server and reads throughput from both ends. Used to measure QUIC
 throughput and to A/B software vs HW AES-GCM (`HWGCM=ON/OFF`).
 
@@ -32,7 +32,7 @@ them. ALPN is `"perf"`. The chip runs `SSL_VERIFY_NONE`, so a self-signed server
   without admin (`dotnet-install.ps1 -Channel 8.0 -InstallDir $env:USERPROFILE\.dotnet -NoPath`).
 - **Run dir (Windows-local):** `C:\Users\zxf10\quicperf_win` — dotnet dislikes a `\\wsl.localhost`
   UNC cwd, so the project is copied here to build/run. `srv.log`/`srv.err` land here.
-- **Chip client target:** `component/amebad/app_km4/quic_test.c` — `QUIC_SERVER_A0..A3` = host IP
+- **Chip client target:** `project/amebad/app_km4/quic_test.c` — `QUIC_SERVER_A0..A3` = host IP
   (currently **192.168.4.250**), `QUIC_SERVER_PORT` = **4567**, `QUIC_ALPN` = "perf",
   `QUIC_PERF_XFER_BYTES` = 4 MB/direction. Edit + rebuild if the host IP/port changes.
 

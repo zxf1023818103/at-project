@@ -11,5 +11,5 @@
 /doc/realtek_an/*.xls
 /doc/realtek_an/*.docx
 /doc/realtek_an/*.doc
-component/amebad/app_km4/aws_iot_creds.h
+project/amebad/app_km4/aws_iot_creds.h
 __pycache__/

@@ -12,7 +12,7 @@
 # Sources and linker scripts are project-local copies of the SDK files (flat in
 # this folder) — see Stage 1.5 in the plan. Resync against the SDK when the
 # platform/ameba-rtos-d submodule pointer moves:
-#   diff -q component/amebad/bootloader_km0/boot_ram_lp.c \
+#   diff -q project/amebad/bootloader_km0/boot_ram_lp.c \
 #           platform/ameba-rtos-d/component/soc/realtek/amebad/bootloader/boot_ram_lp.c
 #
 # Headers + IFLAGS come transitively through amebad_sdk_includes.

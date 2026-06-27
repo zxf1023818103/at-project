@@ -9,7 +9,7 @@ project(at_project C CXX ASM)
 # add_subdirectory()s this root). Other dirs' __FILE__ are unaffected (they don't match the maps).
 add_compile_options(
     "-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/src/="
-    "-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/component/amebad/app_km4/="
+    "-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/project/amebad/app_km4/="
 )
 
 # Root entry for the at_project unified build. Used both:
@@ -68,6 +68,14 @@ add_subdirectory(src)
 # only to emit user_link.list), so component/ correctly stays inactive there.
 if(BOUFFALO_CHIP OR AMEBAD_CHIP MATCHES "^amebad-km[04]$")
     add_subdirectory(component)
+endif()
+
+# AmebaD firmware images (lib/executable split): the bootloader/app/secure executable subtree lives in
+# project/amebad and is added AFTER component, so the AmebaD lib targets + image_tool's CMake functions
+# (amebad_make_*) + common_ld_script's AMEBAD_COMMON_*_LD vars are all in scope. (Bouffalo's executable
+# is added by project/bouffalo's own CMakeLists which wraps this root, not here.)
+if(AMEBAD_CHIP MATCHES "^amebad-km[04]$")
+    add_subdirectory(project/amebad)
 endif()
 
 # Forward src/'s AT_USER_SOURCES / AT_USER_SRC_DIR one more scope up so a

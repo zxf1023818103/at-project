@@ -40,17 +40,19 @@ import tempfile
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 # (flash offset, basename, build dir relative path under the build tree)
-KM0_BOOT  = ("component/amebad/bootloader_km0/km0_boot_all.bin")
-KM0_IMG2  = ("component/amebad/app_km0/km0_image2_all.bin")
-KM4_BOOT  = ("component/amebad/bootloader_km4/km4_boot_all.bin")
-KM4_IMG2  = ("component/amebad/app_km4/km4_image2_all.bin")
+# The bootloader/app/secure executable dirs live under project/amebad (lib/executable split); their
+# build artifacts mirror that path under each core's build tree (build/km{0,4}/project/amebad/...).
+KM0_BOOT  = ("project/amebad/bootloader_km0/km0_boot_all.bin")
+KM0_IMG2  = ("project/amebad/app_km0/km0_image2_all.bin")
+KM4_BOOT  = ("project/amebad/bootloader_km4/km4_boot_all.bin")
+KM4_IMG2  = ("project/amebad/app_km4/km4_image2_all.bin")
 # TF-M SPE blob — read from the BUILD dir (never the source tree): the in-tree
 # TF-M build (CMake target tfm_spe) copies tfm_s.bin here.
-KM4_TFM_S  = ("component/amebad/app_km4_secure/tfm_s.bin")
+KM4_TFM_S  = ("project/amebad/app_km4_secure/tfm_s.bin")
 # Standalone FreeRTOS TrustZone secure image (make SECURE=ON), built by the CMake
 # target target_img3_km4_frtos_s -> objcopy raw binary. Same headerless cached-XIP
 # model as tfm_s.bin; laid at the same dynamic IMG3 slot.
-KM4_FRTOS_S = ("component/amebad/app_km4_freertos_secure/freertos_s.bin")
+KM4_FRTOS_S = ("project/amebad/app_km4_freertos_secure/freertos_s.bin")
 
 OFF_KM0_BOOT  = 0x0000
 OFF_KM4_BOOT  = 0x4000

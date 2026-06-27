@@ -4,7 +4,7 @@
 少数是软件运行时派生、或由厂家在片外保管。来源:Realtek NDA 应用文档(`AN0411 Secure eFuse`、
 `AN0410 Secure Boot`、`AN0405 RSIP`)放在 [`doc/realtek_an/`](realtek_an/README.md)(**NDA,已 gitignore,
 不提交**),加上 SDK `component/amebad/fwlib/rtl8721d_efuse.h` + bootloader
-`component/amebad/bootloader_km4/boot_flash_hp.c`。本文是从那些文档**提取核实后的事实**,可公开。
+`project/amebad/bootloader_km4/boot_flash_hp.c`。本文是从那些文档**提取核实后的事实**,可公开。
 
 > 术语:**RSIP** = Realtek Secure Image Protection(flash OTF 透明加密);**RDP** = Read Data
 > Protection(对镜像区做 AES 解密);**HUK** = Hardware Unique Key(设备根密钥);**ROTPK** = Root

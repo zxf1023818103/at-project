@@ -41,7 +41,7 @@ powershell.exe -File "$PSPATH" -BootPort COM14 -FlashPort COM3 -Image "$IMG" -Ba
 [STG] PS  ciphertext-at-rest PASS (...)
 ```
 
-测试逻辑（`component/amebad/app_km4/tfm_storage_selftest.c`，scheduler 启动前单线程调用）：
+测试逻辑（`project/amebad/app_km4/tfm_storage_selftest.c`，scheduler 启动前单线程调用）：
 首个 boot UID 不存在 → `psa_its_set`/`psa_ps_set` 写入已知 secret 并读回校验；之后每次
 boot → 读回比对（持久化）。PS 额外裸读 `0x083F4000` 验证不是明文（加密落盘）。
 
@@ -262,8 +262,8 @@ isolation L1，**不用 IPC**。
 | TF-M 旋钮 | `platform/rtl8721d/config.cmake` | `if(AMEBAD_TFM_STORAGE)` 块（见 §6） |
 | flash 区 | `platform/rtl8721d/partition/flash_layout.h` | `TFM_HAL_{ITS,PS}_FLASH_AREA_*` + OTP/NV area |
 | flash 驱动 | `platform/rtl8721d/cmsis_drivers/Driver_Flash.c` | 真实读/写/擦（见 §8） |
-| NS 接口 | `component/amebad/app_km4/CMakeLists.txt` | link `tfm_{its,ps}_api.c` + 测试源 + 定义宏 |
-| NS 测试 | `component/amebad/app_km4/tfm_storage_selftest.c` | psa_its/psa_ps 往返 + 持久化 + 密文校验 |
+| NS 接口 | `project/amebad/app_km4/CMakeLists.txt` | link `tfm_{its,ps}_api.c` + 测试源 + 定义宏 |
+| NS 测试 | `project/amebad/app_km4/tfm_storage_selftest.c` | psa_its/psa_ps 往返 + 持久化 + 密文校验 |
 
 ---
 
@@ -337,7 +337,7 @@ SHA/KDF/HMAC，无 RSA/cipher/asym-encrypt）。
 
 ## 8. Secure 世界 flash 驱动
 
-`component/amebad/app_km4_secure/platform/rtl8721d/cmsis_drivers/Driver_Flash.c`：
+`project/amebad/app_km4_secure/platform/rtl8721d/cmsis_drivers/Driver_Flash.c`：
 
 - **读** `ReadData`：memory-mapped，从 `0x08000000+addr` 直接拷（不重配 SPIC，cache 一致）。
 - **写** `ProgramData`：调 ROM `FLASH_TxData256B`（≤256 B / page，不跨 256 B 边界），

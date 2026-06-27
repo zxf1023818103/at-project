@@ -275,6 +275,6 @@ python3 component/amebad/image_tool/build_image_all.py
   `project/amebad/hci_test.ps1`、`project/amebad/hci_info.ps1`(查 version/features)
   - 已删:`btgap.a`、coex `rtk_coex.c`/`vendor_cmd.c` + 头、36+10 个未引用的原厂上层栈 API 头
 - 改:`component/amebad/CMakeLists.txt`(`add_subdirectory(bt)`)、
-  `component/amebad/app_km4/CMakeLists.txt`(`AMEBAD_ENABLE_HCI` option + LINK_GROUP 追加
-  + hci_syscalls.c 进 executable)、`component/amebad/app_km4/main.c`(`AT_PROJECT_HCI` 调用点)
+  `project/amebad/app_km4/CMakeLists.txt`(`AMEBAD_ENABLE_HCI` option + LINK_GROUP 追加
+  + hci_syscalls.c 进 executable)、`project/amebad/app_km4/main.c`(`AT_PROJECT_HCI` 调用点)
 - 不改:全局 `config/platform_opts.h`(CONFIG_BT 仍全局 0,只 `amebad_hci` 组件 scope 开 CONFIG_BT=1)

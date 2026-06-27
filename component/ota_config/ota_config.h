@@ -3,7 +3,7 @@
  *
  * Active because ota_config does NOT define OTA_DO_NOT_USE_CUSTOM_CONFIG; anything not
  * overridden here falls back to ota_config_defaults.h. The OTA Agent is wired on AmebaD KM4
- * (make AWS=ON) over the shared coreMQTT-Agent connection — see component/amebad/app_km4/
+ * (make AWS=ON) over the shared coreMQTT-Agent connection — see project/amebad/app_km4/
  * ota_app.c / ota_pal.c.
  */
 #ifndef OTA_CONFIG_H

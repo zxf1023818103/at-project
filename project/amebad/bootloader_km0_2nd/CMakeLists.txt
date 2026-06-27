@@ -1,7 +1,7 @@
 # AmebaD KM0 LP 2nd-stage bootloader (optional) — produces
 # target_loader_2nd.axf / km0_boot_all_2nd.bin.
 #
-# Background: KM0's primary bootloader (component/amebad/bootloader_km0/)
+# Background: KM0's primary bootloader (project/amebad/bootloader_km0/)
 # runs in KM0 BD_RAM (48K). For more complex boot logic (network OTA,
 # secure boot extensions, ...) Realtek's SDK supports a 2nd-stage
 # bootloader that runs in KM4 SRAM (BOOTLOADER2_RAM = BD_RAM_NS, 456K).

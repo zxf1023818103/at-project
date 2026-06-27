@@ -105,7 +105,7 @@ Gotchas: each new telnet connection's default target may be KM0 → prefix `targ
 Telnet lines have a leading NUL → strip with `tr -d '\r\000'` before grepping.
 Resolve a PC to a symbol: `arm-none-eabi-addr2line -f -e <elf> <pc>` (toolchain `nm`/`addr2line`
 under `toolchain/asdk-*/linux/newlib/bin/`; `/usr/bin/nm` returns nothing for ARM objects).
-Symbol-bearing ELFs: `build/km4/component/amebad/app_km4/target_img2_km4` (5400+ syms; the
+Symbol-bearing ELFs: `build/km4/project/amebad/app_km4/target_img2_km4` (5400+ syms; the
 `*pure*.axf` is stripped) and the KM0 equivalent under `build/km0/...`.
 
 **Boot-vs-hang discriminator (reliable):** read `uxCurrentNumberOfTasks` (addr via `nm`): a

@@ -5,7 +5,7 @@
 KM4 CPU 频率 **200 / 100 / 50 / 25 MHz**；并测两种 wolfCrypt 优化：**Thumb2 对称汇编**、
 **把对称代码+查表表放进 SRAM**。
 
-测试代码：[component/amebad/app_km4/wolfcrypt_bench.c](../component/amebad/app_km4/wolfcrypt_bench.c)
+测试代码：[project/amebad/app_km4/wolfcrypt_bench.c](../project/amebad/app_km4/wolfcrypt_bench.c)
 里的 `crypto_clock_bench()`（日志前缀 `[CCB]`）。相关：[amebad_wolfssl_hwaccel_eval.md](amebad_wolfssl_hwaccel_eval.md)。
 
 ## 结论先行（TL;DR）

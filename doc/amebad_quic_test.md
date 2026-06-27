@@ -111,7 +111,7 @@ from the network-up hook instead of iperf). `WOLFASM` defaults `ON` (record-laye
 AES/SHA via Thumb2 asm). `TFM=ON` builds the in-tree TF-M secure world and makes
 app_km4 the NS side — **required to boot** (see below).
 
-QUIC client target is at the top of `component/amebad/app_km4/quic_test.c`:
+QUIC client target is at the top of `project/amebad/app_km4/quic_test.c`:
 `QUIC_SERVER_*` = `192.168.4.250:4567`, ALPN `perf`, 4 MB/direction.
 
 ### Boot: why TF-M

@@ -19,7 +19,7 @@
 
 
 /* Demo IOCTL contract — must match the secure HAL in
- * component/amebad/app_km4_secure/platform/rtl8721d/services/src/tfm_platform_system.c */
+ * project/amebad/app_km4_secure/platform/rtl8721d/services/src/tfm_platform_system.c */
 #define AMEBAD_IOCTL_PING        ((tfm_platform_ioctl_req_t)0x8721D0)
 #define AMEBAD_IOCTL_PING_XOR    (0x8721D000u)
 #define AMEBAD_IOCTL_EFUSE_HUK_INFO  ((tfm_platform_ioctl_req_t)0x8721E0)

@@ -48,7 +48,7 @@ raw offset      size       region                          flash 保护
 | [platform_opts.h](../platform/ameba-rtos-d/project/realtek_amebaD_va0_example/inc/inc_hp/platform_opts.h) | UART/AP/FTL/Fast-reconnect 整体迁到 `0x3FA000-0x3FFFFF` |
 | [platform_opts_auto_release.h](../platform/ameba-rtos-d/project/realtek_amebaD_va0_example/inc/inc_hp/platform_opts_auto_release.h) | 同上 |
 | [component/littlefs_config/lfs_config.h](../component/littlefs_config/lfs_config.h) | driver-only 几何源头：`LFS_CFG_REGION_OFFSET = 0x300000`、`LFS_CFG_REGION_SIZE = 0x0F0000`（960 KB → 240 blocks）。末尾 64 KB 给 TF-M 安全存储。（SDK 的 littlefs_adapter.h 已不参与 driver-only 构建。）|
-| [platform_opts.h](../component/amebad/app_km4/platform_opts.h) + [src/main.cpp](../src/main.cpp) | settings cluster 移除：`CONFIG_EXAMPLE_WLAN_FAST_CONNECT=0`、`app_pre_example()` 不再挂 fast-reconnect 回调；UART/AP/FTL/Fast-reconnect 地址不再使用 |
+| [platform_opts.h](../project/amebad/app_km4/platform_opts.h) + [src/main.cpp](../src/main.cpp) | settings cluster 移除：`CONFIG_EXAMPLE_WLAN_FAST_CONNECT=0`、`app_pre_example()` 不再挂 fast-reconnect 回调；UART/AP/FTL/Fast-reconnect 地址不再使用 |
 
 `OTA_Region[1]` 和 `LS_IMG2_OTA2_ADDR` 两个值**必须严格同步**：前者是 boot ROM 启动时找 image2 用的，后者是应用层 OTA 升级写新 image 时找位置用的。任何一边没跟上，OTA 升级到 OTA2 后下次启动直接挂。
 

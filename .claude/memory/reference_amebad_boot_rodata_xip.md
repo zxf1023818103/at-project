@@ -12,8 +12,8 @@ The CMake driver-only AmebaD bootloaders hang very early on real hardware — LO
 **Root cause:** at `-Os` GCC merges the boot's string literals (the `DBG_8195A` format strings) into `.rodata.str1.1`. The boot linker scripts' `.ram_image1.text` only catches `*(.boot.ram.text*)` + `*(.boot.rodata*)`, NOT generic `*(.rodata*)` — so those strings get orphaned into the XIP flash region (`.rodata.str1.1` ends up around `0x080005E0`). km0_boot / km4_boot run from RAM (BOOTLOADER_RAM / BD_RAM) before XIP is usable, so dereferencing the orphaned strings faults → hang before it can load/jump to image2.
 
 **Fix:** add `*(.rodata*)` to `.ram_image1.text` in both
-`component/amebad/bootloader_km0/rlx8721d_boot.ld` and
-`component/amebad/bootloader_km4/rlx8721d_img1_s.ld` (CMAKE_PATCH; the bootloader
+`project/amebad/bootloader_km0/rlx8721d_boot.ld` and
+`project/amebad/bootloader_km4/rlx8721d_img1_s.ld` (CMAKE_PATCH; the bootloader
 folders were later flattened — ld scripts now sit at the folder root, no `ld/`
 subdir). After the fix:
 km0_boot `.ram_image1.text` 1048→1897, `km0_boot_all.bin` 3244→**4096** (matches the SDK's `image/km0_boot_all.bin` exactly); `km4_boot_all.bin` → **4256**.

@@ -9,7 +9,7 @@
  *   network_transport_mbedtls  defines nothing                       -> mbedTLS path
  *
  * The flag is threaded from project/amebad/Makefile (TLS_BACKEND=mbedtls|picotls) through
- * the AWS block in component/amebad/app_km4/CMakeLists.txt, which links exactly one of the
+ * the AWS block in project/amebad/app_km4/CMakeLists.txt, which links exactly one of the
  * two libraries. Default is mbedTLS.
  */
 

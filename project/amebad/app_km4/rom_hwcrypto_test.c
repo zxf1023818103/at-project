@@ -12,7 +12,7 @@
  *
  * The HW routines are mask-ROM at fixed addresses (Thumb-tagged / odd); called
  * directly here since app_km4's symbol table intentionally omits them. Addresses
- * from component/amebad/bootloader_km4/rlx8721d_rom_symbol_acut_boot.ld.
+ * from project/amebad/bootloader_km4/rlx8721d_rom_symbol_acut_boot.ld.
  *
  * Prior finding (reference_amebad_hw_crypto): CRYPTO_Init returns 0 (pure
  * register writes), but the first AES *process* call stalls the AHB forever

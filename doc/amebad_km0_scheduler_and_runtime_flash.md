@@ -96,7 +96,7 @@ TF-M 的 SPE（KM4 secure world）用 ROM `FLASH_TxData*` 在 auto/XIP 模式写
 
 注意是 **hang（不返回）不是返回 error** → NS 层"失败重试"救不了（永不返回）。
 
-诊断命令：`component/amebad/app_km4/aws_cli.c` 的 `pstest <size> [retries]`；
+诊断命令：`project/amebad/app_km4/aws_cli.c` 的 `pstest <size> [retries]`；
 host 扫描脚本 `project/amebad/pstest_sweep.ps1`。
 
 ### KM0 跨核仲裁这条路（曾以为是出路，结论复杂）
@@ -162,7 +162,7 @@ dependent"(32 B 快、撞不上;48 B+ 容易撞)。**`dead-vs-alive` 是 confoun
 
 **修复 = 换串行化 NS interface**：
 - `tfm_ns_interface_rtos.c`(每次 PSA dispatch 包一对 mutex)替掉 bare-metal；
-- 自写 FreeRTOS os_wrapper:`component/amebad/app_km4/tfm_os_wrapper_freertos.c`
+- 自写 FreeRTOS os_wrapper:`project/amebad/app_km4/tfm_os_wrapper_freertos.c`
   (`os_wrapper_mutex_create/acquire/release` over `xSemaphore*`,NULL handle 容忍 = boot 期单线程免锁)；
 - `app_km4/main.c` 里 pre-scheduler 调 `tfm_ns_interface_init()`；
 - CMakeLists 把 `tfm_ns_interface_bare_metal.c` 换成上面两个。

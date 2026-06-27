@@ -1,4 +1,4 @@
-# component/amebad/app_km4_secure — AmebaD RTL8721D KM4 secure world = TF-M (SPE).
+# project/amebad/app_km4_secure — AmebaD RTL8721D KM4 secure world = TF-M (SPE).
 #
 # TF-M is a standalone CMake project (its own toolchain file, runs Python manifest
 # tooling at configure, assumes it is the top-level CMAKE_SOURCE_DIR) — it cannot
@@ -11,7 +11,7 @@
 # (s_veneers.o + PSA client interface/headers + generated headers, and the
 # spe-CMakeLists template renamed to the export's CMakeLists.txt) into
 # tfm_spe_export/. The NS side (app_km4) consumes that export by path — see
-# component/amebad/app_km4/CMakeLists.txt (single km4 build tree => can't
+# project/amebad/app_km4/CMakeLists.txt (single km4 build tree => can't
 # add_subdirectory the export, which only exists after this build step).
 #
 # Output: ${CMAKE_CURRENT_BINARY_DIR}/tfm_s.bin (copied from TF-M's bin/), which
@@ -147,4 +147,4 @@ ExternalProject_Add_Step(tfm_spe copy_blob
 # *_sources.cmake the port `include()`s), without a second add_subdirectory.
 #
 # The real NSPE that exercises PSA is app_km4 (the driver image) — see
-# component/amebad/app_km4/{tfm_psa_selftest.c,CMakeLists.txt}.
+# project/amebad/app_km4/{tfm_psa_selftest.c,CMakeLists.txt}.
