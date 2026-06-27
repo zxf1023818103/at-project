@@ -82,6 +82,21 @@ option(AMEBAD_TFM_BOOT "Build + boot TF-M (KM4 secure-world SPE) instead of the 
 # AmebaD flash driver; app_km4 runs a psa_its/psa_ps self-test. OFF by default.
 option(AMEBAD_TFM_STORAGE "Enable TF-M PSA Internal Trusted Storage + Protected Storage + NS self-test" OFF)
 
+# POSIX-fd VFS self-test (syscalls/newlib_syscalls.c): fopen/open + socket-fd over LittleFS +
+# FreeRTOS+TCP. OFF by default (the VFS is otherwise gc-stripped when no consumer references it).
+# Consumed by lfs_port (the vfs_selftest fn) + app_km4 (the call) below.
+option(AMEBAD_VFS_SELFTEST "Build + run the POSIX-fd VFS self-test (fopen/open/socket over LFS+sockets)" OFF)
+
+# Ed25519 secure-boot self-test (make SBOOT=ON). build_image_all.py signs image2 in the boot-ROM's
+# SBOOT format; sboot_cli.c verifies the running signed image with the boot ROM's ed25519 verify.
+# Non-destructive: proves the ROM verify path without burning eFuse. Read by app_km4 below.
+option(AMEBAD_SBOOT "Ed25519-sign image2 + on-device `sboot` secure-boot self-test (no eFuse burn)" OFF)
+
+# DEBUG eFuse provisioning aids (make EFUSE_DEBUG=ON) - NEVER ship: the `efuse_burn` console command,
+# the boot-time dump of all eFuse keys + MACs, and the verbose bootloader log (Boot_Log_En). Default
+# OFF; gates the NS callers (so the SPE eFuse read/write IOCTLs have no caller in a normal build).
+option(AMEBAD_EFUSE_DEBUG "DEBUG eFuse burn/dump aids + verbose boot log (never ship)" OFF)
+
 add_subdirectory(fwlib)              # chip fwlib: headers (amebad_fwlib_headers) + ROM-symbol ld vars + RAM HAL libs (amebad_ram_common/_lp/_hp, chip-gated)
 add_subdirectory(xmodem)             # ROM xmodem headers (amebad_xmodem) + xmodem.ld symbols; linked by sdk_includes below
 add_subdirectory(string_rom)         # ROM swlib-string headers (amebad_string_rom) + string_rom_km{4,0}.ld; linked by sdk_includes below
@@ -255,29 +270,10 @@ add_subdirectory(pmu)                # chip-gated: prebuilt PMC lib (lib_pmc_lp/
 add_subdirectory(wlan)               # KM4-gated: host WiFi driver libs (lib_wlan*.a) + API headers
 add_subdirectory(wpa_supplicant)     # KM4-gated: supplicant cores (lib_wps.a + lib_eap.a) + config/glue source + headers
 add_subdirectory(wifi)               # KM4-gated: host WiFi API + bring-up (amebad_wifi, EXCLUDE)
-# AMEBAD_ENABLE_QUIC (+ the derived AMEBAD_WOLFSSL_TLS force) is declared in the parent
-# component/CMakeLists.txt, before wolfssl_config / ngtcp2_config are added there. It
-# stays a cache var so app_km4 (below) still reads it.
-
-# POSIX-fd VFS self-test (syscalls/newlib_syscalls.c): fopen/open + socket-fd over
-# LittleFS + FreeRTOS+TCP. OFF by default (the VFS is otherwise gc-stripped when no
-# consumer references it). Consumed by lfs_port (the vfs_selftest fn) + app_km4 (the
-# call). Declared here so both subdirs see it.
-option(AMEBAD_VFS_SELFTEST "Build + run the POSIX-fd VFS self-test (fopen/open/socket over LFS+sockets)" OFF)
-
-# Ed25519 secure-boot self-test (make SBOOT=ON). build_image_all.py signs image2 in the boot-ROM's
-# SBOOT format; sboot_cli.c verifies the running signed image with the boot ROM's ed25519 verify.
-# Non-destructive: proves the ROM verify path without burning eFuse. Declared here so app_km4 sees it.
-option(AMEBAD_SBOOT "Ed25519-sign image2 + on-device `sboot` secure-boot self-test (no eFuse burn)" OFF)
-
-# DEBUG eFuse provisioning aids (make EFUSE_DEBUG=ON) - NEVER ship: the `efuse_burn` console command,
-# the boot-time dump of all eFuse keys + MACs, and the verbose bootloader log (Boot_Log_En). Default
-# OFF; gates the NS callers (so the SPE eFuse read/write IOCTLs have no caller in a normal build).
-option(AMEBAD_EFUSE_DEBUG "DEBUG eFuse burn/dump aids + verbose boot log (never ship)" OFF)
-
-# wolfssl_config / ngtcp2_config / coremqtt_config / corehttp_config / freertos-cli_config
-# are added by the parent component/CMakeLists.txt (shared, consumer-coupled config dirs);
-# the in-tree consumers below (app_km4, ngtcp2 self-test, ...) just link the resulting targets.
+# The cross-platform config dirs (freertos-plus-tcp_config / ngtcp2_config / coremqtt_config /
+# picotls_config / mbedtls_config / ...) are added by the parent component/CMakeLists.txt; the in-tree
+# consumers below (app_km4, the ngtcp2 QUIC self-test gated by AMEBAD_ENABLE_QUIC, ...) just link the
+# resulting targets.
 add_subdirectory(build_info)         # INTERFACE: UTS_VERSION banner -D (replaces the vendored build_info.h shim)
 add_subdirectory(hci)                # KM4-gated: BLE controller bring-up + HCI transport + bridge (no btgap.a)
 # NimBLE: the config + header surface (nimble_config) is added by the parent
