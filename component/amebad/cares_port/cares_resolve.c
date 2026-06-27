@@ -25,8 +25,9 @@
 #define AF_UNSPEC 0
 #endif
 
-static ares_channel_t   * s_channel;
 static SemaphoreHandle_t  s_lock;
+static int                s_lib_inited;
+static char               s_servers_csv[ 96 ];   /* DNS servers; applied to each transient channel */
 
 struct gai_ctx {
     int                        family;
@@ -85,49 +86,26 @@ static void prv_gai_cb( void * arg, int status, int timeouts, struct ares_addrin
 
 void cares_resolver_init( void )
 {
-    struct ares_options opts;
-    int                 mask = 0;
-
     if( s_lock == NULL )
     {
         s_lock = xSemaphoreCreateMutex();
     }
-    if( s_channel != NULL )
+    if( !s_lib_inited )
     {
-        return;
-    }
-
-    ( void ) ares_library_init( ARES_LIB_INIT_ALL );
-
-    ( void ) memset( &opts, 0, sizeof( opts ) );
-    opts.timeout = 3000;  mask |= ARES_OPT_TIMEOUTMS;                          /* 3 s per try */
-    opts.tries   = 2;     mask |= ARES_OPT_TRIES;
-    opts.flags   = ARES_FLAG_NOSEARCH | ARES_FLAG_NOALIASES;  mask |= ARES_OPT_FLAGS;
-    opts.lookups = "b";   mask |= ARES_OPT_LOOKUPS;                            /* DNS only, no hosts file */
-
-    if( ares_init_options( &s_channel, &opts, mask ) != ARES_SUCCESS )
-    {
-        s_channel = NULL;
-        log_error( "[cares] ares_init_options failed" );
-    }
-    else
-    {
-        log_info( "[cares] channel up" );
+        ( void ) ares_library_init( ARES_LIB_INIT_ALL );
+        s_lib_inited = 1;
+        log_info( "[cares] ready" );
     }
 }
 
+/* Cache the current DNS servers (DHCP-learned + the DNS_SERVER env override) as a CSV; cares_resolve
+ * re-applies it to the short-lived channel it builds per query. No channel is kept alive here. */
 void cares_resolver_set_servers( void )
 {
     NetworkEndPoint_t * ep;
-    char                csv[ 96 ];
     unsigned            i;
 
-    if( s_channel == NULL )
-    {
-        return;
-    }
-
-    csv[ 0 ] = '\0';
+    s_servers_csv[ 0 ] = '\0';
     for( ep = FreeRTOS_FirstEndPoint( NULL ); ep != NULL; ep = FreeRTOS_NextEndPoint( NULL, ep ) )
     {
         for( i = 0; i < ipconfigENDPOINT_DNS_ADDRESS_COUNT; i++ )
@@ -141,36 +119,30 @@ void cares_resolver_set_servers( void )
                 ( void ) snprintf( b, sizeof( b ), "%u.%u.%u.%u",
                                    ( unsigned ) ( d & 0xffU ),         ( unsigned ) ( ( d >> 8 ) & 0xffU ),
                                    ( unsigned ) ( ( d >> 16 ) & 0xffU ), ( unsigned ) ( ( d >> 24 ) & 0xffU ) );
-                if( ( strlen( csv ) + strlen( b ) + 2U ) < sizeof( csv ) )
+                if( ( strlen( s_servers_csv ) + strlen( b ) + 2U ) < sizeof( s_servers_csv ) )
                 {
-                    if( csv[ 0 ] != '\0' )
+                    if( s_servers_csv[ 0 ] != '\0' )
                     {
-                        ( void ) strcat( csv, "," );
+                        ( void ) strcat( s_servers_csv, "," );
                     }
-                    ( void ) strcat( csv, b );
+                    ( void ) strcat( s_servers_csv, b );
                 }
             }
         }
     }
-
-    if( csv[ 0 ] != '\0' )
-    {
-        int r = ares_set_servers_csv( s_channel, csv );
-        log_info( "[cares] servers=%s rc=%d", csv, r );
-    }
-    else
-    {
-        log_error( "[cares] no DNS servers from endpoint" );
-    }
+    log_info( "[cares] servers=%s", s_servers_csv );
 }
 
 int cares_resolve( const char * host, int family, struct freertos_sockaddr * out )
 {
+    struct ares_options        opts;
     struct gai_ctx             ctx;
     struct ares_addrinfo_hints hints;
+    ares_channel_t           * channel = NULL;
+    int                        mask = 0;
     int                        rc;
 
-    if( ( s_channel == NULL ) || ( host == NULL ) || ( out == NULL ) )
+    if( !s_lib_inited || ( host == NULL ) || ( out == NULL ) )
     {
         return -1;
     }
@@ -178,6 +150,26 @@ int cares_resolve( const char * host, int family, struct freertos_sockaddr * out
     if( s_lock != NULL )
     {
         ( void ) xSemaphoreTake( s_lock, portMAX_DELAY );
+    }
+
+    /* Build a fresh channel per resolve and tear it down at the end. Keeping a channel alive holds
+     * its htables + rand state + the kept-warm UDP connection's in_buf on the heap (~12 KB) between
+     * the infrequent connect/reconnect resolves; create-on-demand keeps the steady-state cost ~0. */
+    ( void ) memset( &opts, 0, sizeof( opts ) );
+    opts.timeout = 3000;  mask |= ARES_OPT_TIMEOUTMS;                          /* 3 s per try */
+    opts.tries   = 2;     mask |= ARES_OPT_TRIES;
+    opts.flags   = ARES_FLAG_NOSEARCH | ARES_FLAG_NOALIASES;  mask |= ARES_OPT_FLAGS;
+    opts.lookups = "b";   mask |= ARES_OPT_LOOKUPS;                            /* DNS only, no hosts file */
+
+    if( ares_init_options( &channel, &opts, mask ) != ARES_SUCCESS )
+    {
+        log_error( "[cares] ares_init_options failed" );
+        if( s_lock != NULL ) { ( void ) xSemaphoreGive( s_lock ); }
+        return -1;
+    }
+    if( s_servers_csv[ 0 ] != '\0' )
+    {
+        ( void ) ares_set_servers_csv( channel, s_servers_csv );
     }
 
     ctx.family = family;
@@ -190,7 +182,7 @@ int cares_resolve( const char * host, int family, struct freertos_sockaddr * out
     hints.ai_family = family;
     hints.ai_flags  = ARES_AI_NOSORT;
 
-    ares_getaddrinfo( s_channel, host, NULL, &hints, prv_gai_cb, &ctx );
+    ares_getaddrinfo( channel, host, NULL, &hints, prv_gai_cb, &ctx );
 
     /* Drive the query to completion: select() on c-ares' fds, then ares_process() (which also
      * services its own retry/timeout schedule when select returns 0). The callback sets ctx.done.
@@ -206,18 +198,18 @@ int cares_resolve( const char * host, int family, struct freertos_sockaddr * out
 
             FD_ZERO( &rf );
             FD_ZERO( &wf );
-            nfds = ares_fds( s_channel, &rf, &wf );
+            nfds = ares_fds( channel, &rf, &wf );
 
             maxtv.tv_sec  = 2;
             maxtv.tv_usec = 0;
-            tvp = ares_timeout( s_channel, &maxtv, &tv );
+            tvp = ares_timeout( channel, &maxtv, &tv );
 
             r = select( nfds, &rf, &wf, NULL, tvp );
             if( r < 0 )
             {
                 break;
             }
-            ares_process( s_channel, &rf, &wf );
+            ares_process( channel, &rf, &wf );
             iters++;
         }
     }
@@ -225,6 +217,10 @@ int cares_resolve( const char * host, int family, struct freertos_sockaddr * out
     rc = ctx.ok ? 0 : -1;
     log_info( "[cares] resolve %s fam=%d status=%d -> %s", host, family, ctx.status,
               ( rc == 0 ) ? "ok" : "fail" );
+
+    /* Tears down sockets + buffers + htables; also fires any still-pending query callback
+     * synchronously with ARES_EDESTRUCTION (ctx is still in scope here, so that is safe). */
+    ares_destroy( channel );
 
     if( s_lock != NULL )
     {
