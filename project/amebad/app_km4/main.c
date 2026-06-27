@@ -303,6 +303,46 @@ static void wifi_autodetect_country( void )
 }
 
 
+#if ( ipconfigUSE_IPv6 != 0 )
+/* Log every configured IPv6 address on the interface. The fe80:: link-local is set at bring-up; the
+ * bWantRA global address appears later, once the Router Advertisement / SLAAC completes. Printed in
+ * full (no :: compression) so it can be pasted straight into a ping6. */
+static void log_ipv6( const char * pcTag )
+{
+    NetworkEndPoint_t * px;
+    for( px = FreeRTOS_FirstEndPoint( NULL ); px != NULL; px = FreeRTOS_NextEndPoint( NULL, px ) )
+    {
+        const uint8_t * a = px->ipv6_settings.xIPAddress.ucBytes;
+        int i, zero = 1;
+        if( px->bits.bIPv6 == 0 ) { continue; }
+        for( i = 0; i < ipSIZE_OF_IPv6_ADDRESS; i++ ) { if( a[ i ] != 0 ) { zero = 0; break; } }
+        if( zero ) { continue; }   /* global endpoint before SLAAC: address is still :: */
+        log_info( "[KM4] IPv6 (%s) %-10s %x:%x:%x:%x:%x:%x:%x:%x", pcTag,
+                  ( ( a[ 0 ] == 0xfeU ) && ( ( a[ 1 ] & 0xc0U ) == 0x80U ) ) ? "link-local" : "global",
+                  ( a[ 0 ] << 8 ) | a[ 1 ],   ( a[ 2 ] << 8 ) | a[ 3 ],
+                  ( a[ 4 ] << 8 ) | a[ 5 ],   ( a[ 6 ] << 8 ) | a[ 7 ],
+                  ( a[ 8 ] << 8 ) | a[ 9 ],   ( a[ 10 ] << 8 ) | a[ 11 ],
+                  ( a[ 12 ] << 8 ) | a[ 13 ], ( a[ 14 ] << 8 ) | a[ 15 ] );
+    }
+}
+
+/* 1 once the bWantRA global endpoint has a non-zero (SLAAC-autoconfigured) address. */
+static int ipv6_global_set( void )
+{
+    NetworkEndPoint_t * px;
+    for( px = FreeRTOS_FirstEndPoint( NULL ); px != NULL; px = FreeRTOS_NextEndPoint( NULL, px ) )
+    {
+        const uint8_t * a = px->ipv6_settings.xIPAddress.ucBytes;
+        if( ( px->bits.bIPv6 != 0 ) && ( a[ 0 ] != 0xfeU ) )   /* IPv6, not the fe80:: link-local */
+        {
+            int i;
+            for( i = 0; i < ipSIZE_OF_IPv6_ADDRESS; i++ ) { if( a[ i ] != 0 ) { return 1; } }
+        }
+    }
+    return 0;
+}
+#endif /* ipconfigUSE_IPv6 */
+
 /* Called by the IP task when the interface comes up (DHCP done) or goes down.
  * ipconfigIPv4_BACKWARD_COMPATIBLE=1 -> single-arg hook. */
 void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
@@ -312,6 +352,9 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
      * the first should print. */
     static int s_downLogged = 0;
     static int s_everUp = 0;     /* gates "network DOWN" to a real drop, not the boot DHCP re-kick below */
+#if ( ipconfigUSE_IPv6 != 0 )
+    static int s_slaacLogged = 0;   /* print the SLAAC global address once, when it autoconfigures */
+#endif
 
     if( eNetworkEvent == eNetworkUp )
     {
@@ -341,6 +384,15 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
          * (This was the 2nd spurious "network UP" once IPv6 was enabled.) */
         if( wifi_link_up() )
         {
+#if ( ipconfigUSE_IPv6 != 0 )
+            /* The bWantRA global IPv6 endpoint comes up here once SLAAC fills its address (the IPv4
+             * lease is already up, so this is the "duplicate" path). Print the new address once. */
+            if( ipv6_global_set() && ( s_slaacLogged == 0 ) )
+            {
+                s_slaacLogged = 1;
+                log_ipv6( "SLAAC updated" );
+            }
+#endif
             return;
         }
         s_downLogged = 0;
@@ -350,6 +402,9 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
         wifi_link_set( 1 );
         /* IPs are in network byte order; byte 0 = first octet. */
         log_info( "[KM4] ==== network UP ====" );
+#if ( ipconfigUSE_IPv6 != 0 )
+        log_ipv6( "network UP" );   /* link-local now; the global SLAAC address logs separately when it arrives */
+#endif
         log_info( "[KM4] DHCP IP   %d.%d.%d.%d",
                     (int)( ulIP & 0xff ), (int)( ( ulIP >> 8 ) & 0xff ),
                     (int)( ( ulIP >> 16 ) & 0xff ), (int)( ( ulIP >> 24 ) & 0xff ) );
