@@ -625,10 +625,13 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
          * upload that exercises the WiFi TX path). The UDP TX/RX + TCP-sink probes
          * stay available for diagnostics. Homegrown iperf2 over FreeRTOS+TCP sockets
          * with a static TX buffer — no iperf3 mmap/pthread/cJSON heap churn. */
-        iperf_client_start();
+        /* IPv6 RX probe: device-as-server (host connects outbound -> no host firewall rule needed).
+         * Host: a raw TCP sender to [device link-local]%<ifindex>:5001 for ~15s; the device drains
+         * and prints the RX rate. (iperf_client_start is the device->host TX variant.) */
+        iperf_server_start();
+        ( void ) iperf_client_start;
         ( void ) iperf_udp_client_start;
         ( void ) iperf_udp_server_start;
-        ( void ) iperf_server_start;
 #endif
 #endif
     }

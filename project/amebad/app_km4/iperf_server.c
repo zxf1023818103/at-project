@@ -26,7 +26,7 @@ static void prvIperfServerTask( void *pvParameters )
     const TickType_t xRecvTimeout = pdMS_TO_TICKS( 6000 );
     ( void ) pvParameters;
 
-    xListen = FreeRTOS_socket( FREERTOS_AF_INET, FREERTOS_SOCK_STREAM, FREERTOS_IPPROTO_TCP );
+    xListen = FreeRTOS_socket( FREERTOS_AF_INET6, FREERTOS_SOCK_STREAM, FREERTOS_IPPROTO_TCP );
     if( ( xListen == FREERTOS_INVALID_SOCKET ) || ( xListen == NULL ) )
     {
         log_error( "[KM4] iperf: socket() failed" );
@@ -34,8 +34,8 @@ static void prvIperfServerTask( void *pvParameters )
         return;
     }
     FreeRTOS_setsockopt( xListen, 0, FREERTOS_SO_REUSE_LISTEN_SOCKET, &xReuse, sizeof( xReuse ) );
-    ( void ) memset( &xBind, 0, sizeof( xBind ) );
-    xBind.sin_family = FREERTOS_AF_INET;
+    ( void ) memset( &xBind, 0, sizeof( xBind ) );   /* zeroed address = bind any ([::]) */
+    xBind.sin_family = FREERTOS_AF_INET6;
     xBind.sin_port = FreeRTOS_htons( IPERF_PORT );
     FreeRTOS_bind( xListen, &xBind, sizeof( xBind ) );
     FreeRTOS_listen( xListen, 2 );

@@ -385,8 +385,19 @@ const char * pcApplicationHostnameHook( void )
     if( dflt[ 0 ] == '\0' )
     {
         uint8_t mac[ 6 ] = { 0 };
-        extern int efuse_logical_read( uint16_t addr, uint16_t size, uint8_t * pbuf );
-        ( void ) efuse_logical_read( 0x190U, 6U, mac );   /* 0x190 = BT/BLE MAC */
+        /* efuse_logical_read is provided via TF-M (AWS/STORAGE images); weak so non-TF-M images
+         * (iperf/scan/...) still link, falling back to the interface (WiFi) MAC. */
+        extern int efuse_logical_read( uint16_t addr, uint16_t size, uint8_t * pbuf ) __attribute__( ( weak ) );
+        int got = 0;
+        if( efuse_logical_read != NULL )
+        {
+            got = ( efuse_logical_read( 0x190U, 6U, mac ) == 0 );   /* 0x190 = BT/BLE MAC */
+        }
+        if( got == 0 )
+        {
+            NetworkEndPoint_t * px = FreeRTOS_FirstEndPoint( NULL );
+            if( px != NULL ) { ( void ) memcpy( mac, px->xMACAddress.ucBytes, 6 ); }
+        }
         ( void ) snprintf( dflt, sizeof( dflt ), "amebad_%02x%02x%02x", mac[ 3 ], mac[ 4 ], mac[ 5 ] );
     }
 
