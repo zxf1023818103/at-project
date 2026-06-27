@@ -42,6 +42,11 @@ add_subdirectory(corepkcs11_config)         # PKCS#11 software token over mbedcr
 add_subdirectory(picotls_config)            # TLS 1.3 core + mbedTLS/PSA backend (picotls_mbedtls) for ngtcp2 QUIC
 add_subdirectory(network_transport)         # TransportInterface_t impls over mbedtls_config + freertos-plus-tcp_config — coreMQTT TLS transport
 
+# lfs_image — host-side LittleFS image builder (cross-platform). Dual-mode CMakeLists: add_subdirectory
+# here registers the helper function lfs_image_add(); the standalone host sub-build is launched
+# separately via ExternalProject_Add when a consumer (either platform) calls lfs_image_add().
+add_subdirectory(lfs_image)
+
 # =====================================================================
 # Platform: Bouffalo Lab BL602 / BL616 / BL616CL
 # =====================================================================
@@ -56,11 +61,7 @@ add_subdirectory(network_transport)         # TransportInterface_t impls over mb
 #                        out of the lwip submodule so it can depend on
 #                        the upstream-clean lwip + freertos_kernel.
 #   lfs_easyflash        EasyFlash KV API on top of upstream littlefs.
-#   lfs_image            host-side helper to pack a directory tree into
-#                        a LittleFS image (component/lfs_image/CMakeLists.txt
-#                        is dual-mode: registers lfs_image_add() here,
-#                        becomes a standalone host build when invoked
-#                        via ExternalProject_Add from inside that helper).
+# (lfs_image — the cross-platform host-side LittleFS image builder — is added unconditionally above.)
 if(BOUFFALO_CHIP)
     # Target chip selection. Typical usage is to set this through a chip
     # toolchain file (cmake/bl602-toolchain.cmake etc., which also pins
@@ -103,14 +104,6 @@ if(BOUFFALO_CHIP)
     # add_subdirectory-only.
     add_subdirectory(lwip_dhcpd)
     add_subdirectory(lfs_easyflash)
-
-    # -----------------------------------------------------------------
-    # lfs_image — host-side LittleFS image builder. Dual-mode CMakeLists:
-    # add_subdirectory here registers the helper function lfs_image_add();
-    # the standalone host sub-build is launched separately via
-    # ExternalProject_Add when a consumer calls lfs_image_add().
-    # -----------------------------------------------------------------
-    add_subdirectory(lfs_image)
 endif()
 
 # =====================================================================
