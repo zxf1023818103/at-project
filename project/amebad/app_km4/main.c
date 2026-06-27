@@ -593,6 +593,22 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
                     log_info( "[KM4] DHCP DNS[%d] %s", (int) i, b );
                 }
             }
+            /* Optional static DNS override (env DNS_SERVER / DNS_SERVER2). An iPad Personal Hotspot's
+             * DNS forwarder does not return AAAA records; pointing at a public resolver that does
+             * (e.g. Alibaba 223.5.5.5 / 223.6.6.6) makes IPv6 (AAAA) resolution work. */
+            {
+                const char * d1 = getenv( "DNS_SERVER" );
+                const char * d2 = getenv( "DNS_SERVER2" );
+                if( ( d1 != NULL ) && ( d1[ 0 ] != '\0' ) )
+                {
+                    xEndPoint.ipv4_settings.ulDNSServerAddresses[ 0 ] = FreeRTOS_inet_addr( d1 );
+                    if( ( d2 != NULL ) && ( d2[ 0 ] != '\0' ) )
+                    {
+                        xEndPoint.ipv4_settings.ulDNSServerAddresses[ 1 ] = FreeRTOS_inet_addr( d2 );
+                    }
+                    log_info( "[KM4] DNS override -> %s / %s", d1, ( d2 != NULL ) ? d2 : "-" );
+                }
+            }
             if( ulDHCPNtpServerAddress != 0U )
             {
                 fmt_ipv4( ulDHCPNtpServerAddress, b, sizeof( b ) );
