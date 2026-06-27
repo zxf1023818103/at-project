@@ -1,3 +1,15 @@
+# ---- standalone CMake project (lib/executable split: libs in component, this image here) ----
+# Built directly via `cmake -S project/amebad/app_km4 -B build/app_km4 -DCMAKE_TOOLCHAIN_FILE=
+# cmake/amebad-km4.cmake` (the toolchain FORCE-sets AMEBAD_CHIP). AT_ROOT anchors the repo root so the
+# add_subdirectory(component) below + every ${AT_ROOT}/... ref resolve regardless of CMAKE_SOURCE_DIR.
+cmake_minimum_required(VERSION 3.20)
+project(app_km4 C CXX ASM)
+get_filename_component(AT_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
+set(AT_ROOT "${AT_ROOT}" CACHE INTERNAL "at-project repo root")
+add_subdirectory(${AT_ROOT}/component ${CMAKE_BINARY_DIR}/component)
+# __FILE__ basename for this app's logs (moved from the deleted root CMakeLists).
+add_compile_options("-fmacro-prefix-map=${CMAKE_CURRENT_LIST_DIR}/=")
+
 # AmebaD KM4 HP application image (image2, non-secure) — produces
 # target_img2_km4.axf. **Bootstrap / WIP**: the full KM4 image2 links the
 # entire WiFi / network / mbedTLS / BT / AT stack (dozens of prebuilt .a plus
@@ -53,7 +65,7 @@ set(_rom_fwlib_ld "${AMEBAD_FWLIB_ROM_KM4_LD}")                      # KM4 fwlib
 set(_rom_str_ld  "${AMEBAD_STRING_ROM_KM4_LD}")                      # KM4 swlib-string ROM symbols (string_rom)
 set(_rom_cmsis_ld "${AMEBAD_CMSIS_ROM_KM4_LD}")                      # KM4 CMSIS mpu/DSP ROM symbols (cmsis_rom)
 set(_rom_wifi_ld "${CMAKE_CURRENT_SOURCE_DIR}/rom_symbol_wifi.ld")   # extra ROM PROVIDEs (PAD_CMD) for lib_wlan
-set(_rom_mbed_ld "${CMAKE_SOURCE_DIR}/component/amebad/mbedtls_rom/mbedtls_rom.ld")  # ROM mbedTLS 2.4.0 + ssl ram map symbols
+set(_rom_mbed_ld "${AT_ROOT}/component/amebad/mbedtls_rom/mbedtls_rom.ld")  # ROM mbedTLS 2.4.0 + ssl ram map symbols
 set(_layout_ld   "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_layout_is.ld")
 set(_combined_ld "${CMAKE_CURRENT_BINARY_DIR}/rlx8721d.ld")
 add_custom_command(
@@ -97,7 +109,7 @@ if(NOT AMEBAD_ENABLE_QUIC)
         "${CMAKE_CURRENT_SOURCE_DIR}/env_cli.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/wifi_cli.c")
     target_include_directories(target_img2_km4 PRIVATE
-        "${CMAKE_SOURCE_DIR}/component/freertos-cli_config/freertos-cli")
+        "${AT_ROOT}/component/freertos-cli_config/freertos-cli")
     # env.c (syscall_config) persists every setenv() to KV/<name> via this link-time wrap; main.c
     # mounts LittleFS + env_init()s globally now, so the WIFI_* / DHCP_* / NTP_SERVER env vars work
     # and persist in EVERY non-QUIC image (not just AWS). __real_setenv resolves to libc's setenv.
@@ -191,7 +203,7 @@ endif()
 if(AMEBAD_ENABLE_ROM_KAT)
     target_sources(target_img2_km4 PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/rom_mbedtls_kat.c"     # known-answer test of the ROM mbedTLS 2.4.0 software crypto
-        "${CMAKE_SOURCE_DIR}/component/amebad/mbedtls_rom/rom_mbedtls.c"  # ROM mbedTLS ram-map glue (use_hw_crypto_func=0)
+        "${AT_ROOT}/component/amebad/mbedtls_rom/rom_mbedtls.c"  # ROM mbedTLS ram-map glue (use_hw_crypto_func=0)
         "${CMAKE_CURRENT_SOURCE_DIR}/rom_hwcrypto_test.c"   # HW-vs-SW compare of rom_ssl_ram_map.h hw_crypto_* (IPSEC engine)
     )
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
@@ -230,7 +242,7 @@ if(AMEBAD_ENABLE_HCI OR AMEBAD_ENABLE_NIMBLE)
     # override the weak {0} stubs (a blob inside the archive wouldn't get pulled).
     # newlib syscalls now come from the syscalls core (linked below).
     set(_hci_grp ",amebad_hci")
-    set(_hci_root "${CMAKE_SOURCE_DIR}/component/amebad/hci")
+    set(_hci_root "${AT_ROOT}/component/amebad/hci")
     if(AMEBAD_HCI_FW_MP)
         set(_hci_fw_src "${_hci_root}/hci_mp_patch.c")
     else()
@@ -283,7 +295,7 @@ endif()
 set(_pk11_grp "")
 if(AMEBAD_ENABLE_PKCS11)
     set(_pk11_grp ",corepkcs11,mbedcrypto,mbedx509,mbedtls,mbedtls_port,mbedtls_config")
-    set(_pal "${CMAKE_SOURCE_DIR}/component/corepkcs11_config/corepkcs11/source/portable/os")
+    set(_pal "${AT_ROOT}/component/corepkcs11_config/corepkcs11/source/portable/os")
     target_sources(target_img2_km4 PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/pkcs11_selftest.c"
         "${_pal}/core_pkcs11_pal_utils.c"      # label <-> filename
@@ -357,18 +369,18 @@ if(AMEBAD_ENABLE_AWS_IOT)
         "${CMAKE_CURRENT_SOURCE_DIR}/ota_pal.c"                   # OTA PAL (slot write + signature verify)
         "${CMAKE_CURRENT_SOURCE_DIR}/ota_app.c"                   # OTA agent wiring (OTA_Init + task)
         "${CMAKE_CURRENT_SOURCE_DIR}/urlparse.c"                  # vendored URL parser (from ngtcp2)
-        "${CMAKE_SOURCE_DIR}/component/amebad/mbed/efuse_api.c")   # efuse_logical_read (BLE MAC @ 0x190); not built into amebad_mbed
-    set_source_files_properties("${CMAKE_SOURCE_DIR}/component/amebad/mbed/efuse_api.c"
+        "${AT_ROOT}/component/amebad/mbed/efuse_api.c")   # efuse_logical_read (BLE MAC @ 0x190); not built into amebad_mbed
+    set_source_files_properties("${AT_ROOT}/component/amebad/mbed/efuse_api.c"
         PROPERTIES COMPILE_OPTIONS "-w")
     set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/urlparse.c"
         PROPERTIES COMPILE_OPTIONS "-w")                          # vendored 3rd-party: silence its warnings
     # coreHTTP (request builder) + its bundled llhttp parser, for ota_http.c.
     target_link_libraries(target_img2_km4 PRIVATE corehttp_config)
     target_include_directories(target_img2_km4 PRIVATE
-        "${CMAKE_SOURCE_DIR}/component/corehttp_config"
-        "${CMAKE_SOURCE_DIR}/component/corehttp_config/corehttp/source/include"
-        "${CMAKE_SOURCE_DIR}/component/corehttp_config/corehttp/source/interface"
-        "${CMAKE_SOURCE_DIR}/component/corehttp_config/corehttp/source/dependency/3rdparty/llhttp/include")
+        "${AT_ROOT}/component/corehttp_config"
+        "${AT_ROOT}/component/corehttp_config/corehttp/source/include"
+        "${AT_ROOT}/component/corehttp_config/corehttp/source/interface"
+        "${AT_ROOT}/component/corehttp_config/corehttp/source/dependency/3rdparty/llhttp/include")
     # coreMQTT-Agent (thread-safe wrapper that lets the telemetry + OTA tasks share one MQTT
     # connection) + the AWS IoT OTA Agent. Both are one-directional: coremqtt_agent calls
     # coreMQTT, aws_ota reaches MQTT only through the consumer-supplied OtaMqttInterface_t — so
@@ -376,11 +388,11 @@ if(AMEBAD_ENABLE_AWS_IOT)
     # PAL's mbedTLS signature verify (x509/pk) is already satisfied by the _aws_grp archives.
     target_link_libraries(target_img2_km4 PRIVATE coremqtt-agent_config ota_config)
     target_include_directories(target_img2_km4 PRIVATE
-        "${CMAKE_SOURCE_DIR}/component/coremqtt-agent_config"
-        "${CMAKE_SOURCE_DIR}/component/coremqtt-agent_config/coremqtt-agent/source/include"
-        "${CMAKE_SOURCE_DIR}/component/ota_config"
-        "${CMAKE_SOURCE_DIR}/component/ota_config/ota/source/include"
-        "${CMAKE_SOURCE_DIR}/component/ota_config/ota/source/portable/os")
+        "${AT_ROOT}/component/coremqtt-agent_config"
+        "${AT_ROOT}/component/coremqtt-agent_config/coremqtt-agent/source/include"
+        "${AT_ROOT}/component/ota_config"
+        "${AT_ROOT}/component/ota_config/ota/source/include"
+        "${AT_ROOT}/component/ota_config/ota/source/portable/os")
     # The OTA lib (ota_mqtt.c stringBuilder) is the only caller of strncat in this image; newlib's
     # strncat is not otherwise pulled, so resolve it to the ROM _strncat (string_rom_km4.ld),
     # mirroring the global memcpy=_memcpy romalias above.
@@ -388,7 +400,7 @@ if(AMEBAD_ENABLE_AWS_IOT)
     # FreeRTOS-Plus-CLI header for aws_cli.c (FreeRTOS_CLIRegisterCommand); the freertos_cli
     # archive is already in the link group via _diag_grp.
     target_include_directories(target_img2_km4 PRIVATE
-        "${CMAKE_SOURCE_DIR}/component/freertos-cli_config/freertos-cli")
+        "${AT_ROOT}/component/freertos-cli_config/freertos-cli")
     # (--wrap=setenv + the LittleFS mount + env_init are now global, in the NOT-QUIC block above.)
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_AWS_IOT)
@@ -445,7 +457,7 @@ if(AMEBAD_VFS_SELFTEST)
                  APPEND PROPERTY COMPILE_DEFINITIONS AMEBAD_VFS_SELFTEST)
     target_compile_definitions(lfs_config PRIVATE AMEBAD_VFS_SELFTEST)
     target_link_libraries(lfs_config PRIVATE amebad_freertos_tcp)
-    target_include_directories(lfs_config PRIVATE "${CMAKE_SOURCE_DIR}/component/syscall_config")
+    target_include_directories(lfs_config PRIVATE "${AT_ROOT}/component/syscall_config")
 endif()
 
 # C++ self-test (cpp_selftest.cpp + LPUART console port). main.c calls
@@ -455,7 +467,7 @@ if(AMEBAD_CPP_SELFTEST)
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
                  APPEND PROPERTY COMPILE_DEFINITIONS AMEBAD_CPP_SELFTEST)
     target_compile_definitions(lfs_config PRIVATE AMEBAD_CPP_SELFTEST)
-    target_sources(lfs_config PRIVATE "${CMAKE_SOURCE_DIR}/component/littlefs_config/cpp_selftest.cpp")
+    target_sources(lfs_config PRIVATE "${AT_ROOT}/component/littlefs_config/cpp_selftest.cpp")
 endif()
 
 # Secure-boot (Ed25519) self-test (make SBOOT=ON). build_image_all.py signs the KM4 image2 in the
@@ -465,7 +477,7 @@ endif()
 # the registration call in main.c.
 if(AMEBAD_SBOOT)
     target_sources(target_img2_km4 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/sboot_cli.c")
-    target_include_directories(target_img2_km4 PRIVATE "${CMAKE_SOURCE_DIR}/build/sboot")
+    target_include_directories(target_img2_km4 PRIVATE "${AT_ROOT}/build/sboot")
     target_compile_definitions(target_img2_km4 PRIVATE AMEBAD_SBOOT)
 endif()
 
@@ -476,19 +488,19 @@ endif()
 if(AMEBAD_ENABLE_WPS)
     target_sources(target_img2_km4 PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/wps_cli.c"
-        "${CMAKE_SOURCE_DIR}/component/amebad/wpa_supplicant/wpa_supplicant/wifi_wps_config.c")
+        "${AT_ROOT}/component/amebad/wpa_supplicant/wpa_supplicant/wifi_wps_config.c")
     target_link_libraries(target_img2_km4 PRIVATE amebad_wpa_supplicant)
     # src root so wifi_wps_config.c's "utils/os.h" / "wps/wps_defs.h" resolve (INTERFACE only has the subdirs);
     # the SDK osdep root resolves os.h's "freertos/wrapper.h" (supplicant util was never compiled in-tree).
     target_include_directories(target_img2_km4 PRIVATE
-        "${CMAKE_SOURCE_DIR}/component/amebad/wpa_supplicant/src"
-        "${CMAKE_SOURCE_DIR}/platform/ameba-rtos-d/component/common/drivers/wlan/realtek/src/osdep")
+        "${AT_ROOT}/component/amebad/wpa_supplicant/src"
+        "${AT_ROOT}/platform/ameba-rtos-d/component/common/drivers/wlan/realtek/src/osdep")
     target_compile_definitions(target_img2_km4 PRIVATE AMEBAD_ENABLE_WPS)
     # Shorten __FILE__ in wifi_wps_config.c's at_log output to the basename (its printf were converted to
     # log_*; without this map the rxi_log line shows the full absolute path, unlike the other sources).
-    set_property(SOURCE "${CMAKE_SOURCE_DIR}/component/amebad/wpa_supplicant/wpa_supplicant/wifi_wps_config.c"
+    set_property(SOURCE "${AT_ROOT}/component/amebad/wpa_supplicant/wpa_supplicant/wifi_wps_config.c"
         APPEND PROPERTY COMPILE_OPTIONS
-        "-fmacro-prefix-map=${CMAKE_SOURCE_DIR}/component/amebad/wpa_supplicant/wpa_supplicant/=")
+        "-fmacro-prefix-map=${AT_ROOT}/component/amebad/wpa_supplicant/wpa_supplicant/=")
 endif()
 
 # DEBUG eFuse provisioning aids (make EFUSE_DEBUG=ON, never ship): the `efuse_burn` console command
@@ -575,8 +587,11 @@ target_link_options(target_img2_km4 PRIVATE
 # builds + installs first. tfm_ns_check.c is a minimal compile/link probe; real
 # PSA calls + NS layout/boot handoff are a follow-on stage.
 if(AMEBAD_TFM_BOOT)
-    set(_tfm_export "${CMAKE_BINARY_DIR}/project/amebad/app_km4_secure/tfm_spe_export")
-    set(_tfm_src    "${CMAKE_SOURCE_DIR}/component/trusted-firmware-m_config/trusted-firmware-m")
+    # Pull the (non-standalone) TF-M SPE sibling into THIS app's build tree — it defines the tfm_spe
+    # ExternalProject target + installs the NS interface export consumed below.
+    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../app_km4_secure ${CMAKE_BINARY_DIR}/app_km4_secure)
+    set(_tfm_export "${CMAKE_BINARY_DIR}/app_km4_secure/tfm_spe_export")
+    set(_tfm_src    "${AT_ROOT}/component/trusted-firmware-m_config/trusted-firmware-m")
     add_dependencies(target_img2_km4 tfm_spe)
     # app_km4 IS the NSPE: issue a real PSA call into TF-M. Link the PSA client
     # interface (tfm_platform_ioctl -> psa_call -> dispatch -> SG veneer) + the

@@ -31,7 +31,7 @@ endif()
 include(ExternalProject)
 
 # ---- Inputs (all absolute) ------------------------------------------------
-set(_tfm_src       "${CMAKE_SOURCE_DIR}/component/trusted-firmware-m_config/trusted-firmware-m")
+set(_tfm_src       "${AT_ROOT}/component/trusted-firmware-m_config/trusted-firmware-m")
 set(_tfm_platform  "${CMAKE_CURRENT_SOURCE_DIR}/platform/rtl8721d")
 set(_tfm_toolchain "${_tfm_src}/toolchain_GNUARM.cmake")
 
@@ -43,7 +43,7 @@ get_filename_component(_tc_bin "${CMAKE_C_COMPILER}" DIRECTORY)
 
 # Python with TF-M's manifest-tool deps (cbor2/jinja2/yaml/click/jsonschema).
 if(NOT DEFINED AMEBAD_TFM_PYTHON)
-    set(AMEBAD_TFM_PYTHON "${CMAKE_SOURCE_DIR}/.venv-tfm/bin/python3"
+    set(AMEBAD_TFM_PYTHON "${AT_ROOT}/.venv-tfm/bin/python3"
         CACHE FILEPATH "Python interpreter for the TF-M manifest tooling")
 endif()
 
@@ -72,7 +72,7 @@ set(_tfm_args
     # SPE + NS, and our submodule stays untouched (TF-M clones into its own build dir).
     # The CC3XX patch (0005) is renamed out (above): it doesn't apply to 3.6.4 and the
     # RTL8721D has no CryptoCell (CRYPTO_HW_ACCELERATOR=OFF -> vanilla software wrappers).
-    "-DMBEDCRYPTO_GIT_REMOTE=${CMAKE_SOURCE_DIR}/component/mbedtls_config/mbedtls"
+    "-DMBEDCRYPTO_GIT_REMOTE=${AT_ROOT}/component/mbedtls_config/mbedtls"
     "-DMBEDCRYPTO_VERSION=mbedtls-3.6.4"
 )
 

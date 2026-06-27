@@ -29,7 +29,7 @@
 #         (flash @ 0x08000000; see project/amebad/flash.ps1).
 # Prereqs: `git submodule update --init --recursive` + ASDK toolchain at toolchain/.
 
-.PHONY: all image configure clean distclean
+.PHONY: all image bootloader_km0 bootloader_km0_2nd app_km0 bootloader_km4 app_km4 clean distclean
 
 REPO       := $(abspath $(CURDIR)/../..)
 GEN        := Ninja
@@ -108,52 +108,59 @@ IMAGE      := $(REPO)/build/amebad/firmware.bin
 
 all: image
 
-# (Re)configure both cores with Ninja. CMake can't change a tree's generator in
-# place, so wipe any non-Ninja tree first (lets you switch from the old Makefiles
-# build). Re-running just updates the NIMBLE/HCI cache vars.
-configure:
-	@for c in km0 km4; do d=$(REPO)/build/$$c; \
-	  [ -f $$d/build.ninja ] || rm -rf $$d; done
-	@[ "$(SBOOT)" = "ON" ] && python3 $(REPO)/component/amebad/image_tool/sboot_keygen.py || true
-	cd $(REPO) && cmake -S . -B build/km0 -G $(GEN) \
-	  -DAMEBAD_CHIP=amebad-km0 \
-	  $$([ -f build/km0/CMakeCache.txt ] || echo -DCMAKE_TOOLCHAIN_FILE=cmake/amebad-km0.cmake) \
-	  -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) \
-	  -DAMEBAD_EFUSE_DEBUG=$(EFUSE_DEBUG) \
-	  -DAMEBAD_RSIP_ENABLE=$(RSIP) \
-	  -DAMEBAD_RSIP_KEY=$(RSIP_KEY) -DAMEBAD_RSIP_IV=$(RSIP_IV)
-	cd $(REPO) && cmake -S . -B build/km4 -G $(GEN) \
-	  -DAMEBAD_CHIP=amebad-km4 \
-	  $$([ -f build/km4/CMakeCache.txt ] || echo -DCMAKE_TOOLCHAIN_FILE=cmake/amebad-km4.cmake) \
-	  -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) \
-	  -DAMEBAD_ENABLE_NIMBLE=$(NIMBLE) -DAMEBAD_ENABLE_HCI=$(HCI) \
-	  -DAMEBAD_ENABLE_QUIC=$(QUIC) -DAMEBAD_ENABLE_PKCS11=$(PKCS11) \
-	  -DAMEBAD_ENABLE_CRYPTOBENCH=$(BENCH) -DAMEBAD_ENABLE_MINIMAL=$(MINIMAL) \
-	  -DAMEBAD_ENABLE_ROM_KAT=$(ROMKAT) -DAMEBAD_ENABLE_IPERF=$(IPERF) \
-	  -DAMEBAD_ENABLE_AWS_IOT=$(AWS) \
-	  -DAMEBAD_FW_VERSION=$(FW_VERSION) \
-	  -DAMEBAD_APP_BUILD=$(APP_BUILD) \
-	  -DAMEBAD_TLS_BACKEND=$(TLS_BACKEND) \
-	  -DAMEBAD_MBEDTLS_HW_GCM=$(HWGCM) \
-	  -DAMEBAD_TFM_BOOT=$(TFM) \
-	  -DAMEBAD_TFM_STORAGE=$(STORAGE) \
-	  -DAMEBAD_VFS_SELFTEST=$(VFSTEST) \
-	  -DAMEBAD_CPP_SELFTEST=$(CPPTEST) \
-	  -DAMEBAD_SBOOT=$(SBOOT) \
-	  -DAMEBAD_ENABLE_WPS=$(WPS) \
-	  -DAMEBAD_EFUSE_DEBUG=$(EFUSE_DEBUG) \
-	  -DAMEBAD_RSIP_ENABLE=$(RSIP) \
-	  -DAMEBAD_RSIP_KEY=$(RSIP_KEY) -DAMEBAD_RSIP_IV=$(RSIP_IV)
+# Per-image standalone builds: each project/amebad/<app> is its own CMake project, configured into
+# its own build/<app> tree with the per-core toolchain (which FORCE-sets AMEBAD_CHIP). The km0 images
+# + bootloaders take only the common flags; only app_km4 reads the full feature set (and pulls in
+# app_km4_secure, the TF-M SPE, as a sub-build).
+TC0 := $(REPO)/cmake/amebad-km0.cmake
+TC4 := $(REPO)/cmake/amebad-km4.cmake
+_COMMON := -G $(GEN) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) -DAMEBAD_EFUSE_DEBUG=$(EFUSE_DEBUG) \
+           -DAMEBAD_RSIP_ENABLE=$(RSIP) -DAMEBAD_RSIP_KEY=$(RSIP_KEY) -DAMEBAD_RSIP_IV=$(RSIP_IV)
+_KM4 := -DAMEBAD_ENABLE_NIMBLE=$(NIMBLE) -DAMEBAD_ENABLE_HCI=$(HCI) -DAMEBAD_ENABLE_QUIC=$(QUIC) \
+        -DAMEBAD_ENABLE_PKCS11=$(PKCS11) -DAMEBAD_ENABLE_CRYPTOBENCH=$(BENCH) -DAMEBAD_ENABLE_MINIMAL=$(MINIMAL) \
+        -DAMEBAD_ENABLE_ROM_KAT=$(ROMKAT) -DAMEBAD_ENABLE_IPERF=$(IPERF) -DAMEBAD_ENABLE_AWS_IOT=$(AWS) \
+        -DAMEBAD_FW_VERSION=$(FW_VERSION) -DAMEBAD_APP_BUILD=$(APP_BUILD) -DAMEBAD_TLS_BACKEND=$(TLS_BACKEND) \
+        -DAMEBAD_MBEDTLS_HW_GCM=$(HWGCM) -DAMEBAD_TFM_BOOT=$(TFM) -DAMEBAD_TFM_STORAGE=$(STORAGE) \
+        -DAMEBAD_VFS_SELFTEST=$(VFSTEST) -DAMEBAD_CPP_SELFTEST=$(CPPTEST) -DAMEBAD_SBOOT=$(SBOOT) \
+        -DAMEBAD_ENABLE_WPS=$(WPS)
 
-# build_image_all.py builds both cores (cmake --build, generator-agnostic — reuses
-# the Ninja trees configured above) and assembles the flashable image.
-image: configure
-	python3 $(REPO)/component/amebad/image_tool/build_image_all.py --out $(IMAGE)
+bootloader_km0:
+	cd $(REPO) && cmake -S project/amebad/bootloader_km0 -B build/bootloader_km0 $(_COMMON) \
+	  $$([ -f build/bootloader_km0/CMakeCache.txt ] || echo -DCMAKE_TOOLCHAIN_FILE=$(TC0))
+	cmake --build $(REPO)/build/bootloader_km0 -t target_loader_km0
+
+bootloader_km0_2nd:
+	cd $(REPO) && cmake -S project/amebad/bootloader_km0_2nd -B build/bootloader_km0_2nd $(_COMMON) \
+	  $$([ -f build/bootloader_km0_2nd/CMakeCache.txt ] || echo -DCMAKE_TOOLCHAIN_FILE=$(TC0))
+	cmake --build $(REPO)/build/bootloader_km0_2nd -t target_loader_2nd
+
+app_km0:
+	cd $(REPO) && cmake -S project/amebad/app_km0 -B build/app_km0 $(_COMMON) \
+	  $$([ -f build/app_km0/CMakeCache.txt ] || echo -DCMAKE_TOOLCHAIN_FILE=$(TC0))
+	cmake --build $(REPO)/build/app_km0 -t target_img2_km0
+
+bootloader_km4:
+	cd $(REPO) && cmake -S project/amebad/bootloader_km4 -B build/bootloader_km4 $(_COMMON) $(_KM4) \
+	  $$([ -f build/bootloader_km4/CMakeCache.txt ] || echo -DCMAKE_TOOLCHAIN_FILE=$(TC4))
+	cmake --build $(REPO)/build/bootloader_km4 -t target_loader_km4
+
+app_km4:
+	cd $(REPO) && cmake -S project/amebad/app_km4 -B build/app_km4 $(_COMMON) $(_KM4) \
+	  $$([ -f build/app_km4/CMakeCache.txt ] || echo -DCMAKE_TOOLCHAIN_FILE=$(TC4))
+	cmake --build $(REPO)/build/app_km4 -t target_img2_km4
+
+# Assemble the flashable image from the per-app build dirs. SBOOT keygen first (the script signs km4
+# image2 with build/sboot/sboot_priv.pem); build_image_all.py reads SBOOT/RSIP/TFM/STORAGE from
+# build/app_km4's cache and only assembles (--no-build; the app targets above did the building).
+image: bootloader_km0 app_km0 bootloader_km4 app_km4
+	@[ "$(SBOOT)" = "ON" ] && python3 $(REPO)/component/amebad/image_tool/sboot_keygen.py || true
+	python3 $(REPO)/component/amebad/image_tool/build_image_all.py --no-build --build-root $(REPO)/build --out $(IMAGE)
 	@echo "==> $(IMAGE)"
 
 clean:
-	@[ -f $(REPO)/build/km0/build.ninja ] && cmake --build $(REPO)/build/km0 -t clean || true
-	@[ -f $(REPO)/build/km4/build.ninja ] && cmake --build $(REPO)/build/km4 -t clean || true
+	@for d in bootloader_km0 bootloader_km0_2nd app_km0 bootloader_km4 app_km4; do \
+	  [ -f $(REPO)/build/$$d/build.ninja ] && cmake --build $(REPO)/build/$$d -t clean || true; done
 
 distclean:
-	rm -rf $(REPO)/build/km0 $(REPO)/build/km4 $(REPO)/build/amebad
+	rm -rf $(REPO)/build/bootloader_km0 $(REPO)/build/bootloader_km0_2nd $(REPO)/build/app_km0 \
+	       $(REPO)/build/bootloader_km4 $(REPO)/build/app_km4 $(REPO)/build/amebad

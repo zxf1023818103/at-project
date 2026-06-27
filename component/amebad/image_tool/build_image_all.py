@@ -39,20 +39,20 @@ import tempfile
 # This script lives in component/amebad/image_tool/ -> repo root is three up.
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
-# (flash offset, basename, build dir relative path under the build tree)
-# The bootloader/app/secure executable dirs live under project/amebad (lib/executable split); their
-# build artifacts mirror that path under each core's build tree (build/km{0,4}/project/amebad/...).
-KM0_BOOT  = ("project/amebad/bootloader_km0/km0_boot_all.bin")
-KM0_IMG2  = ("project/amebad/app_km0/km0_image2_all.bin")
-KM4_BOOT  = ("project/amebad/bootloader_km4/km4_boot_all.bin")
-KM4_IMG2  = ("project/amebad/app_km4/km4_image2_all.bin")
+# Each image is its own standalone CMake project now, so its artifact sits directly in its OWN build
+# dir (<build-root>/<app>/<bin>) — (build-subdir, basename). app_km4_secure (the TF-M SPE) is a
+# sub-build of app_km4, so its tfm_s.bin is under app_km4/app_km4_secure/.
+KM0_BOOT    = ("bootloader_km0", "km0_boot_all.bin")
+KM0_IMG2    = ("app_km0",        "km0_image2_all.bin")
+KM4_BOOT    = ("bootloader_km4", "km4_boot_all.bin")
+KM4_IMG2    = ("app_km4",        "km4_image2_all.bin")
 # TF-M SPE blob — read from the BUILD dir (never the source tree): the in-tree
-# TF-M build (CMake target tfm_spe) copies tfm_s.bin here.
-KM4_TFM_S  = ("project/amebad/app_km4_secure/tfm_s.bin")
+# TF-M build (CMake target tfm_spe, a sub-build of app_km4) copies tfm_s.bin here.
+KM4_TFM_S   = ("app_km4/app_km4_secure", "tfm_s.bin")
 # Standalone FreeRTOS TrustZone secure image (make SECURE=ON), built by the CMake
 # target target_img3_km4_frtos_s -> objcopy raw binary. Same headerless cached-XIP
 # model as tfm_s.bin; laid at the same dynamic IMG3 slot.
-KM4_FRTOS_S = ("project/amebad/app_km4_freertos_secure/freertos_s.bin")
+KM4_FRTOS_S = ("app_km4/app_km4_freertos_secure", "freertos_s.bin")
 
 OFF_KM0_BOOT  = 0x0000
 OFF_KM4_BOOT  = 0x4000
@@ -182,29 +182,34 @@ def sign_km4_image2(img2, priv_pem):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=os.path.join(REPO, "build", "amebad", "Image_All.bin"))
-    ap.add_argument("--km0-build", default=os.path.join(REPO, "build", "km0"))
-    ap.add_argument("--km4-build", default=os.path.join(REPO, "build", "km4"))
+    ap.add_argument("--build-root", default=os.path.join(REPO, "build"),
+                    help="dir holding the per-image build trees (build/<app>/...)")
     ap.add_argument("--no-build", action="store_true",
-                    help="skip cmake, assemble from existing build trees")
+                    help="skip cmake, assemble from the existing per-image build trees")
     args = ap.parse_args()
 
-    tfm_boot = cache_bool(args.km4_build, "AMEBAD_TFM_BOOT")
-    frtos_secure = cache_bool(args.km4_build, "AMEBAD_FREERTOS_SECURE")
-    sboot = cache_bool(args.km4_build, "AMEBAD_SBOOT")
+    br = args.build_root
+    apath = lambda spec: os.path.join(br, spec[0], spec[1])   # (<app-subdir>, <bin>) -> abs path
+    km4_cache = os.path.join(br, "app_km4")                   # SBOOT/RSIP/TFM cache vars live in the km4 app tree
+
+    tfm_boot = cache_bool(km4_cache, "AMEBAD_TFM_BOOT")
+    frtos_secure = cache_bool(km4_cache, "AMEBAD_FREERTOS_SECURE")
+    sboot = cache_bool(km4_cache, "AMEBAD_SBOOT")
 
     if not args.no_build:
-        build(args.km0_build, ["target_loader_km0", "target_img2_km0"])
-        km4_targets = ["target_loader_km4", "target_img2_km4"]
-        if tfm_boot:
-            km4_targets.append("tfm_spe")                  # in-tree TF-M SPE -> tfm_s.bin
+        # each image is its own standalone project / build dir; app_km4 pulls tfm_spe via add_dependencies.
+        build(os.path.join(br, "bootloader_km0"), ["target_loader_km0"])
+        build(os.path.join(br, "app_km0"),        ["target_img2_km0"])
+        build(os.path.join(br, "bootloader_km4"), ["target_loader_km4"])
+        km4_targets = ["target_img2_km4"]
         if frtos_secure:
             km4_targets.append("target_img3_km4_frtos_s")  # FreeRTOS secure image -> freertos_s.bin
-        build(args.km4_build, km4_targets)
+        build(os.path.join(br, "app_km4"), km4_targets)
 
-    km0_boot = read(os.path.join(args.km0_build, KM0_BOOT))
-    km0_img2 = read(os.path.join(args.km0_build, KM0_IMG2))
-    km4_boot = read(os.path.join(args.km4_build, KM4_BOOT))
-    km4_img2 = read(os.path.join(args.km4_build, KM4_IMG2))
+    km0_boot = read(apath(KM0_BOOT))
+    km0_img2 = read(apath(KM0_IMG2))
+    km4_boot = read(apath(KM4_BOOT))
+    km4_img2 = read(apath(KM4_IMG2))
 
     if sboot:
         priv_pem = os.path.join(REPO, "build", "sboot", "sboot_priv.pem")
@@ -218,11 +223,11 @@ def main():
     # region, so the signed blob (payload + SB_HEADER) is what must be encrypted. km0 image2 reads at
     # XIP 0x0c000000, km4 image2 at 0x0e000000 (AN0405 §3.2.2). Encrypting in CMake before this script
     # signed would have signed ciphertext -> IMG2 SBOOT FAIL on a secure-boot board.
-    rsip = cache_bool(args.km4_build, "AMEBAD_RSIP_ENABLE")
+    rsip = cache_bool(km4_cache, "AMEBAD_RSIP_ENABLE")
     rsip_key = rsip_iv = None
     if rsip:
-        rsip_key = cache_str(args.km4_build, "AMEBAD_RSIP_KEY")
-        rsip_iv  = cache_str(args.km4_build, "AMEBAD_RSIP_IV")
+        rsip_key = cache_str(km4_cache, "AMEBAD_RSIP_KEY")
+        rsip_iv  = cache_str(km4_cache, "AMEBAD_RSIP_IV")
         print("\nRSIP-encrypting image2 (sign-then-encrypt): key=%s.. iv=%s.." %
               (rsip_key[:8], rsip_iv[:8]))
         km0_img2 = rsip_encrypt(km0_img2, "0x0c000000", rsip_key, rsip_iv)
@@ -251,19 +256,19 @@ def main():
     secure_blob = None
     secure_label = None
     if tfm_boot:
-        tfm_path = os.path.join(args.km4_build, KM4_TFM_S)
+        tfm_path = apath(KM4_TFM_S)
         if not os.path.exists(tfm_path):
             sys.exit("AMEBAD_TFM_BOOT: %s not found.\n"
                      "  Expected the in-tree TF-M build (CMake target 'tfm_spe') to produce it.\n"
-                     "  Run: cmake --build %s -t tfm_spe" % (tfm_path, args.km4_build))
+                     "  Run: cmake --build %s -t tfm_spe" % (tfm_path, km4_cache))
         secure_blob = read(tfm_path)
         secure_label = "tfm_s.bin (TF-M SPE)"
     elif frtos_secure:
-        frtos_path = os.path.join(args.km4_build, KM4_FRTOS_S)
+        frtos_path = apath(KM4_FRTOS_S)
         if not os.path.exists(frtos_path):
             sys.exit("AMEBAD_FREERTOS_SECURE: %s not found.\n"
                      "  Expected the CMake target 'target_img3_km4_frtos_s' to produce it.\n"
-                     "  Run: cmake --build %s -t target_img3_km4_frtos_s" % (frtos_path, args.km4_build))
+                     "  Run: cmake --build %s -t target_img3_km4_frtos_s" % (frtos_path, km4_cache))
         secure_blob = read(frtos_path)
         secure_label = "freertos_s.bin (FreeRTOS TZ secure)"
 
@@ -322,8 +327,8 @@ def main():
     print("  A. single image (blanks the cal regions):")
     print("       %s  @ 0x08000000" % args.out)
     print("  B. three pieces (keeps existing cal @ 0x08001000-0x08003fff):")
-    print("       %-26s @ 0x08000000" % os.path.join(args.km0_build, KM0_BOOT))
-    print("       %-26s @ 0x08004000" % os.path.join(args.km4_build, KM4_BOOT))
+    print("       %-26s @ 0x08000000" % apath(KM0_BOOT))
+    print("       %-26s @ 0x08004000" % apath(KM4_BOOT))
     print("       %-26s @ 0x08006000" % merged)
 
 

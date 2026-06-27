@@ -1,3 +1,12 @@
+# ---- standalone CMake project (lib/executable split: libs in component, this image here) ----
+# Built via `cmake -S project/amebad/app_km0 -B build/app_km0 -DCMAKE_TOOLCHAIN_FILE=cmake/amebad-km0.cmake`
+# (the toolchain FORCE-sets AMEBAD_CHIP). AT_ROOT anchors the repo root for add_subdirectory(component).
+cmake_minimum_required(VERSION 3.20)
+project(app_km0 C CXX ASM)
+get_filename_component(AT_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
+set(AT_ROOT "${AT_ROOT}" CACHE INTERNAL "at-project repo root")
+add_subdirectory(${AT_ROOT}/component ${CMAKE_BINARY_DIR}/component)
+
 # AmebaD KM0 LP application image (image2) — produces target_img2_km0.axf.
 #
 # Stage 1 of the KM0 image2 pipeline: ELF/AXF link. Mirrors the

@@ -20,7 +20,7 @@
 # (EXCLUDE_FROM_ALL-style: only the consuming port pulls it). It needs FreeRTOS +
 # the mbedcrypto build on whatever platform builds it.
 
-set(_nb "${CMAKE_SOURCE_DIR}/component/nimble_config/nimble")
+set(_nb "${AT_ROOT}/component/nimble_config/nimble")
 
 add_library(nimble_config STATIC EXCLUDE_FROM_ALL
     "${CMAKE_CURRENT_SOURCE_DIR}/nimble_app.c"         # amebad_nimble_start() + host task (printf)

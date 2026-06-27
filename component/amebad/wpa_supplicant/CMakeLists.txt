@@ -54,7 +54,7 @@ target_include_directories(amebad_wpa_supplicant SYSTEM INTERFACE
 add_library(amebad_wps STATIC IMPORTED GLOBAL)
 set_target_properties(amebad_wps PROPERTIES
     IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/lib_wps.a"
-    INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/component/amebad/wlan")
+    INTERFACE_INCLUDE_DIRECTORIES "${AT_ROOT}/component/amebad/wlan")
 # EAP peer / 802.1X methods (PEAP/TLS/TTLS/FAST/MSCHAPv2 + des/md4/sha1/rc4/
 # ms_funcs). Mutually referential with amebad_wps -> same image2 --start-group.
 # Defined but not linked yet (WPA-Enterprise; gated by CONFIG_ENABLE_EAP).

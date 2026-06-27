@@ -22,7 +22,7 @@ if(NOT "${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     return()
 endif()
 
-set(_nb "${CMAKE_SOURCE_DIR}/component/nimble_config/nimble")
+set(_nb "${AT_ROOT}/component/nimble_config/nimble")
 if(NOT EXISTS "${_nb}/nimble/host/src/ble_hs.c")
     message(FATAL_ERROR
         "component/amebad/nimble_port: NimBLE submodule missing — run "

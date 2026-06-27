@@ -10,19 +10,36 @@
 #      BOUFFALO_CHIP / AMEBAD_CHIP — each owns its own branch + the chip-specific companions.
 #
 # The universal *_config that EVERY build needs (zlib, cjson, littlefs, console, tlsf_config,
-# freertos-kernel, freertos-posix) are added one level up in the root CMakeLists, before src/ — so
-# FreeRTOS / freertos_config / at_console / littlefs already exist by the time we get here.
+# freertos-kernel, freertos-posix) are added FIRST, below — so add_subdirectory(component) is
+# self-sufficient: a standalone consumer (each project/amebad image, project/bouffalo) needs only it.
+# Guarded so a caller that already added them directly (project/ameba) doesn't double-add.
+
+# =====================================================================
+# Universal config components every build needs — added FIRST so the *_config + platform subtrees
+# below resolve FreeRTOS / freertos_config / at_console / littlefs / zlibstatic. Ordering:
+# freertos-kernel before freertos-posix. Guard: skip if a non-component consumer already added them.
+# =====================================================================
+if(NOT TARGET FreeRTOS)
+    add_subdirectory(zlib_config)
+    add_subdirectory(cjson_config)
+    add_subdirectory(littlefs_config)
+    add_subdirectory(console)
+    add_subdirectory(tlsf_config)
+    add_subdirectory(freertos-kernel_config)
+    add_subdirectory(freertos-posix_config)
+endif()
 
 # QUIC self-test option (ngtcp2 + picotls/mbedTLS TLS 1.3 — wolfSSL was retired). AmebaD app_km4
 # reads it; ngtcp2_config builds its crypto only when ON. Declared before the block that consumes it.
 option(AMEBAD_ENABLE_QUIC "Build the ngtcp2 + picotls/mbedTLS QUIC client self-test" OFF)
 
 # =====================================================================
-# Cross-platform config components — unconditional (all EXCLUDE_FROM_ALL,
-# built only when a platform consumer links them). Ordering matters:
-#   freertos-plus-tcp_config  before  syscall_config   (syscall PRIVATE-links it)
-#   mbedtls_config            before  ngtcp2_config / picotls_config (they link mbedcrypto)
+# AmebaD-coupled cross-platform config components. Gated to NON-Bouffalo: Bouffalo brings its own
+# mbedtls/lwip via bouffalo_sdk (which add_subdirectory()s mbedtls_config itself — adding it here too
+# double-defines mbedcrypto), and needs none of the AWS/QUIC/NimBLE configs. All EXCLUDE_FROM_ALL.
+# Ordering: freertos-plus-tcp_config before syscall_config; mbedtls_config before ngtcp2/picotls.
 # =====================================================================
+if(NOT BOUFFALO_CHIP)
 add_subdirectory(freertos-plus-tcp_config)  # FreeRTOS-Plus-TCP V4.0.0 core stack + FreeRTOSIPConfig.h
 add_subdirectory(ngtcp2_config)             # ngtcp2 QUIC + the picotls crypto binding (built only when AMEBAD_ENABLE_QUIC)
 add_subdirectory(coremqtt_config)           # coreMQTT v5.0.2 static lib + core_mqtt_config.h
@@ -41,6 +58,7 @@ add_subdirectory(mbedtls_config)            # upstream Mbed TLS v3.6.4 -> mbedcr
 add_subdirectory(corepkcs11_config)         # PKCS#11 software token over mbedcrypto/mbedx509 (PAL consumer-supplied)
 add_subdirectory(picotls_config)            # TLS 1.3 core + mbedTLS/PSA backend (picotls_mbedtls) for ngtcp2 QUIC
 add_subdirectory(network_transport)         # TransportInterface_t impls over mbedtls_config + freertos-plus-tcp_config — coreMQTT TLS transport
+endif()  # NOT BOUFFALO_CHIP
 
 # lfs_image — host-side LittleFS image builder (cross-platform). Dual-mode CMakeLists: add_subdirectory
 # here registers the helper function lfs_image_add(); the standalone host sub-build is launched

@@ -400,7 +400,7 @@ function(amebad_make_image_all_bin)
     if(NOT TARGET amebad_image_all)
         add_custom_target(amebad_image_all
             COMMAND "${AMEBAD_PYTHON3}" "${AMEBAD_BUILD_IMAGE_ALL_PY}" ${_args}
-            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            WORKING_DIRECTORY "${AT_ROOT}"
             USES_TERMINAL
             COMMENT "amebad: build both cores + assemble Image_All.bin (build_image_all.py)"
             VERBATIM

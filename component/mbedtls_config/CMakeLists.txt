@@ -61,7 +61,7 @@ if("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
             # opendir/readdir defs); put its dir on the include path AHEAD of the sysroot so the
             # mbedtls FS_IO sources (parse_file/parse_path) compile on this bare-metal target.
             target_include_directories(${_t} BEFORE PRIVATE
-                "${CMAKE_SOURCE_DIR}/component/syscall_config")
+                "${AT_ROOT}/component/syscall_config")
         endif()
     endforeach()
 endif()

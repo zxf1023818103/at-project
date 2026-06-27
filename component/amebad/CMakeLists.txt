@@ -106,7 +106,7 @@ add_subdirectory(platform_stdlib)    # header-only libc-retarget header (amebad_
 # ============================================================================================
 # amebad_sdk_includes + amebad_freertos_headers  (folded in from the former sdk_headers/ subdir,
 # which by then held only this CMakeLists - the SDK platform headers it once carried had already
-# moved to their owners). All paths are absolute (${CMAKE_SOURCE_DIR}/...), so no relocation was
+# moved to their owners). All paths are absolute (${AT_ROOT}/...), so no relocation was
 # needed. Sits here (after the header-only components it links, before usrcfg) to keep the same
 # target-definition order; the forward refs to later components (osdep/monitor/pmu/...) resolve
 # at generate time as before.
@@ -151,10 +151,10 @@ if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
 else()
     set(_frt_port_path "GCC/ARM_CM33_NTZ/non_secure")
 endif()
-set(_frt_src "${CMAKE_SOURCE_DIR}/component/freertos-kernel_config/freertos-kernel")
+set(_frt_src "${AT_ROOT}/component/freertos-kernel_config/freertos-kernel")
 add_library(amebad_freertos_headers INTERFACE)
 target_include_directories(amebad_freertos_headers SYSTEM INTERFACE
-    "${CMAKE_SOURCE_DIR}/component/amebad/freertos_port"   # freertos_service.h / freertos_heap5_config.h
+    "${AT_ROOT}/component/amebad/freertos_port"   # freertos_service.h / freertos_heap5_config.h
     "${_frt_src}/include"
     "${_frt_src}/portable/${_frt_port_path}")
 

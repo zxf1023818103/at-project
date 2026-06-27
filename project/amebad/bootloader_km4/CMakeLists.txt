@@ -1,3 +1,17 @@
+# ---- standalone CMake project (lib/executable split: libs in component, this image here) ----
+# Built via `cmake -S project/amebad/bootloader_km4 -B build/bootloader_km4 -DCMAKE_TOOLCHAIN_FILE=
+# cmake/amebad-km4.cmake` (the toolchain FORCE-sets AMEBAD_CHIP). AT_ROOT anchors the repo root.
+cmake_minimum_required(VERSION 3.20)
+project(bootloader_km4 C CXX ASM)
+get_filename_component(AT_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
+set(AT_ROOT "${AT_ROOT}" CACHE INTERNAL "at-project repo root")
+add_subdirectory(${AT_ROOT}/component ${CMAKE_BINARY_DIR}/component)
+# This bootloader has no app of its own, but the lib-side amebad_sdk_includes links
+# amebad_proj_config for the per-core platform_opts/autoconf headers fwlib needs — point it at
+# the matching app_km4 config dir (what the old shared per-core configure provided).
+add_library(amebad_proj_config INTERFACE)
+target_include_directories(amebad_proj_config SYSTEM INTERFACE "${CMAKE_CURRENT_LIST_DIR}/../app_km4")
+
 # AmebaD KM4 HP bootloader — produces the target_loader_km4 ELF.
 #
 # Stage 1 of the KM4 image pipeline: ELF/AXF link only. Mirrors

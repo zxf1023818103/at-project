@@ -53,7 +53,7 @@ target_link_libraries(amebad_freertos_tcp PUBLIC
 # here -> cycle). lwip is gone.
 target_link_libraries(amebad_freertos_tcp PRIVATE amebad_netif_shim)
 target_include_directories(amebad_freertos_tcp PRIVATE
-    "${CMAKE_SOURCE_DIR}/component/amebad/wlan/osdep"
+    "${AT_ROOT}/component/amebad/wlan/osdep"
 )
 
 target_compile_options(amebad_freertos_tcp PRIVATE
