@@ -113,7 +113,7 @@ if(NOT AMEBAD_ENABLE_QUIC)
     # env.c (syscall_config) persists every setenv() to KV/<name> via this link-time wrap; main.c
     # mounts LittleFS + env_init()s globally now, so the WIFI_* / DHCP_* / NTP_SERVER env vars work
     # and persist in EVERY non-QUIC image (not just AWS). __real_setenv resolves to libc's setenv.
-    target_link_options(target_img2_km4 PRIVATE "-Wl,--wrap=setenv")
+    target_link_options(target_img2_km4 PRIVATE "-Wl,--wrap=setenv" "-Wl,--wrap=unsetenv")
     # fs_cli's md5sum/sha*sum ride the standard upstream Mbed TLS module API (mbedcrypto,
     # linked via _hash_grp / the feature _grp). Compiled out in a ROMKAT=ON build, which
     # links the ABI-incompatible ROM mbedTLS instead.

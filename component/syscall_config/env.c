@@ -120,3 +120,18 @@ int __wrap_setenv(const char *name, const char *value, int overwrite)
         env_save(name);
     return r;
 }
+
+/* the real libc unsetenv, exposed by `-Wl,--wrap=unsetenv` */
+extern int __real_unsetenv(const char *name);
+
+/* unsetenv() interceptor (-Wl,--wrap=unsetenv): drop via the real libc, then remove the backing
+ * KV/<name> file so the unset persists across reboot (env_init would otherwise reload it). Without
+ * this, the CLI's `setenv <name>` with no value (which calls unsetenv) only cleared environ, and
+ * the var reappeared on the next boot. */
+int __wrap_unsetenv(const char *name)
+{
+    int r = __real_unsetenv(name);
+    if (r == 0)
+        (void)env_save(name);   /* getenv()==NULL now -> env_save removes KV/<name> */
+    return r;
+}
