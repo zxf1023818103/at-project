@@ -12,7 +12,6 @@
  * once those subsystems are wired in.
  */
 #include "ameba_soc.h"
-#include "freertos_service.h"
 
 __attribute__((weak)) int CRYPTO_Init(HAL_CRYPTO_ADAPTER *pIE)
 {
