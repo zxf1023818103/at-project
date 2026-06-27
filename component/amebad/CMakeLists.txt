@@ -266,6 +266,7 @@ add_subdirectory(mbedtls_port)            # KM4-gated: AmebaD port of upstream m
 # port (in-tree) that links it. The port also owns the netif_shim ABI header (INTERFACE
 # target amebad_netif_shim).
 add_subdirectory(freertos_tcp_port)  # KM4-gated: Realtek WiFi <-> stack bridge (`amebad_freertos_tcp`, DHCP bring-up, EXCLUDE)
+add_subdirectory(cares_port)         # synchronous c-ares resolver front-end (`cares_port`); compiled only when app_km4 links it (CARES=ON)
 add_subdirectory(pmu)                # chip-gated: prebuilt PMC lib (lib_pmc_lp/hp.a) + pmu headers
 add_subdirectory(wlan)               # KM4-gated: host WiFi driver libs (lib_wlan*.a) + API headers
 add_subdirectory(wpa_supplicant)     # KM4-gated: supplicant cores (lib_wps.a + lib_eap.a) + config/glue source + headers

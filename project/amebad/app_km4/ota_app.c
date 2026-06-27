@@ -44,6 +44,9 @@
 
 #include "FreeRTOS_IP.h"
 #include "FreeRTOS_Sockets.h"
+#ifdef AT_PROJECT_CARES
+#include "cares_resolve.h"
+#endif
 #include "FreeRTOS_DNS.h"
 
 #include "ota_app.h"
@@ -348,7 +351,14 @@ static OtaHttpStatus_t prvHttpOpenConn( void )
         TickType_t rt = pdMS_TO_TICKS( OTA_HTTP_RECV_TMO_MS );
         TickType_t wt = pdMS_TO_TICKS( OTA_HTTP_SEND_TMO_MS );
 
+#ifdef AT_PROJECT_CARES
+        {
+            struct freertos_sockaddr fa;
+            ip = ( cares_resolve( s_http.host, FREERTOS_AF_INET, &fa ) == 0 ) ? fa.sin_address.ulIP_IPv4 : 0U;
+        }
+#else
         ip = FreeRTOS_gethostbyname( s_http.host );
+#endif
         if( ip == 0 )
         {
             OTA_APP_LOG( "http: DNS lookup of %s FAIL", s_http.host );

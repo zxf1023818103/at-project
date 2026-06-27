@@ -23,6 +23,9 @@
 #include "semphr.h"           /* s_sntp_lock: serialize sntp_sync_once (task vs console) */
 #include "FreeRTOS_IP.h"
 #include "FreeRTOS_Sockets.h"
+#ifdef AT_PROJECT_CARES
+#include "cares_resolve.h"
+#endif
 #include "FreeRTOS_DNS.h"     /* FreeRTOS_gethostbyname */
 
 #include "core_sntp_client.h"
@@ -67,6 +70,14 @@ static bool sntp_resolve_dns( const SntpServerInfo_t * srv, uint32_t * ip )
 
     if( *ip == 0U )
     {
+#ifdef AT_PROJECT_CARES
+        struct freertos_sockaddr fa;
+
+        if( cares_resolve( srv->pServerName, FREERTOS_AF_INET, &fa ) == 0 )
+        {
+            *ip = fa.sin_address.ulIP_IPv4;                 /* network-order IPv4 */
+        }
+#else
         struct freertos_addrinfo   hints;
         struct freertos_addrinfo * res = NULL;
 
@@ -82,6 +93,7 @@ static bool sntp_resolve_dns( const SntpServerInfo_t * srv, uint32_t * ip )
         {
             FreeRTOS_freeaddrinfo( res );
         }
+#endif
     }
     return ( *ip != 0U );
 }

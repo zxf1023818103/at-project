@@ -84,6 +84,33 @@ static void from_freertos(const struct freertos_sockaddr *fa, struct sockaddr *s
     }
 }
 
+/* ---- connected-UDP shim (for c-ares): FreeRTOS+TCP has no connect() on a UDP socket, so we
+ * remember the peer set via connect() on a SOCK_DGRAM fd and route send()/recv() on it through
+ * FreeRTOS_sendto()/FreeRTOS_recvfrom(). socket() (re)registers a fd, so closed-fd reuse is fine. */
+static struct udp_ent {
+    int                      fd;        /* 0 = free (socket fds are >= 3) */
+    int                      has_peer;
+    struct freertos_sockaddr peer;
+} s_udp[ 8 ];
+
+static struct udp_ent *udp_find(int fd)
+{
+    int i;
+    for (i = 0; i < 8; i++) { if (s_udp[i].fd == fd) { return &s_udp[i]; } }
+    return NULL;
+}
+
+static void udp_track(int fd, int is_udp)
+{
+    struct udp_ent *e = udp_find(fd);
+    if (is_udp) {
+        if (e == NULL) { int i; for (i = 0; i < 8; i++) { if (s_udp[i].fd == 0) { e = &s_udp[i]; break; } } }
+        if (e != NULL) { e->fd = fd; e->has_peer = 0; }
+    } else if (e != NULL) {
+        e->fd = 0; e->has_peer = 0;
+    }
+}
+
 /* ------------------------------------------------------------ socket lifecycle --- */
 
 int socket(int domain, int type, int protocol)
@@ -111,6 +138,7 @@ int socket(int domain, int type, int protocol)
         FreeRTOS_closesocket(s);
         return -1;
     }
+    udp_track(fd, type == SOCK_DGRAM);
     return fd;
 }
 
@@ -155,13 +183,27 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
 {
     Socket_t s = sock(fd);
     struct freertos_sockaddr fa;
+    struct udp_ent *e;
 
     if (s == NULL) { errno = EBADF; return -1; }
     if (to_freertos(addr, addrlen, &fa) != 0) { return -1; }
-    /* FreeRTOS_connect blocks until connected/timeout — non-blocking connect() callers
-     * (poll-for-writable) still work since the subsequent poll reports ready. */
-    if (FreeRTOS_connect(s, &fa, sizeof(fa)) != 0) { errno = ECONNREFUSED; return -1; }
-    return 0;
+    e = udp_find(fd);
+    if (e != NULL) {                       /* connected UDP: remember the peer, no FreeRTOS_connect */
+        e->peer = fa;
+        e->has_peer = 1;
+        return 0;
+    }
+    {
+        BaseType_t r = FreeRTOS_connect(s, &fa, sizeof(fa));
+        if (r == 0) { return 0; }
+        /* A non-blocking socket (c-ares sets SO_RCVTIMEO/SNDTIMEO=0) reports the connect as
+         * in-progress; surface EINPROGRESS so the caller waits for writable via select() instead
+         * of treating it as a hard failure. A blocking socket (e.g. iperf) returns 0 above. */
+        if (r == -pdFREERTOS_ERRNO_EWOULDBLOCK || r == -pdFREERTOS_ERRNO_EINPROGRESS) {
+            errno = EINPROGRESS; return -1;
+        }
+        errno = ECONNREFUSED; return -1;
+    }
 }
 
 int shutdown(int fd, int how)
@@ -203,10 +245,18 @@ ssize_t recv(int fd, void *buf, size_t len, int flags)
 {
     Socket_t s = sock(fd);
     BaseType_t f = (flags & MSG_DONTWAIT) ? FREERTOS_MSG_DONTWAIT : 0;
+    struct udp_ent *e;
     BaseType_t r;
 
     if (s == NULL) { errno = EBADF; return -1; }
-    r = FreeRTOS_recv(s, buf, len, f);
+    e = udp_find(fd);
+    if (e != NULL && e->has_peer) {        /* connected UDP -> recvfrom (source ignored) */
+        struct freertos_sockaddr fa;
+        socklen_t falen = sizeof(fa);
+        r = FreeRTOS_recvfrom(s, buf, len, f, &fa, &falen);
+    } else {
+        r = FreeRTOS_recv(s, buf, len, f);
+    }
     if (r < 0) { errno = (r == -pdFREERTOS_ERRNO_EWOULDBLOCK) ? EWOULDBLOCK : EIO; return -1; }
     return (ssize_t)r;
 }
@@ -215,10 +265,16 @@ ssize_t send(int fd, const void *buf, size_t len, int flags)
 {
     Socket_t s = sock(fd);
     BaseType_t f = (flags & MSG_DONTWAIT) ? FREERTOS_MSG_DONTWAIT : 0;
+    struct udp_ent *e;
     BaseType_t r;
 
     if (s == NULL) { errno = EBADF; return -1; }
-    r = FreeRTOS_send(s, buf, len, f);
+    e = udp_find(fd);
+    if (e != NULL && e->has_peer) {        /* connected UDP -> sendto the remembered peer */
+        r = FreeRTOS_sendto(s, buf, len, f, &e->peer, sizeof(e->peer));
+    } else {
+        r = FreeRTOS_send(s, buf, len, f);
+    }
     if (r < 0) { errno = (r == -pdFREERTOS_ERRNO_EWOULDBLOCK) ? EWOULDBLOCK : EIO; return -1; }
     return (ssize_t)r;
 }
@@ -479,3 +535,56 @@ unsigned int sleep(unsigned int seconds) { vTaskDelay(pdMS_TO_TICKS(seconds * 10
 
 #include <sys/resource.h>
 int getrusage(int who, struct rusage *usage) { (void)who; if (usage) memset(usage, 0, sizeof(*usage)); return 0; }
+
+/* ------------------------------------------------------------- c-ares extras --- */
+#include <netdb.h>
+#include <fcntl.h>
+#include <stdarg.h>
+#include <sys/uio.h>
+
+/* c-ares' service-name->port path calls getservbyname(); we always pass a NULL service, so this
+ * is never actually reached. Stub it so the symbol resolves. */
+struct servent *getservbyname(const char *name, const char *proto)
+{
+    (void)name; (void)proto;
+    return NULL;
+}
+
+/* fcntl: c-ares sets a socket non-blocking via fcntl(fd, F_SETFL, flags|O_NONBLOCK). Map that to
+ * FreeRTOS+TCP's zero recv/send timeout (= non-blocking); select() then provides readiness. Other
+ * commands and non-socket fds are a benign no-op (F_GETFL returns 0; c-ares ORs in O_NONBLOCK). */
+int fcntl(int fd, int cmd, ...)
+{
+    Socket_t s = sock(fd);
+
+    if (cmd == F_SETFL) {
+        va_list ap;
+        int     arg;
+        va_start(ap, cmd);
+        arg = va_arg(ap, int);
+        va_end(ap);
+        if (s != NULL && (arg & O_NONBLOCK)) {
+            TickType_t z = 0;
+            (void)FreeRTOS_setsockopt(s, 0, FREERTOS_SO_RCVTIMEO, &z, sizeof(z));
+            (void)FreeRTOS_setsockopt(s, 0, FREERTOS_SO_SNDTIMEO, &z, sizeof(z));
+        }
+    }
+    return 0;
+}
+
+/* writev: c-ares uses it for TCP DNS sends. Walk the iovec, send() each chunk. */
+ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
+{
+    ssize_t total = 0;
+    int     i;
+
+    for (i = 0; i < iovcnt; i++) {
+        ssize_t n;
+        if (iov[i].iov_len == 0) { continue; }
+        n = send(fd, iov[i].iov_base, iov[i].iov_len, 0);
+        if (n < 0) { return (total > 0) ? total : -1; }
+        total += n;
+        if ((size_t)n < iov[i].iov_len) { break; }   /* short write -> stop */
+    }
+    return total;
+}

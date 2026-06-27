@@ -104,3 +104,6 @@
 [submodule "component/rxi_log_config/log"]
 	path = component/rxi_log_config/log
 	url = https://github.com/rxi/log.c
+[submodule "component/c-ares_config/c-ares"]
+	path = component/c-ares_config/c-ares
+	url = https://github.com/c-ares/c-ares

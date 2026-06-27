@@ -53,6 +53,7 @@ add_subdirectory(coresntp_config)           # coreSNTP SNTPv4 client static lib 
 add_subdirectory(freertos-cli_config)       # FreeRTOS-Plus-CLI V202212.00 static lib
 add_subdirectory(nimble_config)             # INTERFACE: NimBLE syscfg + upstream include surface
 add_subdirectory(syscall_config)            # newlib retarget OBJECT lib (VFS + malloc + byte-order); PRIVATE-links freertos-plus-tcp_config + at_console
+add_subdirectory(c-ares_config)             # c-ares async DNS resolver (compiled only when linked / targeted; wired in under CARES=ON)
 add_subdirectory(rxi_log_config)            # rxi log.c (leveled logger) + FreeRTOS-mutex lock via log_set_lock
 add_subdirectory(mbedtls_config)            # upstream Mbed TLS v3.6.4 -> mbedcrypto / mbedx509 / mbedtls
 add_subdirectory(corepkcs11_config)         # PKCS#11 software token over mbedcrypto/mbedx509 (PAL consumer-supplied)

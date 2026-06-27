@@ -41,6 +41,16 @@ int  getaddrinfo(const char *node, const char *service,
 void freeaddrinfo(struct addrinfo *res);
 const char *gai_strerror(int errcode);
 
+/* getservbyname: only referenced by c-ares' service-name->port path, which we never hit (we pass a
+ * NULL service). bsd_socket.c stubs it to return NULL. The struct lets c-ares compile. */
+struct servent {
+    char  *s_name;
+    char **s_aliases;
+    int    s_port;
+    char  *s_proto;
+};
+struct servent *getservbyname(const char *name, const char *proto);
+
 #ifdef __cplusplus
 }
 #endif

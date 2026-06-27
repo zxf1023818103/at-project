@@ -21,6 +21,9 @@
 #include "wifi_ind.h"             /* wifi_ind EventGroup: wifi_event_wait / WIFI_EVENT_BIT (wifi_ind.c) */
 #include "FreeRTOS_IP.h"
 #include "FreeRTOS_Routing.h"     /* NetworkInterface_t / NetworkEndPoint_t / FillEndPoint */
+#ifdef AT_PROJECT_CARES
+#include "cares_resolve.h"        /* c-ares resolver channel (CARES=ON) */
+#endif
 #include "FreeRTOS_DHCP.h"        /* eGetDHCPState / eNotUsingLeasedAddress: reject DHCP fallback-up */
 #include "NetworkBufferManagement.h"  /* pxGetNetworkBufferWithDescriptor: hand-crafted MLDv2 report TX */
 #include "FreeRTOS_ND.h"              /* vRAProcess: restart SLAAC once the MLD join lets RAs through */
@@ -609,6 +612,12 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
                     log_info( "[KM4] DNS override -> %s / %s", d1, ( d2 != NULL ) ? d2 : "-" );
                 }
             }
+#ifdef AT_PROJECT_CARES
+            /* (Re)point the c-ares channel at the current DNS servers (DHCP-learned + the override
+             * above). cares_resolver_init() is a no-op after the first network-up. */
+            cares_resolver_init();
+            cares_resolver_set_servers();
+#endif
             if( ulDHCPNtpServerAddress != 0U )
             {
                 fmt_ipv4( ulDHCPNtpServerAddress, b, sizeof( b ) );

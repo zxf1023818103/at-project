@@ -40,6 +40,9 @@
 #include "FreeRTOS_Sockets.h"
 #include "FreeRTOS_DNS.h"
 #include "FreeRTOS_Routing.h"
+#ifdef AT_PROJECT_CARES
+#include "cares_resolve.h"
+#endif
 
 /* Logging configuration for the Sockets. */
 #ifndef LIBRARY_LOG_NAME
@@ -125,10 +128,9 @@ BaseType_t TCP_Sockets_Connect( Socket_t * pTcpSocket,
     Socket_t tcpSocket = FREERTOS_INVALID_SOCKET;
     BaseType_t socketStatus = FREERTOS_SOCKETS_WRAPPER_NETWORK_ERROR;
     TickType_t transportTimeout = 0;
-    struct freertos_addrinfo   hints;
-    struct freertos_addrinfo * pxOrder[ 2 ] = { NULL, NULL };   /* [0] = IPv6 (preferred), [1] = IPv4 */
+    struct freertos_sockaddr   resolved[ 2 ];                   /* [0] = IPv6 (preferred), [1] = IPv4 */
+    BaseType_t                 have[ 2 ] = { pdFALSE, pdFALSE };
     const BaseType_t           xFamily[ 2 ] = { FREERTOS_AF_INET6, FREERTOS_AF_INET };
-    struct freertos_addrinfo * ai;
     size_t uxIdx;
 
     configASSERT( pTcpSocket != NULL );
@@ -176,31 +178,52 @@ BaseType_t TCP_Sockets_Connect( Socket_t * pTcpSocket,
         }
     }
 
-    /* Resolve AAAA (IPv6) and A (IPv4) separately -- FreeRTOS_getaddrinfo resolves one family per
-     * call. AWS IoT publishes both, so on an IPv6-capable network (e.g. an iPad Personal Hotspot)
-     * we connect over IPv6 (pxOrder[0]) and fall back to IPv4 (pxOrder[1]) elsewhere. */
+    /* Resolve AAAA (IPv6) then A (IPv4) into resolved[]/have[] -- one family per query. AWS IoT
+     * publishes both, so on an IPv6-capable network we connect over IPv6 (resolved[0]) and fall back
+     * to IPv4 (resolved[1]) elsewhere. Under CARES=ON each query goes through c-ares; otherwise the
+     * FreeRTOS+TCP resolver. */
     for( uxIdx = 0; uxIdx < 2U; uxIdx++ )
     {
-        BaseType_t xRc;
+        have[ uxIdx ] = pdFALSE;
 
-        /* Skip the IPv6 (AAAA) attempt when there is no routable global IPv6 address on this link:
-         * otherwise the IPv6 connect below blocks ~20 s timing out before the IPv4 fallback (e.g. a
-         * network that resolves AAAA but has no IPv6 internet route). */
+        /* Skip the IPv6 attempt when there is no routable global IPv6 address on this link: otherwise
+         * the IPv6 connect below blocks ~20 s timing out before the IPv4 fallback (e.g. a network
+         * that resolves AAAA but has no IPv6 internet route). */
         if( ( xFamily[ uxIdx ] == FREERTOS_AF_INET6 ) && ( prvHasGlobalIPv6() == pdFALSE ) )
         {
             continue;
         }
 
-        ( void ) memset( &hints, 0, sizeof( hints ) );
-        hints.ai_family = xFamily[ uxIdx ];
-        xRc = FreeRTOS_getaddrinfo( pHostName, NULL, &hints, &( pxOrder[ uxIdx ] ) );
-        LogInfo( ( "DNS %s for %s: rc=%d %s",
-                   ( xFamily[ uxIdx ] == FREERTOS_AF_INET6 ) ? "AAAA" : "A",
-                   pHostName, ( int ) xRc,
-                   ( pxOrder[ uxIdx ] != NULL ) ? "resolved" : "no-record" ) );
+        #ifdef AT_PROJECT_CARES
+            if( cares_resolve( pHostName, ( int ) xFamily[ uxIdx ], &( resolved[ uxIdx ] ) ) == 0 )
+            {
+                have[ uxIdx ] = pdTRUE;
+            }
+            LogInfo( ( "DNS %s for %s: %s (c-ares)",
+                       ( xFamily[ uxIdx ] == FREERTOS_AF_INET6 ) ? "AAAA" : "A",
+                       pHostName, ( have[ uxIdx ] != pdFALSE ) ? "resolved" : "no-record" ) );
+        #else
+            {
+                struct freertos_addrinfo   hints;
+                struct freertos_addrinfo * res = NULL;
+
+                ( void ) memset( &hints, 0, sizeof( hints ) );
+                hints.ai_family = xFamily[ uxIdx ];
+                if( ( FreeRTOS_getaddrinfo( pHostName, NULL, &hints, &res ) == 0 ) &&
+                    ( res != NULL ) && ( res->ai_addr != NULL ) )
+                {
+                    ( void ) memcpy( &( resolved[ uxIdx ] ), res->ai_addr, sizeof( resolved[ uxIdx ] ) );
+                    have[ uxIdx ] = pdTRUE;
+                }
+                if( res != NULL ) { FreeRTOS_freeaddrinfo( res ); }
+                LogInfo( ( "DNS %s for %s: %s",
+                           ( xFamily[ uxIdx ] == FREERTOS_AF_INET6 ) ? "AAAA" : "A",
+                           pHostName, ( have[ uxIdx ] != pdFALSE ) ? "resolved" : "no-record" ) );
+            }
+        #endif
     }
 
-    if( ( pxOrder[ 0 ] == NULL ) && ( pxOrder[ 1 ] == NULL ) )
+    if( ( have[ 0 ] == pdFALSE ) && ( have[ 1 ] == pdFALSE ) )
     {
         LogError( ( "Failed to connect to server: DNS resolution failed: Hostname=%s.", pHostName ) );
         return FREERTOS_SOCKETS_WRAPPER_NETWORK_ERROR;
@@ -208,41 +231,34 @@ BaseType_t TCP_Sockets_Connect( Socket_t * pTcpSocket,
 
     for( uxIdx = 0; uxIdx < 2U; uxIdx++ )
     {
-        struct freertos_sockaddr serverAddress;
-
-        ai = pxOrder[ uxIdx ];
-        if( ai == NULL )
+        if( have[ uxIdx ] == pdFALSE )
         {
             continue;
         }
 
-        tcpSocket = FreeRTOS_socket( ai->ai_family, FREERTOS_SOCK_STREAM, FREERTOS_IPPROTO_TCP );
+        tcpSocket = FreeRTOS_socket( resolved[ uxIdx ].sin_family, FREERTOS_SOCK_STREAM, FREERTOS_IPPROTO_TCP );
         if( tcpSocket == FREERTOS_INVALID_SOCKET )
         {
             LogError( ( "Failed to create new socket." ) );
             continue;
         }
 
-        ( void ) memcpy( &serverAddress, ai->ai_addr, sizeof( serverAddress ) );
-        serverAddress.sin_port = FreeRTOS_htons( port );
+        resolved[ uxIdx ].sin_port = FreeRTOS_htons( port );
 
         LogInfo( ( "Connecting to %s over %s ...", pHostName,
-                   ( ai->ai_family == FREERTOS_AF_INET6 ) ? "IPv6" : "IPv4" ) );
+                   ( resolved[ uxIdx ].sin_family == FREERTOS_AF_INET6 ) ? "IPv6" : "IPv4" ) );
 
-        if( FreeRTOS_connect( tcpSocket, &serverAddress, sizeof( serverAddress ) ) == 0 )
+        if( FreeRTOS_connect( tcpSocket, &( resolved[ uxIdx ] ), sizeof( resolved[ uxIdx ] ) ) == 0 )
         {
             socketStatus = 0;
             break;
         }
 
         LogError( ( "Connect over %s failed; trying next.",
-                    ( ai->ai_family == FREERTOS_AF_INET6 ) ? "IPv6" : "IPv4" ) );
+                    ( resolved[ uxIdx ].sin_family == FREERTOS_AF_INET6 ) ? "IPv6" : "IPv4" ) );
         ( void ) FreeRTOS_closesocket( tcpSocket );
         tcpSocket = FREERTOS_INVALID_SOCKET;
     }
-
-    if( pxOrder[ 0 ] != NULL ) { FreeRTOS_freeaddrinfo( pxOrder[ 0 ] ); }
-    if( pxOrder[ 1 ] != NULL ) { FreeRTOS_freeaddrinfo( pxOrder[ 1 ] ); }
 
     if( socketStatus == 0 )
     {

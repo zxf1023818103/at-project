@@ -14,6 +14,9 @@
 #include "task.h"
 #include "FreeRTOS_IP.h"
 #include "FreeRTOS_Sockets.h"
+#ifdef AT_PROJECT_CARES
+#include "cares_resolve.h"
+#endif
 #include "FreeRTOS_DNS.h"
 
 #include <string.h>
@@ -103,7 +106,14 @@ static int conn_connect( conn_t * c, int is_https, const char * host, uint16_t p
         uint32_t ip;
         TickType_t rt = pdMS_TO_TICKS( OTA_HTTP_RECV_TMO_MS ), wt = pdMS_TO_TICKS( OTA_HTTP_SEND_TMO_MS );
 
+#ifdef AT_PROJECT_CARES
+        {
+            struct freertos_sockaddr fa;
+            ip = ( cares_resolve( host, FREERTOS_AF_INET, &fa ) == 0 ) ? fa.sin_address.ulIP_IPv4 : 0U;
+        }
+#else
         ip = FreeRTOS_gethostbyname( host );
+#endif
         if( ip == 0 )
         {
             log_error( "[OTA] DNS lookup of %s failed", host );

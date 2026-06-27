@@ -544,6 +544,24 @@ if(AMEBAD_ENABLE_IPERF)
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_IPERF)
 endif()
 
+# c-ares DNS resolver (CARES=ON): the AWS TLS/MQTT (tcp_sockets_wrapper.c, in
+# network_transport_sockets), SNTP, and OTA HTTP paths resolve hostnames via c-ares instead of
+# FreeRTOS+TCP's built-in resolver. cares_port pulls the c_ares archive; AT_PROJECT_CARES switches
+# each call site (the FreeRTOS+TCP path stays as the CARES=OFF fallback). main.c (re)inits the
+# channel + DNS servers on each network-up.
+option(AMEBAD_ENABLE_CARES "Resolve DNS via c-ares (select event loop) instead of FreeRTOS+TCP" OFF)
+if(AMEBAD_ENABLE_CARES)
+    target_link_libraries(target_img2_km4 PRIVATE cares_port)
+    target_compile_definitions(network_transport_sockets PRIVATE AT_PROJECT_CARES)
+    target_link_libraries(network_transport_sockets PRIVATE cares_port)   # for cares_resolve.h
+    set_property(SOURCE
+                 "${CMAKE_CURRENT_SOURCE_DIR}/sntp_time.c"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/ota_app.c"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/ota_http.c"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
+                 APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_CARES)
+endif()
+
 # Archives wrapped in --start-group (cross_refs) for circular vendor refs.
 # libc (-lc) supplies __libc_init_array (KM4 has C++ global ctors; KM0 didn't)
 # plus memcpy/memset — so KM4 doesn't need the ROM memcpy alias KM0 uses.
