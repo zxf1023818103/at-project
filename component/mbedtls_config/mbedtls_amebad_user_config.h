@@ -56,19 +56,19 @@
  * engine) are NOT defined here — they are gated -D defs in the port CMakeLists (make HWGCM=ON),
  * which also documents why the other *_ALT modules (SHA/AES/CCM) are deliberately left software. */
 
-/* ---- TLS record buffers. The KM4 NS heap is tight (shared with WiFi + FreeRTOS-Plus-TCP) and the
- *      AWS handshake peak runs it close to the edge. The default 16 KB IN + 16 KB OUT is far too
- *      much; trim to fixed full-size buffers (NOT variable — see below):
- *   - IN 8 KB: holds the AWS IoT server Certificate record (server-controlled; keep generous).
- *   - OUT 2 KB: the client Certificate (~1.3 KB) is the largest record we SEND. Paired with a 2 KB
- *     max-fragment request (transport_mbedtls.c) so 2 KB is self-consistent. */
-/* IN buffer = the dominant per-connection cost. AWS IoT does NOT honor the max_fragment_length
- * extension (verified: with VARIABLE_BUFFER_LENGTH on, min-ever == steady free, i.e. no post-
- * handshake shrink), so mbedTLS HOLDS this fixed buffer for the whole connection — unlike wolfSSL's
- * dynamic input buffer that shrinks after the cert (~10 KB/conn there vs ~16 KB here). It must hold
- * AWS's largest incoming record, the TLS 1.3 server cert+certverify flight (~6 KB). Probed the floor
- * on HW: 4096 -> handshake "Bad input parameters"; 6144 -> FLAKY (intermittent "Internal error" then
- * success, the flight sits right at the edge) for only ~1.3 KB saved; 8192 -> reliable. Keep 8192. */
+/* ---- TLS record buffers. The KM4 NS heap is tight; the default 16 KB IN + 16 KB OUT is too much.
+ *   - IN 8 KB: mbedTLS is now ONLY the TLS-1.2 fallback path (or a standalone mbedTLS build); AWS IoT
+ *     / S3 and other TLS-1.3 peers ride picotls. A real 1.2 server sends its whole cert chain as one
+ *     Certificate record (commonly 3-6 KB) and MOST servers IGNORE our max_fragment_length request,
+ *     so IN must be big enough to hold that record. It was briefly trimmed to 2 KB on the assumption
+ *     mbedTLS only saw MFLN-honoring "small" servers — but a real 1.2 host (e.g. tls-v1-2.badssl.com)
+ *     sends a >2 KB cert record and the handshake then fails at the Certificate step (SSL - Bad input
+ *     parameters). The IN buffer is per-connection HEAP allocated at mbedtls_ssl_setup, so this 8 KB
+ *     is paid ONLY when mbedTLS actually connects (the rare fallback) — it does NOT touch the AWS
+ *     picotls handshake (mbedTLS isn't allocated then), so the trim never helped the peak it targeted.
+ *     (VARIABLE_BUFFER_LENGTH stays OFF — see below — so this is a static 8 KB, no mid-handshake realloc.)
+ *   - OUT 2 KB: the client Certificate (~1.3 KB) is the largest record we SEND; paired with the 2 KB
+ *     max_fragment request (transport_mbedtls.c). */
 #define MBEDTLS_SSL_IN_CONTENT_LEN       8192
 #define MBEDTLS_SSL_OUT_CONTENT_LEN      2048   /* == MBEDTLS_SSL_MAX_FRAG_LEN_2048 the transport requests */
 /* MBEDTLS_SSL_VARIABLE_BUFFER_LENGTH intentionally OFF. It would let IN/OUT realloc down to the
@@ -79,13 +79,35 @@
  * "SSL - Internal error" / hang at the handshake (extremely layout/timing sensitive). Allocating IN at
  * the full 8 KB up front (this macro off) removes that path with zero steady-state heap cost. */
 
-/* (Dropping MBEDTLS_SSL_KEEP_PEER_CERTIFICATE would free the server cert chain post-handshake, but
- * the base config enables MBEDTLS_SSL_PROTO_TLS1_3 which requires it — check_config.h errors. Left on.) */
+/* TLS-1.2-only fallback build (network_transport CMake defines AMEBAD_MBEDTLS_TLS12_ONLY when
+ * TLS_BACKEND=fallback). There the mbedTLS SSL stack is ONLY the TLS-1.2 fallback path — every TLS
+ * 1.3 peer (AWS IoT, etc.) rides picotls, which uses mbedcrypto/x509, NOT the mbedTLS SSL layer — so
+ * we strip TLS 1.3 from the mbedTLS SSL stack. That in turn lets us drop KEEP_PEER_CERTIFICATE
+ * (forbidden alongside TLS 1.3 by check_config.h): the parsed peer cert chain is then freed right
+ * after verification instead of held for the connection (~1-2 KB/conn), and the 1.3 handshake code
+ * drops out (flash). The peer cert is not needed post-handshake (the data phase is symmetric); the
+ * app doesn't call mbedtls_ssl_get_peer_cert(), and a cert hash is still kept for renegotiation. */
+#ifdef AMEBAD_MBEDTLS_TLS12_ONLY
+    #undef MBEDTLS_SSL_PROTO_TLS1_3
+    #undef MBEDTLS_SSL_TLS1_3_COMPATIBILITY_MODE
+    #undef MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_ENABLED
+    #undef MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_EPHEMERAL_ENABLED
+    #undef MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_EPHEMERAL_ENABLED
+    #undef MBEDTLS_SSL_KEEP_PEER_CERTIFICATE
+#endif
 
 /* ECP RAM: the AWS suite is ECDHE_RSA (P-256). Shrink the multiplication window and drop the
  * fixed-point base-point precompute table — the one-shot handshake ECDHE then uses less RAM (a
  * little slower, fine here). Defaults (window 4, optim on) are heavier than this part can spare. */
 #define MBEDTLS_ECP_WINDOW_SIZE          2
 #define MBEDTLS_ECP_FIXED_POINT_OPTIM    0
+
+/* MAX-CIPHERSUITE experiment (AMEBAD_MBEDTLS_MAX_SUITES): the only standard TLS key exchange the
+ * base config leaves off is EC-JPAKE. Enable it to measure the true-maximum cipher-suite footprint.
+ * Gated so normal builds stay lean (this is a niche PAKE used by Thread/Matter, not web/AWS TLS). */
+#ifdef AMEBAD_MBEDTLS_MAX_SUITES
+    #define MBEDTLS_ECJPAKE_C
+    #define MBEDTLS_KEY_EXCHANGE_ECJPAKE_ENABLED
+#endif
 
 #endif /* MBEDTLS_AMEBAD_USER_CONFIG_H */
