@@ -191,6 +191,17 @@ int ota_flash_finish( ota_ctx_t * c )
 void ota_flash_reboot( void )
 {
     log_info( "[OTA] rebooting into the new image..." );
+    /* WDG full-system reset (SDK sys_reset: sets BKUP_REG0 |= BIT_KM4SYS_RESET_HAPPEN, then a 50 ms WDG).
+     *
+     * This was briefly switched to a Cortex-M33 SYSRESETREQ (SCB->AIRCR, + the ROM reset handshake at
+     * 0x480003F8). Don't: SYSRESETREQ resets only the KM4 CPU core, NOT the Wi-Fi driver/MAC (lib_wlan
+     * + the WL hardware block) - which is left running in a stale post-reset state and faults. sys_reset's
+     * WDG reset takes the whole system down (Wi-Fi driver included), so the reboot comes up clean. (The
+     * "warm-reset heap corruption" earlier blamed on stale SRAM was really this un-reset Wi-Fi driver.)
+     * Bonus: the 50 ms WDG window also flushes the OTA_SELFTEST env/LFS write that ota_pal closeFile()
+     * makes - SYSRESETREQ rebooted too fast for it to land, so getPlatformImageState() read Valid instead
+     * of PendingCommit and the OTA self-test was rejected (OtaErrImageStateMismatch, job FAILED even
+     * though the firmware updated); with sys_reset the flag survives and the self-test commits (SUCCEEDED). */
     sys_reset();
     for( ; ; ) {}
 }

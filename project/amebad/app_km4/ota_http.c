@@ -25,10 +25,17 @@
 #include "urlparse.h"
 #include "llhttp.h"
 #include "core_http_client.h"
+#include "at_log.h"                 /* rxi log.h enum must precede transport_tls.h's logging_levels.h LOG_* macros (mbedtls backend) */
 #include "transport_tls.h"          /* TLS_FreeRTOS_Connect/send/recv/Disconnect, NetworkCredentials_t */
 #include "ota_flash.h"
-#include "at_log.h"
 #include "FreeRTOS_CLI.h"
+#include "psa/crypto.h"             /* psa_crypto_init - PSA backs picotls/mbedTLS RNG + the handshake */
+
+/* rxPlain reserve for the OTA HTTPS connection. The streaming GET pulls S3's large TLS-1.3 records,
+ * so picotls must hold a full ~16 KB record. Reserve it UP FRONT (at connect, heap still fresh) so
+ * picotls never reallocs rxPlain mid-stream - that mid-stream 16 KB realloc at a fragmented/low heap
+ * is what OOMs. (Was implicit via the old picotls default; that default is now 4 KB, so set it here.) */
+#define OTA_HTTP_RXRESERVE      16640u
 
 /* The TLS transport leaves struct NetworkContext incomplete; each consumer defines it (the AWS demo
  * does the same). It holds just the TlsTransportParams_t the transport functions use. */
@@ -44,27 +51,8 @@ struct NetworkContext
 #define OTA_PATH_BUF            1024u           /* path + ?query (SigV4 presigned URLs are ~500 chars) */
 
 /* Amazon Root CA 1 - the trust anchor for *.s3*.amazonaws.com (and most AWS endpoints). */
-static const char AMAZON_ROOT_CA1[] =
-    "-----BEGIN CERTIFICATE-----\n"
-    "MIIDQTCCAimgAwIBAgITBmyfz5m/jAo54vB4ikPmljZbyjANBgkqhkiG9w0BAQsF\n"
-    "ADA5MQswCQYDVQQGEwJVUzEPMA0GA1UEChMGQW1hem9uMRkwFwYDVQQDExBBbWF6\n"
-    "b24gUm9vdCBDQSAxMB4XDTE1MDUyNjAwMDAwMFoXDTM4MDExNzAwMDAwMFowOTEL\n"
-    "MAkGA1UEBhMCVVMxDzANBgNVBAoTBkFtYXpvbjEZMBcGA1UEAxMQQW1hem9uIFJv\n"
-    "b3QgQ0EgMTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALJ4gHHKeNXj\n"
-    "ca9HgFB0fW7Y14h29Jlo91ghYPl0hAEvrAIthtOgQ3pOsqTQNroBvo3bSMgHFzZM\n"
-    "9O6II8c+6zf1tRn4SWiw3te5djgdYZ6k/oI2peVKVuRF4fn9tBb6dNqcmzU5L/qw\n"
-    "IFAGbHrQgLKm+a/sRxmPUDgH3KKHOVj4utWp+UhnMJbulHheb4mjUcAwhmahRWa6\n"
-    "VOujw5H5SNz/0egwLX0tdHA114gk957EWW67c4cX8jJGKLhD+rcdqsq08p8kDi1L\n"
-    "93FcXmn/6pUCyziKrlA4b9v7LWIbxcceVOF34GfID5yHI9Y/QCB/IIDEgEw+OyQm\n"
-    "jgSubJrIqg0CAwEAAaNCMEAwDwYDVR0TAQH/BAUwAwEB/zAOBgNVHQ8BAf8EBAMC\n"
-    "AYYwHQYDVR0OBBYEFIQYzIU07LwMlJQuCFmcx7IQTgoIMA0GCSqGSIb3DQEBCwUA\n"
-    "A4IBAQCY8jdaQZChGsV2USggNiMOruYou6r4lK5IpDB/G/wkjUu0yKGX9rbxenDI\n"
-    "U5PMCCjjmCXPI6T53iHTfIUJrU6adTrCC2qJeHZERxhlbI1Bjjt/msv0tadQ1wUs\n"
-    "N+gDS63pYaACbvXy8MWy7Vu33PqUXHeeE6V/Uq2V8viTO96LXFvKWlJbYK8U90vv\n"
-    "o/ufQJVtMVT8QtPHRh8jrdkPSHCa2XV4cdFyQzR1bldZwgJcJmApzyMZFo6IQ6XU\n"
-    "5MsI+yMRQ+hDKXJioaldXgjUkK642M4UwtBV8ob2xJNDd2ZhwLnoQdeXeGADbkpy\n"
-    "rqXRfboQnoZsG4q5WTP468SQvvG5\n"
-    "-----END CERTIFICATE-----\n";
+/* Server trust = the `ca/` folder on LittleFS (+ the embedded Mozilla CA bundle when
+ * CRT_BUNDLE=ON); no root CA is baked into the source -- see creds.pRootCaPath below. */
 
 /* ---- transport (http: plain TCP, https: TLS) ------------------------------------------------- */
 typedef struct
@@ -88,8 +76,8 @@ static int conn_connect( conn_t * c, int is_https, const char * host, uint16_t p
         memset( c, 0, sizeof( *c ) );
         c->is_https = 1;
         memset( &creds, 0, sizeof( creds ) );
-        creds.pRootCa      = (const uint8_t *) AMAZON_ROOT_CA1;
-        creds.rootCaSize   = sizeof( AMAZON_ROOT_CA1 );        /* includes the NUL, as mbedTLS PEM wants */
+        creds.pRootCaPath  = "ca";   /* CA folder on LittleFS (+ embedded bundle when CRT_BUNDLE=ON) */
+        creds.rxReserveSize = OTA_HTTP_RXRESERVE;   /* full record up front - no mid-stream realloc */
         netctx.pParams     = &c->tlsParams;
         c->tls             = &netctx;
         st = TLS_FreeRTOS_Connect( c->tls, host, port, &creds, OTA_HTTP_RECV_TMO_MS, OTA_HTTP_SEND_TMO_MS );
@@ -228,6 +216,11 @@ static void ota_http_task( void * param )
 
     memset( &sink, 0, sizeof( sink ) );
 
+    /* PSA crypto backs picotls/mbedTLS RNG + the whole handshake. ota_http may be the first TLS user
+     * (e.g. AWS never connected), so ensure PSA is up or the handshake fails (recv -6 / SSL internal
+     * error). Idempotent - a no-op if the AWS path already initialised it. */
+    ( void ) psa_crypto_init();
+
     /* 1. parse the URL */
     if( urlparse_parse_url( url, urllen, 0, &u ) != 0 || !( u.field_set & ( 1 << URLPARSE_HOST ) ) )
     {
@@ -330,6 +323,11 @@ static void ota_http_task( void * param )
 close:
     conn_close( &conn );
 out:
+    /* Stack high-water (in WORDS still free) - the peak was the TLS handshake. Use it to right-size
+     * the 4096-word task stack below: free_words ~= headroom we can reclaim. */
+    log_info( "[OTA] task stack: %u of 4096 words still free (high-water)",
+              (unsigned) uxTaskGetStackHighWaterMark( NULL ) );
+
     if( sink.status != 0 && sink.status != 200 )
         log_error( "[OTA] server returned HTTP %d", sink.status );
 
@@ -368,7 +366,9 @@ static BaseType_t cmd_ota_http( char * out, size_t outlen, const char * cmd )
     memcpy( url, arg, (size_t) arglen );
     url[ arglen ] = '\0';
 
-    if( xTaskCreate( ota_http_task, "ota_http", 4096, url, tskIDLE_PRIORITY + 3, NULL ) != pdPASS )
+    /* 3072 words (12 KB): measured TLS-handshake high-water is ~1941 words (~7.8 KB), so this leaves
+     * ~1131 words (~4.5 KB) headroom while reclaiming ~4 KB of heap vs the old 4096. */
+    if( xTaskCreate( ota_http_task, "ota_http", 3072, url, tskIDLE_PRIORITY + 3, NULL ) != pdPASS )
     {
         vPortFree( url );
         snprintf( out, outlen, "ota_http: failed to start task\r\n" );

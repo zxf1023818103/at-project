@@ -38,6 +38,7 @@
  * the shared TLS transport (picotls/mbedTLS), plain FreeRTOS+TCP for http://, and the vendored
  * URL parser. Mirrors ota_http.c's transport setup; here it feeds the OTA agent file blocks. */
 #include "core_http_client.h"
+#include "at_log.h"                 /* rxi log.h enum must precede transport_tls.h's logging_levels.h LOG_* macros (mbedtls/fallback backend) */
 #include "transport_tls.h"          /* TLS_FreeRTOS_*, NetworkCredentials_t, TlsTransportParams_t */
 #include "transport_interface.h"
 #include "urlparse.h"
@@ -51,7 +52,6 @@
 
 #include "ota_app.h"
 #include "ota_http_interface.h"
-#include "at_log.h"
 
 /* Use the app's flushed at_log (printf is fully-buffered per-task on the LOGUART, so [OTA] printf
  * lines never surface). The first vararg is always a string literal, so the "[OTA] " concat works. */
@@ -181,9 +181,11 @@ static OtaHttpStatus_t prvOtaHttpDeinit( void );
  * handshake Certificate record is larger than a 6 KB reserve, and pinning it too small fails the
  * handshake (err 4). Heap headroom for this 2nd TLS comes from the freed event buffers + the AWS
  * MQTT TLS now reserving only 8 KB. */
-/* 8192: holds S3's handshake records + a 4 KB body record without a realloc, while keeping the
- * handshake PEAK (rxPlain + txbuf + mbedTLS cert-verify working set) well under the ~78 KB free - the
- * 16640 reserve pushed the peak over (malloc fail at 17.8 KB free even though idle heap is healthy). */
+/* 8192: holds S3's handshake records + a 4 KB body record (otaconfigLOG2_FILE_BLOCK_SIZE=12) without a
+ * mid-transfer realloc. Larger reserves were MEASURED to OOM the 2nd (S3) TLS handshake under the lower
+ * idle heap that bigger blocks leave: 9216 @ 8 KB blocks (~69 KB idle) and 16640 @ 16 KB blocks
+ * (~44.5 KB idle) both malloc-failed. 4 KB blocks + this 8192 reserve is the configuration that fits
+ * the S3 handshake peak alongside the AWS MQTT TLS. Pairs with TLS_BACKEND=picotls. */
 #define OTA_HTTP_RXRESERVE      8192u
 /* coreHTTP response buffer: holds the WHOLE response (coreHTTP is not streaming) = 4 KB block +
  * status line + headers. Measured S3 206 headers are only ~480 B, so 1 KB of header room is ample
@@ -195,6 +197,11 @@ static OtaHttpStatus_t prvOtaHttpDeinit( void );
  * it to hold the long path + Host + Range + Connection. */
 #define OTA_HTTP_REQ_BUF        2048u
 #define OTA_HTTP_PATH_BUF       1408u           /* path + ?query (SigV4 presigned URLs are long) */
+/* In-call reconnect-retry budget: S3 closes the keep-alive every few ranged GETs (206 empty-body /
+ * HTTPClient_Send fail). Reconnecting right here (~0.5 s) and retrying the same range beats returning
+ * failure and idling the OTA agent's otaconfigFILE_REQUEST_WAIT_MS (10 s) RequestTimer. Cap so a truly
+ * dead network still surfaces (then the agent's timer takes over). */
+#define OTA_HTTP_REQ_RETRIES    6u
 #define OTA_HTTP_HOST_BUF       128u
 
 /* Amazon Root CA 1 - the trust anchor for *.s3*.amazonaws.com (and most AWS endpoints).
@@ -449,78 +456,100 @@ static OtaHttpStatus_t prvOtaHttpRequest( uint32_t rangeStart, uint32_t rangeEnd
     static uint8_t       s_respBuf[ OTA_HTTP_RESP_BUF ];
     OtaEventMsg_t        eventMsg = { 0 };
     OtaEventData_t *     pData;
+    unsigned             attempt;
 
-    /* Self-healing: if a prior request tore the connection down (S3 keep-alive drop / transient
-     * handshake -6), reopen it here. The OTA agent's block RequestTimer drives these retries. */
-    if( !s_http.inUse )
+    /* In-call reconnect-retry loop (see OTA_HTTP_REQ_RETRIES): S3 closes the keep-alive every few
+     * ranged GETs - HTTPClient_Send then fails, or returns 206 with an empty body. Instead of
+     * returning failure and letting the OTA agent idle the 10 s otaconfigFILE_REQUEST_WAIT_MS
+     * RequestTimer before re-requesting, we reconnect right here (~0.5 s) and retry the SAME range. */
+    for( attempt = 0; attempt < OTA_HTTP_REQ_RETRIES; attempt++ )
     {
-        if( prvHttpOpenConn() != OtaHttpSuccess )
+        /* (Re)open the connection at the top of each attempt if it's down. */
+        if( !s_http.inUse )
         {
-            return OtaHttpRequestFailed;
+            if( prvHttpOpenConn() != OtaHttpSuccess )
+            {
+                continue;   /* reopen failed - retry (or exhaust the budget) */
+            }
         }
+
+        /* Build the GET request with coreHTTP, add the byte Range header. */
+        memset( &reqInfo, 0, sizeof( reqInfo ) );
+        reqInfo.pMethod   = "GET";          reqInfo.methodLen = 3;
+        reqInfo.pPath     = s_http.path;    reqInfo.pathLen   = strlen( s_http.path );
+        reqInfo.pHost     = s_http.host;    reqInfo.hostLen   = strlen( s_http.host );
+        reqInfo.reqFlags  = HTTP_REQUEST_KEEP_ALIVE_FLAG;   /* one connection, many ranged GETs */
+
+        memset( &reqHdr, 0, sizeof( reqHdr ) );
+        reqHdr.pBuffer    = s_reqBuf;
+        reqHdr.bufferLen  = sizeof( s_reqBuf );
+
+        hs = HTTPClient_InitializeRequestHeaders( &reqHdr, &reqInfo );
+        if( hs != HTTPSuccess )
+        {
+            OTA_APP_LOG( "http: init request headers FAIL (%s)", HTTPClient_strerror( hs ) );
+            return OtaHttpRequestFailed;   /* logic error, not retryable */
+        }
+
+        hs = HTTPClient_AddRangeHeader( &reqHdr, ( int32_t ) rangeStart, ( int32_t ) rangeEnd );
+        if( hs != HTTPSuccess )
+        {
+            OTA_APP_LOG( "http: add Range header FAIL (%s)", HTTPClient_strerror( hs ) );
+            return OtaHttpRequestFailed;   /* logic error, not retryable */
+        }
+
+        transport.pNetworkContext = &s_http.netCtx;   /* unused by our send/recv (state is in s_http) */
+        transport.send            = prvHttpTransportSend;
+        transport.recv            = prvHttpTransportRecv;
+
+        memset( &response, 0, sizeof( response ) );
+        response.pBuffer   = s_respBuf;
+        response.bufferLen = sizeof( s_respBuf );
+        /* Without a clock, coreHTTP's recv loop has a 0 ms budget and bails the instant transport.recv
+         * returns 0 (no data yet) - so the body record (which arrives just after the headers) is never
+         * read (bodyLen=0). Give it a ms clock to wait for the body. */
+        response.getTime   = prvHttpGetTimeMs;
+
+        hs = HTTPClient_Send( &transport, &reqHdr, NULL, 0, &response, 0 );
+        if( hs != HTTPSuccess )
+        {
+            OTA_APP_LOG( "http: GET [%u,%u] FAIL (%s) status=%u bodyLen=%u - reconnect+retry %u/%u",
+                         ( unsigned ) rangeStart, ( unsigned ) rangeEnd, HTTPClient_strerror( hs ),
+                         ( unsigned ) response.statusCode, ( unsigned ) response.bodyLen,
+                         attempt + 1u, ( unsigned ) OTA_HTTP_REQ_RETRIES );
+            /* S3 dropped the keep-alive. Tear the dead connection down (inUse=0; also stops the dead
+             * netCtx being reused, which Hard Faulted) and reconnect at the top of the next attempt -
+             * NOT a return, so the agent's 10 s RequestTimer never gets involved. */
+            prvHttpCloseConn();
+            continue;
+        }
+
+        /* A ranged GET should yield 206 Partial Content; 200 (whole file) is also acceptable. */
+        if( ( response.statusCode != 206 ) && ( response.statusCode != 200 ) )
+        {
+            OTA_APP_LOG( "http: GET [%u,%u] -> HTTP %u (expected 206)", ( unsigned ) rangeStart,
+                         ( unsigned ) rangeEnd, ( unsigned ) response.statusCode );
+            return OtaHttpRequestFailed;   /* a real HTTP error (403 expiry, etc.) - not retryable here */
+        }
+
+        if( ( response.pBody == NULL ) || ( response.bodyLen == 0 ) )
+        {
+            OTA_APP_LOG( "http: GET [%u,%u] -> empty body - reconnect+retry %u/%u",
+                         ( unsigned ) rangeStart, ( unsigned ) rangeEnd,
+                         attempt + 1u, ( unsigned ) OTA_HTTP_REQ_RETRIES );
+            /* 206 headers but no body = the keep-alive was half-closed mid-response. Reconnect+retry. */
+            prvHttpCloseConn();
+            continue;
+        }
+
+        /* --- success: body in hand, break out of the retry loop to feed it --- */
+        break;
     }
 
-    /* Build the GET request with coreHTTP, add the byte Range header. */
-    memset( &reqInfo, 0, sizeof( reqInfo ) );
-    reqInfo.pMethod   = "GET";          reqInfo.methodLen = 3;
-    reqInfo.pPath     = s_http.path;    reqInfo.pathLen   = strlen( s_http.path );
-    reqInfo.pHost     = s_http.host;    reqInfo.hostLen   = strlen( s_http.host );
-    reqInfo.reqFlags  = HTTP_REQUEST_KEEP_ALIVE_FLAG;   /* one connection, many ranged GETs */
-
-    memset( &reqHdr, 0, sizeof( reqHdr ) );
-    reqHdr.pBuffer    = s_reqBuf;
-    reqHdr.bufferLen  = sizeof( s_reqBuf );
-
-    hs = HTTPClient_InitializeRequestHeaders( &reqHdr, &reqInfo );
-    if( hs != HTTPSuccess )
+    if( attempt >= OTA_HTTP_REQ_RETRIES )
     {
-        OTA_APP_LOG( "http: init request headers FAIL (%s)", HTTPClient_strerror( hs ) );
-        return OtaHttpRequestFailed;
-    }
-
-    hs = HTTPClient_AddRangeHeader( &reqHdr, ( int32_t ) rangeStart, ( int32_t ) rangeEnd );
-    if( hs != HTTPSuccess )
-    {
-        OTA_APP_LOG( "http: add Range header FAIL (%s)", HTTPClient_strerror( hs ) );
-        return OtaHttpRequestFailed;
-    }
-
-    transport.pNetworkContext = &s_http.netCtx;   /* unused by our send/recv (state is in s_http) */
-    transport.send            = prvHttpTransportSend;
-    transport.recv            = prvHttpTransportRecv;
-
-    memset( &response, 0, sizeof( response ) );
-    response.pBuffer   = s_respBuf;
-    response.bufferLen = sizeof( s_respBuf );
-    /* Without a clock, coreHTTP's recv loop has a 0 ms budget and bails the instant transport.recv
-     * returns 0 (no data yet) - so the body record (which arrives just after the headers) is never
-     * read (bodyLen=0). Give it a ms clock to wait for the body. */
-    response.getTime   = prvHttpGetTimeMs;
-
-    hs = HTTPClient_Send( &transport, &reqHdr, NULL, 0, &response, 0 );
-    if( hs != HTTPSuccess )
-    {
-        OTA_APP_LOG( "http: GET [%u,%u] FAIL (%s) status=%u bodyLen=%u - reopening",
-                     ( unsigned ) rangeStart, ( unsigned ) rangeEnd, HTTPClient_strerror( hs ),
-                     ( unsigned ) response.statusCode, ( unsigned ) response.bodyLen );
-        /* S3 drops the keep-alive after a few hundred KB of ranged GETs. Tear the dead connection
-         * down (inUse=0) so the OTA agent's next block request reopens it via the self-healing top -
-         * critically, this stops the dead netCtx being reused (which Hard Faulted). */
-        prvHttpCloseConn();
-        return OtaHttpRequestFailed;
-    }
-
-    /* A ranged GET should yield 206 Partial Content; 200 (whole file) is also acceptable. */
-    if( ( response.statusCode != 206 ) && ( response.statusCode != 200 ) )
-    {
-        OTA_APP_LOG( "http: GET [%u,%u] -> HTTP %u (expected 206)", ( unsigned ) rangeStart,
-                     ( unsigned ) rangeEnd, ( unsigned ) response.statusCode );
-        return OtaHttpRequestFailed;
-    }
-
-    if( ( response.pBody == NULL ) || ( response.bodyLen == 0 ) )
-    {
-        OTA_APP_LOG( "http: GET [%u,%u] -> empty body", ( unsigned ) rangeStart, ( unsigned ) rangeEnd );
+        OTA_APP_LOG( "http: GET [%u,%u] exhausted %u reconnect attempts - deferring to agent timer",
+                     ( unsigned ) rangeStart, ( unsigned ) rangeEnd, ( unsigned ) OTA_HTTP_REQ_RETRIES );
         return OtaHttpRequestFailed;
     }
 

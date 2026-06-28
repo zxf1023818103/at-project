@@ -91,7 +91,7 @@ extern uint32_t SystemCoreClock;
 /* INCLUDE_ deltas shared by both cores */
 #define INCLUDE_vTaskCleanUpResources                   0
 #define INCLUDE_pcTaskGetTaskName                       1
-#define INCLUDE_uxTaskGetStackHighWaterMark             0
+#define INCLUDE_uxTaskGetStackHighWaterMark             1
 #define INCLUDE_xTaskGetIdleTaskHandle                  0
 #define INCLUDE_xTaskResumeFromISR                      0
 #define INCLUDE_xTaskGetCurrentTaskHandle               1

@@ -26,7 +26,15 @@
 #define configOTA_PRIMARY_DATA_PROTOCOL    ( OTA_DATA_OVER_HTTP )
 
 /* ---- block size ----
- * 2^12 = 4096-byte file blocks (matches the ota_pal decode buffer s_decodeMem). */
+ * 2^12 = 4096-byte file blocks. MEASURED to be the heap-bound max on this target: bigger blocks grow
+ * the per-block buffers (ota_pal s_decodeMem, the OtaEventData_t block buffer, ota_app's HTTP response
+ * buffer), and the resulting lower idle heap can't absorb the S3 picotls handshake PEAK (cert-verify
+ * working set + the contiguous rxReserve alloc) running concurrently with the AWS MQTT TLS:
+ *   - 4 KB  (LOG2=12): idle heap ~80 KB -> OTA download OK.
+ *   - 8 KB  (LOG2=13): idle heap ~69 KB -> 2nd (S3) TLS malloc FAILED.
+ *   - 16 KB (LOG2=14): idle heap ~44.5 KB -> 2nd (S3) TLS malloc FAILED.
+ * So the keep-alive-drop reconnect count stays at ~273 blocks; the speed win comes from the ota_app
+ * in-call reconnect-retry (OTA_HTTP_REQ_RETRIES) instead, not from fewer blocks. Pairs with picotls. */
 #define otaconfigLOG2_FILE_BLOCK_SIZE      ( 12UL )
 
 /* Number of blocks requested per data-plane request. Keep small: the AmebaD PAL streams
