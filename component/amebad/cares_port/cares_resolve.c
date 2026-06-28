@@ -99,32 +99,59 @@ void cares_resolver_init( void )
     }
 }
 
-/* Cache the current DNS servers (DHCP-learned + the DNS_SERVER env override) as a CSV; cares_resolve
- * re-applies it to the short-lived channel it builds per query. No channel is kept alive here. */
+/* Does any endpoint hold a routable (non-link-local, non-zero) global IPv6 address? */
+static int cares_has_global_ipv6( void )
+{
+#if ( ipconfigUSE_IPv6 != 0 )
+    NetworkEndPoint_t * px;
+
+    for( px = FreeRTOS_FirstEndPoint( NULL ); px != NULL; px = FreeRTOS_NextEndPoint( NULL, px ) )
+    {
+        const uint8_t * a = px->ipv6_settings.xIPAddress.ucBytes;
+
+        if( px->bits.bIPv6 == 0U )                                   { continue; }
+        if( ( a[ 0 ] == 0xfeU ) && ( ( a[ 1 ] & 0xc0U ) == 0x80U ) ) { continue; }  /* fe80::/10 */
+        if( ( a[ 0 ] | a[ 1 ] ) != 0U )                             { return 1; }
+    }
+#endif
+    return 0;
+}
+
+/* Append CSV element `s` to `buf` (capacity n) -- no-op if empty or it would overflow. */
+static void csv_add( char * buf, size_t n, const char * s )
+{
+    if( ( s == NULL ) || ( s[ 0 ] == '\0' ) )       { return; }
+    if( ( strlen( buf ) + strlen( s ) + 2U ) >= n ) { return; }
+    if( buf[ 0 ] != '\0' )                          { ( void ) strcat( buf, "," ); }
+    ( void ) strcat( buf, s );
+}
+
+/* Cache the DNS servers as a CSV for cares_resolve to apply to its short-lived channel. Strategy:
+ * bin the candidate servers into IPv6 (DNS_SERVER/DNS_SERVER2 env literals containing ':') and IPv4
+ * (env + the DHCP-learned ipv4_settings); then -- if the device holds a routable global IPv6 -- put
+ * the IPv6 servers first (query them first, IPv4 as fallback); otherwise drop the IPv6 servers,
+ * which are unreachable without a global address, and use IPv4 only. c-ares' set_servers_csv parses
+ * a bare IPv6 literal fine (no brackets needed). */
 void cares_resolver_set_servers( void )
 {
-    const char *        e1 = getenv( "DNS_SERVER" );
-    const char *        e2 = getenv( "DNS_SERVER2" );
+    const char *        envs[ 2 ];
+    char                v6[ 96 ];
+    char                v4[ 96 ];
+    int                 have_v6 = cares_has_global_ipv6();
     NetworkEndPoint_t * ep;
     unsigned            i;
 
-    s_servers_csv[ 0 ] = '\0';
+    v6[ 0 ] = '\0';
+    v4[ 0 ] = '\0';
 
-    /* Explicit override via env -- supports IPv6 literals (e.g. `set DNS_SERVER 2400:3200::1`),
-     * which the DHCP-learned ipv4_settings path below cannot represent. c-ares' set_servers_csv
-     * parses a bare IPv6 address fine (no brackets needed). */
-    if( ( e1 != NULL ) && ( e1[ 0 ] != '\0' ) )
+    envs[ 0 ] = getenv( "DNS_SERVER" );
+    envs[ 1 ] = getenv( "DNS_SERVER2" );
+    for( i = 0; i < 2U; i++ )
     {
-        if( ( e2 != NULL ) && ( e2[ 0 ] != '\0' ) )
+        if( ( envs[ i ] != NULL ) && ( envs[ i ][ 0 ] != '\0' ) )
         {
-            ( void ) snprintf( s_servers_csv, sizeof( s_servers_csv ), "%s,%s", e1, e2 );
+            csv_add( ( strchr( envs[ i ], ':' ) != NULL ) ? v6 : v4, sizeof( v6 ), envs[ i ] );
         }
-        else
-        {
-            ( void ) snprintf( s_servers_csv, sizeof( s_servers_csv ), "%s", e1 );
-        }
-        log_info( "[cares] servers (env)=%s", s_servers_csv );
-        return;
     }
 
     for( ep = FreeRTOS_FirstEndPoint( NULL ); ep != NULL; ep = FreeRTOS_NextEndPoint( NULL, ep ) )
@@ -136,22 +163,22 @@ void cares_resolver_set_servers( void )
             if( d != 0U )
             {
                 char b[ 24 ];
-
                 ( void ) snprintf( b, sizeof( b ), "%u.%u.%u.%u",
-                                   ( unsigned ) ( d & 0xffU ),         ( unsigned ) ( ( d >> 8 ) & 0xffU ),
+                                   ( unsigned ) ( d & 0xffU ),          ( unsigned ) ( ( d >> 8 ) & 0xffU ),
                                    ( unsigned ) ( ( d >> 16 ) & 0xffU ), ( unsigned ) ( ( d >> 24 ) & 0xffU ) );
-                if( ( strlen( s_servers_csv ) + strlen( b ) + 2U ) < sizeof( s_servers_csv ) )
-                {
-                    if( s_servers_csv[ 0 ] != '\0' )
-                    {
-                        ( void ) strcat( s_servers_csv, "," );
-                    }
-                    ( void ) strcat( s_servers_csv, b );
-                }
+                csv_add( v4, sizeof( v4 ), b );
             }
         }
     }
-    log_info( "[cares] servers=%s", s_servers_csv );
+
+    s_servers_csv[ 0 ] = '\0';
+    if( have_v6 )
+    {
+        csv_add( s_servers_csv, sizeof( s_servers_csv ), v6 );   /* global IPv6 up -> IPv6 DNS first */
+    }
+    csv_add( s_servers_csv, sizeof( s_servers_csv ), v4 );
+
+    log_info( "[cares] servers (global_v6=%d)=%s", have_v6, s_servers_csv );
 }
 
 int cares_resolve( const char * host, int family, struct freertos_sockaddr * out )
