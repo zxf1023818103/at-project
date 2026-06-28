@@ -602,12 +602,20 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
             {
                 const char * d1 = getenv( "DNS_SERVER" );
                 const char * d2 = getenv( "DNS_SERVER2" );
-                if( ( d1 != NULL ) && ( d1[ 0 ] != '\0' ) )
+                uint32_t     a1 = ( ( d1 != NULL ) && ( d1[ 0 ] != '\0' ) ) ? FreeRTOS_inet_addr( d1 ) : 0U;
+                /* Only an IPv4 literal overrides the IPv4 DNS array. An IPv6 DNS_SERVER (for c-ares
+                 * under CARES=ON) yields inet_addr()==0 -- do NOT write that, or it wipes the
+                 * DHCP-learned IPv4 DNS and leaves the box with no usable resolver on an IPv4-only link. */
+                if( a1 != 0U )
                 {
-                    xEndPoint.ipv4_settings.ulDNSServerAddresses[ 0 ] = FreeRTOS_inet_addr( d1 );
+                    xEndPoint.ipv4_settings.ulDNSServerAddresses[ 0 ] = a1;
                     if( ( d2 != NULL ) && ( d2[ 0 ] != '\0' ) )
                     {
-                        xEndPoint.ipv4_settings.ulDNSServerAddresses[ 1 ] = FreeRTOS_inet_addr( d2 );
+                        uint32_t a2 = FreeRTOS_inet_addr( d2 );
+                        if( a2 != 0U )
+                        {
+                            xEndPoint.ipv4_settings.ulDNSServerAddresses[ 1 ] = a2;
+                        }
                     }
                     log_info( "[KM4] DNS override -> %s / %s", d1, ( d2 != NULL ) ? d2 : "-" );
                 }
