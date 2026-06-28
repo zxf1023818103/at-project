@@ -60,7 +60,20 @@
     /* MbedTLS PSA Includes */
     #include "psa/crypto.h"
     #include "psa/crypto_values.h"
+    #include "mbedtls/psa_util.h"   /* mbedtls_psa_get_random / MBEDTLS_PSA_RANDOM_STATE */
 #endif /* MBEDTLS_PSA_CRYPTO_C */
+
+/* TLS RNG source. When PSA crypto is present, draw randomness from the global PSA DRBG (the same
+ * one picotls uses via ptls_mbedtls_random_bytes) instead of a per-connection mbedtls_ctr_drbg: the
+ * DRBG is then shared across both backends and there is no per-connection entropy reseed. Falls
+ * back to the classic per-context ctr_drbg when PSA crypto is absent. */
+#ifdef MBEDTLS_PSA_CRYPTO_C
+    #define TLS_RNG_FUNC          mbedtls_psa_get_random
+    #define TLS_RNG_CTX( pSsl )   ( MBEDTLS_PSA_RANDOM_STATE )
+#else
+    #define TLS_RNG_FUNC          mbedtls_ctr_drbg_random
+    #define TLS_RNG_CTX( pSsl )   ( &( ( pSsl )->ctrDrbgContext ) )
+#endif
 
 #ifdef MBEDTLS_DEBUG_C
     #include "mbedtls/debug.h"
@@ -71,6 +84,12 @@
 
 /* TLS transport header. */
 #include "transport_mbedtls.h"
+
+#include <sys/stat.h>   /* stat / S_ISDIR -- folder vs single-file root CA path */
+
+#ifdef AMEBAD_ENABLE_CRT_BUNDLE
+    #include "esp_crt_bundle.h"
+#endif
 
 /*-----------------------------------------------------------*/
 
@@ -86,6 +105,12 @@ struct NetworkContext
 {
     TlsTransportParams_t * pParams;
 };
+
+/* Size of this backend's params block, for the fallback dispatcher (transport_fallback.c). */
+size_t TLS_FreeRTOS_params_size( void )
+{
+    return sizeof( TlsTransportParams_t );
+}
 
 /*-----------------------------------------------------------*/
 
@@ -140,15 +165,13 @@ static void sslContextFree( SSLContext_t * pSslContext );
  * from files into stores, so the file API must be called. Start with the
  * root certificate.
  *
- * @param[out] pSslContext SSL context to which the trusted server root CA is to be added.
- * @param[in] pRootCa PEM-encoded string of the trusted server root CA.
- * @param[in] rootCaSize Size of the trusted server root CA.
+ * @param[out] pSslContext SSL context to which the trusted server root CA(s) are added.
+ * @param[in] pRootCaPath Filesystem path of a CA folder (parse_path) or single PEM/DER file.
  *
  * @return 0 on success; otherwise, failure;
  */
-static int32_t setRootCa( SSLContext_t * pSslContext,
-                          const uint8_t * pRootCa,
-                          size_t rootCaSize );
+static int32_t setRootCaPath( SSLContext_t * pSslContext,
+                              const char * pRootCaPath );
 
 /**
  * @brief Set X509 certificate as client certificate for the server to authenticate.
@@ -299,40 +322,50 @@ static void sslContextFree( SSLContext_t * pSslContext )
     mbedtls_x509_crt_free( &( pSslContext->rootCa ) );
     mbedtls_x509_crt_free( &( pSslContext->clientCert ) );
     mbedtls_pk_free( &( pSslContext->privKey ) );
-    mbedtls_entropy_free( &( pSslContext->entropyContext ) );
-    mbedtls_ctr_drbg_free( &( pSslContext->ctrDrbgContext ) );
+    #if !defined( MBEDTLS_PSA_CRYPTO_C )
+        /* Only the classic path inits these (the PSA path shares the global PSA DRBG). */
+        mbedtls_entropy_free( &( pSslContext->entropyContext ) );
+        mbedtls_ctr_drbg_free( &( pSslContext->ctrDrbgContext ) );
+    #endif
     mbedtls_ssl_config_free( &( pSslContext->config ) );
 }
 /*-----------------------------------------------------------*/
 
-static int32_t setRootCa( SSLContext_t * pSslContext,
-                          const uint8_t * pRootCa,
-                          size_t rootCaSize )
+static int32_t setRootCaPath( SSLContext_t * pSslContext,
+                              const char * pRootCaPath )
 {
-    int32_t mbedtlsError = -1;
+    int rc = 0;
+    struct stat st;
 
     configASSERT( pSslContext != NULL );
-    configASSERT( pRootCa != NULL );
 
-    /* Parse the server root CA certificate into the SSL context. */
-    mbedtlsError = mbedtls_x509_crt_parse( &( pSslContext->rootCa ),
-                                           pRootCa,
-                                           rootCaSize );
-
-    if( mbedtlsError != 0 )
+    if( pRootCaPath == NULL )
     {
-        LogError( ( "Failed to parse server root CA certificate: mbedTLSError= %s : %s.",
-                    mbedtlsHighLevelCodeOrDefault( mbedtlsError ),
-                    mbedtlsLowLevelCodeOrDefault( mbedtlsError ) ) );
+        return 0;   /* no file roots; the embedded bundle (if built) is the trust source */
+    }
+
+    /* A folder of CA certs (the `ca/` store) -> parse_path; a single file -> parse_file. */
+    if( ( stat( pRootCaPath, &st ) == 0 ) && S_ISDIR( st.st_mode ) )
+    {
+        rc = mbedtls_x509_crt_parse_path( &( pSslContext->rootCa ), pRootCaPath );
     }
     else
     {
-        mbedtls_ssl_conf_ca_chain( &( pSslContext->config ),
-                                   &( pSslContext->rootCa ),
-                                   NULL );
+        rc = mbedtls_x509_crt_parse_file( &( pSslContext->rootCa ), pRootCaPath );
     }
 
-    return mbedtlsError;
+    if( rc < 0 )
+    {
+        /* Not fatal in a CRT_BUNDLE=ON build (the bundle still verifies public roots); in a
+         * file-only build this leaves no trust anchors and the handshake will fail. */
+        LogWarn( ( "no CA roots loaded from '%s': -0x%04X", pRootCaPath, ( unsigned ) -rc ) );
+    }
+    else if( rc > 0 )
+    {
+        LogWarn( ( "%d cert(s) in '%s' failed to parse (rest loaded)", rc, pRootCaPath ) );
+    }
+
+    return 0;
 }
 /*-----------------------------------------------------------*/
 
@@ -408,8 +441,8 @@ static int32_t setPrivateKey( SSLContext_t * pSslContext,
                                              pPrivateKey,
                                              privateKeySize,
                                              NULL, 0,
-                                             mbedtls_ctr_drbg_random,
-                                             &( pSslContext->ctrDrbgContext ) );
+                                             TLS_RNG_FUNC,
+                                             TLS_RNG_CTX( pSslContext ) );
     #endif /* if MBEDTLS_VERSION_NUMBER < 0x03000000 */
 
     if( mbedtlsError != 0 )
@@ -438,14 +471,22 @@ static int32_t setCredentials( SSLContext_t * pSslContext,
     mbedtls_ssl_conf_authmode( &( pSslContext->config ),
                                MBEDTLS_SSL_VERIFY_REQUIRED );
     mbedtls_ssl_conf_rng( &( pSslContext->config ),
-                          mbedtls_ctr_drbg_random,
-                          &( pSslContext->ctrDrbgContext ) );
+                          TLS_RNG_FUNC,
+                          TLS_RNG_CTX( pSslContext ) );
     mbedtls_ssl_conf_cert_profile( &( pSslContext->config ),
                                    &( pSslContext->certProfile ) );
 
-    mbedtlsError = setRootCa( pSslContext,
-                              pNetworkCredentials->pRootCa,
-                              pNetworkCredentials->rootCaSize );
+    /* Load the file/folder trust anchors (the `ca/` store) into pSslContext->rootCa. */
+    setRootCaPath( pSslContext, pNetworkCredentials->pRootCaPath );
+#ifdef AMEBAD_ENABLE_CRT_BUNDLE
+    /* Verify against the embedded Mozilla CA bundle, with the file roots as extra trust anchors
+     * (so a server chaining to a self-signed / niche CA dropped in the folder is also accepted). */
+    mbedtlsError = esp_crt_bundle_attach( &( pSslContext->config ), &( pSslContext->rootCa ) );
+#else
+    /* No bundle: the file/folder roots are the only trust anchors. */
+    mbedtls_ssl_conf_ca_chain( &( pSslContext->config ), &( pSslContext->rootCa ), NULL );
+    mbedtlsError = 0;
+#endif
 
     if( ( ( pNetworkCredentials->pClientCert != NULL )
         #if defined( MBEDTLS_FS_IO )
@@ -569,7 +610,6 @@ static TlsTransportStatus_t tlsSetup( NetworkContext_t * pNetworkContext,
     configASSERT( pNetworkContext->pParams != NULL );
     configASSERT( pHostName != NULL );
     configASSERT( pNetworkCredentials != NULL );
-    configASSERT( pNetworkCredentials->pRootCa != NULL );
 
     pTlsTransportParams = pNetworkContext->pParams;
     /* Initialize the mbed TLS context structures. */
@@ -700,17 +740,17 @@ static TlsTransportStatus_t initMbedtls( mbedtls_entropy_context * pEntropyConte
         mbedtls_platform_threading_init();
     #endif
 
-    /* Initialize contexts for random number generation. */
-    mbedtls_entropy_init( pEntropyContext );
-    mbedtls_ctr_drbg_init( pCtrDrbgContext );
-
-    if( mbedtlsError != 0 )
-    {
-        LogError( ( "Failed to add entropy source: mbedTLSError= %s : %s.",
-                    mbedtlsHighLevelCodeOrDefault( mbedtlsError ),
-                    mbedtlsLowLevelCodeOrDefault( mbedtlsError ) ) );
-        returnStatus = TLS_TRANSPORT_INTERNAL_ERROR;
-    }
+    #if !defined( MBEDTLS_PSA_CRYPTO_C )
+        /* Classic path: a per-connection entropy + ctr_drbg, seeded below. */
+        mbedtls_entropy_init( pEntropyContext );
+        mbedtls_ctr_drbg_init( pCtrDrbgContext );
+    #else
+        /* PSA path: the TLS RNG draws from the shared global PSA DRBG (set up by psa_crypto_init
+         * below and also used by picotls), so there is no per-connection entropy/ctr_drbg to init
+         * or seed. */
+        ( void ) pEntropyContext;
+        ( void ) pCtrDrbgContext;
+    #endif
 
     #ifdef MBEDTLS_PSA_CRYPTO_C
         if( returnStatus == TLS_TRANSPORT_SUCCESS )
@@ -725,23 +765,26 @@ static TlsTransportStatus_t initMbedtls( mbedtls_entropy_context * pEntropyConte
         }
     #endif /* MBEDTLS_PSA_CRYPTO_C */
 
-    if( returnStatus == TLS_TRANSPORT_SUCCESS )
-    {
-        /* Seed the random number generator. */
-        mbedtlsError = mbedtls_ctr_drbg_seed( pCtrDrbgContext,
-                                              mbedtls_entropy_func,
-                                              pEntropyContext,
-                                              NULL,
-                                              0 );
-
-        if( mbedtlsError != 0 )
+    #if !defined( MBEDTLS_PSA_CRYPTO_C )
+        if( returnStatus == TLS_TRANSPORT_SUCCESS )
         {
-            LogError( ( "Failed to seed PRNG: mbedTLSError= %s : %s.",
-                        mbedtlsHighLevelCodeOrDefault( mbedtlsError ),
-                        mbedtlsLowLevelCodeOrDefault( mbedtlsError ) ) );
-            returnStatus = TLS_TRANSPORT_INTERNAL_ERROR;
+            /* Seed the per-connection ctr_drbg from entropy (PSA path skips this — its DRBG is
+             * already seeded once, globally). */
+            mbedtlsError = mbedtls_ctr_drbg_seed( pCtrDrbgContext,
+                                                  mbedtls_entropy_func,
+                                                  pEntropyContext,
+                                                  NULL,
+                                                  0 );
+
+            if( mbedtlsError != 0 )
+            {
+                LogError( ( "Failed to seed PRNG: mbedTLSError= %s : %s.",
+                            mbedtlsHighLevelCodeOrDefault( mbedtlsError ),
+                            mbedtlsLowLevelCodeOrDefault( mbedtlsError ) ) );
+                returnStatus = TLS_TRANSPORT_INTERNAL_ERROR;
+            }
         }
-    }
+    #endif /* !MBEDTLS_PSA_CRYPTO_C */
 
     if( returnStatus == TLS_TRANSPORT_SUCCESS )
     {
@@ -776,11 +819,14 @@ TlsTransportStatus_t TLS_FreeRTOS_Connect( NetworkContext_t * pNetworkContext,
                     pNetworkCredentials ) );
         returnStatus = TLS_TRANSPORT_INVALID_PARAMETER;
     }
-    else if( ( pNetworkCredentials->pRootCa == NULL ) )
+#ifndef AMEBAD_ENABLE_CRT_BUNDLE
+    else if( pNetworkCredentials->pRootCaPath == NULL )
     {
-        LogError( ( "pRootCa cannot be NULL." ) );
+        /* Without the embedded bundle, the `ca/` folder is the only trust source. */
+        LogError( ( "pRootCaPath cannot be NULL (no embedded CA bundle in this build)." ) );
         returnStatus = TLS_TRANSPORT_INVALID_PARAMETER;
     }
+#endif
     else
     {
         /* Empty else for MISRA 15.7 compliance. */
@@ -814,8 +860,12 @@ TlsTransportStatus_t TLS_FreeRTOS_Connect( NetworkContext_t * pNetworkContext,
     {
         isSocketConnected = pdTRUE;
 
+    #if !defined( MBEDTLS_PSA_CRYPTO_C )
         returnStatus = initMbedtls( &( pTlsTransportParams->sslContext.entropyContext ),
                                     &( pTlsTransportParams->sslContext.ctrDrbgContext ) );
+    #else
+        returnStatus = initMbedtls( NULL, NULL );   /* PSA path: no per-connection entropy/ctr_drbg */
+    #endif
     }
 
     /* Initialize TLS contexts and set credentials. */

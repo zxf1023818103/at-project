@@ -237,8 +237,10 @@ static void aws_agent_task(void *param)
     prvWaitForProvisioning();
 
     memset(&s_creds, 0, sizeof(s_creds));
-    s_creds.pRootCa = (const uint8_t *)AWS_ROOT_CA_PEM;
-    s_creds.rootCaSize = sizeof(AWS_ROOT_CA_PEM);
+    /* Server trust: the `ca/` folder on LittleFS (shipped from project/resource/ca). In a
+     * CRT_BUNDLE=ON build it augments the embedded Mozilla bundle; in an OFF build it is the
+     * only trust source. No root CA is baked into the source. */
+    s_creds.pRootCaPath = "ca";
     s_creds.pClientCert = NULL;
     s_creds.clientCertSize = 0;
     s_creds.pClientCertPath = s_certPath;
@@ -249,6 +251,9 @@ static void aws_agent_task(void *param)
      * rxPlain reserve is ample - it leaves ~8 KB more heap for the OTA HTTP data plane's 2nd TLS
      * (the 16 KB default is only needed for bulk TLS reads, which the HTTPS download owns instead). */
     s_creds.rxReserveSize = 6144;
+    /* AWS IoT Core supports TLS 1.3 - force picotls so a transient handshake failure never silently
+     * downgrades the control/data session to TLS 1.2 via the fallback dispatcher. */
+    s_creds.backendMode = TLS_BACKEND_MODE_PICOTLS;
 
     /* The command-pointer queue the agent + app tasks rendezvous on. */
     s_agentMsgCtx.queue = xQueueCreateStatic(AWS_AGENT_QUEUE_LEN,

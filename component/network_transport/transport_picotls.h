@@ -23,6 +23,21 @@
 #include "tcp_sockets_wrapper.h"
 #include "transport_interface.h"
 
+/* Backend-agnostic NetworkCredentials_t / TlsTransportStatus_t (shared with the mbedTLS backend
+ * and the fallback dispatcher). */
+#include "transport_tls_common.h"
+
+/* For the TLS-1.2 fallback build, both backends are linked side by side, so this backend's public
+ * API symbols are renamed (the network_transport CMake defines TLS_TRANSPORT_RENAME_PICOTLS) and
+ * the fallback dispatcher (transport_fallback.c) calls the picotls_* set directly. */
+#ifdef TLS_TRANSPORT_RENAME_PICOTLS
+    #define TLS_FreeRTOS_Connect      picotls_TLS_FreeRTOS_Connect
+    #define TLS_FreeRTOS_Disconnect   picotls_TLS_FreeRTOS_Disconnect
+    #define TLS_FreeRTOS_send         picotls_TLS_FreeRTOS_send
+    #define TLS_FreeRTOS_recv         picotls_TLS_FreeRTOS_recv
+    #define TLS_FreeRTOS_params_size  picotls_TLS_FreeRTOS_params_size
+#endif
+
 /**
  * @brief Parameters for the network context of the transport interface
  * implementation that uses picotls and FreeRTOS+TCP sockets.
@@ -40,64 +55,7 @@ typedef struct TlsTransportParams
     size_t        rxConsumed; /**< @brief Bytes of rxPlain already returned to the caller. */
 } TlsTransportParams_t;
 
-/**
- * @brief Contains the credentials necessary for tls connection setup.
- *
- * Identical layout to the mbedTLS transport's NetworkCredentials_t (backend-agnostic),
- * so the application fills it the same way regardless of which backend is linked.
- */
-typedef struct NetworkCredentials
-{
-    /**
-     * @brief To use ALPN, set this to a NULL-terminated list of supported
-     * protocols in decreasing order of preference. (Not wired on the picotls path
-     * yet — AWS IoT on port 8883 needs none; a non-NULL value is logged and ignored.)
-     */
-    const char ** pAlpnProtos;
-
-    /**
-     * @brief Disable server name indication (SNI) for a TLS session.
-     */
-    BaseType_t disableSni;
-
-    const uint8_t * pRootCa;     /**< @brief Trusted server root certificate (PEM or DER). */
-    size_t rootCaSize;           /**< @brief Size associated with #NetworkCredentials.pRootCa. */
-    const uint8_t * pClientCert; /**< @brief Client certificate (PEM or DER), or NULL. */
-    size_t clientCertSize;       /**< @brief Size associated with #NetworkCredentials.pClientCert. */
-    const uint8_t * pPrivateKey; /**< @brief Client private key (PEM or DER), or NULL. */
-    size_t privateKeySize;       /**< @brief Size associated with #NetworkCredentials.pPrivateKey. */
-
-    /**
-     * @brief Filesystem path of the client certificate (PEM or DER), loaded when
-     * #pClientCert is NULL. Lets a non-secret cert live as a plain file while the key
-     * stays in secure storage.
-     */
-    const char * pClientCertPath;
-
-    /**
-     * @brief Optional override for the rxPlain pre-reserve size (bytes). 0 = the
-     * default full-TLS-record reserve (16640). A second concurrent TLS connection
-     * (e.g. the OTA HTTPS download alongside the AWS MQTT session) can pass a smaller
-     * value to save heap: its application records are tiny (4 KB OTA blocks), so a
-     * modest reserve (e.g. 6144) avoids holding a second 16 KB buffer. Only consumed
-     * by the picotls backend; ignored by mbedTLS.
-     */
-    size_t rxReserveSize;
-} NetworkCredentials_t;
-
-/**
- * @brief TLS Connect / Disconnect return status.
- */
-typedef enum TlsTransportStatus
-{
-    TLS_TRANSPORT_SUCCESS = 0,         /**< Function successfully completed. */
-    TLS_TRANSPORT_INVALID_PARAMETER,   /**< At least one parameter was invalid. */
-    TLS_TRANSPORT_INSUFFICIENT_MEMORY, /**< Insufficient memory required to establish connection. */
-    TLS_TRANSPORT_INVALID_CREDENTIALS, /**< Provided credentials were invalid. */
-    TLS_TRANSPORT_HANDSHAKE_FAILED,    /**< Performing TLS handshake with server failed. */
-    TLS_TRANSPORT_INTERNAL_ERROR,      /**< A call to a system API resulted in an internal error. */
-    TLS_TRANSPORT_CONNECT_FAILURE      /**< Initial connection to the server failed. */
-} TlsTransportStatus_t;
+/* NetworkCredentials_t and TlsTransportStatus_t are now in transport_tls_common.h (included above). */
 
 /**
  * @brief Create a TLS connection with FreeRTOS sockets.
@@ -145,5 +103,11 @@ int32_t TLS_FreeRTOS_recv( NetworkContext_t * pNetworkContext,
 int32_t TLS_FreeRTOS_send( NetworkContext_t * pNetworkContext,
                            const void * pBuffer,
                            size_t bytesToSend );
+
+/**
+ * @brief sizeof(TlsTransportParams_t) for this backend, so the fallback dispatcher can allocate a
+ * params block of the right size without seeing the (backend-private) struct layout.
+ */
+size_t TLS_FreeRTOS_params_size( void );
 
 #endif /* ifndef USING_PICOTLS */

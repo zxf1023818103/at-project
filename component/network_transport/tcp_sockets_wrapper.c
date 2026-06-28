@@ -178,11 +178,28 @@ BaseType_t TCP_Sockets_Connect( Socket_t * pTcpSocket,
         }
     }
 
+    /* Literal dotted-quad IPv4 host (e.g. a LAN HTTPS server, "192.168.4.250"): connect to it
+     * directly. FreeRTOS_getaddrinfo has no AI_NUMERICHOST equivalent, so it would treat the IP
+     * string as a name and DNS-fail. */
+    {
+        uint32_t ulLiteralIPv4 = FreeRTOS_inet_addr( pHostName );
+
+        if( ulLiteralIPv4 != 0U )
+        {
+            ( void ) memset( &( resolved[ 1 ] ), 0, sizeof( resolved[ 1 ] ) );
+            resolved[ 1 ].sin_family = ( uint8_t ) FREERTOS_AF_INET;
+            resolved[ 1 ].sin_len = ( uint8_t ) sizeof( resolved[ 1 ] );
+            resolved[ 1 ].sin_address.ulIP_IPv4 = ulLiteralIPv4;
+            have[ 1 ] = pdTRUE;
+            LogInfo( ( "host %s is a literal IPv4 -- skipping DNS", pHostName ) );
+        }
+    }
+
     /* Resolve AAAA (IPv6) then A (IPv4) into resolved[]/have[] -- one family per query. AWS IoT
      * publishes both, so on an IPv6-capable network we connect over IPv6 (resolved[0]) and fall back
      * to IPv4 (resolved[1]) elsewhere. Under CARES=ON each query goes through c-ares; otherwise the
-     * FreeRTOS+TCP resolver. */
-    for( uxIdx = 0; uxIdx < 2U; uxIdx++ )
+     * FreeRTOS+TCP resolver. Skipped entirely when pHostName was a literal IPv4 (have[1] set above). */
+    for( uxIdx = 0; ( uxIdx < 2U ) && ( have[ 1 ] == pdFALSE ); uxIdx++ )
     {
         have[ uxIdx ] = pdFALSE;
 

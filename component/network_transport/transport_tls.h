@@ -16,7 +16,9 @@
 #ifndef TRANSPORT_TLS_H
 #define TRANSPORT_TLS_H
 
-#if defined( TLS_BACKEND_PICOTLS )
+#if defined( TLS_BACKEND_FALLBACK )
+    #include "transport_fallback.h"
+#elif defined( TLS_BACKEND_PICOTLS )
     #include "transport_picotls.h"
 #else
     #include "transport_mbedtls.h"

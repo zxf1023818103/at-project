@@ -181,12 +181,15 @@ static OtaHttpStatus_t prvOtaHttpDeinit( void );
  * handshake Certificate record is larger than a 6 KB reserve, and pinning it too small fails the
  * handshake (err 4). Heap headroom for this 2nd TLS comes from the freed event buffers + the AWS
  * MQTT TLS now reserving only 8 KB. */
-/* 8192: holds S3's handshake records + a 4 KB body record (otaconfigLOG2_FILE_BLOCK_SIZE=12) without a
- * mid-transfer realloc. Larger reserves were MEASURED to OOM the 2nd (S3) TLS handshake under the lower
- * idle heap that bigger blocks leave: 9216 @ 8 KB blocks (~69 KB idle) and 16640 @ 16 KB blocks
- * (~44.5 KB idle) both malloc-failed. 4 KB blocks + this 8192 reserve is the configuration that fits
- * the S3 handshake peak alongside the AWS MQTT TLS. Pairs with TLS_BACKEND=picotls. */
-#define OTA_HTTP_RXRESERVE      8192u
+/* 5120: holds one decrypted S3 application record = ~400-500 B 206 headers + a 4 KB body chunk
+ * (otaconfigLOG2_FILE_BLOCK_SIZE=12), with ~0.5 KB margin, without a mid-transfer realloc. Trimmed
+ * from 8192 to cut ~3 KB of steady heap held by this (2nd) picotls connection while the AWS MQTT TLS
+ * is live - the binding constraint is that concurrent peak. (ptls_buffer grows 2x on demand and never
+ * shrinks, so if S3 ever coalesces a record beyond 5 KB this just costs one realloc, not correctness;
+ * verified against the AMEBAD_TLS_HEAP_TRACE handshake trace.) Larger blocks were MEASURED to OOM the
+ * S3 handshake: 8 KB blocks @9216 (~69 KB idle) and 16 KB @16640 (~44.5 KB idle). This connection is
+ * forced to picotls (TLS 1.3) - see creds.backendMode below. */
+#define OTA_HTTP_RXRESERVE      5120u
 /* coreHTTP response buffer: holds the WHOLE response (coreHTTP is not streaming) = 4 KB block +
  * status line + headers. Measured S3 206 headers are only ~480 B, so 1 KB of header room is ample
  * (the earlier HTTPPartialResponse was the body not arriving, not header overflow). Keep it lean to
@@ -339,6 +342,7 @@ static OtaHttpStatus_t prvHttpOpenConn( void )
         creds.pRootCa        = ( const uint8_t * ) OTA_AMAZON_ROOT_CA1;
         creds.rootCaSize     = sizeof( OTA_AMAZON_ROOT_CA1 );   /* incl. NUL, as mbedTLS PEM wants */
         creds.rxReserveSize  = OTA_HTTP_RXRESERVE;
+        creds.backendMode    = TLS_BACKEND_MODE_PICOTLS;   /* AWS S3 supports TLS 1.3; never fall back */
         s_http.netCtx.pParams = &s_http.tlsParams;
 
         if( TLS_FreeRTOS_Connect( &s_http.netCtx, s_http.host, s_http.port, &creds,

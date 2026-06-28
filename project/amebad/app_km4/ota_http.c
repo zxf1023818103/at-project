@@ -78,6 +78,7 @@ static int conn_connect( conn_t * c, int is_https, const char * host, uint16_t p
         memset( &creds, 0, sizeof( creds ) );
         creds.pRootCaPath  = "ca";   /* CA folder on LittleFS (+ embedded bundle when CRT_BUNDLE=ON) */
         creds.rxReserveSize = OTA_HTTP_RXRESERVE;   /* full record up front - no mid-stream realloc */
+        creds.backendMode   = TLS_BACKEND_MODE_FALLBACK; /* arbitrary host - allow TLS 1.2 fallback */
         netctx.pParams     = &c->tlsParams;
         c->tls             = &netctx;
         st = TLS_FreeRTOS_Connect( c->tls, host, port, &creds, OTA_HTTP_RECV_TMO_MS, OTA_HTTP_SEND_TMO_MS );

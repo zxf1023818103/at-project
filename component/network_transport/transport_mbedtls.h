@@ -93,6 +93,21 @@ extern void vLoggingPrintf( const char * pcFormatString,
 /* Transport interface include. */
 #include "transport_interface.h"
 
+/* Backend-agnostic NetworkCredentials_t / TlsTransportStatus_t (shared with the picotls backend
+ * and the fallback dispatcher). */
+#include "transport_tls_common.h"
+
+/* For the TLS-1.2 fallback build, both backends are linked side by side, so this backend's public
+ * API symbols are renamed (the network_transport CMake defines TLS_TRANSPORT_RENAME_MBEDTLS) and
+ * the fallback dispatcher (transport_fallback.c) calls the mbedtls_* set directly. */
+#ifdef TLS_TRANSPORT_RENAME_MBEDTLS
+    #define TLS_FreeRTOS_Connect      mbedtls_TLS_FreeRTOS_Connect
+    #define TLS_FreeRTOS_Disconnect   mbedtls_TLS_FreeRTOS_Disconnect
+    #define TLS_FreeRTOS_send         mbedtls_TLS_FreeRTOS_send
+    #define TLS_FreeRTOS_recv         mbedtls_TLS_FreeRTOS_recv
+    #define TLS_FreeRTOS_params_size  mbedtls_TLS_FreeRTOS_params_size
+#endif
+
 /**
  * @brief Secured connection context.
  */
@@ -104,8 +119,13 @@ typedef struct SSLContext
     mbedtls_x509_crt rootCa;                 /**< @brief Root CA certificate context. */
     mbedtls_x509_crt clientCert;             /**< @brief Client certificate context. */
     mbedtls_pk_context privKey;              /**< @brief Client private key context. */
+#if !defined( MBEDTLS_PSA_CRYPTO_C )
+    /* Per-connection RNG. With PSA crypto present the TLS RNG draws from the shared global PSA DRBG
+     * (transport_mbedtls.c TLS_RNG_FUNC) — the same one picotls uses — so these are omitted, saving
+     * ~1 KB per connection and the per-connection entropy reseed. */
     mbedtls_entropy_context entropyContext;  /**< @brief Entropy context for random number generation. */
     mbedtls_ctr_drbg_context ctrDrbgContext; /**< @brief CTR DRBG context for random number generation. */
+#endif
 } SSLContext_t;
 
 /**
@@ -118,54 +138,7 @@ typedef struct TlsTransportParams
     SSLContext_t sslContext;
 } TlsTransportParams_t;
 
-/**
- * @brief Contains the credentials necessary for tls connection setup.
- */
-typedef struct NetworkCredentials
-{
-    /**
-     * @brief To use ALPN, set this to a NULL-terminated list of supported
-     * protocols in decreasing order of preference.
-     *
-     * See [this link]
-     * (https://aws.amazon.com/blogs/iot/mqtt-with-tls-client-authentication-on-port-443-why-it-is-useful-and-how-it-works/)
-     * for more information.
-     */
-    const char ** pAlpnProtos;
-
-    /**
-     * @brief Disable server name indication (SNI) for a TLS session.
-     */
-    BaseType_t disableSni;
-
-    const uint8_t * pRootCa;     /**< @brief String representing a trusted server root certificate. */
-    size_t rootCaSize;           /**< @brief Size associated with #NetworkCredentials.pRootCa. */
-    const uint8_t * pClientCert; /**< @brief String representing the client certificate. */
-    size_t clientCertSize;       /**< @brief Size associated with #NetworkCredentials.pClientCert. */
-    const uint8_t * pPrivateKey; /**< @brief String representing the client certificate's private key. */
-    size_t privateKeySize;       /**< @brief Size associated with #NetworkCredentials.pPrivateKey. */
-
-    /**
-     * @brief Filesystem path of the client certificate (PEM or DER), loaded with
-     * mbedtls_x509_crt_parse_file when #pClientCert is NULL. Requires MBEDTLS_FS_IO.
-     * Lets a non-secret cert live as a plain file while the key stays in secure storage.
-     */
-    const char * pClientCertPath;
-} NetworkCredentials_t;
-
-/**
- * @brief TLS Connect / Disconnect return status.
- */
-typedef enum TlsTransportStatus
-{
-    TLS_TRANSPORT_SUCCESS = 0,         /**< Function successfully completed. */
-    TLS_TRANSPORT_INVALID_PARAMETER,   /**< At least one parameter was invalid. */
-    TLS_TRANSPORT_INSUFFICIENT_MEMORY, /**< Insufficient memory required to establish connection. */
-    TLS_TRANSPORT_INVALID_CREDENTIALS, /**< Provided credentials were invalid. */
-    TLS_TRANSPORT_HANDSHAKE_FAILED,    /**< Performing TLS handshake with server failed. */
-    TLS_TRANSPORT_INTERNAL_ERROR,      /**< A call to a system API resulted in an internal error. */
-    TLS_TRANSPORT_CONNECT_FAILURE      /**< Initial connection to the server failed. */
-} TlsTransportStatus_t;
+/* NetworkCredentials_t and TlsTransportStatus_t are now in transport_tls_common.h (included above). */
 
 /**
  * @brief Create a TLS connection with FreeRTOS sockets.
@@ -230,6 +203,12 @@ int32_t TLS_FreeRTOS_recv( NetworkContext_t * pNetworkContext,
 int32_t TLS_FreeRTOS_send( NetworkContext_t * pNetworkContext,
                            const void * pBuffer,
                            size_t bytesToSend );
+
+/**
+ * @brief sizeof(TlsTransportParams_t) for this backend, so the fallback dispatcher can allocate a
+ * params block of the right size without seeing the (backend-private) struct layout.
+ */
+size_t TLS_FreeRTOS_params_size( void );
 
 
 #ifdef MBEDTLS_DEBUG_C

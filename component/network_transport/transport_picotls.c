@@ -64,6 +64,25 @@
 #include "tcp_sockets_wrapper.h"
 #include "transport_picotls.h"
 
+#include <sys/stat.h>   /* stat / S_ISDIR -- folder vs single-file root CA path */
+
+#ifdef AMEBAD_ENABLE_CRT_BUNDLE
+    #include "esp_crt_bundle.h"
+#endif
+
+/* Optional heap tracing of the TLS handshake (compile with -DAMEBAD_TLS_HEAP_TRACE). Logs free heap
+ * (and min-ever-free, meaningful only when CONFIG_MM_ENABLE_MIN_FREE_TRACKING=1) at the connect /
+ * handshake / disconnect milestones, so the transient handshake PEAK (the Certificate flight) reads
+ * off as the low point of the `free` column. No-op by default. */
+#if defined( AMEBAD_TLS_HEAP_TRACE )
+    #define TLS_HEAP_MARK( tag )                                                  \
+    LogInfo( ( "[HEAPTRACE] %-24s free=%u minever=%u", ( tag ),                    \
+               ( unsigned ) xPortGetFreeHeapSize(),                               \
+               ( unsigned ) xPortGetMinimumEverFreeHeapSize() ) )
+#else
+    #define TLS_HEAP_MARK( tag )    ( ( void ) 0 )
+#endif
+
 /*-----------------------------------------------------------*/
 
 /**
@@ -73,6 +92,12 @@ struct NetworkContext
 {
     TlsTransportParams_t * pParams;
 };
+
+/* Size of this backend's params block, for the fallback dispatcher (transport_fallback.c). */
+size_t TLS_FreeRTOS_params_size( void )
+{
+    return sizeof( TlsTransportParams_t );
+}
 
 /*-----------------------------------------------------------*/
 /* TLS handshake wall-clock cap (matches the mbedTLS transport). */
@@ -272,7 +297,7 @@ static const uint16_t s_verifyAlgos[] = {
 typedef struct
 {
     ptls_verify_certificate_t super;
-    mbedtls_x509_crt          trustCa;   /* parsed trust anchor (the root CA in the creds) */
+    mbedtls_x509_crt          trustCa;   /* file/folder-loaded trust anchors (the `ca/` store) */
     int                       loaded;
 } picotls_verify_t;
 static picotls_verify_t s_verifier;
@@ -391,9 +416,26 @@ static int picotls_verify_cert( ptls_verify_certificate_t * _self,
         }
     }
 
-    ret = mbedtls_x509_crt_verify( &s_serverChain, &self->trustCa, NULL,
-                                   ( ( server_name != NULL ) && ( server_name[ 0 ] != '\0' ) ) ? server_name : NULL,
-                                   &flags, NULL, NULL );
+    const char * cn = ( ( server_name != NULL ) && ( server_name[ 0 ] != '\0' ) ) ? server_name : NULL;
+#ifdef AMEBAD_ENABLE_CRT_BUNDLE
+    /* Verify against the embedded Mozilla bundle, with the file/folder roots (self->trustCa, the
+     * `ca/` store) as extra trust anchors for self-signed / niche CAs the bundle lacks. */
+    ret = esp_crt_bundle_verify_chain( &s_serverChain, &self->trustCa, cn, &flags );
+#else
+    /* No bundle: the file/folder roots are the only trust anchors. */
+    ret = mbedtls_x509_crt_verify( &s_serverChain, &self->trustCa, NULL, cn, &flags, NULL, NULL );
+#endif
+
+    /* Report the server (leaf) cert identity + the verification outcome at handshake time. */
+    {
+        char subj[ 160 ], issuer[ 160 ];
+        ( void ) mbedtls_x509_dn_gets( subj, sizeof( subj ), &s_serverChain.subject );
+        ( void ) mbedtls_x509_dn_gets( issuer, sizeof( issuer ), &s_serverChain.issuer );
+        LogInfo( ( "server cert Subject [%s] Issuer [%s] -- verify %s (ret=-0x%04X flags=0x%08X)",
+                   subj, issuer, ( ret == 0 ) ? "PASS" : "FAIL",
+                   ( unsigned int ) -ret, ( unsigned int ) flags ) );
+    }
+
     if( ret != 0 )
     {
         LogError( ( "server certificate verification failed: -0x%04X, flags=0x%08X",
@@ -433,21 +475,43 @@ Fail:
     return ret;
 }
 
-/* Parse the trust anchor and arm the verifier. PEM (rootCaSize includes the NUL) or DER. */
+/* Load the trust anchors from the `ca/` store (a folder -> parse_path, or a single PEM/DER file)
+ * and arm the verifier. In a CRT_BUNDLE=ON build an empty/missing store is fine (the embedded
+ * bundle is the trust source); in a CRT_BUNDLE=OFF build it leaves nothing to trust -> fail. */
 static int picotls_init_verify( picotls_verify_t * self,
-                                const uint8_t * rootCa,
-                                size_t rootCaSize )
+                                const char * rootCaPath )
 {
-    int rc;
+    struct stat st;
+    int rc = 0;
 
     mbedtls_x509_crt_init( &self->trustCa );
-    rc = mbedtls_x509_crt_parse( &self->trustCa, rootCa, rootCaSize );
-    if( rc != 0 )
+
+    if( rootCaPath != NULL )
     {
-        LogError( ( "failed to parse root CA: -0x%04X", ( unsigned int ) -rc ) );
-        mbedtls_x509_crt_free( &self->trustCa );
-        return rc;
+        if( ( stat( rootCaPath, &st ) == 0 ) && S_ISDIR( st.st_mode ) )
+        {
+            rc = mbedtls_x509_crt_parse_path( &self->trustCa, rootCaPath );
+        }
+        else
+        {
+            rc = mbedtls_x509_crt_parse_file( &self->trustCa, rootCaPath );
+        }
+        if( rc < 0 )
+        {
+            LogWarn( ( "no CA roots loaded from '%s': -0x%04X", rootCaPath, ( unsigned int ) -rc ) );
+        }
     }
+
+#ifndef AMEBAD_ENABLE_CRT_BUNDLE
+    if( self->trustCa.raw.p == NULL )
+    {
+        LogError( ( "no trusted CA roots (path '%s') and no embedded bundle in this build",
+                    rootCaPath ? rootCaPath : "(null)" ) );
+        mbedtls_x509_crt_free( &self->trustCa );
+        return -1;
+    }
+#endif
+
     self->super.cb = picotls_verify_cert;
     self->super.algos = s_verifyAlgos;
     self->loaded = 1;
@@ -673,7 +737,9 @@ static TlsTransportStatus_t picotls_load_credentials( const NetworkCredentials_t
         mbedtls_x509_crt_free( &s_verifier.trustCa );
         s_verifier.loaded = 0;
     }
-    if( picotls_init_verify( &s_verifier, creds->pRootCa, creds->rootCaSize ) != 0 )
+    /* Load the `ca/` store into trustCa; picotls_verify_cert layers the embedded bundle on top
+     * (CRT_BUNDLE=ON) or uses these file roots alone (CRT_BUNDLE=OFF). */
+    if( picotls_init_verify( &s_verifier, creds->pRootCaPath ) != 0 )
     {
         return TLS_TRANSPORT_INVALID_CREDENTIALS;
     }
@@ -829,6 +895,10 @@ static TlsTransportStatus_t picotls_handshake( TlsTransportParams_t * p )
             size_t consumed = ( size_t ) n - off;
             ret = ptls_handshake( p->tls, &sendbuf, rxCipher + off, &consumed, &hsprop );
             off += consumed;
+            /* The Certificate-flight step holds the parsed server chain + runs cert verify here -
+             * this is the handshake heap trough (the in-call verify working set is freed by now, so
+             * this slightly under-reports the true peak, but captures the held cert chain). */
+            TLS_HEAP_MARK( "hs-step" );
             if( ret == 0 )
             {
                 break;
@@ -892,11 +962,14 @@ TlsTransportStatus_t TLS_FreeRTOS_Connect( NetworkContext_t * pNetworkContext,
                     ( void * ) pNetworkContext, ( const void * ) pHostName, ( const void * ) pNetworkCredentials ) );
         return TLS_TRANSPORT_INVALID_PARAMETER;
     }
-    if( pNetworkCredentials->pRootCa == NULL )
+#ifndef AMEBAD_ENABLE_CRT_BUNDLE
+    if( pNetworkCredentials->pRootCaPath == NULL )
     {
-        LogError( ( "pRootCa cannot be NULL." ) );
+        /* Without the embedded bundle, the `ca/` folder is the only trust source. */
+        LogError( ( "pRootCaPath cannot be NULL (no embedded CA bundle in this build)." ) );
         return TLS_TRANSPORT_INVALID_PARAMETER;
     }
+#endif
 
     p = pNetworkContext->pParams;
     p->tcpSocket = NULL;
@@ -922,6 +995,7 @@ TlsTransportStatus_t TLS_FreeRTOS_Connect( NetworkContext_t * pNetworkContext,
         goto Cleanup;
     }
 
+    TLS_HEAP_MARK( "pre-client_new" );
     p->tls = ptls_client_new( &s_ptlsCtx );
     if( p->tls == NULL )
     {
@@ -933,14 +1007,16 @@ TlsTransportStatus_t TLS_FreeRTOS_Connect( NetworkContext_t * pNetworkContext,
     p->rxConsumed = 0;
     isTlsCreated = pdTRUE;
 
-    /* Pre-reserve a full TLS record (16 KB) up front, while the heap is least fragmented. Otherwise
-     * the decrypt path reallocs rxPlain up to ~16 KB mid-stream, and that large realloc fails in a
-     * fragmented heap during a big transfer (e.g. an OTA download), aborting the connection.
-     * A caller may pass a smaller rxReserveSize (e.g. a concurrent OTA HTTPS download with tiny 4 KB
-     * records) to save heap; 0 keeps the full-record default. */
+    /* Pre-reserve the rxPlain decrypt sink up front, while the heap is least fragmented (the decrypt
+     * path otherwise reallocs rxPlain mid-stream to fit a record's plaintext, and a large realloc can
+     * fail in a fragmented heap during a big transfer). Default 4 KB: enough for typical small app
+     * records (MQTT control/telemetry, HTTP headers) without holding a full 16 KB record; a bigger
+     * record still grows the buffer on demand. Callers with a known larger steady record (e.g. the
+     * OTA HTTPS data plane) pass a matching rxReserveSize so the grow happens once, up front. */
+    #define PICOTLS_RX_RESERVE_DEFAULT    ( 4096U )
     {
         size_t rxReserve = ( pNetworkCredentials->rxReserveSize != 0 )
-                           ? pNetworkCredentials->rxReserveSize : 16640;
+                           ? pNetworkCredentials->rxReserveSize : PICOTLS_RX_RESERVE_DEFAULT;
     if( ptls_buffer_reserve( &p->rxPlain, rxReserve ) != 0 )
     {
         LogError( ( "rxPlain pre-reserve failed" ) );
@@ -948,6 +1024,7 @@ TlsTransportStatus_t TLS_FreeRTOS_Connect( NetworkContext_t * pNetworkContext,
         goto Cleanup;
     }
     }
+    TLS_HEAP_MARK( "post-client_new+reserve" );
 
     if( pNetworkCredentials->disableSni == pdFALSE )
     {
@@ -963,6 +1040,7 @@ TlsTransportStatus_t TLS_FreeRTOS_Connect( NetworkContext_t * pNetworkContext,
     {
         goto Cleanup;
     }
+    TLS_HEAP_MARK( "post-handshake" );
 
     LogInfo( ( "(Network connection %p) Connection to %s established.",
                ( void * ) pNetworkContext, pHostName ) );
@@ -1044,6 +1122,7 @@ void TLS_FreeRTOS_Disconnect( NetworkContext_t * pNetworkContext )
         mbedtls_x509_crt_free( &s_serverChain );
         s_serverChainInUse = 0;
     }
+    TLS_HEAP_MARK( "post-disconnect" );
 }
 /*-----------------------------------------------------------*/
 

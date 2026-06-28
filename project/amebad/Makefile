@@ -17,10 +17,12 @@
 #   make TFM=ON          # in-tree TF-M secure world (SPE via ExternalProject; app_km4 = NSPE)
 #   make STORAGE=ON      # TF-M PSA secure storage (ITS + PS) + NS storage self-test (implies TFM=ON)
 #   make AWS=ON          # AWS IoT Core MQTT/TLS demo (coreMQTT + mbedTLS; cert/endpoint->LFS, key->TF-M PS; implies STORAGE=ON)
-#   make TLS_BACKEND=<picotls|mbedtls>   # TLS-over-TCP backend for AWS (default picotls: TLS 1.3 only,
-#                        # ~112 KB smaller flash + ~24 KB less heap, shares the QUIC TLS stack). Use mbedtls
-#                        # for TLS 1.2 compatibility / broader servers (1.2+1.3, mature, native X.509).
-#                        # e.g. make AWS=ON TLS_BACKEND=mbedtls
+#   make TLS_BACKEND=<fallback|picotls|mbedtls>  # TLS-over-TCP backend(s) for AWS. Default fallback:
+#                        # links BOTH picotls (TLS 1.3) and mbedTLS (TLS 1.2), and each connection picks
+#                        # via NetworkCredentials_t.backendMode (AWS MQTT/OTA force picotls; ota_http uses
+#                        # fallback = picotls then mbedTLS). picotls = TLS 1.3 only, ~112 KB smaller flash
+#                        # but no per-connection mode / no 1.2 fallback. mbedtls = TLS 1.2/1.3 only.
+#                        # e.g. make AWS=ON TLS_BACKEND=picotls
 #   make clean           # ninja clean both cores
 #   make distclean       # delete build/km0 build/km4 build/amebad
 #
@@ -45,13 +47,20 @@ IPERF      ?= OFF          # ON -> `iperf` console command over upstream iperf3 
 CARES      ?= OFF          # ON -> resolve DNS via c-ares (select event loop) instead of the FreeRTOS+TCP resolver (AWS/SNTP/OTA)
 WPS        ?= OFF          # ON -> `wps` console command (WPS PBC/PIN connect test; compiles wifi_wps_config.c, links lib_wps.a)
 TFM        ?= OFF          # ON -> build + boot in-tree TF-M SPE (app_km4 becomes the NS side)
-TLS_BACKEND ?= picotls     # AWS TLS-over-TCP backend (default: picotls — TLS 1.3 only; ~112 KB smaller flash + ~24 KB less heap; shares the QUIC TLS stack). Set mbedtls for TLS 1.2 compatibility / broader server support (1.2+1.3, mature, native X.509). Switch wiring: component/network_transport/transport_tls.h.
-ifeq ($(filter $(TLS_BACKEND),mbedtls picotls),)
-$(error TLS_BACKEND must be 'mbedtls' or 'picotls')
+TLS_BACKEND ?= fallback    # AWS TLS-over-TCP backend (default: fallback — links BOTH picotls/TLS1.3 + mbedTLS/TLS1.2, per-connection choice via NetworkCredentials_t.backendMode: AWS MQTT/OTA force picotls, ota_http falls back picotls->mbedTLS). picotls = TLS 1.3 only, ~112 KB smaller flash but no runtime mode / no 1.2 fallback (backendMode ignored). mbedtls = TLS 1.2/1.3. Switch wiring: component/network_transport/transport_tls.h.
+ifeq ($(filter $(TLS_BACKEND),mbedtls picotls fallback),)
+$(error TLS_BACKEND must be 'mbedtls', 'picotls', or 'fallback')
 endif
+# fallback: try picotls (TLS 1.3) first, fall back to mbedTLS (TLS 1.2/1.3) when the server has no
+# TLS 1.3. Links both backends (transport_fallback.c dispatches). e.g. make AWS=ON TLS_BACKEND=fallback
+TLS_HEAP_TRACE ?= OFF      # ON = compile the gated picotls handshake heap trace (transport_picotls.c TLS_HEAP_MARK); logs free heap at connect/handshake/disconnect. Debug/measurement only.
 HWGCM      ?= $(TFM)       # default = TFM: route AES-GCM + ChaCha20-Poly1305 to the RTL8721D IPSEC HW engine (needs TFM=ON's SAU, so on iff TFM is on). Both TLS backends use it: mbedTLS via the classic one-shot mbedtls_gcm; picotls via the encrypt-coalesce shim in transport_picotls.c that reduces its PSA multi-part AEAD to the engine's one-shot path.
 STORAGE    ?= OFF          # ON -> TF-M PSA secure storage (ITS + PS) + NS storage self-test; implies TFM=ON
 AWS        ?= OFF          # ON -> AWS IoT Core MQTT/TLS demo (coreMQTT + mbedTLS); cert/endpoint->LFS, private key->TF-M PS
+# CRT_BUNDLE: verify the TLS server cert against the embedded compressed Mozilla CA root bundle
+# (esp_crt_bundle, ~121 roots), falling back to the `ca/` folder (project/resource/ca -> LittleFS)
+# for roots the bundle lacks (self-signed / niche CAs). ALWAYS ON for AWS images (not
+# user-overridable); forced OFF for non-AWS images (no TLS path). Set below from $(AWS).
 FW_VERSION ?= ota-A        # firmware version string stamped into the AWS image (printed + in telemetry); bump for an OTA target build, e.g. make AWS=ON FW_VERSION=ota-B
 APP_BUILD  ?= 1            # appFirmwareVersion build number (0.9.N) for the OTA self-test; an OTA target must be > the running image, e.g. make AWS=ON FW_VERSION=ota-E APP_BUILD=2
 # coreSNTP UTC time-sync is now default-on (every non-QUIC image) - no SNTP flag.
@@ -85,6 +94,13 @@ ifeq ($(HWGCM),ON)
 ifneq ($(TFM),ON)
 $(error HWGCM=ON requires TFM=ON (NS-direct HW crypto needs TF-M's SAU; a non-TF-M image hangs))
 endif
+endif
+# CRT_BUNDLE only matters for the TLS path, which exists only in the AWS image. Always ON there
+# (the embedded bundle is the primary trust source + the ca/ folder fallback); OFF everywhere else.
+ifeq ($(AWS),ON)
+CRT_BUNDLE := ON
+else
+CRT_BUNDLE := OFF
 endif
 VFSTEST    ?= OFF          # ON -> POSIX-fd VFS self-test (fopen/open/socket over LFS+sockets)
 CPPTEST    ?= OFF          # ON -> C++ std::filesystem/iostream self-test (cout/cin over LPUART, stderr LOGUART)
@@ -120,7 +136,9 @@ _COMMON := -G $(GEN) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) -DAMEBAD_EFUSE_DEBUG=$(EFU
 _KM4 := -DAMEBAD_ENABLE_NIMBLE=$(NIMBLE) -DAMEBAD_ENABLE_HCI=$(HCI) -DAMEBAD_ENABLE_QUIC=$(QUIC) \
         -DAMEBAD_ENABLE_PKCS11=$(PKCS11) -DAMEBAD_ENABLE_CRYPTOBENCH=$(BENCH) -DAMEBAD_ENABLE_MINIMAL=$(MINIMAL) \
         -DAMEBAD_ENABLE_ROM_KAT=$(ROMKAT) -DAMEBAD_ENABLE_IPERF=$(IPERF) -DAMEBAD_ENABLE_AWS_IOT=$(AWS) -DAMEBAD_ENABLE_CARES=$(CARES) \
+        -DAMEBAD_ENABLE_CRT_BUNDLE=$(CRT_BUNDLE) \
         -DAMEBAD_FW_VERSION=$(FW_VERSION) -DAMEBAD_APP_BUILD=$(APP_BUILD) -DAMEBAD_TLS_BACKEND=$(TLS_BACKEND) \
+        -DAMEBAD_TLS_HEAP_TRACE=$(TLS_HEAP_TRACE) \
         -DAMEBAD_MBEDTLS_HW_GCM=$(HWGCM) -DAMEBAD_TFM_BOOT=$(TFM) -DAMEBAD_TFM_STORAGE=$(STORAGE) \
         -DAMEBAD_VFS_SELFTEST=$(VFSTEST) -DAMEBAD_CPP_SELFTEST=$(CPPTEST) -DAMEBAD_SBOOT=$(SBOOT) \
         -DAMEBAD_ENABLE_WPS=$(WPS)
