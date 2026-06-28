@@ -70,6 +70,23 @@ static BaseType_t cmd_getenv(char *out, size_t outlen, const char *cmd)
     return pdFALSE;
 }
 
+static BaseType_t cmd_unsetenv(char *out, size_t outlen, const char *cmd)
+{
+    BaseType_t ln = 0;
+    const char *name = FreeRTOS_CLIGetParameter(cmd, 1, &ln);
+    char nbuf[ENV_CLI_NAME_MAX];
+
+    if (name == NULL || ln == 0 || (size_t)ln >= sizeof(nbuf)) {
+        snprintf(out, outlen, "usage: unsetenv <name>\r\n");
+        return pdFALSE;
+    }
+    memcpy(nbuf, name, (size_t)ln);
+    nbuf[ln] = '\0';
+    unsetenv(nbuf);                 /* __wrap_unsetenv also removes KV/<name> in the AWS image */
+    snprintf(out, outlen, "unset %s\r\n", nbuf);
+    return pdFALSE;
+}
+
 /* List environ one entry per FreeRTOS+CLI call (return pdTRUE => call again), so a long
  * environment isn't truncated by the single CLI output buffer. */
 static BaseType_t cmd_env(char *out, size_t outlen, const char *cmd)
@@ -106,8 +123,13 @@ void env_cli_register(void)
         "env", "env:\r\n list all env vars\r\n",
         cmd_env, 0
     };
+    static const CLI_Command_Definition_t cmd_unsetenv_def = {
+        "unsetenv", "unsetenv <name>:\r\n remove an env var (also from KV in the AWS image)\r\n",
+        cmd_unsetenv, 1
+    };
 
     FreeRTOS_CLIRegisterCommand(&cmd_setenv_def);
     FreeRTOS_CLIRegisterCommand(&cmd_getenv_def);
     FreeRTOS_CLIRegisterCommand(&cmd_env_def);
+    FreeRTOS_CLIRegisterCommand(&cmd_unsetenv_def);
 }
