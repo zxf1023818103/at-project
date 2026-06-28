@@ -2,6 +2,7 @@
  * a select() event loop. See cares_resolve.h. */
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>   /* getenv */
 
 /* BSD socket types FIRST: struct sockaddr_in must be fully defined before FreeRTOS_Sockets.h's
  * `#define sin_addr sin_address.ulIP_IPv4` backward-compat alias, which would otherwise rewrite the
@@ -102,10 +103,30 @@ void cares_resolver_init( void )
  * re-applies it to the short-lived channel it builds per query. No channel is kept alive here. */
 void cares_resolver_set_servers( void )
 {
+    const char *        e1 = getenv( "DNS_SERVER" );
+    const char *        e2 = getenv( "DNS_SERVER2" );
     NetworkEndPoint_t * ep;
     unsigned            i;
 
     s_servers_csv[ 0 ] = '\0';
+
+    /* Explicit override via env -- supports IPv6 literals (e.g. `set DNS_SERVER 2400:3200::1`),
+     * which the DHCP-learned ipv4_settings path below cannot represent. c-ares' set_servers_csv
+     * parses a bare IPv6 address fine (no brackets needed). */
+    if( ( e1 != NULL ) && ( e1[ 0 ] != '\0' ) )
+    {
+        if( ( e2 != NULL ) && ( e2[ 0 ] != '\0' ) )
+        {
+            ( void ) snprintf( s_servers_csv, sizeof( s_servers_csv ), "%s,%s", e1, e2 );
+        }
+        else
+        {
+            ( void ) snprintf( s_servers_csv, sizeof( s_servers_csv ), "%s", e1 );
+        }
+        log_info( "[cares] servers (env)=%s", s_servers_csv );
+        return;
+    }
+
     for( ep = FreeRTOS_FirstEndPoint( NULL ); ep != NULL; ep = FreeRTOS_NextEndPoint( NULL, ep ) )
     {
         for( i = 0; i < ipconfigENDPOINT_DNS_ADDRESS_COUNT; i++ )

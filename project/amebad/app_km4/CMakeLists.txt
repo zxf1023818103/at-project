@@ -559,6 +559,7 @@ if(AMEBAD_ENABLE_CARES)
                  "${CMAKE_CURRENT_SOURCE_DIR}/ota_app.c"
                  "${CMAKE_CURRENT_SOURCE_DIR}/ota_http.c"
                  "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/wifi_cli.c"
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_CARES)
 endif()
 

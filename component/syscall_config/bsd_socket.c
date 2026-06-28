@@ -52,33 +52,58 @@ static Socket_t sock(int fd)
     return (Socket_t)fd_get_socket(fd);
 }
 
-/* POSIX sockaddr_in (network-order port + addr) -> FreeRTOS freertos_sockaddr. */
+/* POSIX sockaddr_in / sockaddr_in6 (network order) -> FreeRTOS freertos_sockaddr. */
 static int to_freertos(const struct sockaddr *sa, socklen_t len, struct freertos_sockaddr *out)
 {
-    const struct sockaddr_in *in = (const struct sockaddr_in *)sa;
-
-    if (sa == NULL || len < (socklen_t)sizeof(*in) || in->sin_family != AF_INET) {
-        errno = EAFNOSUPPORT;
-        return -1;
-    }
+    if (sa == NULL) { errno = EAFNOSUPPORT; return -1; }
     memset(out, 0, sizeof(*out));
     out->sin_len = (uint8_t)sizeof(*out);
-    out->sin_family = FREERTOS_AF_INET;
-    out->sin_port = in->sin_port;                       /* both network order */
-    out->sin_address.ulIP_IPv4 = in->sin_addr.s_addr;   /* both network order */
-    return 0;
+
+    if (sa->sa_family == AF_INET6) {
+        const struct sockaddr_in6 *in6 = (const struct sockaddr_in6 *)sa;
+        if (len < (socklen_t)sizeof(*in6)) { errno = EINVAL; return -1; }
+        out->sin_family = FREERTOS_AF_INET6;
+        out->sin_port = in6->sin6_port;                 /* network order */
+        memcpy(out->sin_address.xIP_IPv6.ucBytes, in6->sin6_addr.s6_addr, 16);
+        return 0;
+    }
+    {
+        const struct sockaddr_in *in = (const struct sockaddr_in *)sa;
+        if (len < (socklen_t)sizeof(*in) || in->sin_family != AF_INET) {
+            errno = EAFNOSUPPORT;
+            return -1;
+        }
+        out->sin_family = FREERTOS_AF_INET;
+        out->sin_port = in->sin_port;                       /* both network order */
+        out->sin_address.ulIP_IPv4 = in->sin_addr.s_addr;   /* both network order */
+        return 0;
+    }
 }
 
 static void from_freertos(const struct freertos_sockaddr *fa, struct sockaddr *sa, socklen_t *len)
 {
-    struct sockaddr_in in;
+    if (sa == NULL || len == NULL) { return; }
 
-    memset(&in, 0, sizeof(in));
-    in.sin_family = AF_INET;
-    in.sin_port = fa->sin_port;
-    in.sin_addr.s_addr = fa->sin_address.ulIP_IPv4;
-    if (sa != NULL && len != NULL) {
-        socklen_t n = (*len < (socklen_t)sizeof(in)) ? *len : (socklen_t)sizeof(in);
+    if (fa->sin_family == FREERTOS_AF_INET6) {
+        struct sockaddr_in6 in6;
+        socklen_t n;
+        memset(&in6, 0, sizeof(in6));
+        in6.sin6_family = AF_INET6;
+        in6.sin6_port = fa->sin_port;
+        memcpy(in6.sin6_addr.s6_addr, fa->sin_address.xIP_IPv6.ucBytes, 16);
+        n = (*len < (socklen_t)sizeof(in6)) ? *len : (socklen_t)sizeof(in6);
+        memcpy(sa, &in6, n);
+        *len = (socklen_t)sizeof(in6);
+        return;
+    }
+    {
+        struct sockaddr_in in;
+        socklen_t n;
+        memset(&in, 0, sizeof(in));
+        in.sin_family = AF_INET;
+        in.sin_port = fa->sin_port;
+        in.sin_addr.s_addr = fa->sin_address.ulIP_IPv4;
+        n = (*len < (socklen_t)sizeof(in)) ? *len : (socklen_t)sizeof(in);
         memcpy(sa, &in, n);
         *len = (socklen_t)sizeof(in);
     }
@@ -115,20 +140,19 @@ static void udp_track(int fd, int is_udp)
 
 int socket(int domain, int type, int protocol)
 {
-    BaseType_t ftype, fproto;
+    BaseType_t ftype, fproto, fdomain;
     Socket_t s;
     int fd;
     (void)protocol;
 
-    if (domain != AF_INET) {            /* IPv4 only */
-        errno = EAFNOSUPPORT;
-        return -1;
-    }
+    if (domain == AF_INET)       { fdomain = FREERTOS_AF_INET; }
+    else if (domain == AF_INET6) { fdomain = FREERTOS_AF_INET6; }
+    else { errno = EAFNOSUPPORT; return -1; }
     if (type == SOCK_STREAM) { ftype = FREERTOS_SOCK_STREAM; fproto = FREERTOS_IPPROTO_TCP; }
     else if (type == SOCK_DGRAM) { ftype = FREERTOS_SOCK_DGRAM; fproto = FREERTOS_IPPROTO_UDP; }
     else { errno = EINVAL; return -1; }
 
-    s = FreeRTOS_socket(FREERTOS_AF_INET, ftype, fproto);
+    s = FreeRTOS_socket(fdomain, ftype, fproto);
     if (s == FREERTOS_INVALID_SOCKET || s == NULL) {
         errno = ENOMEM;
         return -1;
