@@ -100,7 +100,7 @@ int bt_hci_bringup_nostack(void)
     }
 
     if (s_bringup_done == 1)
-        DiagPrintf("[BT] HCI bring-up OK (no btgap.a) — controller up, patch + reset via our transport\n\r");
+        DiagPrintf("[BT] HCI bring-up OK (no btgap.a) - controller up, patch + reset via our transport\n\r");
     else
         DiagPrintf("[BT] HCI bring-up FAILED (no btgap.a), done=%d\n\r", s_bringup_done);
     return s_bringup_done;

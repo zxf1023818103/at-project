@@ -252,6 +252,15 @@ if(AMEBAD_ENABLE_HCI OR AMEBAD_ENABLE_NIMBLE)
         COMPILE_OPTIONS "-Wno-unused-variable;-Wno-unused-const-variable")
     target_sources(target_img2_km4 PRIVATE
         "${_hci_fw_src}")
+    # hci_board.c's bt_get_mac_address() reads the BLE MAC via efuse_logical_read (0x190),
+    # which lives in efuse_api.c (not built into amebad_mbed). AWS images already add it
+    # below; add it here for the HCI/NIMBLE images so the controller MAC read resolves.
+    if(NOT AMEBAD_ENABLE_AWS_IOT)
+        target_sources(target_img2_km4 PRIVATE
+            "${AT_ROOT}/component/amebad/mbed/efuse_api.c")
+        set_source_files_properties("${AT_ROOT}/component/amebad/mbed/efuse_api.c"
+            PROPERTIES COMPILE_OPTIONS "-w")
+    endif()
 endif()
 if(AMEBAD_ENABLE_NIMBLE)
     # NimBLE SM crypto now rides upstream mbedTLS (mbedtls_sm_glue.c), not wolfCrypt:
@@ -342,7 +351,15 @@ if(AMEBAD_ENABLE_AWS_IOT)
     # NetworkCredentials_t, so aws_iot_demo.c (via transport_tls.h) is identical either way. picotls's
     # picotls_core + picotls_mbedtls join the circular mbedTLS archives in the group (its crypto rides
     # PSA/mbedcrypto); the network_transport_* libs are one-directional so they link as ordinary libs.
-    if(AMEBAD_TLS_BACKEND STREQUAL "picotls")
+    if(AMEBAD_TLS_BACKEND STREQUAL "fallback")
+        # Both backends linked; transport_fallback.c tries picotls (1.3) then mbedTLS (1.2/1.3).
+        # The group already carries the picotls + mbedTLS archives (picotls rides mbedcrypto anyway).
+        set(_aws_grp ",picotls_core,picotls_mbedtls,mbedcrypto,mbedx509,mbedtls,mbedtls_port,mbedtls_config")
+        target_link_libraries(target_img2_km4 PRIVATE
+            core_mqtt backoff_algorithm
+            network_transport_fallback network_transport_picotls network_transport_mbedtls
+            network_transport_mbedtls_bio network_transport_sockets)
+    elseif(AMEBAD_TLS_BACKEND STREQUAL "picotls")
         set(_aws_grp ",picotls_core,picotls_mbedtls,mbedcrypto,mbedx509,mbedtls,mbedtls_port,mbedtls_config")
         target_link_libraries(target_img2_km4 PRIVATE
             core_mqtt backoff_algorithm
@@ -352,6 +369,20 @@ if(AMEBAD_ENABLE_AWS_IOT)
         target_link_libraries(target_img2_km4 PRIVATE
             core_mqtt backoff_algorithm
             network_transport_mbedtls network_transport_mbedtls_bio network_transport_sockets)
+    endif()
+    # Compressed CA root bundle (CRT_BUNDLE=ON): verify the server cert against the embedded
+    # Mozilla root bundle (esp_crt_bundle, ~121 roots) instead of the single pinned root in
+    # NetworkCredentials_t.pRootCa. esp_crt_bundle references mbedcrypto/mbedx509 (also in the
+    # group), so it joins the cross_refs group; linking esp_crt_bundle_config gives crt_bundle_cli.c
+    # + the app TUs the esp_crt_bundle.h include path. The AMEBAD_ENABLE_CRT_BUNDLE macro gates the
+    # creds.useCrtBundle assignments in aws_iot_demo.c / ota_http.c / ota_app.c and the transport
+    # hooks (the transport libs get the macro from component/network_transport).
+    if(AMEBAD_ENABLE_CRT_BUNDLE STREQUAL "ON")
+        set(_aws_grp "${_aws_grp},esp_crt_bundle")
+        target_sources(target_img2_km4 PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/crt_bundle_cli.c")   # `crt_bundle` console command
+        target_link_libraries(target_img2_km4 PRIVATE esp_crt_bundle_config)
+        target_compile_definitions(target_img2_km4 PRIVATE AMEBAD_ENABLE_CRT_BUNDLE)
     endif()
     target_sources(target_img2_km4 PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/aws_iot_demo.c"

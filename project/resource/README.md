@@ -1,20 +1,21 @@
-# LittleFS 镜像根
+# LittleFS image root
 
-`make -C project lfs_image` 会用 [mklfs](../../doc/lfs.md) 把这个目录的全部内容
-打包成 `project/lfs.bin`，再由各平台合成固件流程烧到 raw offset `0x300000`
-开始的 LFS 区。
+`make -C project lfs_image` packs everything under this directory into
+`project/lfs.bin` (via [mklfs](../../doc/lfs.md)), which each platform's firmware
+assembly step then flashes to the LFS region starting at raw offset `0x300000`.
 
-目录里的每个文件 / 子目录都会原样进入 lfs 文件系统的根目录。
+Every file / subdirectory here lands verbatim at the root of the lfs filesystem.
 
-## KV 预填
+## KV pre-seed
 
-`resource/KV/<key>` 这个相对路径直接对应运行时：
+The relative path `resource/KV/<key>` maps directly to the runtime KV store:
 
-| 平台 | 读取 API |
+| Platform | Read API |
 |---|---|
 | Bouffalo BL602 / BL616 / BL616CL | `ef_get_env_blob("<key>", buf, sizeof(buf), &got)` |
 | Ameba D / Dplus / Green2 | `rt_kv_get("<key>", buf, sizeof(buf))` |
 
-文件内容**就是 value**，没有 header 也没有 CRC（保护由 littlefs 兜底）。
+The file content **is the value** - no header, no CRC (integrity is left to
+littlefs).
 
-key 命名约束：不要含 `/` 或 `}` —— 见 [../../doc/kv.md](../../doc/kv.md)。
+Key naming constraint: no `/` or `}` - see [../../doc/kv.md](../../doc/kv.md).

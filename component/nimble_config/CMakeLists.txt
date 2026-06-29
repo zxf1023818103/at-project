@@ -25,6 +25,7 @@ set(_nb "${AT_ROOT}/component/nimble_config/nimble")
 add_library(nimble_config STATIC EXCLUDE_FROM_ALL
     "${CMAKE_CURRENT_SOURCE_DIR}/nimble_app.c"         # amebad_nimble_start() + host task (printf)
     "${CMAKE_CURRENT_SOURCE_DIR}/mbedtls_sm_glue.c"    # SM AES/ECDH on upstream mbedTLS (replaces tinycrypt + the old wolfCrypt glue)
+    "${CMAKE_CURRENT_SOURCE_DIR}/ble_store_lfs.c"      # LittleFS-persistent BLE store (bonds survive reboot)
 )
 
 # Config + header surface. PUBLIC so both this lib's own sources and the port see

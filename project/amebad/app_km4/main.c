@@ -1345,6 +1345,9 @@ int main(void)
 #ifdef AMEBAD_SBOOT
     { extern void sboot_cli_register(void); sboot_cli_register(); } /* secure-boot Ed25519 self-test */
 #endif
+#ifdef AMEBAD_ENABLE_CRT_BUNDLE
+    { extern void crt_bundle_cli_register(void); crt_bundle_cli_register(); } /* compressed CA root bundle */
+#endif
 #ifdef AMEBAD_ENABLE_WPS
     { extern void wps_cli_register(void); wps_cli_register(); }     /* WPS (PBC/PIN) connect test */
 #endif

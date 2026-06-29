@@ -75,7 +75,7 @@ void bt_dtm_enter_bridge(uint32_t host_baud, uint8_t parity)
     (void)parity;
     /* Marker the host (project/amebad/hci_test.ps1) syncs on — printed BEFORE we
      * hijack the UART, while DiagPrintf/TX still interleaves normally. */
-    DiagPrintf("[BT] entering HCI bridge (polling, host_baud=%d) — console is now a raw HCI pipe\n\r",
+    DiagPrintf("[BT] entering HCI bridge (polling, host_baud=%d) - console is now a raw HCI pipe\n\r",
                (int)host_baud);
 
     /* Stop the two IRQ owners from draining the RX FIFOs we are about to poll. */

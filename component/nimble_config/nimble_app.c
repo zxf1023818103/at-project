@@ -26,6 +26,7 @@ extern void amebad_nimble_coex_set_conn(int connected); /* coex_amebad.c: BLE-ac
 extern void bt_dtm_bringup(void);                   /* hci_dtm.c: controller bring-up */
 extern void nimble_amebad_transport_start_rx(void); /* transport_amebad.c: HCI RX task */
 extern void amebad_nimble_sm_crypto_selftest(void); /* wolfcrypt_sm_glue.c: SM crypto KAT */
+extern void ble_store_lfs_init(void);               /* ble_store_lfs.c: LittleFS-persistent BLE store */
 
 #define NIMBLE_DEV_NAME   "amebad-nimble"
 
@@ -93,7 +94,7 @@ nimble_gap_event(struct ble_gap_event *event, void *arg)
         }
         return 0;
     case BLE_GAP_EVENT_DISCONNECT:
-        printf("[NimBLE] disconnect (reason 0x%x) — re-advertising\n\r",
+        printf("[NimBLE] disconnect (reason 0x%x) - re-advertising\n\r",
                    event->disconnect.reason);
         amebad_nimble_coex_set_conn(0);       /* BLE idle -> hint WiFi coex */
         nimble_advertise();
@@ -154,7 +155,7 @@ nimble_on_sync(void)
         printf("[NimBLE] infer_auto rc=%d\n\r", rc);
         return;
     }
-    printf("[NimBLE] host synced — controller ready\n\r");
+    printf("[NimBLE] host synced - controller ready\n\r");
     nimble_advertise();
 }
 
@@ -187,6 +188,13 @@ amebad_nimble_start(void)
     /* 2. NimBLE port + sysinit (-> ble_transport_ll_init inits our H4 SM) */
     printf("[NimBLE] nimble_port_init ...\n\r");
     nimble_port_init();
+
+    /* 2b. Register the LittleFS-persistent BLE store. Mynewt would register a
+     * store via sysinit (BLE_STORE_*_SYSINIT_STAGE); our CMake build must call
+     * it explicitly, else ble_hs_cfg.store_read_cb stays NULL and IRK restore
+     * fails with BLE_HS_ENOTSUP (8). This backend persists bonds to LFS so
+     * pairings survive reboot. */
+    ble_store_lfs_init();
 
     /* 3. services: standard GAP/GATT + our sample service, set the device name */
     ble_svc_gap_init();
