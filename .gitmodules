@@ -40,7 +40,8 @@
 	branch = at-project
 [submodule "component/thirdparty/freertos-plus-tcp"]
 	path = component/freertos-plus-tcp_config/freertos-plus-tcp
-	url = https://github.com/FreeRTOS/FreeRTOS-Plus-TCP.git
+	url = https://github.com/zxf1023818103/FreeRTOS-Plus-TCP.git
+	branch = at-project
 [submodule "component/thirdparty/nimble"]
 	path = component/nimble_config/nimble
 	url = https://github.com/apache/mynewt-nimble
@@ -49,7 +50,8 @@
 	url = https://github.com/ngtcp2/ngtcp2
 [submodule "component/thirdparty/trusted-firmware-m"]
 	path = component/trusted-firmware-m_config/trusted-firmware-m
-	url = https://github.com/TrustedFirmware-M/trusted-firmware-m.git
+	url = https://github.com/zxf1023818103/trusted-firmware-m.git
+	branch = at-project
 [submodule "component/thirdparty/coremqtt"]
 	path = component/coremqtt_config/coremqtt
 	url = https://github.com/FreeRTOS/coreMQTT.git
@@ -67,7 +69,8 @@
 	url = https://github.com/h2o/picotls.git
 [submodule "component/coremqtt-agent_config/coremqtt-agent"]
 	path = component/coremqtt-agent_config/coremqtt-agent
-	url = https://github.com/FreeRTOS/coreMQTT-Agent.git
+	url = https://github.com/zxf1023818103/coreMQTT-Agent.git
+	branch = at-project
 [submodule "component/coresntp_config/coresntp"]
 	path = component/coresntp_config/coresntp
 	url = https://github.com/FreeRTOS/coreSNTP.git
@@ -106,4 +109,5 @@
 	url = https://github.com/rxi/log.c
 [submodule "component/c-ares_config/c-ares"]
 	path = component/c-ares_config/c-ares
-	url = https://github.com/c-ares/c-ares
+	url = https://github.com/zxf1023818103/c-ares.git
+	branch = at-project
