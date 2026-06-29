@@ -60,7 +60,7 @@ struct NetworkContext
     TlsTransportParams_t * pParams;
 };
 
-#define AWS_NET_BUFFER_SZ      2048   /* coreMQTT-Agent fixed buffer: must hold the largest
+#define AWS_NET_BUFFER_SZ      4736   /* MQTT data plane: hold a 4 KB OTA block PUBLISH. largest
                                         * packet pumped through the shared connection - OTA
                                         * job docs / 4 KB stream data blocks dwarf the tiny
                                         * telemetry PUBLISH, so this is bumped from the old

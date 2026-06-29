@@ -53,9 +53,21 @@ void FLASH_Write_IPC_Int(VOID *Data, u32 IrqStatus, u32 ChanNum)
 	}
 }
 
+/* at-project: when set (by the OTA slot writer), FLASH_Write_Lock/Unlock park KM0 by SPINNING it
+ * (IRQ-masked, in SRAM) via the private ch4 quiesce, instead of the wfe-sleep path below. The
+ * wfe-sleep is woken by KM0 IRQs (NimBLE BT/coex traffic) -> KM0 XIP-fetches mid-program -> the OTA
+ * slot write corrupts (confirmed on HW by a read-back self-check: download bytes OK but flash differs).
+ * The spin-park (cpsid i on KM0) cannot be woken, so the SPI flash is idle for KM4's program. Pre-
+ * NimBLE this was never hit (no KM0 IRQs). Constants are shared with the SPE quiesce handler below. */
+volatile u32 g_flash_spin_park = 0;
+#define SPE_QUIESCE_CH        4u
+#define SPE_QUIESCE_REQ       0x5350454bu   /* 'SPEK' : KM4 -> KM0 "park"   */
+#define SPE_QUIESCE_PARKED    0x4b4d3050u   /* 'KM0P' : KM0 -> KM4 "parked" */
+#define SPE_QUIESCE_TIMEOUT   4000000u      /* poll-iter cap; proceed unquiesced if KM0 never parks */
+
 /**
   * @brief  This function is used to lock CPU when write or erase flash under XIP.
-  * @note   
+  * @note
   *		- all interrupt include systick will be stopped.
   * @retval none
   */
@@ -71,13 +83,23 @@ void FLASH_Write_Lock(void)
 
 	//u32 hp_sleep_state;
 	/*IPC request to let the other CPU sleep*/
-	if (cpu_id == 1) {	
+	if (cpu_id == 1) {
+		if (g_flash_spin_park) {
+			/* wfe-free: fire KM0 ch4 handler -> KM0 spins IRQ-masked in SRAM (won't XIP). */
+			u32 to = 0;
+			IPCM4_DEV->IPCx_USR[SPE_QUIESCE_CH] = SPE_QUIESCE_REQ;
+			IPC_INTRequest(IPCM4_DEV, SPE_QUIESCE_CH);
+			while (IPCM0_DEV->IPCx_USR[SPE_QUIESCE_CH] != SPE_QUIESCE_PARKED) {
+				if (++to > SPE_QUIESCE_TIMEOUT) { break; }   /* proceed unquiesced rather than wedge */
+			}
+		} else {
 		ipc_send_message(IPC_INT_CHAN_FLASHPG_REQ, NULL);
 		while(1) {
 			lp_sleep_state = HAL_READ32(SYSTEM_CTRL_BASE_LP, REG_LP_KM0_CTRL); 	/*get KM0 sleep status*/
 			if(lp_sleep_state & BIT_KM0_SLEEPSYS) {
 				break;
 			}
+		}
 		}
 	} else {
 #if defined (ARM_CORE_CM0)
@@ -119,11 +141,20 @@ void FLASH_Write_Unlock(void)
 	/*send an event using "sev" instruction to let the other CPU wake up*/
 	asm volatile ("sev");
 	if (cpu_id == 1) {
+		if (g_flash_spin_park) {
+			/* release the spin-parked KM0: clear the ch4 request, it exits the SRAM spin. */
+			u32 to = 0;
+			IPCM4_DEV->IPCx_USR[SPE_QUIESCE_CH] = 0u;
+			while (IPCM0_DEV->IPCx_USR[SPE_QUIESCE_CH] != 0u) {
+				if (++to > SPE_QUIESCE_TIMEOUT) { break; }
+			}
+		} else {
 		while(1) {
 			lp_sleep_state = HAL_READ32(SYSTEM_CTRL_BASE_LP, REG_LP_KM0_CTRL);	/*get KM0 sleep status*/
 			if(!(lp_sleep_state & BIT_KM0_SLEEPSYS)) {
 				break;
 			}
+		}
 		}
 	} else {
 #if defined (ARM_CORE_CM0)
@@ -162,10 +193,7 @@ void FLASH_Write_Unlock(void)
  * IPCM0_DEV->IPCx_USR[4]=ACK (KM4 reads it). KM0 acks by writing its OWN reg directly (no
  * IPC_INTRequest) so no spurious IRQ lands on the masked KM4.
  * =========================================================================================== */
-#define SPE_QUIESCE_CH        4u
-#define SPE_QUIESCE_REQ       0x5350454bu   /* 'SPEK' : KM4 -> KM0 "park"     */
-#define SPE_QUIESCE_PARKED    0x4b4d3050u   /* 'KM0P' : KM0 -> KM4 "parked"   */
-#define SPE_QUIESCE_TIMEOUT   4000000u      /* poll-iter cap; KM4 proceeds unquiesced if KM0 never parks */
+/* (SPE_QUIESCE_* constants + g_flash_spin_park are defined above, before FLASH_Write_Lock.) */
 
 /* KM0-side ch4 handler: spin in SRAM (NOT wfe) until KM4 clears its request register. RAM-resident
  * so KM0 never fetches the shared SPI flash while parked; IRQs masked so no other KM0 ISR fetches

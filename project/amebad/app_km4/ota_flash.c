@@ -22,6 +22,11 @@ extern void flash_erase_sector( flash_t * obj, uint32_t address );
 /* sys_api.c (added to the mbed build): WDG full-system reset. */
 extern void sys_reset( void );
 
+/* rtl8721d_flash_ram.c: when nonzero, FLASH_Write_Lock/Unlock park KM0 by SPINNING it (IRQ-masked,
+ * SRAM) instead of the wfe-sleep that NimBLE's KM0 IRQs wake mid-program -> XIP-fetch -> the slot
+ * write corrupts. We set it for the whole OTA write burst (confirmed fix for the IMG2-Invalid bug). */
+extern volatile unsigned int g_flash_spin_park;
+
 #define OTA1_OFF        0x006000u
 #define OTA2_OFF        0x183000u
 #define SLOT_SIZE       0x17D000u                 /* 1524 KB per slot */
@@ -64,7 +69,8 @@ int ota_flash_begin( ota_ctx_t * c )
         c->write_off  = OTA2_OFF;
     }
     c->erased_to = c->write_off;
-    log_info( "[OTA] running slot @0x%06x, writing new image to @0x%06x",
+    g_flash_spin_park = 1;   /* spin-park KM0 (not wfe-sleep) for every flash op until ota_flash_finish */
+    log_info( "[OTA] running slot @0x%06x, writing new image to @0x%06x (KM0 spin-park ON)",
               (unsigned) c->active_off, (unsigned) c->write_off );
     return 0;
 }
@@ -183,6 +189,7 @@ int ota_flash_finish( ota_ctx_t * c )
         log_error( "[OTA] clearing old-slot signature failed" );
         return -1;
     }
+    g_flash_spin_park = 0;   /* OTA writes done -> restore the normal wfe-sleep flash lock */
     log_info( "[OTA] image verified + armed slot @0x%06x; clearing old @0x%06x",
               (unsigned) c->write_off, (unsigned) c->active_off );
     return 0;

@@ -23,7 +23,7 @@
  * DOWNLOAD therefore rides HTTPS; MQTT stays available as a fallback if a job offers only MQTT.
  * Primary = HTTP so HTTP wins when a job lists both. */
 #define configENABLED_DATA_PROTOCOLS       ( OTA_DATA_OVER_MQTT | OTA_DATA_OVER_HTTP )
-#define configOTA_PRIMARY_DATA_PROTOCOL    ( OTA_DATA_OVER_HTTP )
+#define configOTA_PRIMARY_DATA_PROTOCOL    ( OTA_DATA_OVER_MQTT )
 
 /* ---- block size ----
  * 2^12 = 4096-byte file blocks. MEASURED to be the heap-bound max on this target: bigger blocks grow
