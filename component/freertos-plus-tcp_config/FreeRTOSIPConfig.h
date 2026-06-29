@@ -38,7 +38,7 @@
 #define ipconfigTCP_MSS                         ( 1500 - 40 )   /* 1460 */
 #define ipconfigTCP_TIME_TO_LIVE                128
 #define ipconfigIGNORE_UNKNOWN_PACKETS          0
-#define ipconfigDHCP_REGISTER_HOSTNAME          0
+#define ipconfigDHCP_REGISTER_HOSTNAME          1   /* send hostname (pcApplicationHostnameHook) in DHCP req -> router shows it */
 #define ipconfigUSE_DNS                         1       /* FreeRTOS_gethostbyname: resolve the AWS IoT endpoint (tcp_sockets_wrapper) */
 #define ipconfigUSE_LLMNR                       0
 #define ipconfigUSE_MDNS                        1       /* <hostname>.local responder (A + AAAA), via pcApplicationHostnameHook */

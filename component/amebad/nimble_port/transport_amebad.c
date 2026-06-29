@@ -65,13 +65,27 @@ ble_transport_ll_init(void)
     hci_h4_sm_init(&h4sm, &hci_h4_allocs_from_ll, nimble_amebad_frame_cb);
 }
 
+static TaskHandle_t s_rx_task_h;
+
 /* Started by nimble_app.c AFTER nimble_port_init (so the H4 SM is inited) and the
  * controller bring-up; pumps controller RX into the host. */
 void
 nimble_amebad_transport_start_rx(void)
 {
     xTaskCreate(nimble_amebad_rx_task, "nimble_hci_rx", 768, NULL,
-                tskIDLE_PRIORITY + 4, NULL);
+                tskIDLE_PRIORITY + 4, &s_rx_task_h);
+}
+
+/* Delete the HCI RX task to reclaim its stack (~3 KB). Used by amebad_nimble_stop()
+ * to free heap for the OTA HTTPS data-plane TLS. The task spends idle time in
+ * vTaskDelay(1), so deleting it between polls is clean. */
+void
+nimble_amebad_transport_stop_rx(void)
+{
+    if (s_rx_task_h != NULL) {
+        vTaskDelete(s_rx_task_h);
+        s_rx_task_h = NULL;
+    }
 }
 
 /* ---- TX: host -> controller ---- */

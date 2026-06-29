@@ -13,6 +13,8 @@
  * P4 will add BLE Mesh; P5 the WiFi/BT coex glue.
  */
 #include <string.h>
+#include "FreeRTOS.h"
+#include "task.h"
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
 #include "host/ble_hs.h"
@@ -25,10 +27,15 @@ extern void amebad_nimble_coex_init(void);
 extern void amebad_nimble_coex_set_conn(int connected); /* coex_amebad.c: BLE-active hint -> WiFi */
 extern void bt_dtm_bringup(void);                   /* hci_dtm.c: controller bring-up */
 extern void nimble_amebad_transport_start_rx(void); /* transport_amebad.c: HCI RX task */
+extern void nimble_amebad_transport_stop_rx(void);  /* transport_amebad.c: delete HCI RX task */
 extern void amebad_nimble_sm_crypto_selftest(void); /* wolfcrypt_sm_glue.c: SM crypto KAT */
 extern void ble_store_lfs_init(void);               /* ble_store_lfs.c: LittleFS-persistent BLE store */
+/* realtek_netif.c (FreeRTOS+TCP): the WiFi hostname — $HOSTNAME (KV-backed) or "amebad_<BLE-MAC last
+ * 3 bytes>". Reused as the BLE device name so the chip shows one identity on WiFi (mDNS) and BLE.
+ * Declared here because the upstream prototype is gated behind ipconfigDHCP_REGISTER_HOSTNAME (off). */
+extern const char *pcApplicationHostnameHook(void);
 
-#define NIMBLE_DEV_NAME   "amebad-nimble"
+#define NIMBLE_DEV_NAME   "amebad-nimble"   /* fallback only (hook always returns non-empty) */
 
 /* Sample 128-bit service 0x59462f12-9543-9999-12c8-58b459a2712d with one
  * read/write characteristic (...2d -> ...2e). */
@@ -41,6 +48,7 @@ static const ble_uuid128_t chr_uuid =
 
 static uint8_t sample_val;
 static uint8_t own_addr_type;
+static TaskHandle_t s_host_task_h;   /* the "ble" host task, so amebad_nimble_stop() can free its stack */
 
 static void nimble_advertise(void);
 
@@ -169,6 +177,7 @@ static void
 nimble_host_task(void *param)
 {
     (void)param;
+    s_host_task_h = xTaskGetCurrentTaskHandle();   /* let amebad_nimble_stop() delete us */
     printf("[NimBLE] host task: nimble_port_run()\n\r");
     nimble_port_run();   /* runs the host eventq forever */
 }
@@ -206,7 +215,14 @@ amebad_nimble_start(void)
     if (rc != 0) {
         printf("[NimBLE] gatt svc register rc=%d\n\r", rc);
     }
-    ble_svc_gap_device_name_set(NIMBLE_DEV_NAME);
+    {
+        /* Reuse the WiFi hostname as the BLE device name (one identity across radios). */
+        const char *devname = pcApplicationHostnameHook();
+        if (devname == NULL || devname[0] == '\0') {
+            devname = NIMBLE_DEV_NAME;
+        }
+        ble_svc_gap_device_name_set(devname);
+    }
 
     ble_hs_cfg.sync_cb  = nimble_on_sync;
     ble_hs_cfg.reset_cb = nimble_on_reset;
@@ -217,4 +233,35 @@ amebad_nimble_start(void)
     nimble_amebad_transport_start_rx();
     nimble_port_freertos_init(nimble_host_task);
     printf("[NimBLE] host task created\n\r");
+}
+
+/* Tear BLE down to reclaim heap for the OTA HTTPS data-plane TLS (~16.6 KB picotls
+ * reserve). With NimBLE up, steady free heap is ~40 KB and the second TLS handshake
+ * OOMs (free dips to ~15.5 KB). Called once when an OTA download is about to open its
+ * HTTPS connection (ota_app.c). Stops advertising, then deletes the host + HCI-RX
+ * tasks to free their stacks (~7 KB). One-way: a successful OTA reboots (BLE returns
+ * fresh); a failed OTA leaves BLE off until the next reboot (NimBLE 1.9.0 has no clean
+ * port-deinit/re-init path). The on-chip controller keeps running but is idle. */
+void
+amebad_nimble_stop(void)
+{
+    static int stopped = 0;
+    if (stopped) {
+        return;
+    }
+    stopped = 1;
+
+    printf("[NimBLE] stopping for OTA (free heap before %u)\n\r",
+           (unsigned)xPortGetFreeHeapSize());
+
+    (void)ble_gap_adv_stop();          /* stop the radio + the adv state machine (blocks for HCI ack) */
+    amebad_nimble_coex_set_conn(0);    /* tell WiFi coex BLE is idle */
+    nimble_amebad_transport_stop_rx(); /* delete the HCI RX task (after adv-stop's ack is drained) */
+    if (s_host_task_h != NULL) {
+        vTaskDelete(s_host_task_h);    /* delete the host task -> frees its stack */
+        s_host_task_h = NULL;
+    }
+
+    printf("[NimBLE] stopped (free heap after %u)\n\r",
+           (unsigned)xPortGetFreeHeapSize());
 }

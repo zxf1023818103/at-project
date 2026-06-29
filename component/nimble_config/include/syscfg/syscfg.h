@@ -27,6 +27,20 @@
 /* not a host/linux simulator */
 #define MYNEWT_VAL_BSP_SIMULATED               (0)
 
+/* ---- .bss pool trims (shrink static os_membuf_t[] pools -> grow the heap) ----
+ * These pools are compile-time static .bss (no malloc/heap switch in NimBLE 1.9.0),
+ * and .bss directly shrinks the heap region (heap = __sram_end__ - __bss_end__). We
+ * run as a single-connection peripheral (advertise + a sample GATT), no LE Audio and
+ * no long/prepared writes, so the upstream defaults are oversized. Trimming them frees
+ * ~7 KB of heap permanently with no functional impact for our use case.
+ * (For our transport config -- HS=native, LL=custom -- transport.c uses the *_FROM_LL_*
+ * counts: POOL_ACL_COUNT = ACL_FROM_LL_COUNT, POOL_ISO_COUNT = ISO_FROM_LL_COUNT.) */
+#define MYNEWT_VAL_BLE_TRANSPORT_ISO_FROM_LL_COUNT (0)   /* no isochronous (LE Audio) -> drop pool_iso_buf (~3.5 KB) */
+#define MYNEWT_VAL_BLE_TRANSPORT_ISO_FROM_HS_COUNT (0)
+#define MYNEWT_VAL_BLE_TRANSPORT_ACL_FROM_LL_COUNT (4)   /* was 10; 1 low-throughput peripheral link (~1.5 KB) */
+#define MYNEWT_VAL_BLE_ATT_SVR_MAX_PREP_ENTRIES    (4)   /* was 64; no long/prepared writes (~1.3 KB) */
+#define MYNEWT_VAL_MSYS_1_BLOCK_COUNT              (8)   /* was 12; enough mbufs for a single peripheral (~1.2 KB) */
+
 #endif /* H_ATPROJECT_NIMBLE_SYSCFG_ */
 
 /* pull upstream defaults (porting/nimble/include/syscfg/syscfg.h) for the rest */

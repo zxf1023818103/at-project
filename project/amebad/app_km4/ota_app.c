@@ -328,6 +328,12 @@ static int prvHttpParseUrl( const char * pUrl )
     return 0;
 }
 
+/* Defined by component/nimble_config/nimble_app.c only in NIMBLE builds; weak so AWS-only images
+ * (no NimBLE) still link (resolves to NULL -> skipped). Tearing BLE down frees ~7 KB for the HTTPS
+ * data-plane TLS. NOTE: on AWS+NIMBLE this ~7 KB is NOT enough on its own -- the HTTPS OTA still
+ * OOMs (two concurrent TLS contexts exceed the heap); kept as a (harmless) partial mitigation. */
+extern void amebad_nimble_stop( void ) __attribute__( ( weak ) );
+
 /* OtaHttpInterface_t.init: parse the presigned URL and open the connection. */
 /* (Re)open the transport to the already-parsed s_http.host:port. Used by init AND by request()'s
  * self-healing reconnect (S3 drops the keep-alive after a few hundred KB of ranged GETs). On success
@@ -337,6 +343,12 @@ static OtaHttpStatus_t prvHttpOpenConn( void )
     if( s_http.isHttps )
     {
         NetworkCredentials_t creds;
+
+        /* Free BLE heap before opening the OTA data-plane TLS (partial mitigation; see note above). */
+        if( amebad_nimble_stop != NULL )
+        {
+            amebad_nimble_stop();
+        }
 
         memset( &creds, 0, sizeof( creds ) );
         creds.pRootCa        = ( const uint8_t * ) OTA_AMAZON_ROOT_CA1;
