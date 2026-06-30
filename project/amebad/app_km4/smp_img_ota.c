@@ -142,28 +142,16 @@ int img_mgmt_impl_log_confirm(int s, const uint8_t *h)       { (void)s; (void)h;
 
 /* ------------------------------------------------------------- os_mgmt impl -- */
 
-static void
-smp_reset_task(void *arg)
-{
-    unsigned int ms = (unsigned int) (uintptr_t) arg;
-    vTaskDelay(pdMS_TO_TICKS(ms));     /* let the SMP reset response flush over BLE first */
-    log_info("[mcumgr] reset");
-    sys_reset();
-    for ( ; ; ) {
-    }
-}
-
-/* Strong override of the weak stub in os_mgmt/stubs.c. */
+/* Strong override of the weak stub in os_mgmt/stubs.c. Reset directly with sys_reset() - no helper
+ * task: a small task stack overflows on the timestamped log_info (UsageFault STKOF, CFSR bit20), and
+ * this runs on the NimBLE host task which already has a generous stack. sys_reset() arms a WDG reset
+ * with a ~50 ms window, so returning lets mcumgr's reset response flush over BLE before the reboot. */
 int
 os_mgmt_impl_reset(unsigned int delay_ms)
 {
-    if (delay_ms < 50) {
-        delay_ms = 50;
-    }
-    if (xTaskCreate(smp_reset_task, "smp_rst", 256, (void *) (uintptr_t) delay_ms,
-                    tskIDLE_PRIORITY + 1, NULL) != pdPASS) {
-        return MGMT_ERR_EUNKNOWN;
-    }
+    (void) delay_ms;
+    log_info("[mcumgr] reset");
+    sys_reset();
     return 0;
 }
 
