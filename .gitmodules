@@ -44,7 +44,8 @@
 	branch = at-project
 [submodule "component/thirdparty/nimble"]
 	path = component/nimble_config/nimble
-	url = https://github.com/apache/mynewt-nimble
+	url = https://github.com/zxf1023818103/mynewt-nimble.git
+	branch = at-project
 [submodule "component/thirdparty/ngtcp2"]
 	path = component/ngtcp2_config/ngtcp2
 	url = https://github.com/ngtcp2/ngtcp2
@@ -110,4 +111,8 @@
 [submodule "component/c-ares_config/c-ares"]
 	path = component/c-ares_config/c-ares
 	url = https://github.com/zxf1023818103/c-ares.git
+	branch = at-project
+[submodule "component/mcumgr_config/mcumgr"]
+	path = component/mcumgr_config/mcumgr
+	url = https://github.com/zxf1023818103/mynewt-mcumgr.git
 	branch = at-project
