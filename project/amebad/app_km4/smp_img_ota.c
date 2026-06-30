@@ -33,6 +33,26 @@ extern void sys_reset(void);   /* sys_api.c (mbed) - WDG full-system reset */
 static ota_ctx_t s_ota;
 static int       s_ota_active;
 
+/* SMP file/image transfer activity window. A flash op's FLASH_Write_Lock masks interrupts (cpsid i),
+ * which drops HCI UART bytes mid-transfer and desyncs the H4 RX parser (crash in hci_h4_sm_rx). So
+ * console flash commands defer while this window is open. It auto-expires 2s after the last chunk, so
+ * an aborted/disconnected transfer self-clears. smp_xfer_active() is the strong override of the weak
+ * stub in fs_cli.c. */
+static volatile TickType_t s_xfer_until_tick;
+
+void
+smp_xfer_touch(void)
+{
+    s_xfer_until_tick = xTaskGetTickCount() + pdMS_TO_TICKS(2000);
+}
+
+int
+smp_xfer_active(void)
+{
+    TickType_t u = s_xfer_until_tick;
+    return (u != 0) && ((int32_t)(u - xTaskGetTickCount()) > 0);
+}
+
 /* ------------------------------------------------------------ img_mgmt impl -- */
 
 int
@@ -77,6 +97,7 @@ int
 img_mgmt_impl_write_image_data(unsigned int offset, const void *data,
                                unsigned int num_bytes, bool last)
 {
+    smp_xfer_touch();   /* keep console flash ops out of the way for the burst */
     if (offset == 0) {
         if (ota_flash_begin(&s_ota) != 0) {
             return MGMT_ERR_EUNKNOWN;

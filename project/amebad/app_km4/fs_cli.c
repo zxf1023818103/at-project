@@ -63,22 +63,57 @@
  * console (cli) task ever runs these handlers, one command at a time. */
 static uint8_t s_fsbuf[512];
 
-/* Copy CLI parameter `idx` (ptr+len, NOT NUL-terminated) into `buf`. Returns the
- * length, or -1 if the parameter is absent/empty. */
+/* Copy CLI parameter `idx` (1-based; idx 0 = the command word) into `buf`. Parses the raw command
+ * line honoring double-quotes, so paths with spaces work: `rm "my file.txt"`. Returns the length, or
+ * -1 if the parameter is absent/empty. (We scan the raw string rather than FreeRTOS_CLIGetParameter,
+ * which tokenizes on every space and can't represent a spaced filename. The path commands are also
+ * registered with a variable parameter count so the CLI doesn't reject the quoted token as "extra".)
+ */
 static int fs_arg(const char *cmd, UBaseType_t idx, char *buf, size_t sz)
 {
-    BaseType_t l = 0;
-    const char *p = FreeRTOS_CLIGetParameter(cmd, idx, &l);
+    const char *p = cmd;
+    UBaseType_t cur = 0;
 
-    if (p == NULL || l <= 0) {
-        return -1;
+    for (;;) {
+        const char *start;
+        int len;
+
+        while (*p == ' ' || *p == '\t') {
+            p++;
+        }
+        if (*p == '\0') {
+            return -1;
+        }
+        if (*p == '"') {                        /* quoted token: spaces allowed inside */
+            p++;
+            start = p;
+            while (*p != '\0' && *p != '"') {
+                p++;
+            }
+            len = (int)(p - start);
+            if (*p == '"') {
+                p++;
+            }
+        } else {                                /* bare token: ends at whitespace */
+            start = p;
+            while (*p != '\0' && *p != ' ' && *p != '\t') {
+                p++;
+            }
+            len = (int)(p - start);
+        }
+        if (cur == idx) {
+            if (len <= 0) {
+                return -1;
+            }
+            if ((size_t)len >= sz) {
+                len = (int)(sz - 1);
+            }
+            memcpy(buf, start, (size_t)len);
+            buf[len] = '\0';
+            return len;
+        }
+        cur++;
     }
-    if ((size_t)l >= sz) {
-        l = (BaseType_t)(sz - 1);
-    }
-    memcpy(buf, p, (size_t)l);
-    buf[l] = '\0';
-    return (int)l;
 }
 
 /* Raw console output (LOGUART, same path cli_puts uses). snprintf into a local then
@@ -96,6 +131,21 @@ static void fs_emit_n(const char *s, int n)
         DiagPutChar(*s++);
     }
 }
+
+/* True while an SMP (BLE) file/image transfer is in flight. Strong override in smp_img_ota.c (MCUMGR
+ * builds); weak stub here returns 0 otherwise. A console flash op during a transfer masks interrupts
+ * (FLASH_Write_Lock cpsid i) long enough to drop HCI UART bytes and crash the BLE H4 RX parser, so
+ * the flash commands below decline while a transfer is active. */
+int smp_xfer_active(void) __attribute__((weak));
+int smp_xfer_active(void) { return 0; }
+
+#define FS_GUARD_XFER()                                                        \
+    do {                                                                       \
+        if (smp_xfer_active()) {                                               \
+            fs_emit("busy: BLE file transfer in progress; retry shortly\r\n"); \
+            return pdFALSE;                                                    \
+        }                                                                      \
+    } while (0)
 
 /* Join dir + "/" + name (handles dir == "" or "/"). Manual bounded copy rather than
  * snprintf("%s/%s") so it never overruns and doesn't trip -Wformat-truncation (both
@@ -153,6 +203,7 @@ static void fs_mode_str(char b[11], uint16_t mode, int is_dir)
 /* ----------------------------------------------------------------------- ls --- */
 static BaseType_t cmd_ls(char *out, size_t outlen, const char *cmd)
 {
+    FS_GUARD_XFER();
     char path[FS_PATH_MAX], child[FS_PATH_MAX], num[24], perm[11];
     const char *dir;
     lfs_t *lfs;
@@ -195,6 +246,7 @@ static BaseType_t cmd_ls(char *out, size_t outlen, const char *cmd)
 /* ---------------------------------------------------------------------- cat --- */
 static BaseType_t cmd_cat(char *out, size_t outlen, const char *cmd)
 {
+    FS_GUARD_XFER();
     char path[FS_PATH_MAX];
     int fd, n;
 
@@ -219,6 +271,7 @@ static BaseType_t cmd_cat(char *out, size_t outlen, const char *cmd)
 /* ------------------------------------------------------------------ hexdump --- */
 static BaseType_t cmd_hexdump(char *out, size_t outlen, const char *cmd)
 {
+    FS_GUARD_XFER();
     char path[FS_PATH_MAX], arg[16], line[96];
     long max = -1;
     unsigned long off = 0;
@@ -280,6 +333,7 @@ static BaseType_t cmd_hexdump(char *out, size_t outlen, const char *cmd)
 /* ------------------------------------------------------------ rm/rmdir/mkdir --- */
 static BaseType_t cmd_rm(char *out, size_t outlen, const char *cmd)
 {
+    FS_GUARD_XFER();
     char path[FS_PATH_MAX];
 
     if (fs_arg(cmd, 1, path, sizeof path) <= 0) {
@@ -292,6 +346,7 @@ static BaseType_t cmd_rm(char *out, size_t outlen, const char *cmd)
 
 static BaseType_t cmd_rmdir(char *out, size_t outlen, const char *cmd)
 {
+    FS_GUARD_XFER();
     char path[FS_PATH_MAX];
 
     if (fs_arg(cmd, 1, path, sizeof path) <= 0) {
@@ -304,6 +359,7 @@ static BaseType_t cmd_rmdir(char *out, size_t outlen, const char *cmd)
 
 static BaseType_t cmd_mkdir(char *out, size_t outlen, const char *cmd)
 {
+    FS_GUARD_XFER();
     char path[FS_PATH_MAX];
 
     if (fs_arg(cmd, 1, path, sizeof path) <= 0) {
@@ -317,6 +373,7 @@ static BaseType_t cmd_mkdir(char *out, size_t outlen, const char *cmd)
 /* ----------------------------------------------------------------------- mv --- */
 static BaseType_t cmd_mv(char *out, size_t outlen, const char *cmd)
 {
+    FS_GUARD_XFER();
     char a[FS_PATH_MAX], b[FS_PATH_MAX];
 
     if (fs_arg(cmd, 1, a, sizeof a) <= 0 || fs_arg(cmd, 2, b, sizeof b) <= 0) {
@@ -330,6 +387,7 @@ static BaseType_t cmd_mv(char *out, size_t outlen, const char *cmd)
 /* ----------------------------------------------------------------------- cp --- */
 static BaseType_t cmd_cp(char *out, size_t outlen, const char *cmd)
 {
+    FS_GUARD_XFER();
     char a[FS_PATH_MAX], b[FS_PATH_MAX];
     int in, outfd, n, err = 0;
     long total = 0;
@@ -365,6 +423,7 @@ static BaseType_t cmd_cp(char *out, size_t outlen, const char *cmd)
 /* -------------------------------------------------------------------- touch --- */
 static BaseType_t cmd_touch(char *out, size_t outlen, const char *cmd)
 {
+    FS_GUARD_XFER();
     char path[FS_PATH_MAX];
     int fd;
 
@@ -385,6 +444,7 @@ static BaseType_t cmd_touch(char *out, size_t outlen, const char *cmd)
 /* ----------------------------------------------------------------------- df --- */
 static BaseType_t cmd_df(char *out, size_t outlen, const char *cmd)
 {
+    FS_GUARD_XFER();
     lfs_t *lfs;
     lfs_ssize_t used;
     unsigned long total_blk = LFS_CFG_BLOCK_COUNT;
@@ -414,6 +474,7 @@ static BaseType_t cmd_df(char *out, size_t outlen, const char *cmd)
 /* --------------------------------------------------------------------- mkfs --- */
 static BaseType_t cmd_mkfs(char *out, size_t outlen, const char *cmd)
 {
+    FS_GUARD_XFER();
     char tok[8];
     int err;
 
@@ -437,6 +498,7 @@ static BaseType_t cmd_mkfs(char *out, size_t outlen, const char *cmd)
 /* -------------------------------------------------------------------- chmod --- */
 static BaseType_t cmd_chmod(char *out, size_t outlen, const char *cmd)
 {
+    FS_GUARD_XFER();
     char marg[16], path[FS_PATH_MAX], *end;
     unsigned long v;
     uint16_t mode;
@@ -478,6 +540,7 @@ enum { H_MD5, H_SHA1, H_SHA224, H_SHA256, H_SHA384, H_SHA512 };
  * into the CLI buffer. The digest line fits the 2 KB out buffer (64 hex + path). */
 static BaseType_t cmd_hash(char *out, size_t outlen, const char *cmd, int algo)
 {
+    FS_GUARD_XFER();
     char path[FS_PATH_MAX];
     unsigned char dig[64];
     union {
@@ -546,24 +609,27 @@ void fs_cli_register(void)
 {
     static const CLI_Command_Definition_t defs[] = {
         { "ls",      "ls [dir]:\r\n list a directory (default /)\r\n",                  cmd_ls,      -1 },
-        { "cat",     "cat <file>:\r\n print a file to the console\r\n",                 cmd_cat,      1 },
+        /* -1 (variable param count): the path commands parse paths via fs_arg (quote-aware), so the
+         * CLI must not reject a quoted "spaced file.txt" as an extra space-delimited parameter. The
+         * handlers validate their own args. */
+        { "cat",     "cat <file>:\r\n print a file to the console\r\n",                 cmd_cat,     -1 },
         { "hexdump", "hexdump <file> [max]:\r\n hex+ascii dump a file\r\n",             cmd_hexdump, -1 },
-        { "rm",      "rm <file>:\r\n delete a file\r\n",                                cmd_rm,       1 },
-        { "rmdir",   "rmdir <dir>:\r\n remove an empty directory\r\n",                  cmd_rmdir,    1 },
-        { "mkdir",   "mkdir <dir>:\r\n create a directory\r\n",                         cmd_mkdir,    1 },
-        { "mv",      "mv <old> <new>:\r\n rename/move a file or directory\r\n",         cmd_mv,       2 },
-        { "cp",      "cp <src> <dst>:\r\n copy a file\r\n",                             cmd_cp,       2 },
-        { "touch",   "touch <file>:\r\n create an empty file if missing\r\n",          cmd_touch,    1 },
+        { "rm",      "rm <file>:\r\n delete a file\r\n",                                cmd_rm,      -1 },
+        { "rmdir",   "rmdir <dir>:\r\n remove an empty directory\r\n",                  cmd_rmdir,   -1 },
+        { "mkdir",   "mkdir <dir>:\r\n create a directory\r\n",                         cmd_mkdir,   -1 },
+        { "mv",      "mv <old> <new>:\r\n rename/move a file or directory\r\n",         cmd_mv,      -1 },
+        { "cp",      "cp <src> <dst>:\r\n copy a file\r\n",                             cmd_cp,      -1 },
+        { "touch",   "touch <file>:\r\n create an empty file if missing\r\n",          cmd_touch,   -1 },
         { "df",      "df:\r\n show LittleFS block usage\r\n",                           cmd_df,       0 },
         { "mkfs",    "mkfs [yes|-y]:\r\n format the LittleFS partition (ERASES all)\r\n", cmd_mkfs,  -1 },
-        { "chmod",   "chmod <octal> <path>:\r\n set rwx permission bits (stored as an lfs attr)\r\n", cmd_chmod, 2 },
+        { "chmod",   "chmod <octal> <path>:\r\n set rwx permission bits (stored as an lfs attr)\r\n", cmd_chmod, -1 },
 #ifdef FS_CLI_HASH
-        { "md5sum",    "md5sum <file>:\r\n print the MD5 of a file\r\n",                 cmd_md5sum,    1 },
-        { "sha1sum",   "sha1sum <file>:\r\n print the SHA-1 of a file\r\n",              cmd_sha1sum,   1 },
-        { "sha224sum", "sha224sum <file>:\r\n print the SHA-224 of a file\r\n",          cmd_sha224sum, 1 },
-        { "sha256sum", "sha256sum <file>:\r\n print the SHA-256 of a file\r\n",          cmd_sha256sum, 1 },
-        { "sha384sum", "sha384sum <file>:\r\n print the SHA-384 of a file\r\n",          cmd_sha384sum, 1 },
-        { "sha512sum", "sha512sum <file>:\r\n print the SHA-512 of a file\r\n",          cmd_sha512sum, 1 },
+        { "md5sum",    "md5sum <file>:\r\n print the MD5 of a file\r\n",                 cmd_md5sum,   -1 },
+        { "sha1sum",   "sha1sum <file>:\r\n print the SHA-1 of a file\r\n",              cmd_sha1sum,  -1 },
+        { "sha224sum", "sha224sum <file>:\r\n print the SHA-224 of a file\r\n",          cmd_sha224sum,-1 },
+        { "sha256sum", "sha256sum <file>:\r\n print the SHA-256 of a file\r\n",          cmd_sha256sum,-1 },
+        { "sha384sum", "sha384sum <file>:\r\n print the SHA-384 of a file\r\n",          cmd_sha384sum,-1 },
+        { "sha512sum", "sha512sum <file>:\r\n print the SHA-512 of a file\r\n",          cmd_sha512sum,-1 },
 #endif
     };
     unsigned i;
