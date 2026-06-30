@@ -275,7 +275,6 @@ add_subdirectory(wifi)               # KM4-gated: host WiFi API + bring-up (ameb
 # picotls_config / mbedtls_config / ...) are added by the parent component/CMakeLists.txt; the in-tree
 # consumers below (app_km4, the ngtcp2 QUIC self-test gated by AMEBAD_ENABLE_QUIC, ...) just link the
 # resulting targets.
-add_subdirectory(build_info)         # INTERFACE: UTS_VERSION banner -D (replaces the vendored build_info.h shim)
 add_subdirectory(hci)                # KM4-gated: BLE controller bring-up + HCI transport + bridge (no btgap.a)
 # NimBLE: the config + header surface (nimble_config) is added by the parent
 # component/CMakeLists.txt; here we add the AmebaD port (in-tree, KM4-gated; links
