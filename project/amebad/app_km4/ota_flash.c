@@ -24,6 +24,67 @@
 #include "ota_flash.h"
 #include <string.h>
 #include "at_log.h"
+#include "FreeRTOS.h"
+#include "task.h"
+
+/* ---- OTA mutual exclusion (see ota_flash.h) ------------------------------------------------- */
+static volatile ota_src_t  s_ota_holder = OTA_SRC_NONE;
+static volatile TickType_t s_ota_ble_until;   /* BLE claim self-expiry (abandoned upload) */
+
+/* Drop a BLE claim that hasn't been refreshed in a while - an upload whose phone disconnected would
+ * otherwise hold the lock forever and block a later AWS job. Call inside a critical section. */
+static void ota_lock_expire_stale( void )
+{
+    if( s_ota_holder == OTA_SRC_BLE &&
+        (int32_t)( s_ota_ble_until - xTaskGetTickCount() ) <= 0 )
+    {
+        s_ota_holder = OTA_SRC_NONE;
+    }
+}
+
+int ota_lock_try( ota_src_t src )
+{
+    int rc;
+
+    taskENTER_CRITICAL();
+    ota_lock_expire_stale();
+    if( s_ota_holder == OTA_SRC_NONE || s_ota_holder == src )
+    {
+        s_ota_holder = src;
+        if( src == OTA_SRC_BLE )
+        {
+            s_ota_ble_until = xTaskGetTickCount() + pdMS_TO_TICKS( 5000 );
+        }
+        rc = 0;
+    }
+    else
+    {
+        rc = -1;
+    }
+    taskEXIT_CRITICAL();
+    return rc;
+}
+
+void ota_lock_release( ota_src_t src )
+{
+    taskENTER_CRITICAL();
+    if( s_ota_holder == src )
+    {
+        s_ota_holder = OTA_SRC_NONE;
+    }
+    taskEXIT_CRITICAL();
+}
+
+ota_src_t ota_lock_holder( void )
+{
+    ota_src_t h;
+
+    taskENTER_CRITICAL();
+    ota_lock_expire_stale();
+    h = s_ota_holder;
+    taskEXIT_CRITICAL();
+    return h;
+}
 
 /* flash_api.c (component/amebad/mbed, already compiled). flash_t is opaque; the API ignores it. */
 typedef struct flash_s flash_t;

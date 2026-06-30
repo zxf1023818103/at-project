@@ -257,7 +257,12 @@ static void ota_http_task( void * param )
     }
     log_info( "[OTA] %s host=%s port=%u path=%s", is_https ? "https" : "http", host, port, path );
 
-    /* 2. detect the target slot before touching the network (fail fast) */
+    /* 2. anti-conflict: refuse if a BLE/AWS OTA owns the slot, then detect the target slot */
+    if( ota_lock_try( OTA_SRC_HTTP ) != 0 )
+    {
+        log_error( "[OTA] rejected - a BLE/AWS OTA is in progress" );
+        goto out;
+    }
     if( ota_flash_begin( &sink.ota ) < 0 )
         goto out;
     sink.started = 1;
@@ -340,6 +345,7 @@ out:
         ota_flash_reboot();                 /* does not return */
     }
 
+    ota_lock_release( OTA_SRC_HTTP );
     log_error( "[OTA] update FAILED" );
     vPortFree( url );
     vTaskDelete( NULL );

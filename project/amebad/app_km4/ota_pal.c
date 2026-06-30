@@ -78,6 +78,7 @@ static OtaPalStatus_t prvAbort( OtaFileContext_t * const pFileContext )
         OTA_PAL_LOG( "abort: discarding in-progress download (%u bytes)", ( unsigned ) s_consumed );
     }
     prvPalReset();
+    ota_lock_release( OTA_SRC_AWS );
 
     if( pFileContext != NULL )
     {
@@ -95,9 +96,17 @@ static OtaPalStatus_t prvCreateFileForRx( OtaFileContext_t * const pFileContext 
 
     prvPalReset();
 
+    /* Anti-conflict: refuse the AWS OTA job while a BLE (mcumgr) or HTTP OTA owns the slot. */
+    if( ota_lock_try( OTA_SRC_AWS ) != 0 )
+    {
+        OTA_PAL_LOG( "createFile: rejected - a BLE/HTTP OTA is in progress" );
+        return OTA_PAL_COMBINE_ERR( OtaPalRxFileCreateFailed, 0 );
+    }
+
     if( ota_flash_begin( &s_slot ) != 0 )
     {
         OTA_PAL_LOG( "createFile: ota_flash_begin FAIL" );
+        ota_lock_release( OTA_SRC_AWS );
         return OTA_PAL_COMBINE_ERR( OtaPalRxFileCreateFailed, 0 );
     }
 
@@ -105,6 +114,7 @@ static OtaPalStatus_t prvCreateFileForRx( OtaFileContext_t * const pFileContext 
     if( mbedtls_sha256_starts( &s_sha, 0 /* SHA-256, not 224 */ ) != 0 )
     {
         OTA_PAL_LOG( "createFile: sha256_starts FAIL" );
+        ota_lock_release( OTA_SRC_AWS );
         return OTA_PAL_COMBINE_ERR( OtaPalRxFileCreateFailed, 0 );
     }
 
@@ -244,6 +254,7 @@ static OtaPalStatus_t prvCloseFile( OtaFileContext_t * const pFileContext )
         /* Leave the slot un-armed: ota_flash_finish would write the boot sig last, so
          * skipping it means the bootloader will not pick this (un-finished) slot. */
         prvPalReset();
+        ota_lock_release( OTA_SRC_AWS );
         if( pFileContext != NULL ) { pFileContext->pFile = NULL; }
         return sigStatus;
     }
@@ -253,6 +264,7 @@ static OtaPalStatus_t prvCloseFile( OtaFileContext_t * const pFileContext )
     {
         OTA_PAL_LOG( "closeFile: ota_flash_finish (len/checksum) FAIL" );
         prvPalReset();
+        ota_lock_release( OTA_SRC_AWS );
         if( pFileContext != NULL ) { pFileContext->pFile = NULL; }
         return OTA_PAL_COMBINE_ERR( OtaPalFileClose, 0 );
     }
@@ -264,6 +276,7 @@ static OtaPalStatus_t prvCloseFile( OtaFileContext_t * const pFileContext )
      * cleared on Accepted/Rejected. */
     ( void ) setenv( "OTA_SELFTEST", "1", 1 );
     s_active = 0;
+    ota_lock_release( OTA_SRC_AWS );
     if( pFileContext != NULL ) { pFileContext->pFile = NULL; }
     return OTA_PAL_COMBINE_ERR( OtaPalSuccess, 0 );
 }

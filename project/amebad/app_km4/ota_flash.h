@@ -45,4 +45,26 @@ int ota_flash_finish( ota_ctx_t * c );
 /* Full system reset (WDG) so the bootloader re-selects the now-active slot. Does not return. */
 void ota_flash_reboot( void );
 
+/* ---- OTA mutual exclusion -------------------------------------------------------------------- *
+ * BLE (mcumgr), AWS IoT (ota_pal), and the ota_http console command all write the SAME inactive
+ * dual-bank slot; running two at once corrupts the image. Each source claims this lock before
+ * ota_flash_begin and releases it after finish/abort. A BLE claim self-expires a few seconds after
+ * the last chunk so an abandoned (phone-disconnected) upload doesn't wedge the lock against a later
+ * AWS job. */
+typedef enum
+{
+    OTA_SRC_NONE = 0,
+    OTA_SRC_BLE,        /* mcumgr SMP image upload   */
+    OTA_SRC_AWS,        /* AWS IoT OTA agent (ota_pal) */
+    OTA_SRC_HTTP        /* ota_http console command  */
+} ota_src_t;
+
+/* Claim (or refresh, if already held by `src`) the OTA lock. Returns 0 on success, -1 if another
+ * source holds it. */
+int       ota_lock_try( ota_src_t src );
+/* Release the lock iff `src` currently holds it. */
+void      ota_lock_release( ota_src_t src );
+/* Current holder (OTA_SRC_NONE if free); expires a stale BLE claim first. */
+ota_src_t ota_lock_holder( void );
+
 #endif /* OTA_FLASH_H */

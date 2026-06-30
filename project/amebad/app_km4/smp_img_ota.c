@@ -97,9 +97,17 @@ int
 img_mgmt_impl_write_image_data(unsigned int offset, const void *data,
                                unsigned int num_bytes, bool last)
 {
+    /* Anti-conflict: refuse if an AWS/HTTP OTA owns the slot; otherwise claim + refresh the lock for
+     * BLE (refreshing each chunk keeps it alive; it self-expires if the phone vanishes mid-upload). */
+    if (ota_lock_try(OTA_SRC_BLE) != 0) {
+        log_warn("[mcumgr] image upload rejected: another OTA (AWS/HTTP) in progress");
+        s_ota_active = 0;
+        return MGMT_ERR_EBADSTATE;
+    }
     smp_xfer_touch();   /* keep console flash ops out of the way for the burst */
     if (offset == 0) {
         if (ota_flash_begin(&s_ota) != 0) {
+            ota_lock_release(OTA_SRC_BLE);
             return MGMT_ERR_EUNKNOWN;
         }
         s_ota_active = 1;
@@ -110,6 +118,7 @@ img_mgmt_impl_write_image_data(unsigned int offset, const void *data,
     }
     if (ota_flash_feed(&s_ota, (const uint8_t *) data, num_bytes) != 0) {
         s_ota_active = 0;
+        ota_lock_release(OTA_SRC_BLE);
         return MGMT_ERR_EUNKNOWN;
     }
     if (last) {
@@ -119,6 +128,7 @@ img_mgmt_impl_write_image_data(unsigned int offset, const void *data,
          * an upload error). */
         int rc = ota_flash_finish(&s_ota);
         s_ota_active = 0;
+        ota_lock_release(OTA_SRC_BLE);
         if (rc != 0) {
             return MGMT_ERR_EUNKNOWN;
         }
