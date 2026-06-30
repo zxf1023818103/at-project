@@ -23,6 +23,7 @@
 #include "img_mgmt/img_mgmt_impl.h"
 #include "os_mgmt/os_mgmt.h"
 #include "os_mgmt/os_mgmt_impl.h"
+#include "fs_mgmt/fs_mgmt.h"
 
 #include "ota_flash.h"
 #include "at_log.h"
@@ -162,5 +163,6 @@ smp_img_ota_init(void)
 {
     img_mgmt_register_group();
     os_mgmt_register_group();
-    log_info("[mcumgr] img + os command groups registered");
+    fs_mgmt_register_group();
+    log_info("[mcumgr] img + os + fs command groups registered");
 }

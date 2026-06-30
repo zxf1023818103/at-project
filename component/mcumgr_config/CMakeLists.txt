@@ -31,6 +31,8 @@ add_library(mcumgr STATIC EXCLUDE_FROM_ALL
     "${_m}/cmd/img_mgmt/src/img_mgmt_util.c"
     "${_m}/cmd/os_mgmt/src/os_mgmt.c"
     "${_m}/cmd/os_mgmt/src/stubs.c"
+    "${_m}/cmd/fs_mgmt/src/fs_mgmt.c"
+    "${_m}/cmd/fs_mgmt/src/stubs.c"
     "${_m}/cborattr/src/cborattr.c"
     "${_m}/util/src/mcumgr_util.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/mcumgr_compat.c"
@@ -41,6 +43,7 @@ target_include_directories(mcumgr PUBLIC
     "${_m}/smp/include"
     "${_m}/cmd/img_mgmt/include"
     "${_m}/cmd/os_mgmt/include"
+    "${_m}/cmd/fs_mgmt/include"
     "${_m}/cborattr/include"
     "${_m}/util/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/include"          # mcumgr_compat.h, syscfg shim, cbor_buf_reader.h

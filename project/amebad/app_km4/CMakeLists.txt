@@ -290,7 +290,9 @@ if(AMEBAD_ENABLE_MCUMGR)
     # the mgmt/img/os headers + the tinycbor/ prefix symlink that smp_img_ota.c needs.
     target_include_directories(target_img2_km4 PRIVATE
         $<TARGET_PROPERTY:mcumgr,INTERFACE_INCLUDE_DIRECTORIES>)
-    target_sources(target_img2_km4 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/smp_img_ota.c")
+    target_sources(target_img2_km4 PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/smp_img_ota.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/smp_fs.c")     # fs_mgmt impl over the LittleFS POSIX VFS
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_MCUMGR
                  "AMEBAD_MCUMGR_FW_VERSION=\"${AMEBAD_FW_VERSION}\"")
