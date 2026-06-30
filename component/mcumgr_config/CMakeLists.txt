@@ -1,7 +1,8 @@
 # mcumgr_config - apache/mynewt-mcumgr 0.7.0 (submodule component/mcumgr_config/mcumgr) as the
 # SMP management protocol for AmebaD BLE DFU (make MCUMGR=ON). We compile only the protocol core
 # (mgmt + smp) and the img + os command groups; the BLE smp_bt transport + the img/os platform
-# impls live in component/amebad/mcumgr_port + app_km4 (mcumgr's transport/ is docs-only and the
+# impls live in app_km4, and the BLE smp_bt transport is built here too (smp_bt.c, the mcumgr_port
+# target below - merged in from the former component/amebad/mcumgr_port; mcumgr's transport/ is docs-only and the
 # *_impl_* hooks are platform-specific).
 #
 # mcumgr 0.7.0 targets the old apache-mynewt-core tinycbor (reader/writer CBOR API). This project
@@ -64,3 +65,17 @@ target_include_directories(mcumgr PUBLIC
 
 add_library(mcumgr_config INTERFACE)
 target_link_libraries(mcumgr_config INTERFACE mcumgr)
+
+# SMP-over-BLE transport (smp_bt.c) - merged in from the former component/amebad/mcumgr_port (no
+# platform-HAL code: pure NimBLE host + mcumgr core). KM4 + MCUMGR-gated. Include-only deps (NOT link):
+# mcumgr_port rides the image's cross_refs LINK_GROUP alongside mcumgr / nimble / rxi_log archives, so
+# linking the umbrellas here would cycle; the group resolves the symbols at the final link.
+if("${AMEBAD_CHIP}" STREQUAL "amebad-km4" AND AMEBAD_ENABLE_MCUMGR)
+    add_library(mcumgr_port STATIC EXCLUDE_FROM_ALL "${CMAKE_CURRENT_SOURCE_DIR}/smp_bt.c")
+    target_compile_options(mcumgr_port PRIVATE "-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=")
+    target_include_directories(mcumgr_port PRIVATE
+        $<TARGET_PROPERTY:mcumgr,INTERFACE_INCLUDE_DIRECTORIES>          # mcumgr_smp_process + mgmt/smp + tinycbor prefix
+        $<TARGET_PROPERTY:nimble_config,INTERFACE_INCLUDE_DIRECTORIES>  # host/ble_hs.h, ble_gatt, ble_att, os_mbuf
+        $<TARGET_PROPERTY:rxi_log_config,INTERFACE_INCLUDE_DIRECTORIES> # at_log.h
+        $<TARGET_PROPERTY:FreeRTOS,INTERFACE_INCLUDE_DIRECTORIES>)
+endif()

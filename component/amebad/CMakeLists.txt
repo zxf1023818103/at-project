@@ -266,7 +266,7 @@ add_subdirectory(mbedtls_port)            # KM4-gated: AmebaD port of upstream m
 # port (in-tree) that links it. The port also owns the netif_shim ABI header (INTERFACE
 # target amebad_netif_shim).
 add_subdirectory(freertos_tcp_port)  # KM4-gated: Realtek WiFi <-> stack bridge (`amebad_freertos_tcp`, DHCP bring-up, EXCLUDE)
-add_subdirectory(cares_port)         # synchronous c-ares resolver front-end (`cares_port`); compiled only when app_km4 links it (CARES=ON)
+# (cares_port merged into the cross-platform component/c-ares_config; no platform-HAL code)
 add_subdirectory(pmu)                # chip-gated: prebuilt PMC lib (lib_pmc_lp/hp.a) + pmu headers
 add_subdirectory(wlan)               # KM4-gated: host WiFi driver libs (lib_wlan*.a) + API headers
 add_subdirectory(wpa_supplicant)     # KM4-gated: supplicant cores (lib_wps.a + lib_eap.a) + config/glue source + headers
@@ -281,7 +281,7 @@ add_subdirectory(hci)                # KM4-gated: BLE controller bring-up + HCI 
 # component/CMakeLists.txt; here we add the AmebaD port (in-tree, KM4-gated; links
 # nimble_config + amebad_hci).
 add_subdirectory(nimble_port)        # KM4-gated: NimBLE host stack (`nimble` lib) on amebad_hci; SM crypto on mbedTLS
-add_subdirectory(mcumgr_port)        # KM4 + MCUMGR-gated: SMP-over-BLE transport (`mcumgr_port` lib) bridging NimBLE GATT <-> mcumgr core
+# (mcumgr_port / smp_bt merged into the cross-platform component/mcumgr_config; no platform-HAL code)
 # newlib retarget: the cross-platform core (syscall_config OBJECT lib: VFS + malloc +
 # byte-order) is added by the parent component/CMakeLists.txt; here we add the AmebaD
 # console backend (in-tree). Both OBJECT libs, linked into the image by app_km4.

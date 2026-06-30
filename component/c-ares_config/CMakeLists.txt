@@ -110,3 +110,17 @@ target_include_directories(c_ares SYSTEM PRIVATE
 # Umbrella INTERFACE (伞形): consumers link `c_ares_config`.
 add_library(c_ares_config INTERFACE)
 target_link_libraries(c_ares_config INTERFACE c_ares)
+
+# Synchronous resolver front-end (cares_resolve.c) - merged in from the former
+# component/amebad/cares_port (no platform-HAL code: c-ares + a select() loop over the BSD-sockets
+# shim). EXCLUDE_FROM_ALL: built only when app_km4 links it (CARES=ON). rxi_log_config is added after
+# this component, so take its headers via a genex (the log_* symbols resolve at the final app link).
+add_library(cares_port STATIC EXCLUDE_FROM_ALL "${CMAKE_CURRENT_SOURCE_DIR}/cares_resolve.c")
+target_compile_options(cares_port PRIVATE "-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=")
+target_include_directories(cares_port PUBLIC "${CMAKE_CURRENT_LIST_DIR}")   # cares_resolve.h for consumers
+target_link_libraries(cares_port PUBLIC c_ares_config)                      # propagate the c_ares archive
+target_link_libraries(cares_port PRIVATE freertos_config freertos-plus-tcp_config)
+target_include_directories(cares_port SYSTEM PRIVATE
+    $<TARGET_PROPERTY:syscall_config,INTERFACE_INCLUDE_DIRECTORIES>     # select/fd_set, sockaddr_in/in6
+    $<TARGET_PROPERTY:rxi_log_config,INTERFACE_INCLUDE_DIRECTORIES>     # at_log.h
+)
