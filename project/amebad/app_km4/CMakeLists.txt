@@ -227,6 +227,9 @@ add_dependencies(target_img2_km4 amebad_km4_img2_ld)
 # additionally links the `nimble` lib. Pick one. OFF by default.
 option(AMEBAD_ENABLE_HCI    "Build the BLE controller HCI test image (bring-up + HCI bridge)" OFF)
 option(AMEBAD_ENABLE_NIMBLE "Build the NimBLE host image (LE/GATT/Mesh/coex on amebad_hci)" OFF)
+# mcumgr SMP-over-BLE DFU (img_mgmt -> ota_flash + os_mgmt echo/reset). Implies NIMBLE (forced ON
+# by the Makefile). Adds the mcumgr core + the smp_bt transport + the img/os platform impls.
+option(AMEBAD_ENABLE_MCUMGR "Build mcumgr SMP-over-BLE DFU (implies NIMBLE)" OFF)
 
 # The console (FreeRTOS-Plus-CLI over the LOGUART) is now the DEFAULT, built by
 # component/amebad/monitor (amebad_monitor + amebad_monitor_common, in _diag_grp below) and
@@ -273,6 +276,27 @@ if(AMEBAD_ENABLE_NIMBLE)
 elseif(AMEBAD_ENABLE_HCI)
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_HCI)
+endif()
+
+# mcumgr SMP-over-BLE DFU. MCUMGR implies NIMBLE (so the block above already added the NimBLE +
+# mbedTLS archives + AT_PROJECT_NIMBLE). Append the mcumgr core (`mcumgr`), the BLE transport
+# (`mcumgr_port`) and tinycbor to the link group (real archive names; the _config umbrellas don't
+# expand inside LINK_GROUP), link mcumgr_config separately for header propagation, and pull in
+# ota_flash.c (the slot writer; normally AWS-only) as the DFU flash sink.
+if(AMEBAD_ENABLE_MCUMGR)
+    set(_hci_grp "${_hci_grp},mcumgr,mcumgr_port,tinycbor")
+    # Header propagation only (the archives ride the LINK_GROUP above); linking the mcumgr_config
+    # umbrella here would form a dependency cycle with the group. mcumgr's interface includes carry
+    # the mgmt/img/os headers + the tinycbor/ prefix symlink that smp_img_ota.c needs.
+    target_include_directories(target_img2_km4 PRIVATE
+        $<TARGET_PROPERTY:mcumgr,INTERFACE_INCLUDE_DIRECTORIES>)
+    target_sources(target_img2_km4 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/smp_img_ota.c")
+    set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
+                 APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_MCUMGR
+                 "AMEBAD_MCUMGR_FW_VERSION=\"${AMEBAD_FW_VERSION}\"")
+    if(NOT AMEBAD_ENABLE_AWS_IOT)
+        target_sources(target_img2_km4 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/ota_flash.c")
+    endif()
 endif()
 
 # QUIC self-test (ngtcp2 + picotls TLS 1.3 on the mbedTLS/PSA backend — the wolfSSL

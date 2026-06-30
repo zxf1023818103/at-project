@@ -281,6 +281,7 @@ add_subdirectory(hci)                # KM4-gated: BLE controller bring-up + HCI 
 # component/CMakeLists.txt; here we add the AmebaD port (in-tree, KM4-gated; links
 # nimble_config + amebad_hci).
 add_subdirectory(nimble_port)        # KM4-gated: NimBLE host stack (`nimble` lib) on amebad_hci; SM crypto on mbedTLS
+add_subdirectory(mcumgr_port)        # KM4 + MCUMGR-gated: SMP-over-BLE transport (`mcumgr_port` lib) bridging NimBLE GATT <-> mcumgr core
 # newlib retarget: the cross-platform core (syscall_config OBJECT lib: VFS + malloc +
 # byte-order) is added by the parent component/CMakeLists.txt; here we add the AmebaD
 # console backend (in-tree). Both OBJECT libs, linked into the image by app_km4.

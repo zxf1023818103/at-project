@@ -52,6 +52,7 @@ add_subdirectory(ota_config)                # AWS IoT OTA Agent v3.3.0 — links
 add_subdirectory(coresntp_config)           # coreSNTP SNTPv4 client static lib + core_sntp_config.h
 add_subdirectory(freertos-cli_config)       # FreeRTOS-Plus-CLI V202212.00 static lib
 add_subdirectory(nimble_config)             # INTERFACE: NimBLE syscfg + upstream include surface
+add_subdirectory(mcumgr_config)             # apache/mynewt-mcumgr 0.7.0 SMP core (img+os groups) over tinycbor v7 shim — BLE DFU (MCUMGR=ON)
 add_subdirectory(syscall_config)            # newlib retarget OBJECT lib (VFS + malloc + byte-order); PRIVATE-links freertos-plus-tcp_config + at_console
 add_subdirectory(c-ares_config)             # c-ares async DNS resolver (compiled only when linked / targeted; wired in under CARES=ON)
 add_subdirectory(rxi_log_config)            # rxi log.c (leveled logger) + FreeRTOS-mutex lock via log_set_lock

@@ -1299,6 +1299,10 @@ int main(void)
     log_lock_init();   /* install the FreeRTOS-mutex lock before any log_* (pre-scheduler is fine) */
     log_info("[KM4] at-project image2 - FreeRTOS+TCP DHCP bring-up");
     log_info("[KM4] FreeRTOS kernel %s", tskKERNEL_VERSION_NUMBER);
+#if defined(AT_PROJECT_MCUMGR) && defined(AMEBAD_MCUMGR_FW_VERSION)
+    /* Boot-visible firmware tag so a mcumgr BLE DFU is verifiable (the new slot prints a new tag). */
+    log_info("[mcumgr] firmware tag: %s", AMEBAD_MCUMGR_FW_VERSION);
+#endif
 
 #ifdef AMEBAD_TFM_BOOT
     /* Serialize every NS->SPE PSA call: tfm_ns_interface_rtos.c takes this mutex around each

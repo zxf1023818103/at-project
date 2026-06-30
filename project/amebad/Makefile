@@ -33,10 +33,17 @@
 
 .PHONY: all image bootloader_km0 bootloader_km0_2nd app_km0 bootloader_km4 app_km4 clean distclean
 
+# mcumgr SMP DFU rides the NimBLE host (smp_bt transport) and writes via ota_flash, so MCUMGR=ON
+# forces NIMBLE=ON regardless of the command line (NIMBLE is ?= so := overrides it).
+ifeq ($(MCUMGR),ON)
+override NIMBLE := ON
+endif
+
 REPO       := $(abspath $(CURDIR)/../..)
 GEN        := Ninja
 BUILD_TYPE := MinSizeRel
 NIMBLE     ?= OFF          # ON -> NimBLE host
+MCUMGR     ?= OFF          # ON -> mcumgr SMP-over-BLE (DFU via img_mgmt -> ota_flash + os_mgmt echo/reset); implies NIMBLE=ON
 HCI        ?= OFF          # ON -> bare HCI/DTM
 QUIC       ?= OFF          # ON -> ngtcp2 QUIC client self-test (pulls full wolfSSL TLS1.3)
 PKCS11     ?= OFF          # ON -> corePKCS11 token self-test (upstream mbedTLS backend + LittleFS PAL)
@@ -133,7 +140,7 @@ TC0 := $(REPO)/cmake/amebad-km0.cmake
 TC4 := $(REPO)/cmake/amebad-km4.cmake
 _COMMON := -G $(GEN) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) -DAMEBAD_EFUSE_DEBUG=$(EFUSE_DEBUG) \
            -DAMEBAD_RSIP_ENABLE=$(RSIP) -DAMEBAD_RSIP_KEY=$(RSIP_KEY) -DAMEBAD_RSIP_IV=$(RSIP_IV)
-_KM4 := -DAMEBAD_ENABLE_NIMBLE=$(NIMBLE) -DAMEBAD_ENABLE_HCI=$(HCI) -DAMEBAD_ENABLE_QUIC=$(QUIC) \
+_KM4 := -DAMEBAD_ENABLE_NIMBLE=$(NIMBLE) -DAMEBAD_ENABLE_MCUMGR=$(MCUMGR) -DAMEBAD_ENABLE_HCI=$(HCI) -DAMEBAD_ENABLE_QUIC=$(QUIC) \
         -DAMEBAD_ENABLE_PKCS11=$(PKCS11) -DAMEBAD_ENABLE_CRYPTOBENCH=$(BENCH) -DAMEBAD_ENABLE_MINIMAL=$(MINIMAL) \
         -DAMEBAD_ENABLE_ROM_KAT=$(ROMKAT) -DAMEBAD_ENABLE_IPERF=$(IPERF) -DAMEBAD_ENABLE_AWS_IOT=$(AWS) -DAMEBAD_ENABLE_CARES=$(CARES) \
         -DAMEBAD_ENABLE_CRT_BUNDLE=$(CRT_BUNDLE) \

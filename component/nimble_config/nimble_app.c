@@ -35,6 +35,11 @@ extern void ble_store_lfs_init(void);               /* ble_store_lfs.c: LittleFS
  * Declared here because the upstream prototype is gated behind ipconfigDHCP_REGISTER_HOSTNAME (off). */
 extern const char *pcApplicationHostnameHook(void);
 
+#ifdef AT_PROJECT_MCUMGR
+extern int  smp_bt_register(void);     /* mcumgr_port/smp_bt.c: register the SMP GATT service */
+extern void smp_img_ota_init(void);    /* app_km4/smp_img_ota.c: register img + os command groups */
+#endif
+
 #define NIMBLE_DEV_NAME   "amebad-nimble"   /* fallback only (hook always returns non-empty) */
 
 /* Sample 128-bit service 0x59462f12-9543-9999-12c8-58b459a2712d with one
@@ -97,6 +102,10 @@ nimble_gap_event(struct ble_gap_event *event, void *arg)
                    event->connect.status == 0 ? "OK" : "FAIL", event->connect.conn_handle);
         if (event->connect.status == 0) {
             amebad_nimble_coex_set_conn(1);   /* BLE link up -> hint WiFi coex */
+            /* NOTE: do NOT kick a connection-parameter update here - issuing it right at connect
+             * collides with the central's ATT MTU exchange and some stacks (go-ble) then time out
+             * the MTU request, never reaching SMP. The bigger KM0 park timeout keeps per-sector
+             * write blocks short enough that the default supervision timeout survives. */
         } else {
             nimble_advertise();   /* failed — keep advertising */
         }
@@ -215,6 +224,12 @@ amebad_nimble_start(void)
     if (rc != 0) {
         printf("[NimBLE] gatt svc register rc=%d\n\r", rc);
     }
+#ifdef AT_PROJECT_MCUMGR
+    /* Register the SMP GATT service (mcumgr BLE DFU) alongside the sample service, then the
+     * img + os command groups. Must happen before the host task starts. */
+    smp_bt_register();
+    smp_img_ota_init();
+#endif
     {
         /* Reuse the WiFi hostname as the BLE device name (one identity across radios). */
         const char *devname = pcApplicationHostnameHook();

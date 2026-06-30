@@ -71,3 +71,9 @@ target_compile_definitions(nimble_config PRIVATE
 # Our glue rides on the vendored tinycrypt/NimBLE headers — silence their warnings
 # (the AmebaD flag stack is -Wall -Wextra -Werror). -w (last) overrides -Werror.
 target_compile_options(nimble_config PRIVATE -w)
+
+# mcumgr SMP-over-BLE DFU (MCUMGR=ON): nimble_app.c::amebad_nimble_start() registers the SMP GATT
+# service + img/os groups under AT_PROJECT_MCUMGR.
+if(AMEBAD_ENABLE_MCUMGR)
+    target_compile_definitions(nimble_config PRIVATE AT_PROJECT_MCUMGR)
+endif()
