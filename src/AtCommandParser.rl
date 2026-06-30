@@ -23,6 +23,12 @@
 
 #include "AtCommandParser.h"
 
+// Ragel -G2 emits goto-driven switches with intentional fall-throughs;
+// suppress -Wimplicit-fallthrough for the whole TU so SDKs that build
+// with -Werror -Wextra (Ameba new) don't reject the generated parser.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wimplicit-fallthrough"
+
 namespace at {
 
 %% write data;
@@ -65,3 +71,5 @@ void AtCommandParser::process(char input) {
 }
 
 }  // namespace at
+
+#pragma GCC diagnostic pop

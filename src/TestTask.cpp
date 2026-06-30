@@ -456,7 +456,7 @@ void TestTask::routine() {
     // testUartOutStream1();
     // testUartInStream1();
     // testFileSystem1();
-    testZlib1();
+    // testZlib1();
 }
 
 }  // namespace at

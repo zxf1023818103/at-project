@@ -1,1 +1,15 @@
 /build/
+/test/bouffalo_toolchain/build/
+/toolchain/
+/.venv-tfm/
+
+# Realtek NDA / confidential docs (datasheets, ANs, MP guides, pinmux — local reference only,
+# do NOT commit/push). Ignore every binary doc under the dir; only README.md is tracked.
+/doc/realtek_an/*.pdf
+/doc/realtek_an/*.chm
+/doc/realtek_an/*.xlsx
+/doc/realtek_an/*.xls
+/doc/realtek_an/*.docx
+/doc/realtek_an/*.doc
+project/amebad/app_km4/aws_iot_creds.h
+__pycache__/

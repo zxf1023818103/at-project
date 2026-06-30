@@ -12,6 +12,107 @@
 	path = platform/bouffalo_sdk
 	url = https://github.com/zxf1023818103/bouffalo_sdk.git
 	branch = at-v2.3.26
-[submodule "thirdparty/zlib"]
-	path = thirdparty/zlib
+[submodule "component/zlib"]
+	path = component/zlib_config/zlib
 	url = https://github.com/madler/zlib.git
+[submodule "component/freertos-kernel"]
+	path = component/freertos-kernel_config/freertos-kernel
+	url = https://github.com/zxf1023818103/FreeRTOS-Kernel.git
+	branch = bouffalo-port
+[submodule "component/lwip"]
+	path = component/lwip_config/lwip
+	url = https://github.com/zxf1023818103/lwip.git
+	branch = bouffalo-port
+[submodule "component/cjson"]
+	path = component/cjson_config/cjson
+	url = https://github.com/DaveGamble/cJSON.git
+[submodule "component/mbedtls"]
+	path = component/mbedtls_config/mbedtls
+	url = https://github.com/Mbed-TLS/mbedtls.git
+	branch = v3.6.4
+[submodule "component/littlefs"]
+	path = component/littlefs_config/littlefs
+	url = https://github.com/littlefs-project/littlefs.git
+	branch = v2.8.2
+[submodule "component/lfs_image/mklittlefs"]
+	path = component/lfs_image/mklittlefs
+	url = https://github.com/zxf1023818103/mklittlefs.git
+	branch = at-project
+[submodule "component/thirdparty/freertos-plus-tcp"]
+	path = component/freertos-plus-tcp_config/freertos-plus-tcp
+	url = https://github.com/zxf1023818103/FreeRTOS-Plus-TCP.git
+	branch = at-project
+[submodule "component/thirdparty/nimble"]
+	path = component/nimble_config/nimble
+	url = https://github.com/zxf1023818103/mynewt-nimble.git
+	branch = at-project
+[submodule "component/thirdparty/ngtcp2"]
+	path = component/ngtcp2_config/ngtcp2
+	url = https://github.com/ngtcp2/ngtcp2
+[submodule "component/thirdparty/trusted-firmware-m"]
+	path = component/trusted-firmware-m_config/trusted-firmware-m
+	url = https://github.com/zxf1023818103/trusted-firmware-m.git
+	branch = at-project
+[submodule "component/thirdparty/coremqtt"]
+	path = component/coremqtt_config/coremqtt
+	url = https://github.com/FreeRTOS/coreMQTT.git
+[submodule "component/thirdparty/corehttp"]
+	path = component/corehttp_config/corehttp
+	url = https://github.com/FreeRTOS/coreHTTP.git
+[submodule "component/freertos-posix_config/freertos-posix"]
+	path = component/freertos-posix_config/freertos-posix
+	url = https://github.com/FreeRTOS/Lab-Project-FreeRTOS-POSIX.git
+[submodule "component/thirdparty/corepkcs11"]
+	path = component/corepkcs11_config/corepkcs11
+	url = https://github.com/FreeRTOS/corePKCS11.git
+[submodule "component/thirdparty/picotls"]
+	path = component/picotls_config/picotls
+	url = https://github.com/h2o/picotls.git
+[submodule "component/coremqtt-agent_config/coremqtt-agent"]
+	path = component/coremqtt-agent_config/coremqtt-agent
+	url = https://github.com/zxf1023818103/coreMQTT-Agent.git
+	branch = at-project
+[submodule "component/coresntp_config/coresntp"]
+	path = component/coresntp_config/coresntp
+	url = https://github.com/FreeRTOS/coreSNTP.git
+[submodule "component/tinycbor_config/tinycbor"]
+	path = component/tinycbor_config/tinycbor
+	url = https://github.com/intel/tinycbor.git
+[submodule "component/backoffalgorithm_config/backoffalgorithm"]
+	path = component/backoffalgorithm_config/backoffalgorithm
+	url = https://github.com/FreeRTOS/backoffAlgorithm.git
+[submodule "component/sigv4_config/sigv4"]
+	path = component/sigv4_config/sigv4
+	url = https://github.com/aws/SigV4-for-AWS-IoT-embedded-sdk.git
+[submodule "component/fleetprovisioning_config/fleetprovisioning"]
+	path = component/fleetprovisioning_config/fleetprovisioning
+	url = https://github.com/aws/Fleet-Provisioning-for-AWS-IoT-embedded-sdk.git
+[submodule "component/deviceshadow_config/deviceshadow"]
+	path = component/deviceshadow_config/deviceshadow
+	url = https://github.com/aws/Device-Shadow-for-AWS-IoT-embedded-sdk.git
+[submodule "component/devicedefender_config/devicedefender"]
+	path = component/devicedefender_config/devicedefender
+	url = https://github.com/aws/Device-Defender-for-AWS-IoT-embedded-sdk.git
+[submodule "component/jobs_config/jobs"]
+	path = component/jobs_config/jobs
+	url = https://github.com/aws/Jobs-for-AWS-IoT-embedded-sdk.git
+[submodule "component/ota_config/ota"]
+	path = component/ota_config/ota
+	url = https://github.com/aws/ota-for-aws-iot-embedded-sdk.git
+[submodule "component/corejson_config/corejson"]
+	path = component/corejson_config/corejson
+	url = https://github.com/FreeRTOS/coreJSON.git
+[submodule "component/tlsf_config/tlsf"]
+	path = component/tlsf_config/tlsf
+	url = https://github.com/mattconte/tlsf
+[submodule "component/rxi_log_config/log"]
+	path = component/rxi_log_config/log
+	url = https://github.com/rxi/log.c
+[submodule "component/c-ares_config/c-ares"]
+	path = component/c-ares_config/c-ares
+	url = https://github.com/zxf1023818103/c-ares.git
+	branch = at-project
+[submodule "component/mcumgr_config/mcumgr"]
+	path = component/mcumgr_config/mcumgr
+	url = https://github.com/zxf1023818103/mynewt-mcumgr.git
+	branch = at-project

@@ -31,7 +31,7 @@ metadata:
 
 ## 烧录硬件接线 / 时序
 
-见 [doc/ameba_image_download.md](../../../home/zxf/at-project/doc/ameba_image_download.md)。两路串口：
+见 [doc/ameba_image_download.md](doc/ameba_image_download.md)。两路串口：
 
 - `COM10` — RTS→CHIP_EN, DTR→LOG_RX（仅做 download-mode 进入时序，不传数据）
 - `COM25` — TXD/RXD→LOG_TX/LOG_RX（烧录数据）。**它的 RTS 也接 CHIP_EN，DTR 接 LOG_RX**，开关 port 时会扰动芯片，所以 ImageTool 用 `-g false`（DtrRtsConfig=false），手动用 COM10 拉一次 download mode 即可。

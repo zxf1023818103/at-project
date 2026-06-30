@@ -1,20 +1,34 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.20)
+# ASM enabled at top level (the deleted root CMakeLists used to via project(at_project C CXX ASM)):
+# component's universal configs (freertos-kernel etc.) + bouffalo_sdk have .S sources, and a late
+# enable_language(ASM) in a subdir scope leaves CMAKE_ASM_COMPILE_OBJECT unset for them.
+project(at C CXX ASM)
+
+# CMP0118 NEW (CMake 3.20+) makes the GENERATED source-file property
+# visible across directory boundaries. Required because src/CMakeLists.txt
+# (pulled in via add_subdirectory below) registers a custom command for
+# the ragel-generated AtCommandParser.rl.cpp; without this policy,
+# bflb_add_executable(at ${AT_USER_SOURCES}) in this directory wouldn't
+# know that the .cpp is a build product and would error
+# "Cannot find source file".
+cmake_policy(SET CMP0118 NEW)
+
 include(proj.conf)
-find_package(bouffalo_sdk REQUIRED HINTS $ENV{BL_SDK_BASE})
-sdk_add_include_directories(./include)
 
-set(AT_PROJECT_ROOT ${CMAKE_CURRENT_LIST_DIR}/../..)
-set(SRC_DIR ${AT_PROJECT_ROOT}/src)
+# The repo-root CMakeLists was deleted (each image is its own project now), so this entry adds the
+# shared subtrees directly (like project/ameba): component self-adds the universal *_config + the
+# BOUFFALO branch's bouffalo_sdk; src exports AT_USER_SOURCES. AT_ROOT anchors the repo root.
+get_filename_component(AT_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
+set(AT_ROOT "${AT_ROOT}" CACHE INTERNAL "at-project repo root")
+add_compile_options("-fmacro-prefix-map=${AT_ROOT}/src/=")   # __FILE__ basename (moved from the deleted root)
+add_subdirectory(${AT_ROOT}/component ${CMAKE_BINARY_DIR}/component)   # universal configs (self) + bouffalo_sdk
+add_subdirectory(${AT_ROOT}/src       ${CMAKE_BINARY_DIR}/src)        # exports AT_USER_SOURCES
 
-file(GLOB private_sources
-    CONFIGURE_DEPENDS "${SRC_DIR}/*.cpp" "${SRC_DIR}/*.c"
-    LIST_DIRECTORIES false)
+bflb_add_executable(at ${AT_USER_SOURCES})
 
-project(at)
-target_sources(${proj_name}.elf PRIVATE ${private_sources})
+target_include_directories(at PRIVATE
+    ${AT_USER_SRC_DIR}
+    ${CMAKE_CURRENT_LIST_DIR}/include
+)
 
-include(${AT_PROJECT_ROOT}/cmake/zlib.cmake)
-# Bouffalo SDK uses plain (no PRIVATE/PUBLIC) target_link_libraries on
-# the elf target inside extension.cmake; CMake requires all calls on a
-# given target to be the same style, so we stay plain too.
-target_link_libraries(${proj_name}.elf zlibstatic)
+target_link_libraries(at PRIVATE bouffalo_sdk)

@@ -1,7 +1,18 @@
-set(AT_PROJECT_ROOT ${CMAKE_CURRENT_LIST_DIR}/../..)
-set(SRC_DIR ${AT_PROJECT_ROOT}/src)
-include(${SRC_DIR}/sources.cmake)
-include(${AT_PROJECT_ROOT}/cmake/zlib.cmake)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../src
+                 ${CMAKE_BINARY_DIR}/src)
+# Cross-platform third-party libs, each in its own component/<name>_config
+# (submodule + wrapper). This build doesn't go through the repo-root CMakeLists,
+# so the universal ones are added here (out-of-tree adds need explicit binary dirs).
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../component/zlib_config
+                 ${CMAKE_BINARY_DIR}/component/zlib_config)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../component/cjson_config
+                 ${CMAKE_BINARY_DIR}/component/cjson_config)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../component/littlefs_config
+                 ${CMAKE_BINARY_DIR}/component/littlefs_config)
+# Shared cross-platform stdio console dispatcher (component/console). The ameba
+# build doesn't go through the repo-root CMakeLists, so add it here.
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../component/console
+                 ${CMAKE_BINARY_DIR}/component/console)
 
 set(private_compile_options
     $<$<COMPILE_LANGUAGE:CXX>:-Wno-error=unused-function>
@@ -27,6 +38,7 @@ set(private_includes
 ameba_add_internal_library(at_user
     p_SOURCES
         ${AT_USER_SOURCES}
+        ${CMAKE_CURRENT_LIST_DIR}/ameba_console_shim.c   # shared-console adoption (--wrap _read/_write)
     p_INCLUDES
         ${private_includes}
     p_DEFINITIONS
@@ -39,4 +51,14 @@ ameba_add_internal_library(at_user
 # wraps the real target name into ${c_CURRENT_TARGET_NAME} (e.g.
 # "at_user_target_img2_km4tz"); target_link_libraries on the bare "at_user"
 # fails because that name isn't a real target.
-target_link_libraries(${c_CURRENT_TARGET_NAME} PRIVATE zlibstatic)
+# at_console: the shared fd 0/1/2 dispatcher (console.h + at_console_read/write),
+# backed by ameba_console_shim.c's __real-based LOGUART backend.
+target_link_libraries(${c_CURRENT_TARGET_NAME} PRIVATE zlibstatic at_console)
+
+# Route newlib's console syscalls through the shared dispatcher without editing the
+# SDK submodule: wrap _read/_write at the final link so they resolve to the
+# __wrap_* in ameba_console_shim.c (the SDK's originals stay as __real_*). INTERFACE
+# so the option lands on the final image link (mirrors bflb_libc's -Wl,-wrap,*).
+target_link_options(${c_CURRENT_TARGET_NAME} INTERFACE
+    -Wl,--wrap=_read
+    -Wl,--wrap=_write)

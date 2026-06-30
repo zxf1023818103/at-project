@@ -15,7 +15,20 @@ param(
     [int]   $Baudrate  = 1500000,
     [string]$Image,
     [string]$ToolDir,
-    [switch]$SkipModeCheck
+    [switch]$SkipModeCheck,
+    [switch]$Erase,         # -e true: full chip erase before write (wipes TF-M ITS/PS at 0x3F0000,
+                            # which sits above the image so a normal flash leaves it stale/corrupt)
+
+    # AWS IoT provisioning (AWS=ON image): after the post-flash reset, drive the sibling
+    # aws_provision.ps1 over the console ($FlashPort) to provision credentials by their storage:
+    #   -Endpoint <ats-host>  -> env var "endpoint" (plain LittleFS KV/endpoint)
+    #   -Cert <cert.pem>      -> plain LittleFS DER file (aws_cert.der); path = env var "cert"
+    #   -Key  <key.pem>       -> TF-M Internal Trusted Storage (the only secret)
+    # Any subset may be given; omit all three to skip provisioning. The device idle-retries until
+    # provisioned, so it connects without a second flash.
+    [string]$Endpoint,
+    [string]$Cert,
+    [string]$Key
 )
 
 $ErrorActionPreference = 'Stop'
@@ -155,10 +168,13 @@ Enter-DownloadMode -Port $BootPort
 Write-Host "[flash] launching ImageTool ..."
 Push-Location $ToolDir
 try {
+    $eraseArg = if ($Erase) { 'true' } else { 'false' }
+    if ($Erase) { Write-Host "[flash] CHIP ERASE enabled (-e true): wipes whole flash incl. ITS/PS" }
     $toolOut = & .\Ameba_1-N_MP_ImageTool.exe `
         -c $Chip `
         -i $Image `
         -b $Baudrate `
+        -e $eraseArg `
         -g false `
         -v true `
         -s true `
@@ -189,3 +205,19 @@ finally {
 }
 
 Write-Host "[done] flash success"
+
+# AWS IoT provisioning: if any credential was given, drive the console `set ...` commands over
+# $FlashPort (which is also the LOGUART console after boot). The sibling aws_provision.ps1 waits
+# for boot/WiFi/AWS to settle, then sends `set endpoint/cert/key`. The device persists endpoint +
+# cert to LittleFS and the key to TF-M ITS, so subsequent boots reconnect with no re-flash.
+if ($Endpoint -or $Cert -or $Key) {
+    $prov = Join-Path $here 'aws_provision.ps1'
+    if (-not (Test-Path $prov)) { throw "aws_provision.ps1 not found: $prov" }
+    Write-Host "[prov] provisioning AWS creds over $FlashPort @ $Baudrate ..."
+    $pargs = @{ Port = $FlashPort; Baud = $Baudrate }
+    if ($Endpoint) { $pargs.Endpoint = $Endpoint }
+    if ($Cert)     { $pargs.Cert     = $Cert }
+    if ($Key)      { $pargs.Key      = $Key }
+    & $prov @pargs
+    Write-Host "[prov] provisioning step done"
+}
