@@ -141,7 +141,7 @@ if(AMEBAD_TLS_BACKEND STREQUAL "fallback")
     target_compile_definitions(network_transport_mbedtls PRIVATE TLS_TRANSPORT_RENAME_MBEDTLS)
 
     # The mbedTLS SSL stack is only the TLS-1.2 fallback path here (1.3 peers ride picotls). Strip
-    # TLS 1.3 from it (mbedtls_amebad_user_config.h gates on AMEBAD_MBEDTLS_TLS12_ONLY) so we can also
+    # TLS 1.3 from it (mbedtls_user_config.h gates on AMEBAD_MBEDTLS_TLS12_ONLY) so we can also
     # drop KEEP_PEER_CERTIFICATE (free the peer cert post-handshake). PUBLIC + on all three upstream
     # archives so every TU sees one consistent mbedTLS config (shared struct layouts). picotls's
     # TLS 1.3 is unaffected — it's its own stack over mbedcrypto, not the mbedTLS SSL layer.

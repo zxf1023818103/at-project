@@ -1,16 +1,15 @@
 # component/mbedtls_config — home for the Mbed TLS v3.6.4 submodule
 # (component/mbedtls_config/mbedtls), built via its OWN upstream CMake (add_subdirectory).
 #
-# Consumer-coupled: the upstream sources are unbuildable without a config
-# (MBEDTLS_CONFIG_FILE) + the Bouffalo port/hw_acc adapter headers, and only the Bouffalo
-# SDK consumes upstream mbedtls (AmebaD uses ROM mbedtls — headers only, no build, via
-# component/amebad/mbedtls_rom). So this component is add_subdirectory'd by
-# component/bouffalo_sdk, which FIRST sets the directory-scoped MBEDTLS_CONFIG_FILE +
-# the bflb config/port/hw_acc include dirs (inherited into this scope); this file sets the
-# platform-agnostic upstream option knobs and add_subdirectory's the submodule.
+# Platform-agnostic: this file only sets the upstream option knobs, add_subdirectory's the
+# submodule, and builds the shared FreeRTOS threading-alt glue. ALL per-platform mbedTLS config
+# (the MBEDTLS_USER_CONFIG_FILE deltas, the MBEDTLS_*_ALT selections, include wiring) lives in
+# each platform's mbedtls_port (component/amebad/mbedtls_port, component/bouffalo_sdk/mbedtls_port),
+# which attaches it onto the upstream targets there. Both AmebaD and Bouffalo build upstream from
+# here on the upstream DEFAULT config + their own user config (no MBEDTLS_CONFIG_FILE replacement).
 #
 # Targets produced (all STATIC — BUILD_SHARED_LIBS forced OFF): mbedcrypto / mbedx509 /
-# mbedtls (+ everest / p256m). The consumer wires the bflb adapters onto them afterward.
+# mbedtls (+ everest / p256m). The consumer's mbedtls_port wires its config onto them afterward.
 #
 # Pinned at v3.6.4 (not 3.6.5+) so the classic MBEDTLS_*_ALT mechanism Bouffalo's
 # HW-accelerated impls rely on stays intact — see component/bouffalo_sdk for the why.
@@ -31,40 +30,15 @@ add_subdirectory(mbedtls "${CMAKE_BINARY_DIR}/at_mbedtls_build" EXCLUDE_FROM_ALL
 #   - threading_alt.h               : the FreeRTOS-friendly opaque mutex type (void*)
 #   - mbedtls_threading_alt.c       : the MBEDTLS_THREADING_ALT FreeRTOS callbacks +
 #                                     mbedtls_threading_freertos_init()
-#   - mbedtls_amebad_user_config.h  : the AmebaD MBEDTLS_USER_CONFIG_FILE deltas
-# Export the dir so a port can reference these headers (user config / threading_alt.h) without a
-# fragile relative path.
+# Export the dir so a port can reference threading_alt.h without a fragile relative path.
 set(MBEDTLS_CONFIG_DIR "${CMAKE_CURRENT_SOURCE_DIR}" CACHE INTERNAL
-    "component/mbedtls_config source dir (threading_alt.h / mbedtls_threading_alt.c / user config)")
+    "component/mbedtls_config source dir (threading_alt.h / mbedtls_threading_alt.c)")
 
-# These selections live HERE, each next to the file it names/uses (tree-structured: a macro sits
-# with its implementation, not in a far-off port):
-#   - MBEDTLS_USER_CONFIG_FILE -> mbedtls_amebad_user_config.h (this dir): the default-config deltas
-#     (disable net/fs/time, enable threading + no-platform-entropy).
-#   - MBEDTLS_THREADING_ALT    -> threading_alt.h + mbedtls_threading_alt.c (this dir): route the
-#     mbedTLS mutexes to the FreeRTOS callbacks compiled into the mbedtls_config lib above.
-# Attached PUBLIC onto the upstream targets so (a) their own sources compile with them and (b) every
-# consumer inherits them; the include dir (this dir) lets their threading.h find threading_alt.h.
-# AmebaD-only: Bouffalo replaces the whole config via MBEDTLS_CONFIG_FILE=config-tls-generic.h (set
-# in component/bouffalo_sdk) and doesn't use the FreeRTOS threading-alt, so neither may leak there —
-# upstream threading.h pulls threading_alt.h on MBEDTLS_THREADING_ALT alone (no THREADING_C guard).
-# The HW-specific *_ALT (entropy/gcm/chachapoly) sit with THEIR impls in component/amebad/mbedtls_port.
-if("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
-    foreach(_t mbedcrypto mbedx509 mbedtls p256m everest)
-        if(TARGET ${_t})
-            target_compile_definitions(${_t} PUBLIC
-                MBEDTLS_USER_CONFIG_FILE="mbedtls_amebad_user_config.h"
-                MBEDTLS_THREADING_ALT)
-            target_include_directories(${_t} SYSTEM PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
-            # MBEDTLS_FS_IO is on (user config) -> x509_crt.c #include <dirent.h>, which newlib
-            # ships as a `#error` stub. component/syscall_config supplies a real <dirent.h> (+ the
-            # opendir/readdir defs); put its dir on the include path AHEAD of the sysroot so the
-            # mbedtls FS_IO sources (parse_file/parse_path) compile on this bare-metal target.
-            target_include_directories(${_t} BEFORE PRIVATE
-                "${AT_ROOT}/component/syscall_config")
-        endif()
-    endforeach()
-endif()
+# NO platform config here. All per-platform mbedTLS config (the MBEDTLS_USER_CONFIG_FILE deltas,
+# the MBEDTLS_*_ALT selections, and the include wiring) lives in each platform's mbedtls_port
+# (component/amebad/mbedtls_port, component/bouffalo_sdk/mbedtls_port), which attaches it onto the
+# upstream targets itself. This component only builds the vanilla upstream submodule + the shared
+# FreeRTOS threading-alt glue below.
 
 # `mbedtls_config` — the umbrella consumers link to pull the WHOLE upstream mbedTLS stack with one
 # target. It compiles the FreeRTOS threading-alt and re-exports the three upstream archives, so a

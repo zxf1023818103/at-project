@@ -581,7 +581,7 @@ static void setOptionalConfigurations( SSLContext_t * pSslContext,
     #ifdef MBEDTLS_SSL_MAX_FRAGMENT_LENGTH
 
         /* Enable the max fragment extension. AmebaD KM4: 2048 (not 4096) — it must match
-         * MBEDTLS_SSL_OUT_CONTENT_LEN (mbedtls_amebad_user_config.h, trimmed to 2 KB to fit the NS
+         * MBEDTLS_SSL_OUT_CONTENT_LEN (mbedtls_user_config.h, trimmed to 2 KB to fit the NS
          * heap), and 2 KB holds the largest record we send (the ~1.3 KB client Certificate). With
          * MBEDTLS_SSL_VARIABLE_BUFFER_LENGTH this also lets IN/OUT realloc down to 2 KB after the
          * handshake. See RFC 8449; smaller values are in "mbedtls/include/ssl.h".

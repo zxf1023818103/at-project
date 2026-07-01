@@ -28,9 +28,15 @@ endif()
 # The include dir carries gcm_alt.h / chachapoly_alt.h (the HW *_ALT context structs) by bare name.
 add_library(amebad_mbedtls_cfg INTERFACE)
 target_compile_definitions(amebad_mbedtls_cfg INTERFACE
+    # AmebaD mbedTLS config: upstream default + this port's mbedtls_user_config.h (deltas), plus
+    # the MBEDTLS_*_ALT selections that live with their impls here (not in the shared
+    # component/mbedtls_config, which is platform-agnostic).
+    MBEDTLS_USER_CONFIG_FILE="mbedtls_user_config.h"   # this dir: the default-config deltas
+    MBEDTLS_THREADING_ALT            # threading_alt.h + mbedtls_threading_alt.c (mbedtls_config)
     MBEDTLS_ENTROPY_HARDWARE_ALT)    # mbedtls_hardware_poll(): entropy_hardware_alt.c
 target_include_directories(amebad_mbedtls_cfg SYSTEM INTERFACE
-    "${CMAKE_CURRENT_SOURCE_DIR}")   # gcm_alt.h / chachapoly_alt.h
+    "${CMAKE_CURRENT_SOURCE_DIR}"           # mbedtls_user_config.h / gcm_alt.h / chachapoly_alt.h
+    "${MBEDTLS_CONFIG_DIR}")                # threading_alt.h
 
 # Opt-in: route the AEAD ciphers to the RTL8721D IPSEC HW engine — MBEDTLS_GCM_ALT (gcm_alt.{h,c})
 # + MBEDTLS_CHACHAPOLY_ALT (chachapoly_alt.{h,c}); both NS ROM, NSPE-direct. AES-GCM ~115x the
@@ -54,6 +60,11 @@ foreach(_t mbedcrypto mbedx509 mbedtls p256m everest)
     if(TARGET ${_t})
         target_link_libraries(${_t} PUBLIC amebad_mbedtls_cfg)
         target_compile_options(${_t} PRIVATE -w)   # silence vendor warnings under -Werror
+        # MBEDTLS_FS_IO stays on (user config) -> x509_crt.c #include <dirent.h>, which newlib
+        # ships as a `#error` stub. component/syscall_config supplies a real <dirent.h>; put its
+        # dir AHEAD of the sysroot so the FS_IO sources (parse_file/parse_path) compile.
+        target_include_directories(${_t} BEFORE PRIVATE
+            "${AT_ROOT}/component/syscall_config")
     endif()
 endforeach()
 

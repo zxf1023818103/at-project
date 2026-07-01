@@ -11,21 +11,23 @@
 #   HACC / PKA hardware crypto ALTs (always compiled, merged from the former
 #   bflb_mbedtls_hw_acc): aes / sha1 / sha256 / sha512 / ecp / bignum.
 #
-# The upstream MBEDTLS_*_ALT / MBEDTLS_ENTROPY_HARDWARE_ALT / MBEDTLS_PLATFORM_MS_TIME_ALT
-# macros are carried by bflb_mbedtls_config (config-tls-generic.h, now defined
-# unconditionally) — upstream is built unchanged and we layer on via those macros plus this
-# lib's strong overrides.
+# Config: the upstream DEFAULT mbedtls config + MBEDTLS_USER_CONFIG_FILE="mbedtls_user_config.h"
+# (this dir — the Bouffalo deltas). The bespoke config-tls-generic.h / bflb_mbedtls_config
+# component was removed; the shared component/mbedtls_config carries no platform config. The
+# `bflb_mbedtls_cfg` INTERFACE below carries that config wiring PLUS the HW-crypto ALT
+# selection, and is attached to both this lib and the upstream mbedtls targets (the latter in
+# the umbrella foreach) — a pure INTERFACE so it can reach upstream without the genex cycle
+# that blocks linking mbedtls_port itself onto mbedcrypto.
 #
 # The former net_sockets.c (lwip-backed mbedtls_net_*, MBEDTLS_NET_C is off / no callers)
 # was dropped — this lib has no lwip dependency.
 #
 # HACC / PKA hardware crypto, wired through the upstream MBEDTLS_*_ALT mechanism.
-# How it works (Mbed TLS up to v3.6.4): config (bflb_mbedtls_config) defines
-# MBEDTLS_<PRIMITIVE>_ALT unconditionally, upstream's <mbedtls/aes.h> then skips its own
-# context and `#include "aes_alt.h"` (so this dir must be on the include path), and
-# library/aes.c wraps its default impl in !defined(MBEDTLS_AES_ALT) so the alt is the sole
-# provider — no collision. All alt sources are compiled unconditionally (no per-primitive
-# toggles).
+# How it works (Mbed TLS up to v3.6.4): MBEDTLS_<PRIMITIVE>_ALT (in bflb_mbedtls_cfg below)
+# makes upstream's <mbedtls/aes.h> skip its own context and `#include "aes_alt.h"` (so this
+# dir must be on the include path), and library/aes.c wraps its default impl in
+# !defined(MBEDTLS_AES_ALT) so the alt is the sole provider — no collision. All alt sources
+# are compiled unconditionally (no per-primitive toggles).
 #
 # bignum is the odd one out: upstream library/bignum.c has NO whole-module _ALT hook, so
 # HW modexp (mbedtls_mpi_exp_mod on the PKA, bignum_alt.c) can't be selected by a macro.
@@ -65,9 +67,27 @@ target_include_directories(mbedtls_port PRIVATE
     "$<TARGET_PROPERTY:mbedcrypto,SOURCE_DIR>"
 )
 
-# Real-target deps. bflb_lhal — sec_trng + mtimer + SEC AES/SHA + PKA drivers. config —
-# MBEDTLS_CONFIG_FILE + the MBEDTLS_*_ALT macros.
+# Bouffalo mbedTLS config surface (a pure INTERFACE so it can attach onto the upstream mbedtls
+# targets without the genex cycle that blocks linking mbedtls_port itself onto mbedcrypto):
+#   - MBEDTLS_USER_CONFIG_FILE -> mbedtls_user_config.h (this dir): the default-config deltas.
+#   - MBEDTLS_*_ALT / ENTROPY_HARDWARE_ALT: the HACC/PKA + TRNG selections whose impls live here.
+# The include dir (this dir) carries both mbedtls_user_config.h and the *_alt.h context headers.
+# Attached onto mbedtls_port itself (below) AND onto the upstream targets (umbrella foreach).
+add_library(bflb_mbedtls_cfg INTERFACE)
+target_compile_definitions(bflb_mbedtls_cfg INTERFACE
+    MBEDTLS_USER_CONFIG_FILE="mbedtls_user_config.h"
+    MBEDTLS_SHA1_ALT
+    MBEDTLS_SHA256_ALT
+    MBEDTLS_SHA512_ALT
+    MBEDTLS_AES_ALT
+    MBEDTLS_ECP_ALT
+    MBEDTLS_ENTROPY_HARDWARE_ALT)
+target_include_directories(bflb_mbedtls_cfg SYSTEM INTERFACE
+    "${CMAKE_CURRENT_SOURCE_DIR}")   # mbedtls_user_config.h + *_alt.h
+
+# Real-target deps. bflb_lhal — sec_trng + mtimer + SEC AES/SHA + PKA drivers.
+# bflb_mbedtls_cfg — the config file + MBEDTLS_*_ALT macros (this lib's own sources need them).
 target_link_libraries(mbedtls_port PUBLIC
     bflb_lhal
-    bflb_mbedtls_config
+    bflb_mbedtls_cfg
 )

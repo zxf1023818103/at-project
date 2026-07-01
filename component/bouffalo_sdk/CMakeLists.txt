@@ -67,20 +67,18 @@ add_subdirectory(bflb_lwip_port)
 # when nothing links it.
 add_subdirectory(bflb_littlefs_port)
 
-# mbedtls port surface — split into config (headers) + port (runtime glue +
-# HACC/PKA-backed alt impls). Both are prereqs for the upstream mbedtls pull
-# immediately below, so they're added first. The port's HW-crypto ALT sources
-# are consumed via the MBEDTLS_*_ALT mechanism, so they only get linked in if a
-# consumer's call into upstream mbedcrypto pulls them in.
-add_subdirectory(bflb_mbedtls_config)
+# mbedtls port surface — mbedtls_port carries the runtime glue + HACC/PKA-backed alt impls AND
+# (via its bflb_mbedtls_cfg INTERFACE) the whole Bouffalo mbedTLS config: MBEDTLS_USER_CONFIG_FILE
+# + the MBEDTLS_*_ALT selections. Added before the upstream mbedtls pull below; its config
+# INTERFACE is attached onto the upstream targets in the foreach further down.
 add_subdirectory(mbedtls_port)
 
 # -------------------------------------------------------------------------
 # Upstream Mbed TLS v3.6.4 (component/mbedtls_config/mbedtls, clean upstream).
 # Pulled here — not in component/thirdparty/CMakeLists.txt — because the
-# upstream sources are unbuildable without bflb_mbedtls_config /
-# mbedtls_port headers, and nothing outside the Bouffalo SDK consumes
-# upstream mbedtls. Keeps the dependency one-directional.
+# upstream sources are unbuildable without the mbedtls_port config/headers,
+# and nothing outside the Bouffalo SDK consumes upstream mbedtls. Keeps the
+# dependency one-directional.
 #
 # Why v3.6.4 and not v3.6.5+: the 3.6.5 release reorganized the source
 # tree (most primitives moved under tf-psa-crypto/drivers/builtin/src/)
@@ -98,17 +96,12 @@ add_subdirectory(mbedtls_port)
 #   p256m         secp256r1 fast impl (3rdparty submodule)
 
 # The upstream option knobs (ENABLE_TESTING OFF, USE_STATIC_MBEDTLS_LIBRARY, …) + the
-# add_subdirectory of the submodule now live in component/mbedtls_config (the standard
-# "set options then add_subdirectory" wrapper). The Bouffalo-specific config is set HERE
-# first so it is inherited into that subdirectory: point upstream at the config wrapper
-# (config-tls-generic.h, carried by bflb_mbedtls_config) via -DMBEDTLS_CONFIG_FILE +
-# include_directories BEFORE the add, so every target the upstream tree creates
-# (mbedcrypto, mbedtls, mbedx509, p256m, everest, …) sees both the macro AND the path.
-add_compile_definitions(MBEDTLS_CONFIG_FILE="config-tls-generic.h")
-include_directories("${CMAKE_CURRENT_LIST_DIR}/bflb_mbedtls_config")
-# The port's alt headers (aes_alt.h etc.) need to be on the include path of every TU
-# because upstream's public headers #include "aes_alt.h" unconditionally when
-# MBEDTLS_AES_ALT is set (same for the header named by MBEDTLS_PLATFORM_STD_MEM_HDR).
+# add_subdirectory of the submodule live in component/mbedtls_config. Bouffalo uses the
+# upstream DEFAULT config + MBEDTLS_USER_CONFIG_FILE (mbedtls_user_config.h) — both carried by
+# mbedtls_port's bflb_mbedtls_cfg INTERFACE, attached onto the upstream targets in the foreach
+# below (no -DMBEDTLS_CONFIG_FILE here anymore).
+# The port's alt headers (aes_alt.h etc.) need to be on the include path of every TU because
+# upstream's public headers #include "aes_alt.h" unconditionally when MBEDTLS_AES_ALT is set.
 include_directories("${CMAKE_CURRENT_LIST_DIR}/mbedtls_port")
 
 add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../mbedtls_config"
@@ -119,29 +112,22 @@ add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../mbedtls_config"
 # targets so the config file resolves and the alt headers are visible
 # when MBEDTLS_*_ALT macros are on.
 #
-# mbedtls_port is NOT linked here — that would create a cycle
-# (port links mbedcrypto for upstream headers; doing the reverse would
-# break configuration). Instead we expose only port's source directory
-# to mbedcrypto (header edge, not symbol edge), so both the alt headers
-# (aes_alt.h etc.) and MBEDTLS_PLATFORM_STD_MEM_HDR resolve during
-# upstream compilation. Using
-# $<TARGET_PROPERTY:mbedtls_port,SOURCE_DIR> rather than its
-# INTERFACE_INCLUDE_DIRECTORIES is deliberate: port itself reads
-# mbedcrypto's INTERFACE_INCLUDE_DIRECTORIES (for the mbedtls/ public
-# headers), and feeding port's INTERFACE includes back into mbedcrypto
-# would close a generator-expression cycle. SOURCE_DIR is a fixed
-# string, so the propagation stays one-way.
-#
-# bflb_lhal IS link-attached: with the MBEDTLS_*_ALT macros always on, upstream's
-# <mbedtls/aes.h>/<sha*.h>/<ecp.h> pull the alt struct headers (aes_alt.h …), which
-# in turn #include the bflb_lhal SEC driver headers (bflb_sec_aes.h → bflb_core.h →
-# the chip std register headers). Link propagation carries bflb_lhal's whole transitive
-# include interface (incl. bl<chip>_std) onto every upstream mbedtls TU. No cycle:
-# bflb_lhal doesn't reference mbedcrypto. everest/p256m need it too (they pull psa/crypto
-# → sha1.h). bflb_lhal is add_subdirectory'd further down — a forward link ref is fine.
+# Attach the Bouffalo mbedTLS config onto the upstream targets:
+#   - bflb_mbedtls_cfg (INTERFACE from mbedtls_port): MBEDTLS_USER_CONFIG_FILE + the MBEDTLS_*_ALT
+#     selections + the include dir for mbedtls_user_config.h / the *_alt.h headers. It's a pure
+#     INTERFACE so it can attach onto upstream without the genex cycle that blocks linking
+#     mbedtls_port itself onto mbedcrypto (port reads mbedcrypto's INTERFACE_INCLUDE_DIRECTORIES).
+#   - the alt struct headers also need port's SOURCE_DIR on every TU (upstream's <mbedtls/aes.h>
+#     #includes "aes_alt.h" when MBEDTLS_AES_ALT is set); fed via SOURCE_DIR (a fixed string,
+#     one-way — feeding port's INTERFACE includes back would close the genex cycle).
+#   - bflb_lhal: the alt headers #include the SEC driver headers (bflb_sec_aes.h → bflb_core.h →
+#     the chip std register headers); link propagation carries bflb_lhal's whole transitive include
+#     interface (incl. bl<chip>_std) onto every upstream mbedtls TU. No cycle (bflb_lhal doesn't
+#     reference mbedcrypto). everest/p256m need it too (they pull psa/crypto → sha1.h). bflb_lhal
+#     is add_subdirectory'd further down — a forward link ref is fine.
 foreach(_t mbedcrypto mbedtls mbedx509 everest p256m)
     if(TARGET ${_t})
-        target_link_libraries(${_t} PUBLIC bflb_mbedtls_config bflb_lhal)
+        target_link_libraries(${_t} PUBLIC bflb_mbedtls_cfg bflb_lhal)
         target_include_directories(${_t} PUBLIC
             "$<TARGET_PROPERTY:mbedtls_port,SOURCE_DIR>"
         )
