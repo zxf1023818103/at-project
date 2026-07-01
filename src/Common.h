@@ -64,7 +64,8 @@ extern write_reconnect_ptr p_roaming_start_callback;
 #include <bluetooth.h>
 #include <l2cap.h>
 #include <gatt.h>
-#include <hci_core.h>
+// hci_core.h was the Zephyr host's internal HCI header; the host was removed from
+// bflb_zypher_bluetooth (HCI-transport-only build), so it no longer exists.
 #include <hci_driver.h>
 
 #define API_TASK_STACK_SIZE 256*12
