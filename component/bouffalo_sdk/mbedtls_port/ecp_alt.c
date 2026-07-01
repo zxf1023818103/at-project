@@ -88,6 +88,8 @@
 #include "mbedtls/error.h"
 #ifdef CONFIG_MBEDTLS_V2
 #include "mbedtls/bn_mul.h"
+#else
+#include "bn_mul.h"   /* v3: library-private header (MBEDTLS_BYTES_TO_T_UINT_8 for the curve consts) */
 #endif
 #include "ecp_invasive.h"
 
@@ -2258,9 +2260,13 @@ int mbedtls_ecp_muladd( mbedtls_ecp_group *grp, mbedtls_ecp_point *R,
 
 #if defined(MBEDTLS_ECP_MONTGOMERY_ENABLED)
 #if defined(MBEDTLS_ECP_DP_CURVE25519_ENABLED)
-#define ECP_MPI_INIT(s, n, p) {s, (n), (mbedtls_mpi_uint *)(p)}
+/* Designated initializers (order-independent): mbedtls_mpi's field order changed across
+ * versions (in v3.6.4 the limb pointer `p` is the FIRST field), so the old positional
+ * {s, n, p} form assigned the integer sign to the pointer field -> "initializer element is
+ * not constant". Match upstream ecp.c's designated form. */
+#define ECP_MPI_INIT(_p, _n) { .p = (mbedtls_mpi_uint *) (_p), .s = 1, .n = (_n) }
 #define ECP_MPI_INIT_ARRAY(x)   \
-    ECP_MPI_INIT(1, sizeof(x) / sizeof(mbedtls_mpi_uint), x)
+    ECP_MPI_INIT(x, sizeof(x) / sizeof(mbedtls_mpi_uint))
 /*
  * Constants for the two points other than 0, 1, -1 (mod p) in
  * https://cr.yp.to/ecdh.html#validate

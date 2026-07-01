@@ -33,11 +33,15 @@
 #include "mbedtls/platform.h"
 #include "mbedtls/platform_util.h"
 #include "mbedtls/error.h"
-#if defined(MBEDTLS_PADLOCK_C)
-#include "mbedtls/padlock.h"
+/* padlock.h / aesni.h are x86-only (library-private headers, no "mbedtls/" prefix). Guard the
+ * includes with the SAME arch condition as their use sites below (lines using MBEDTLS_HAVE_X86 /
+ * MBEDTLS_HAVE_X86_64) so they don't fire on non-x86 targets where MBEDTLS_PADLOCK_C /
+ * MBEDTLS_AESNI_C may still be defined by the upstream default config. */
+#if defined(MBEDTLS_PADLOCK_C) && defined(MBEDTLS_HAVE_X86)
+#include "padlock.h"
 #endif
-#if defined(MBEDTLS_AESNI_C)
-#include "mbedtls/aesni.h"
+#if defined(MBEDTLS_AESNI_C) && defined(MBEDTLS_HAVE_X86_64)
+#include "aesni.h"
 #endif
 
 #include "mbedtls/platform.h"

@@ -26,16 +26,4 @@
  *      mbedtls_hardware_poll() is entropy_poll_alt.c, backed by the SEC TRNG). ------------- */
 #define MBEDTLS_NO_PLATFORM_ENTROPY
 
-/* ---- Trim what the HACC/PKA alt sources can't build against ------------------------- *
- * The upstream default enables more than the old bespoke config, and the bouffalo alt impls
- * (aes_alt.c / ecp_alt.c, forks tuned for a restricted set) don't compile against all of it:
- *   - x86 accelerators: aes_alt.c #includes mbedtls/padlock.h / aesni.h (library-private in
- *     3.6.4) under MBEDTLS_PADLOCK_C / MBEDTLS_AESNI_C; irrelevant on RISC-V.
- *   - Montgomery curves: ecp_alt.c's x25519/x448 constant tables aren't constant-initializable
- *     in this port. WPA/WPA3-SAE + TLS here use the NIST short-Weierstrass curves anyway. */
-#undef MBEDTLS_PADLOCK_C
-#undef MBEDTLS_AESNI_C
-#undef MBEDTLS_ECP_DP_CURVE25519_ENABLED
-#undef MBEDTLS_ECP_DP_CURVE448_ENABLED
-
 #endif /* MBEDTLS_USER_CONFIG_H */
