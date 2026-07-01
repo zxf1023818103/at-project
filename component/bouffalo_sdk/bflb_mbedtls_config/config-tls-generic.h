@@ -19,28 +19,17 @@
 
 #define MBEDTLS_NO_PLATFORM_ENTROPY
 
-// Hash HW
-#if defined(CONFIG_MBEDTLS_SHA1_USE_HW)
+// HACC / PKA hardware crypto — always on. These route the primitives to the
+// alt implementations in component/bouffalo_sdk/mbedtls_port (aes_alt.c /
+// sha*_alt.c / ecp_alt.c). Defining the macro guards the upstream software impl
+// out (aes.c / sha*.c / ecp.c wrap themselves in !defined(MBEDTLS_*_ALT)), so the
+// alt is the sole provider. (bignum HW has no upstream _ALT hook, so bignum_alt.c
+// stays a link-order fallback — see component/bouffalo_sdk/CMakeLists.txt.)
 #define MBEDTLS_SHA1_ALT
-#endif
-
-#if defined(CONFIG_MBEDTLS_SHA256_USE_HW)
 #define MBEDTLS_SHA256_ALT
-#endif
-
-#if defined(CONFIG_MBEDTLS_SHA512_USE_HW)
 #define MBEDTLS_SHA512_ALT
-#endif
-
-// AES HW
-#if defined(CONFIG_MBEDTLS_AES_USE_HW)
 #define MBEDTLS_AES_ALT
-#endif
-
-// ECC HW
-#if defined(CONFIG_MBEDTLS_ECC_USE_HW)
 #define MBEDTLS_ECP_ALT
-#endif
 
 #if defined(CONFIG_MBEDTLS_ZEROIZE_ALT)
 #define MBEDTLS_PLATFORM_ZEROIZE_ALT

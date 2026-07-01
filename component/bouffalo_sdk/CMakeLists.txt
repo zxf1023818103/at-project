@@ -67,20 +67,19 @@ add_subdirectory(bflb_lwip_port)
 # when nothing links it.
 add_subdirectory(bflb_littlefs_port)
 
-# mbedtls port surface — split into config (headers) + port (runtime
-# glue) + hw_acc (HACC-backed alt impls). All three are prereqs for the
-# upstream mbedtls pull immediately below, so they're added first. hw_acc
-# is consumed via the MBEDTLS_*_ALT mechanism, so its sources only get
-# linked in if a consumer's call into upstream mbedcrypto pulls them in.
+# mbedtls port surface — split into config (headers) + port (runtime glue +
+# HACC/PKA-backed alt impls). Both are prereqs for the upstream mbedtls pull
+# immediately below, so they're added first. The port's HW-crypto ALT sources
+# are consumed via the MBEDTLS_*_ALT mechanism, so they only get linked in if a
+# consumer's call into upstream mbedcrypto pulls them in.
 add_subdirectory(bflb_mbedtls_config)
-add_subdirectory(bflb_mbedtls_port)
-add_subdirectory(bflb_mbedtls_hw_acc)
+add_subdirectory(mbedtls_port)
 
 # -------------------------------------------------------------------------
 # Upstream Mbed TLS v3.6.4 (component/mbedtls_config/mbedtls, clean upstream).
 # Pulled here — not in component/thirdparty/CMakeLists.txt — because the
 # upstream sources are unbuildable without bflb_mbedtls_config /
-# _port / _hw_acc headers, and nothing outside the Bouffalo SDK consumes
+# mbedtls_port headers, and nothing outside the Bouffalo SDK consumes
 # upstream mbedtls. Keeps the dependency one-directional.
 #
 # Why v3.6.4 and not v3.6.5+: the 3.6.5 release reorganized the source
@@ -107,41 +106,60 @@ add_subdirectory(bflb_mbedtls_hw_acc)
 # (mbedcrypto, mbedtls, mbedx509, p256m, everest, …) sees both the macro AND the path.
 add_compile_definitions(MBEDTLS_CONFIG_FILE="config-tls-generic.h")
 include_directories("${CMAKE_CURRENT_LIST_DIR}/bflb_mbedtls_config")
-# hw_acc headers (aes_alt.h etc.) likewise need to be on the include path of every TU
+# The port's alt headers (aes_alt.h etc.) need to be on the include path of every TU
 # because upstream's public headers #include "aes_alt.h" unconditionally when
-# MBEDTLS_AES_ALT is set.
-include_directories("${CMAKE_CURRENT_LIST_DIR}/bflb_mbedtls_hw_acc")
-# Same story for the port header named by MBEDTLS_PLATFORM_STD_MEM_HDR.
-include_directories("${CMAKE_CURRENT_LIST_DIR}/bflb_mbedtls_port")
+# MBEDTLS_AES_ALT is set (same for the header named by MBEDTLS_PLATFORM_STD_MEM_HDR).
+include_directories("${CMAKE_CURRENT_LIST_DIR}/mbedtls_port")
 
 add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../mbedtls_config"
                  ${CMAKE_BINARY_DIR}/component/mbedtls_config
                  EXCLUDE_FROM_ALL)
 
-# Wire the Bouffalo include paths (config + hw_acc) onto the upstream
+# Wire the Bouffalo include paths (config + port) onto the upstream
 # targets so the config file resolves and the alt headers are visible
 # when MBEDTLS_*_ALT macros are on.
 #
-# bflb_mbedtls_port is NOT linked here — that would create a cycle
+# mbedtls_port is NOT linked here — that would create a cycle
 # (port links mbedcrypto for upstream headers; doing the reverse would
 # break configuration). Instead we expose only port's source directory
-# to mbedcrypto (header edge, not symbol edge), so
-# MBEDTLS_PLATFORM_STD_MEM_HDR="mbedtls_port_bouffalo_sdk.h" resolves
-# during upstream compilation. Using
-# $<TARGET_PROPERTY:bflb_mbedtls_port,SOURCE_DIR> rather than its
+# to mbedcrypto (header edge, not symbol edge), so both the alt headers
+# (aes_alt.h etc.) and MBEDTLS_PLATFORM_STD_MEM_HDR resolve during
+# upstream compilation. Using
+# $<TARGET_PROPERTY:mbedtls_port,SOURCE_DIR> rather than its
 # INTERFACE_INCLUDE_DIRECTORIES is deliberate: port itself reads
 # mbedcrypto's INTERFACE_INCLUDE_DIRECTORIES (for the mbedtls/ public
 # headers), and feeding port's INTERFACE includes back into mbedcrypto
 # would close a generator-expression cycle. SOURCE_DIR is a fixed
 # string, so the propagation stays one-way.
-foreach(_t mbedcrypto mbedtls mbedx509)
-    target_link_libraries(${_t} PUBLIC bflb_mbedtls_config)
-    target_include_directories(${_t} PUBLIC
-        "$<TARGET_PROPERTY:bflb_mbedtls_hw_acc,SOURCE_DIR>"
-        "$<TARGET_PROPERTY:bflb_mbedtls_port,SOURCE_DIR>"
-    )
-    target_compile_options(${_t} PRIVATE -w)
+#
+# bflb_lhal IS link-attached: with the MBEDTLS_*_ALT macros always on, upstream's
+# <mbedtls/aes.h>/<sha*.h>/<ecp.h> pull the alt struct headers (aes_alt.h …), which
+# in turn #include the bflb_lhal SEC driver headers (bflb_sec_aes.h → bflb_core.h →
+# the chip std register headers). Link propagation carries bflb_lhal's whole transitive
+# include interface (incl. bl<chip>_std) onto every upstream mbedtls TU. No cycle:
+# bflb_lhal doesn't reference mbedcrypto. everest/p256m need it too (they pull psa/crypto
+# → sha1.h). bflb_lhal is add_subdirectory'd further down — a forward link ref is fine.
+foreach(_t mbedcrypto mbedtls mbedx509 everest p256m)
+    if(TARGET ${_t})
+        target_link_libraries(${_t} PUBLIC bflb_mbedtls_config bflb_lhal)
+        target_include_directories(${_t} PUBLIC
+            "$<TARGET_PROPERTY:mbedtls_port,SOURCE_DIR>"
+        )
+        target_compile_options(${_t} PRIVATE -w)
+    endif()
 endforeach()
+
+# Swap the bignum module for the Bouffalo PKA fork. Unlike aes/sha/ecp, upstream
+# library/bignum.c has no whole-module MBEDTLS_*_ALT guard, so we can't select the HW
+# modexp with a macro. Instead: exclude upstream's bignum.c from mbedcrypto (HEADER_FILE_ONLY
+# keeps it in the target's file list but tells the generator not to compile it), and let
+# mbedtls_port's forked bignum.c + bignum_alt.c (HW mbedtls_mpi_exp_mod) provide the
+# mbedtls_mpi_* API instead. TARGET_DIRECTORY sets the property in mbedcrypto's dir scope
+# (the source is added there). bignum_core.c / bignum_mod*.c stay upstream.
+set_source_files_properties(
+    "${CMAKE_CURRENT_LIST_DIR}/../mbedtls_config/mbedtls/library/bignum.c"
+    TARGET_DIRECTORY mbedcrypto
+    PROPERTIES HEADER_FILE_ONLY ON)
 # Utility libs ported one-by-one from
 # platform/bouffalo_sdk/components/utils/. All are header-only INTERFACEs
 # or small STATIC libs; pull them all in unconditionally — they're tiny
@@ -276,15 +294,15 @@ if(TARGET rfparam)
 endif()
 
 # Port adapter libs that always get built (bflb_lwip_port / bflb_littlefs_port
-# / bflb_mbedtls_port carry headers downstream consumers transitively need
-# even when nothing references the symbols). Plus the Zephyr-derived BLE host
-# when CONFIG_BLUETOOTH is on. Stitching them in the umbrella here so that
-# downstream projects don't have to know which sub-targets exist — they just
-# do `target_link_libraries(<exe> PRIVATE bouffalo_sdk)`.
+# carry headers downstream consumers transitively need even when nothing
+# references the symbols). Plus the Zephyr-derived BLE host when CONFIG_BLUETOOTH
+# is on. Stitching them in the umbrella here so that downstream projects don't
+# have to know which sub-targets exist — they just do
+# `target_link_libraries(<exe> PRIVATE bouffalo_sdk)`.
+# (mbedtls_port is linked further down, AFTER the upstream mbedtls archives — see there.)
 target_link_libraries(bouffalo_sdk INTERFACE
     bflb_lwip_port
     bflb_littlefs_port
-    bflb_mbedtls_port
 )
 if(TARGET bflb_zypher_bluetooth)
     target_link_libraries(bouffalo_sdk INTERFACE bflb_zypher_bluetooth)
@@ -296,11 +314,16 @@ endif()
 # blocks above. Sticking them on the umbrella here keeps the dependency
 # one-directional: third-party doesn't peek at bouffalo_sdk.
 #
-# mbedcrypto / mbedtls / mbedx509 + bflb_mbedtls_hw_acc: hw_acc used to
-# PUBLIC-link into mbedcrypto directly, but that closed an include-cycle
-# once hw_acc started pulling mbedcrypto's INTERFACE_INCLUDE_DIRECTORIES.
-# Routing both through the umbrella keeps symbol resolution intact without
-# the cycle.
+# mbedcrypto / mbedtls / mbedx509: the upstream archives. mbedtls_port (which
+# now also carries the HACC/PKA MBEDTLS_*_ALT impls, formerly bflb_mbedtls_hw_acc)
+# is linked AFTER them ON PURPOSE: those alt impls define the same
+# mbedtls_sha*/aes/ecp/bignum symbols as upstream, and the MBEDTLS_*_ALT macros
+# don't currently reach the upstream compile (upstream still emits the software
+# impls), so within the link group the alt objects must come last — upstream
+# resolves the symbols first and the alt members are simply never pulled (they
+# act as fallbacks). Linking mbedtls_port before mbedcrypto pulls both and the
+# linker reports multiple-definition. The port's platform hooks (entropy /
+# timing) still resolve fine via the --start/--end-group re-scan.
 target_link_libraries(bouffalo_sdk INTERFACE
     zlibstatic
     cjson
@@ -310,7 +333,7 @@ target_link_libraries(bouffalo_sdk INTERFACE
     mbedtls
     mbedcrypto
     mbedx509
-    bflb_mbedtls_hw_acc
+    mbedtls_port
 )
 
 # Bouffalo SDK keeps its -march/-mabi/include flags on the sdk_intf_lib

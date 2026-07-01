@@ -77,7 +77,7 @@ add_subdirectory(lfs_image)
 #                        Umbrella INTERFACE target `bouffalo_sdk` is what
 #                        consumers link. Also pulls in upstream lwip
 #                        (via bflb_lwip_port) and upstream mbedtls (after
-#                        the three bflb_mbedtls_* port adapters).
+#                        bflb_mbedtls_config + the mbedtls_port adapter).
 #   lwip_dhcpd           Bouffalo's raw DHCP-server-on-lwip app, lifted
 #                        out of the lwip submodule so it can depend on
 #                        the upstream-clean lwip + freertos_kernel.
