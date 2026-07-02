@@ -20,6 +20,7 @@ Platform SDKs are managed as git submodules under `platform/`. Run `git submodul
 - Flash layout: derived from `platform/bouffalo_sdk/bsp/board/<BOARD>/config/partition_cfg_*.toml`; `project/bouffalo/tools/build_whole.py` reads it and drives `BLFlashCommand --build` to produce `whole_flash_data.bin`
 - Security/eFuse: the chip's eFuse security-field inventory (SF-AES flash encryption / RSA-ECC secure boot / ROTPK-hash / key slots / debug locks + Sec_Eng/PKA/TZC), with an AmebaD cross-reference: `doc/bouffalo_keys.md`
 - ROM symbols: the per-chip boot-ROM API inventory (fixed function-pointer table + index; BL602 `RomDriver_*` @0x21010800 / BL616 `ROM_API_INDEX_*` @0x90015800 / BL616CL @0x90019000; E907 chips add a `romapi_patch` layer), module breakdown, and how it relates to the crypto path (TRNG/AES/SHA/PKA do NOT go through ROM): `doc/bouffalo_rom_symbols.md`
+- TrustZone / TF-M feasibility: why BL616's E907 (RISC-V, M/U + PMP only, no ARM-style TrustZone-M) can't run the AmebaD-style TF-M secure world — vendor assessment (from-scratch, Zephyr, only 618DG evaluated feasible; PMP entries exhausted), the AmebaD Cortex-M33 contrast, and the project takeaway (no secure world on BL616; HACC/PKA crypto is NS-direct so needs no TZ; key protection falls back to eFuse): `doc/bouffalo_trustzone.md`
 
 ### Realtek Ameba D (RTL8721D / RTL8710C)
 - SDK: `platform/ameba-rtos-d` (driver-only, dual-core: KM0 LP + KM4 HP)
