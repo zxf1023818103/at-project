@@ -265,3 +265,45 @@ Bouffalo 没有 TF-M / PSA-FF（见 §PSA 支持），但**隔离硬件是齐的
 - BL616 头文件里 `ef_cfg_0` 的 bitfield 结构体与命名 `*_POS` 宏在个别相邻位上不完全自洽（不同 SDK 代次）；
   安全字段以 **`.c` 实际用法 + 命名 `*_POS/_MSK` 宏**为准。
 - 没有 OpenTitan / Ibex / Caliptra 任何痕迹——三颗都是博流自带安全 IP，不是 RoT 协处理器宿主。
+
+---
+
+## BL616/BL618 Secure Boot 官方应用手册要点
+
+来源:`doc/BL616_BL618_Secure_Boot_Application_Note_v2.0.pdf`(博流 2023,已随仓)。上面的字段清单是从
+SDK 头文件反推的;这份官方 AppNote 把 BL616/618 的具体数值/流程钉死了,和上文互为印证。
+
+### 信任链(BootROM → Bootloader → App)
+每一级都:**AES CTR/XTS 解密**(密钥来自 eFuse,Flash 控制器 XIP 时透明解)+ **ECDSA 验签**。
+BootROM 是 Root of Trust,跳到 Bootloader 后**自保护**(Bootloader 阶段读不到/执行不了 BootROM)。
+
+### 签名(ECDSA,不是 amebad 的 Ed25519!)
+- **算法 ECDSA,曲线 SECP256R1(P-256)**,Boot2 和 App 都签。密钥用 OpenSSL 生成:
+  `openssl ecparam -name secp256r1 -genkey -noout -out privatekey_uecc.pem` + `-pubout publickey_uecc.pem`。
+- 工具:`bflb_iot_tool --chipname bl616 --boot2 ... --firmware ... --pt <partition.toml> --dts ... --pk publickey_uecc.pem --sk privatekey_uecc.pem --build`。
+- **签名后固件头**:偏移 **0x100 存 64 字节公钥**,偏移 **0x148 存 64 字节签名**;固件体不变(只在头部加公钥+签名)。
+- **ROTPK 机制**:BootROM/Bootloader 从固件头读公钥 → 算 **SHA256(公钥)** → 和 eFuse 里烧的 **公钥 hash(ROTPK)** 比 →
+  再用镜像 SHA256 验签。**eFuse 存的是公钥的 SHA256(32B),不是整把公钥。** `efusedata.bin` 偏移 **0x1C** 存这 32B。
+- 对比 amebad:amebad boot ROM 用 **Ed25519**(见 `doc/amebad_keys.md`),BL616 用 **ECDSA-P256**——所以 amebad 的
+  AWS-Signer(ECDSA)在 boot 验签用不了,BL616 反而天然吻合 ECDSA-P256。
+
+### 加密(Flash AES CTR/XTS = amebad RSIP 的等价物)
+- **Flash OTF 解密单元:AES CTR/XTS**,长度 128/192/256,**推荐 AES-CTR-128**;XIP 读时硬件自动解,无软件参与,
+  密钥读保护后任何软件读不到。工具:`bflb_iot_tool ... --key "<32hex>" --iv "<32hex>" --build`(默认 Boot2 与 App 同 key/IV)。
+- **加密后固件头**:**AES IV(16B)存在固件头偏移 0x100**,随固件写 flash;bootheader 占 flash `0x10000~0x10FFF`,实体从 `0x11000` 起。
+- **加密+签名同时**:先加密再签,头部同时含公钥+签名+AES IV(IV 排在公钥/签名之后)。
+- AES key 存 `efusedata.bin` 偏移 **0x3C**(AES-128=16B / AES-256=32B),可设读保护。
+
+### eFuse 版图(权威数值)
+- **4096 bits = 512 字节,Base Address `0x20056000`**;可存签名公钥 SHA256 / 镜像加密密钥 / 用户数据密钥 / 安全启动配置 / 用户自定义数据。
+- 关键字段(AppNote 表 4.1):`0x1C~0x3C` = **Bootloader 公钥 hash**(ROTPK,Slot0/1);`0x1A0~0x1C0` = **App 公钥 hash**;
+  `0x180~0x1A0` = **Anti-Rollback version**;`0x3C` 起 = Bootloader/APP XIP AES key、Sec Eng AES key slots(每 slot 16B);
+  `0x7C/0xFC/0x1FC` 处是 eFuse 读写锁。每字段可**独立烧读写保护**(锁后不可读不可改)。
+- **应用数据加解密**:Sec Eng AES 可用 eFuse 里的固定密钥(按 16B slot 组织,`key_sel` 选 slot),API
+  `Sec_Eng_AES_Set_Key_IV_BE(SEC_ENG_AES_ID0, SEC_ENG_AES_KEY_HW, key, iv)`(keySrc=HW 即取 eFuse)。
+
+### Anti-Rollback / 量产 / JTAG
+- **Anti-Rollback**:Bootloader 启动时查 App 版本号 ≥ eFuse 安全版本号才启;OTA 前也先查、小于就直接放弃下载。
+- **量产/烧录**:`bflb_iot_tool --chipname bl616 --port <COM> --baudrate 2000000 --addr 0x0 --firmware whole_flash_data.bin --efuse efusedata.bin --single`。
+  下载模式:按住 BOOT_SEL → 按 CHIP_EN/Reset → 松 Reset → 松 BOOT_SEL。
+- **Security Debug**:JTAG 可设**密码模式**(输对密码才开)或**关闭模式**(永久禁 JTAG),防第三方经 JTAG 窃取固件/数据。
