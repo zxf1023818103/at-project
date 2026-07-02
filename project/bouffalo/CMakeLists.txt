@@ -32,3 +32,8 @@ target_include_directories(at PRIVATE
 )
 
 target_link_libraries(at PRIVATE bouffalo_sdk)
+
+# NimBLE host: main.cpp starts the shared nimble_start() from a boot task under this macro.
+if(CONFIG_NIMBLE_HOST)
+    target_compile_definitions(at PRIVATE CONFIG_NIMBLE_HOST)
+endif()

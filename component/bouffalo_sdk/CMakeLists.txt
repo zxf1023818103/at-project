@@ -68,7 +68,7 @@ add_subdirectory(bflb_lwip_port)
 add_subdirectory(bflb_littlefs_port)
 
 # mbedtls port surface — mbedtls_port carries the runtime glue + HACC/PKA-backed alt impls AND
-# (via its bflb_mbedtls_cfg INTERFACE) the whole Bouffalo mbedTLS config: MBEDTLS_USER_CONFIG_FILE
+# (via its mbedtls_cfg INTERFACE) the whole Bouffalo mbedTLS config: MBEDTLS_USER_CONFIG_FILE
 # + the MBEDTLS_*_ALT selections. Added before the upstream mbedtls pull below; its config
 # INTERFACE is attached onto the upstream targets in the foreach further down.
 add_subdirectory(mbedtls_port)
@@ -98,7 +98,7 @@ add_subdirectory(mbedtls_port)
 # The upstream option knobs (ENABLE_TESTING OFF, USE_STATIC_MBEDTLS_LIBRARY, …) + the
 # add_subdirectory of the submodule live in component/mbedtls_config. Bouffalo uses the
 # upstream DEFAULT config + MBEDTLS_USER_CONFIG_FILE (mbedtls_user_config.h) — both carried by
-# mbedtls_port's bflb_mbedtls_cfg INTERFACE, attached onto the upstream targets in the foreach
+# mbedtls_port's mbedtls_cfg INTERFACE, attached onto the upstream targets in the foreach
 # below (no -DMBEDTLS_CONFIG_FILE here anymore).
 # The port's alt headers (aes_alt.h etc.) need to be on the include path of every TU because
 # upstream's public headers #include "aes_alt.h" unconditionally when MBEDTLS_AES_ALT is set.
@@ -113,7 +113,7 @@ add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../mbedtls_config"
 # when MBEDTLS_*_ALT macros are on.
 #
 # Attach the Bouffalo mbedTLS config onto the upstream targets:
-#   - bflb_mbedtls_cfg (INTERFACE from mbedtls_port): MBEDTLS_USER_CONFIG_FILE + the MBEDTLS_*_ALT
+#   - mbedtls_cfg (INTERFACE from mbedtls_port): MBEDTLS_USER_CONFIG_FILE + the MBEDTLS_*_ALT
 #     selections + the include dir for mbedtls_user_config.h / the *_alt.h headers. It's a pure
 #     INTERFACE so it can attach onto upstream without the genex cycle that blocks linking
 #     mbedtls_port itself onto mbedcrypto (port reads mbedcrypto's INTERFACE_INCLUDE_DIRECTORIES).
@@ -127,10 +127,16 @@ add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../mbedtls_config"
 #     is add_subdirectory'd further down — a forward link ref is fine.
 foreach(_t mbedcrypto mbedtls mbedx509 everest p256m)
     if(TARGET ${_t})
-        target_link_libraries(${_t} PUBLIC bflb_mbedtls_cfg bflb_lhal)
+        target_link_libraries(${_t} PUBLIC mbedtls_cfg bflb_lhal)
         target_include_directories(${_t} PUBLIC
             "$<TARGET_PROPERTY:mbedtls_port,SOURCE_DIR>"
         )
+        # MBEDTLS_FS_IO stays on (shared user config) -> x509_crt.c #include <dirent.h>, which the
+        # t-head newlib ships as a `#error` stub. component/syscall_config supplies a real
+        # <dirent.h>; put its dir FIRST so it shadows the stub. (parse_path is unreferenced here, so
+        # it just needs to compile -> dead-strips at link; no opendir/readdir link dep.)
+        target_include_directories(${_t} BEFORE PRIVATE
+            "${AT_ROOT}/component/syscall_config")
         target_compile_options(${_t} PRIVATE -w)
     endif()
 endforeach()
@@ -223,6 +229,11 @@ if(CONFIG_BLUETOOTH)
             "CONFIG_BLUETOOTH: unsupported BOUFFALO_CHIP '${BOUFFALO_CHIP}' "
             "(blecontroller / btblecontroller .a pruned to bl602/bl616/bl616cl).")
     endif()
+
+    # Apache NimBLE host on top of the on-chip controller (structured HCI).
+    if(CONFIG_NIMBLE_HOST)
+        add_subdirectory(nimble_port)
+    endif()
 endif()
 
 add_library(bouffalo_sdk INTERFACE)
@@ -303,6 +314,10 @@ if(TARGET blecontroller)
 endif()
 if(TARGET btblecontroller)
     target_link_libraries(bouffalo_sdk INTERFACE btblecontroller)
+endif()
+# NimBLE host (pulls its mbedcrypto/mbedtls_config deps + the controller transitively).
+if(TARGET nimble)
+    target_link_libraries(bouffalo_sdk INTERFACE nimble)
 endif()
 
 # Cross-platform third-party libs from component/thirdparty/ (built by its

@@ -4,10 +4,12 @@
 #   - the config + header surface: our syscfg.h overrides (include/syscfg/syscfg.h)
 #     plus every upstream NimBLE public include dir;
 #   - the portable application + SM-crypto glue, compiled into the `nimble_config`
-#     lib: nimble_app.c (amebad_nimble_start() — GAP/GATT sample peripheral + host
-#     task) and mbedtls_sm_glue.c (SM AES/AES-CMAC/ECDH P-256 over mbedTLS,
-#     replacing NimBLE's bundled tinycrypt AES + micro-ecc). Both use plain printf
-#     (newlib -> console), no platform logger.
+#     lib: nimble_app.c (SHARED nimble_start() — GAP/GATT sample peripheral + host
+#     task, platform specifics behind __weak hooks) and mbedtls_sm_glue.c (SM
+#     AES/AES-CMAC/ECDH P-256 over mbedTLS, replacing NimBLE's bundled tinycrypt AES
+#     + micro-ecc). Both use plain printf (newlib -> console), no platform logger.
+#     (Bouffalo compiles the same nimble_app.c/mbedtls_sm_glue.c by path in its own
+#     nimble lib rather than linking this; AmebaD links this lib.)
 #
 # The platform-specific transport + coex live in the port (component/amebad/
 # nimble_port), which compiles the upstream NimBLE sources and links this. The two
@@ -23,7 +25,7 @@
 set(_nb "${AT_ROOT}/component/nimble_config/nimble")
 
 add_library(nimble_config STATIC EXCLUDE_FROM_ALL
-    "${CMAKE_CURRENT_SOURCE_DIR}/nimble_app.c"         # amebad_nimble_start() + host task (printf)
+    "${CMAKE_CURRENT_SOURCE_DIR}/nimble_app.c"         # shared nimble_start() + host task (printf)
     "${CMAKE_CURRENT_SOURCE_DIR}/mbedtls_sm_glue.c"    # SM AES/ECDH on upstream mbedTLS (replaces tinycrypt + the old wolfCrypt glue)
     "${CMAKE_CURRENT_SOURCE_DIR}/ble_store_lfs.c"      # LittleFS-persistent BLE store (bonds survive reboot)
 )
@@ -61,7 +63,7 @@ target_link_libraries(nimble_config PUBLIC FreeRTOS)
 # mbedTLS headers + the AmebaD MBEDTLS_USER_CONFIG_FILE for mbedtls_sm_glue.c — COMPILE
 # requirements only, NOT a link edge (the mbedtls_* symbols resolve via app_km4's
 # cross_refs LINK_GROUP, which lists mbedcrypto + mbedtls_port). mbedcrypto carries
-# the amebad config (via amebad_mbedtls_cfg); the gen-exprs resolve at generate regardless
+# the amebad config (via mbedtls_cfg); the gen-exprs resolve at generate regardless
 # of subdir order. (wolfCrypt migration — see component/amebad/mbedtls_port.)
 target_include_directories(nimble_config SYSTEM PRIVATE
     $<TARGET_PROPERTY:mbedcrypto,INTERFACE_INCLUDE_DIRECTORIES>)
@@ -72,7 +74,7 @@ target_compile_definitions(nimble_config PRIVATE
 # (the AmebaD flag stack is -Wall -Wextra -Werror). -w (last) overrides -Werror.
 target_compile_options(nimble_config PRIVATE -w)
 
-# mcumgr SMP-over-BLE DFU (MCUMGR=ON): nimble_app.c::amebad_nimble_start() registers the SMP GATT
+# mcumgr SMP-over-BLE DFU (MCUMGR=ON): nimble_app.c::nimble_start() registers the SMP GATT
 # service + img/os groups under AT_PROJECT_MCUMGR.
 if(AMEBAD_ENABLE_MCUMGR)
     target_compile_definitions(nimble_config PRIVATE AT_PROJECT_MCUMGR)

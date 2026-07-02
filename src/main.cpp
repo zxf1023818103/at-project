@@ -170,6 +170,18 @@ static void on_tcpip_init_done(void *arg) {
 #endif // defined BL602 || defined BL702
 }
 
+#if defined(CONFIG_NIMBLE_HOST)
+// Apache NimBLE host bring-up — shared nimble_start() (component/nimble_config/
+// nimble_app.c). Runs from a task because it brings the on-chip controller up (which
+// creates its own task) and starts the NimBLE host task — both need the scheduler running.
+extern "C" void nimble_start(void);
+static void bflb_nimble_boot_task(void *arg) {
+    (void)arg;
+    nimble_start();
+    vTaskDelete(NULL);
+}
+#endif // CONFIG_NIMBLE_HOST
+
 int main(void) {
     board_init();
     // Lock bottom 3 MB of flash against accidental writes; must run after
@@ -192,6 +204,10 @@ int main(void) {
     tcpip_init(on_tcpip_init_done, NULL);
 
     at::make_shared<at::AtTask>()->startAsync("AtTask", 256 * 12, 4);
+
+#if defined(CONFIG_NIMBLE_HOST)
+    xTaskCreate(bflb_nimble_boot_task, (char *)"nimble_boot", 1024, NULL, 3, NULL);
+#endif // CONFIG_NIMBLE_HOST
 
     vTaskStartScheduler();
     while (1) {}

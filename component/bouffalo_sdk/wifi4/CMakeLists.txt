@@ -79,7 +79,7 @@ target_link_libraries(wifi4_internal_headers INTERFACE
 # wpa_supplicant's crypto layer #includes <mbedtls/aes.h> unconditionally
 # (USE_MBEDTLS_CRYPTO is hardwired in supplicant_opt.h). The mbedtls_port
 # target carries the public include path for component/mbedtls_config/mbedtls/include
-# (and the matching MBEDTLS_*_ALT macros via mbedtls_port's bflb_mbedtls_cfg).
+# (and the matching MBEDTLS_*_ALT macros via mbedtls_port's mbedtls_cfg).
 if(TARGET mbedtls_port)
     target_link_libraries(wifi4_internal_headers INTERFACE mbedtls_port)
 endif()

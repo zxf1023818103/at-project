@@ -3,7 +3,7 @@
 # The upstream mbedcrypto/mbedx509/mbedtls targets themselves are built by
 # component/mbedtls_config (add_subdirectory'd from component/CMakeLists.txt's AmebaD branch,
 # BEFORE the amebad subtree). This dir supplies the AmebaD-specific pieces:
-#   - `amebad_mbedtls_cfg` INTERFACE: the MBEDTLS_USER_CONFIG_FILE + MBEDTLS_*_ALT selections +
+#   - `mbedtls_cfg` INTERFACE: the MBEDTLS_USER_CONFIG_FILE + MBEDTLS_*_ALT selections +
 #     the include dirs, attached PUBLIC onto the upstream targets so their sources compile with
 #     our deltas. The shared config (user config, threading_alt.h, the FreeRTOS threading-alt
 #     source) now lives in component/mbedtls_config; only the AmebaD-specific entropy
@@ -26,39 +26,33 @@ endif()
 #   - MBEDTLS_ENTROPY_HARDWARE_ALT -> entropy_hardware_alt.c (this dir)
 #   - MBEDTLS_GCM_ALT / _CHACHAPOLY_ALT (option below) -> gcm_alt.c / chachapoly_alt.c (this dir)
 # The include dir carries gcm_alt.h / chachapoly_alt.h (the HW *_ALT context structs) by bare name.
-add_library(amebad_mbedtls_cfg INTERFACE)
-target_compile_definitions(amebad_mbedtls_cfg INTERFACE
+add_library(mbedtls_cfg INTERFACE)
+target_compile_definitions(mbedtls_cfg INTERFACE
     # AmebaD mbedTLS config: upstream default + this port's mbedtls_user_config.h (deltas), plus
     # the MBEDTLS_*_ALT selections that live with their impls here (not in the shared
     # component/mbedtls_config, which is platform-agnostic).
     MBEDTLS_USER_CONFIG_FILE="mbedtls_user_config.h"   # this dir: the default-config deltas
     MBEDTLS_THREADING_ALT            # threading_alt.h + mbedtls_threading_alt.c (mbedtls_config)
     MBEDTLS_ENTROPY_HARDWARE_ALT)    # mbedtls_hardware_poll(): entropy_hardware_alt.c
-target_include_directories(amebad_mbedtls_cfg SYSTEM INTERFACE
+target_include_directories(mbedtls_cfg SYSTEM INTERFACE
     "${CMAKE_CURRENT_SOURCE_DIR}"           # mbedtls_user_config.h / gcm_alt.h / chachapoly_alt.h
     "${MBEDTLS_CONFIG_DIR}")                # threading_alt.h
 
-# Opt-in: route the AEAD ciphers to the RTL8721D IPSEC HW engine — MBEDTLS_GCM_ALT (gcm_alt.{h,c})
-# + MBEDTLS_CHACHAPOLY_ALT (chachapoly_alt.{h,c}); both NS ROM, NSPE-direct. AES-GCM ~115x the
-# software GCM (the QUIC record-cipher bottleneck). Needs TFM=ON (NS-direct reaches the
-# secure-only crypto peripheral only with TF-M's SAU).
-# The OTHER *_ALT modules are left software on purpose (the engine is ONE shared single-context
-# DMA block): SHA256/512_ALT - mbedTLS clones/keeps concurrent SHA contexts (TLS transcript) that
-# one HW context can't hold (and SW SHA-256 is already ~50 cyc/B); AES_ALT - per-16B-block DMA is
-# an anti-pattern (the win is at the AEAD level); CCM/DES/MD5 - not in ROM / not used by TLS1.3.
-# Default ON: HW AEAD is the preferred path. The Makefile drives the real value off HWGCM (which
-# itself defaults to TFM, since NS-direct HW crypto needs TF-M's SAU), so a non-TFM image still
-# gets it OFF and never touches the secure-only engine; this default just makes ON the baseline.
-option(AMEBAD_MBEDTLS_HW_GCM "Route mbedTLS AEAD (GCM + ChaCha20-Poly1305) to the RTL8721D IPSEC HW engine" ON)
+# Route the AEAD ciphers to the RTL8721D IPSEC HW engine — MBEDTLS_GCM_ALT (gcm_alt.{h,c}) +
+# MBEDTLS_CHACHAPOLY_ALT (chachapoly_alt.{h,c}). This MUST stay gated: the engine is secure-only,
+# so a non-TFM image (no SAU) hangs on the first HW crypto op. AMEBAD_MBEDTLS_HW_GCM is driven by
+# the Makefile (-D...=$(HWGCM), which itself defaults to TFM), so non-TFM builds get it OFF and
+# never touch the secure engine. (The other *_ALT modules stay software: the engine is ONE shared
+# single-context DMA block — the win is at the AEAD level, not per-16B AES / concurrent SHA.)
 if(AMEBAD_MBEDTLS_HW_GCM)
-    target_compile_definitions(amebad_mbedtls_cfg INTERFACE MBEDTLS_GCM_ALT MBEDTLS_CHACHAPOLY_ALT)
+    target_compile_definitions(mbedtls_cfg INTERFACE MBEDTLS_GCM_ALT MBEDTLS_CHACHAPOLY_ALT)
 endif()
 
 # Attach the config onto the upstream targets (defined earlier by component/mbedtls_config).
 # PUBLIC so it reaches both the targets' own sources AND every consumer (corePKCS11, picotls).
 foreach(_t mbedcrypto mbedx509 mbedtls p256m everest)
     if(TARGET ${_t})
-        target_link_libraries(${_t} PUBLIC amebad_mbedtls_cfg)
+        target_link_libraries(${_t} PUBLIC mbedtls_cfg)
         target_compile_options(${_t} PRIVATE -w)   # silence vendor warnings under -Werror
         # MBEDTLS_FS_IO stays on (user config) -> x509_crt.c #include <dirent.h>, which newlib
         # ships as a `#error` stub. component/syscall_config supplies a real <dirent.h>; put its
@@ -79,7 +73,7 @@ add_library(mbedtls_port STATIC EXCLUDE_FROM_ALL
     entropy_hardware_alt.c
     gcm_alt.c
     chachapoly_alt.c)
-target_link_libraries(mbedtls_port PUBLIC amebad_mbedtls_cfg mbedcrypto FreeRTOS freertos_config)
+target_link_libraries(mbedtls_port PUBLIC mbedtls_cfg mbedcrypto FreeRTOS freertos_config)
 
 # Attach the AmebaD HW-ALT/entropy glue onto the shared `mbedtls_config` umbrella (defined earlier
 # in component/mbedtls_config). PUBLIC so a consumer linking just `mbedtls_config` also pulls the

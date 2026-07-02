@@ -958,11 +958,11 @@ static void wifi_bringup_thread( void *param )
     /* NimBLE host image: start the Apache NimBLE host (controller bring-up + host +
      * advertising) on top of our HCI transport (component/amebad/nimble_port). Then FALL THROUGH
      * to the normal WiFi connect + FreeRTOS+TCP + iperf path so WiFi traffic and BLE
-     * run concurrently - exercising WiFi/BT coex (P5). amebad_nimble_start() spawns
+     * run concurrently - exercising WiFi/BT coex (P5). nimble_start() spawns
      * its own host/RX tasks and returns. */
     {
-        extern void amebad_nimble_start( void );
-        amebad_nimble_start();
+        extern void nimble_start( void );
+        nimble_start();
         /* fall through -> dump_surrounding_country_codes + wifi_connect + iperf */
     }
 #endif

@@ -1,20 +1,20 @@
 /*
- * mbedtls_user_config.h — AmebaD KM4 overrides for upstream Mbed TLS v3.6.4.
+ * mbedtls_user_config.h — SHARED cross-platform overrides for upstream Mbed TLS v3.6.4.
  *
- * Wired as MBEDTLS_USER_CONFIG_FILE (NOT MBEDTLS_CONFIG_FILE) by this port's CMakeLists: the
- * full upstream default config (include/mbedtls/mbedtls_config.h) is the base and THIS file is
- * included after it, so we only delta. The base already enables everything the AmebaD stack
- * needs (PK / RSA / ECP / ECDSA / X509_CRT / SHA / AES / GCM / CMAC / CTR_DRBG / ENTROPY /
- * PEM / PSA_CRYPTO). Each platform keeps its own config here in its mbedtls_port — the shared
- * component/mbedtls_config carries no platform deltas.
+ * Wired as MBEDTLS_USER_CONFIG_FILE (NOT MBEDTLS_CONFIG_FILE) by each platform's mbedtls_port
+ * CMakeLists (via the MBEDTLS_CONFIG_DIR include path): the full upstream default config
+ * (include/mbedtls/mbedtls_config.h) is the base and THIS file is included after it, so it only
+ * deltas. The base already enables everything both AmebaD and Bouffalo need (PK / RSA / ECP /
+ * ECDSA / X509_CRT / SHA / AES / GCM / CMAC / CTR_DRBG / ENTROPY / PEM / PSA_CRYPTO).
  *
- * The MBEDTLS_*_ALT SELECTIONS (THREADING_ALT / ENTROPY_HARDWARE_ALT / the HW-crypto GCM/
- * CHACHAPOLY ones) are NOT here — they are -D compile definitions in this port's CMakeLists,
- * next to the alt impls (entropy_hardware_alt.c / gcm_alt.c / chachapoly_alt.c) and the
- * FreeRTOS threading-alt (component/mbedtls_config/mbedtls_threading_alt.c).
+ * The MBEDTLS_*_ALT SELECTIONS (THREADING_ALT / ENTROPY_HARDWARE_ALT + each chip's HW-crypto
+ * alts: AmebaD GCM/CHACHAPOLY, Bouffalo SHA/AES/ECP HACC+PKA) stay as -D compile definitions in
+ * each platform's mbedtls_port CMakeLists, next to their alt impls; the shared FreeRTOS
+ * threading-alt (mbedtls_threading_alt.c) is compiled by this dir's mbedtls_config lib.
  *
- * Coexists with the ROM Mbed TLS 2.4.0 path (component/amebad/mbedtls_rom), a self-contained
- * header with no mbedtls/*.h tree — never linked into one image.
+ * The AmebaD KM4 tunings below (SSL buffer sizes, ECP RAM) are harmless on Bouffalo: it has no
+ * mbedTLS TLS session (WPA + NimBLE SM use mbedcrypto only) and its ECP runs on the HW PKA
+ * (MBEDTLS_ECP_ALT), which ignores the software ECP window/fixed-point knobs.
  */
 #ifndef MBEDTLS_USER_CONFIG_H
 #define MBEDTLS_USER_CONFIG_H
@@ -26,18 +26,18 @@
 #undef MBEDTLS_HAVE_TIME_DATE       /* requires HAVE_TIME */
 #undef MBEDTLS_PSA_CRYPTO_STORAGE_C /* persistent PSA keys need ITS storage */
 #undef MBEDTLS_PSA_ITS_FILE_C       /* ITS-over-files needs FS_IO */
-/* MBEDTLS_FS_IO stays ENABLED (default): mbedtls_x509_crt_parse_file loads the AWS client cert
- * from a plain LittleFS DER file (path is env var "cert"; the key stays in TF-M ITS). fopen/
- * opendir route through the newlib VFS (component/syscall_config) onto LittleFS, and that
- * component supplies the <dirent.h> x509_crt.c needs under FS_IO — its dir is put on the mbedtls
- * include path by this port's CMakeLists. */
+/* MBEDTLS_FS_IO stays ENABLED (default): on AmebaD mbedtls_x509_crt_parse_file loads the AWS
+ * client cert from a plain LittleFS DER file (fopen/opendir route through the newlib VFS). On
+ * Bouffalo nothing calls the x509 file API, so those functions dead-strip; <dirent.h> comes from
+ * newlib. Left ON (not undef'd) to keep one shared config. */
 
-/* ---- Entropy: no /dev/urandom (MBEDTLS_ENTROPY_HARDWARE_ALT is set in the port CMakeLists;
- *      mbedtls_hardware_poll() is entropy_hardware_alt.c). ------------------------------- */
+/* ---- Entropy: no /dev/urandom (MBEDTLS_ENTROPY_HARDWARE_ALT is set in each port's CMakeLists;
+ *      mbedtls_hardware_poll() is the chip's entropy alt). ------------------------------- */
 #define MBEDTLS_NO_PLATFORM_ENTROPY
 
-/* ---- Threading: corePKCS11 uses mbedtls_threading_mutex_t. MBEDTLS_THREADING_ALT is set in
- *      the port CMakeLists; the mutex type is threading_alt.h + mbedtls_threading_alt.c. ---- */
+/* ---- Threading: corePKCS11 / the NimBLE SM glue use mbedtls_threading_mutex_t. THREADING_ALT
+ *      is set in each port's CMakeLists; the mutex type is threading_alt.h (this dir) +
+ *      mbedtls_threading_alt.c. ---- */
 #define MBEDTLS_THREADING_C
 
 /* ---- PSA: skip the local input/output buffer copy — single address space, no trust boundary
@@ -61,7 +61,7 @@
 
 /* ---- TLS-1.2-only fallback build (TLS_BACKEND=fallback): the mbedTLS SSL stack is ONLY the 1.2
  * fallback; every 1.3 peer rides picotls (which uses mbedcrypto/x509, not the SSL layer). ---- */
-#ifdef AMEBAD_MBEDTLS_TLS12_ONLY
+#ifdef MBEDTLS_TLS12_ONLY
     #undef MBEDTLS_SSL_PROTO_TLS1_3
     #undef MBEDTLS_SSL_TLS1_3_COMPATIBILITY_MODE
     #undef MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_ENABLED
@@ -71,7 +71,7 @@
 #endif
 
 /* ---- MAX-CIPHERSUITE experiment: the only standard key exchange the base leaves off is EC-JPAKE. */
-#ifdef AMEBAD_MBEDTLS_MAX_SUITES
+#ifdef MBEDTLS_MAX_SUITES
     #define MBEDTLS_ECJPAKE_C
     #define MBEDTLS_KEY_EXCHANGE_ECJPAKE_ENABLED
 #endif
