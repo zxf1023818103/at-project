@@ -61,12 +61,23 @@ extern write_reconnect_ptr p_roaming_start_callback;
 #if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
 #include <easyflash.h>
 #include <wifi_mgmr_ext.h>
-#include <bluetooth.h>
-#include <l2cap.h>
-#include <gatt.h>
-// hci_core.h was the Zephyr host's internal HCI header; the host was removed from
-// bflb_zypher_bluetooth (HCI-transport-only build), so it no longer exists.
-#include <hci_driver.h>
+// The Zephyr BLE host + HCI transport (blestack) were removed from
+// bflb_zypher_bluetooth — only the prebuilt controller remains — so the Zephyr
+// host headers (bluetooth.h / l2cap.h / gatt.h / hci_core.h / hci_driver.h) no
+// longer exist. The controller's own API comes from ble_lib_api.h /
+// btble_lib_api.h (included in the per-chip blocks below).
+//
+// The cross-platform advertising template methods in ZephyrBluetooth.h /
+// BluetoothTask.h still NAME these Zephyr BT types/functions at template-definition
+// time. Nothing on bouffalo instantiates them anymore (the only caller,
+// testBluetoothTask1, is compiled out here), so these are declaration-only shims
+// to keep them compiling; bt_le_adv_start/update_data are never linked.
+struct bt_data { uint8_t type; uint8_t data_len; const uint8_t *data; };
+struct bt_le_adv_param { uint8_t options; uint16_t interval_min; uint16_t interval_max; };
+int bt_le_adv_start(const struct bt_le_adv_param *param, const struct bt_data *ad,
+                    size_t ad_len, const struct bt_data *sd, size_t sd_len);
+int bt_le_adv_update_data(const struct bt_data *ad, size_t ad_len,
+                          const struct bt_data *sd, size_t sd_len);
 
 #define API_TASK_STACK_SIZE 256*12
 #define API_TASK_PRIORITY 4
@@ -104,7 +115,6 @@ extern write_reconnect_ptr p_roaming_start_callback;
 #include <board.h>
 #include <bflb_mtd.h>
 #include <btble_lib_api.h>
-#include <bt_uuid.h>
 #define WIFI_STACK_SIZE  (1536)
 #define TASK_PRIORITY_FW (16)
 #endif // defined BL606P || defined BL808 || defined BL616 || defined BL616CL

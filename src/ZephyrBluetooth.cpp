@@ -31,11 +31,11 @@ void ZephyrBluetooth::sendCallback(shared_ptr<AbstractCallbackTask> callback) {
 }
 
 shared_ptr<MacAddress> ZephyrBluetooth::macAddressInternal() {
+    // The Zephyr host was removed (only the prebuilt controller remains), so
+    // bt_get_local_public_address()/bt_addr_le_t are gone. Return a zero MAC until
+    // a host/HCI layer is built on the controller.
     auto macPtr = make_shared<MacAddress>();
-    // HCI-only: bt_get_local_public_address() lived in the (removed) host. Return a
-    // zero address until a host is layered back on.
-    ::bt_addr_le_t local_addr = {};
-    reverse_copy(local_addr.a.val, local_addr.a.val + 6, begin(macPtr->address));
+    macPtr->address.fill(0);
     return macPtr;
 }
 

@@ -208,13 +208,21 @@ if(CONFIG_RF AND NOT ("${BOUFFALO_CHIP}" STREQUAL "bl602"))
     add_subdirectory(rfparam)
 endif()
 
-# bflb_zypher_bluetooth — Bouffalo's Zephyr-derived BLE host + the
-# chip-specific (prebuilt) controller .a. Gated on CONFIG_BLUETOOTH;
-# currently wired for BL602 (m1s1 controller profile) only — BL616 /
-# BL616CL prebuilts are present but the profile-config defs aren't
-# translated yet.
+# BLE/BT controller — Bouffalo's chip-specific prebuilt controller .a (the
+# Zephyr-derived host + HCI transport were stripped; only the controller +
+# its folded-in CONFIG_BT_* defs remain). Gated on CONFIG_BLUETOOTH; BL602 uses
+# blecontroller (m1s1 profile), BL616 / BL616CL use btblecontroller.
 if(CONFIG_BLUETOOTH)
-    add_subdirectory(bflb_zypher_bluetooth)
+    if("${BOUFFALO_CHIP}" STREQUAL "bl602")
+        add_subdirectory(blecontroller)
+    elseif("${BOUFFALO_CHIP}" STREQUAL "bl616" OR
+           "${BOUFFALO_CHIP}" STREQUAL "bl616cl")
+        add_subdirectory(btblecontroller)
+    else()
+        message(FATAL_ERROR
+            "CONFIG_BLUETOOTH: unsupported BOUFFALO_CHIP '${BOUFFALO_CHIP}' "
+            "(blecontroller / btblecontroller .a pruned to bl602/bl616/bl616cl).")
+    endif()
 endif()
 
 add_library(bouffalo_sdk INTERFACE)
@@ -281,8 +289,8 @@ endif()
 
 # Port adapter libs that always get built (bflb_lwip_port / bflb_littlefs_port
 # carry headers downstream consumers transitively need even when nothing
-# references the symbols). Plus the Zephyr-derived BLE host when CONFIG_BLUETOOTH
-# is on. Stitching them in the umbrella here so that downstream projects don't
+# references the symbols). Plus the chip's prebuilt BLE/BT controller when
+# CONFIG_BLUETOOTH is on. Stitching them in the umbrella here so that downstream projects don't
 # have to know which sub-targets exist — they just do
 # `target_link_libraries(<exe> PRIVATE bouffalo_sdk)`.
 # (mbedtls_port is linked further down, AFTER the upstream mbedtls archives — see there.)
@@ -290,8 +298,11 @@ target_link_libraries(bouffalo_sdk INTERFACE
     bflb_lwip_port
     bflb_littlefs_port
 )
-if(TARGET bflb_zypher_bluetooth)
-    target_link_libraries(bouffalo_sdk INTERFACE bflb_zypher_bluetooth)
+if(TARGET blecontroller)
+    target_link_libraries(bouffalo_sdk INTERFACE blecontroller)
+endif()
+if(TARGET btblecontroller)
+    target_link_libraries(bouffalo_sdk INTERFACE btblecontroller)
 endif()
 
 # Cross-platform third-party libs from component/thirdparty/ (built by its

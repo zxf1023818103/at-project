@@ -172,6 +172,12 @@ void testStandardLibrary1() {
     getLogger()->logFormat(Logger::INFO, "========= Standard Library Test 1 Finished =========");
 }
 
+// The bouffalo Zephyr BLE host + HCI transport (blestack) were removed — only the
+// prebuilt controller remains — so the Zephyr BT API this test drives (bt_data /
+// bt_le_adv_* / BT_DATA_* / BT_GAP_*) no longer exists there. The test is dead
+// (its call in routine() is commented out); keep it for the platforms that still
+// have those types, but compile it out on bouffalo.
+#if !(defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL)
 void testBluetoothTask1() {
     getLogger()->setLevel(Logger::DEBUG);
     getLogger()->logFormat(Logger::INFO, "========= Bluetooth Task Test 1 Started =========");
@@ -285,6 +291,7 @@ void testBluetoothTask1() {
     }
     getLogger()->logFormat(Logger::INFO, "========= Bluetooth Task Test 1 Finished =========");
 }
+#endif // non-bouffalo
 
 void testUartOutStream1() {
     auto *uartDev = openAtUart();
