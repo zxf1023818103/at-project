@@ -34,12 +34,12 @@ if(CONFIG_PM_MANAGER)
         clock_manager.c
         pm_manager.c
     )
-    # pm_manager.c pulls in <lwip/tcpip.h>, <wifi_mgmr_ext.h>; clock_manager.c
-    # pulls in "easyflash.h". Each lib's PUBLIC include dirs propagate here.
-    # Pick the wifi mgmr by CONFIG_* (TARGET check would be order-dependent on
-    # add_subdirectory: bflb_power_mgmt runs before wifi4/wl80211 alphabetically).
+    # pm_manager.c pulls in <lwip/tcpip.h> (needs rework for FreeRTOS-Plus-TCP),
+    # <wifi_mgmr_ext.h>; clock_manager.c pulls in "easyflash.h". Each lib's PUBLIC
+    # include dirs propagate here. Pick the wifi mgmr by CONFIG_* (TARGET check would
+    # be order-dependent on add_subdirectory). This whole block is gated CONFIG_PM_MANAGER
+    # (currently off); lwipcore was removed with the lwIP stack.
     target_link_libraries(bflb_power_mgmt PRIVATE
-        lwipcore
         lfs_easyflash
     )
     if(CONFIG_WL80211)

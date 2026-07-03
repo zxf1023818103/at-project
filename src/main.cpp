@@ -160,7 +160,7 @@ extern void wifi_task_create(void);
 #endif
 
 static void on_tcpip_init_done(void *arg) {
-    LWIP_UNUSED_ARG(arg);
+    (void)arg;
 #if defined BL602 || defined BL702
     // wifi_task_create() starts the wifi_main thread (which services the IPC
     // command queue used by wifi_mgmr) AND posts CODE_WIFI_ON_INIT_DONE
@@ -201,7 +201,17 @@ int main(void) {
     }
     bflb_mtd_init();
     easyflash_init();
+#if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
+    // lwIP has been removed on Bouffalo — the network stack is being switched to
+    // FreeRTOS-Plus-TCP. TODO(freertos-plus-tcp): FreeRTOS_IPInit_Multi() + the
+    // Bouffalo NetworkInterface bring-up goes here. For now still start the WiFi
+    // driver thread that the lwIP tcpip_init callback used to kick (BL602/BL702
+    // need wifi_task_create(); other Bouffalo chips: no-op body).
+    on_tcpip_init_done(NULL);
+#else
+    // ameba platforms still run lwIP.
     tcpip_init(on_tcpip_init_done, NULL);
+#endif
 
     at::make_shared<at::AtTask>()->startAsync("AtTask", 256 * 12, 4);
 

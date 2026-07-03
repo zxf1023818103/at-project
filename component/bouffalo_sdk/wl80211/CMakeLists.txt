@@ -31,12 +31,15 @@ if(NOT EXISTS "${_wl80211_lib}")
     message(FATAL_ERROR "wl80211: missing prebuilt ${_wl80211_lib}")
 endif()
 
+# lwip.c (the lwIP netif glue: wl80211_tcpip_input RX up-call + wl80211_output TX +
+# wl80211_lwip_init) is dropped — the network stack is switching to FreeRTOS-Plus-TCP.
+# A new freertos_tcp_port will re-supply wl80211_tcpip_input / wl80211_lwip_init (the
+# symbols the prebuilt libwl80211 calls) on top of a FreeRTOS-Plus-TCP NetworkInterface.
 add_library(wl80211 STATIC
     wifi_mgmr.c
     wifi_mgmr_cli.c
     country.c
     wl80211_platform.c
-    lwip.c
     supplicant.c
 )
 
@@ -56,8 +59,6 @@ target_link_libraries(wl80211 PUBLIC
     bflb_lhal
     ${BOUFFALO_CHIP}_std
     bflb_freertos_port
-    bflb_lwip_port
-    lwipcore
     # wl80211.h pulls "queue/queue.h" + "tree/tree.h" (header-only utils)
     bflb_queue
     bflb_tree
@@ -65,9 +66,7 @@ target_link_libraries(wl80211 PUBLIC
     macsw
     # wl80211_platform.c #include "mm.h"
     tlsf_config
-    # lwip.c #include "dhcp_server.h"
-    lwip_dhcpd
-    # wifi_mgmr.c / wl80211_platform.c / lwip.c #include "async_event.h"
+    # wifi_mgmr.c / wl80211_platform.c #include "async_event.h"
     bflb_async_event
     # wifi_mgmr_cli.c #include "utils_getopt.h"
     bflb_getopt

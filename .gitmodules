@@ -19,10 +19,6 @@
 	path = component/freertos-kernel_config/freertos-kernel
 	url = https://github.com/zxf1023818103/FreeRTOS-Kernel.git
 	branch = bouffalo-port
-[submodule "component/lwip"]
-	path = component/lwip_config/lwip
-	url = https://github.com/zxf1023818103/lwip.git
-	branch = bouffalo-port
 [submodule "component/cjson"]
 	path = component/cjson_config/cjson
 	url = https://github.com/DaveGamble/cJSON.git

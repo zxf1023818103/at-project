@@ -15,7 +15,12 @@ extern "C" {
 #include <task.h>
 #include <semphr.h>
 
+// Bouffalo has switched its network stack to FreeRTOS-Plus-TCP; the lwIP headers
+// no longer exist there. The ameba platforms still run lwIP, so keep the include
+// for them. (The Bouffalo chip set: BL602/BL702/BL606P/BL808/BL616/BL616CL.)
+#if !defined(BL602) && !defined(BL702) && !defined(BL606P) && !defined(BL808) && !defined(BL616) && !defined(BL616CL)
 #include <lwip/tcpip.h>
+#endif
 
 #if defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C || defined CONFIG_PLATFORM_AMEBALITE || defined CONFIG_PLATFORM_AMEBASMART || defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2
 #include <os_sched.h>

@@ -54,12 +54,9 @@ add_subdirectory(bflb_async_event)
 if(NOT "${BOUFFALO_CHIP}" STREQUAL "bl602")
     add_subdirectory(bflb_power_mgmt)
 endif()
-# Bouffalo's lwIP port layer (arch + lwipopts.h + ethernetif + sys_arch).
-# Always built — the lwip block in component/thirdparty/CMakeLists.txt
-# hard-requires this target, and a few
-# bflb_* libs include lwipopts.h transitively. Lib is tiny when nothing
-# pulls it.
-add_subdirectory(bflb_lwip_port)
+# (bflb_lwip_port removed — the lwIP stack is being replaced by FreeRTOS-Plus-TCP.
+# The WiFi driver's netif glue that used it is being rewritten onto a
+# FreeRTOS-Plus-TCP NetworkInterface.)
 
 # Bouffalo's littlefs XIP-flash backend (lfs_xip_init + the four lfs_config
 # read/prog/erase/sync callbacks). Always built so consumers of the
@@ -298,15 +295,14 @@ if(TARGET rfparam)
     target_link_libraries(bouffalo_sdk INTERFACE rfparam)
 endif()
 
-# Port adapter libs that always get built (bflb_lwip_port / bflb_littlefs_port
-# carry headers downstream consumers transitively need even when nothing
+# Port adapter libs that always get built (bflb_littlefs_port carries headers
+# downstream consumers transitively need even when nothing
 # references the symbols). Plus the chip's prebuilt BLE/BT controller when
 # CONFIG_BLUETOOTH is on. Stitching them in the umbrella here so that downstream projects don't
 # have to know which sub-targets exist — they just do
 # `target_link_libraries(<exe> PRIVATE bouffalo_sdk)`.
 # (mbedtls_port is linked further down, AFTER the upstream mbedtls archives — see there.)
 target_link_libraries(bouffalo_sdk INTERFACE
-    bflb_lwip_port
     bflb_littlefs_port
 )
 if(TARGET blecontroller)
@@ -321,10 +317,10 @@ if(TARGET nimble)
 endif()
 
 # Cross-platform third-party libs from component/thirdparty/ (built by its
-# own CMakeLists, which knows nothing about Bouffalo) + the upstream lwip
-# and mbedtls targets pulled in by the bflb_lwip_port and upstream-mbedtls
-# blocks above. Sticking them on the umbrella here keeps the dependency
-# one-directional: third-party doesn't peek at bouffalo_sdk.
+# own CMakeLists, which knows nothing about Bouffalo) + the upstream mbedtls
+# targets pulled in by the upstream-mbedtls block above. Sticking them on the
+# umbrella here keeps the dependency one-directional: third-party doesn't peek
+# at bouffalo_sdk.
 #
 # mbedcrypto / mbedtls / mbedx509: the upstream archives. mbedtls_port (which
 # now also carries the HACC/PKA MBEDTLS_*_ALT impls, formerly bflb_mbedtls_hw_acc)
@@ -341,7 +337,6 @@ target_link_libraries(bouffalo_sdk INTERFACE
     cjson
     cjson_utils
     littlefs
-    lwipcore
     mbedtls
     mbedcrypto
     mbedx509
@@ -362,7 +357,7 @@ endif()
 # SDK's newlib retargets. Closing --end-group is deferred to project scope
 # by component/CMakeLists.txt's _bouffalo_sdk_close_link_group() — that's
 # the only way to guarantee the `-Wl,--end-group` token is appended past
-# every external lib (cjson / lwip / mbedtls / …) the umbrella links
+# every external lib (cjson / mbedtls / …) the umbrella links
 # above, since `target_link_options` emits before `target_link_libraries`
 # in the final link line.
 #
@@ -399,8 +394,8 @@ target_link_options(bouffalo_sdk INTERFACE
 # (not a link option) so CMake appends it to INTERFACE_LINK_LIBRARIES — emitted AFTER
 # the link-options block and after every archive the umbrella transitively pulls. The
 # cmake_language(DEFER) to project scope guarantees it is the very LAST entry, past
-# every external lib (cjson / lwip / mbedtls / the late lwip_dhcpd + lfs_easyflash
-# self-registrations). Lives here with --start-group (was in component/CMakeLists.txt).
+# every external lib (cjson / mbedtls / the late lfs_easyflash
+# self-registration). Lives here with --start-group (was in component/CMakeLists.txt).
 function(_bouffalo_sdk_close_link_group)
     target_link_libraries(bouffalo_sdk INTERFACE -Wl,--end-group)
 endfunction()

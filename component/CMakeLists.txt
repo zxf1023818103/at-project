@@ -75,12 +75,10 @@ add_subdirectory(lfs_image)
 #   bouffalo_sdk         the Bouffalo Lab SDK extraction (HAL + chip-std
 #                        + sysinit + port adapters + wifi/BT/RF stacks).
 #                        Umbrella INTERFACE target `bouffalo_sdk` is what
-#                        consumers link. Also pulls in upstream lwip
-#                        (via bflb_lwip_port) and upstream mbedtls (config +
+#                        consumers link. Pulls in upstream mbedtls (config +
 #                        HW-crypto ALTs come from the mbedtls_port adapter).
-#   lwip_dhcpd           Bouffalo's raw DHCP-server-on-lwip app, lifted
-#                        out of the lwip submodule so it can depend on
-#                        the upstream-clean lwip + freertos_kernel.
+#                        (The lwIP stack has been removed — the network stack
+#                        is being switched to FreeRTOS-Plus-TCP.)
 #   lfs_easyflash        EasyFlash KV API on top of upstream littlefs.
 # (lfs_image — the cross-platform host-side LittleFS image builder — is added unconditionally above.)
 if(BOUFFALO_CHIP)
@@ -117,13 +115,13 @@ if(BOUFFALO_CHIP)
     # bouffalo_sdk's umbrella can pull into its INTERFACE link list.
     add_subdirectory(bouffalo_sdk)
 
-    # lwip_dhcpd / lfs_easyflash live at this level (not inside bouffalo_sdk) because they
-    # depend on targets the bouffalo_sdk subtree defines (lwipcore / bflb_littlefs_port).
-    # Each self-registers into the bouffalo_sdk umbrella aggregate from its OWN CMakeLists
+    # lfs_easyflash lives at this level (not inside bouffalo_sdk) because it
+    # depends on a target the bouffalo_sdk subtree defines (bflb_littlefs_port).
+    # It self-registers into the bouffalo_sdk umbrella aggregate from its OWN CMakeLists
     # (target_link_libraries(bouffalo_sdk INTERFACE <self>) there), and the --start/--end
     # link-group is owned by bouffalo_sdk/CMakeLists.txt — so this subtree umbrella stays
     # add_subdirectory-only.
-    add_subdirectory(lwip_dhcpd)
+    # (lwip_dhcpd removed — the lwIP stack is being replaced by FreeRTOS-Plus-TCP.)
     add_subdirectory(lfs_easyflash)
 endif()
 

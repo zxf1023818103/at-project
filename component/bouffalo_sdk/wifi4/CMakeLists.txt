@@ -65,16 +65,15 @@ target_include_directories(wifi4_internal_headers INTERFACE
 # SDK's old global include space (utils_list.h, utils_hex.h, utils_log.h,
 # …). PUBLIC-link propagation gives every wifi4 sublib that PRIVATEly
 # uses wifi4_internal_headers transparent access to these headers.
-# lwip is here too — wifi_mgmr_ext.h and a half-dozen .c files #include
-# <lwip/…> directly. Linking lwipcore brings its PUBLIC include surface
-# (lwip/* + lwipopts.h via bflb_lwip_port) onto the line.
+# NOTE: the lwIP stack has been removed (switching to FreeRTOS-Plus-TCP). The
+# BL602 driver's packet path (bl_tx.c / bl_rx.c / bl_utils.c pbuf usage +
+# wifi_mgmr_ext.h's <lwip/netif.h>) is being rewritten onto FreeRTOS-Plus-TCP
+# NetworkBufferDescriptor_t; until that lands these TUs won't compile.
 target_link_libraries(wifi4_internal_headers INTERFACE
     bflb_list
     bflb_math
     bflb_log
     bflb_ring_buffer
-    lwipcore
-    lwip_dhcpd
 )
 # wpa_supplicant's crypto layer #includes <mbedtls/aes.h> unconditionally
 # (USE_MBEDTLS_CRYPTO is hardwired in supplicant_opt.h). The mbedtls_port
