@@ -110,6 +110,14 @@ if(BOUFFALO_CHIP)
     # transitively by add_subdirectory(bouffalo_sdk).
     enable_language(ASM)
 
+    # FreeRTOS-Plus-TCP V4.0.0 core stack + FreeRTOSIPConfig.h — the network stack
+    # replacing lwIP on Bouffalo. Its custom NetworkInterface (A_CUSTOM_NETWORK_IF)
+    # is component/bouffalo_sdk/freertos_tcp_port, resolved inside bouffalo_sdk's
+    # --start-group at the final image link (same pattern as amebad_freertos_tcp).
+    # Added here (not in the NOT-BOUFFALO block, which also double-adds mbedtls_config)
+    # so bouffalo_sdk below can link freertos_plus_tcp / freertos_plus_tcp_port.
+    add_subdirectory(freertos-plus-tcp_config)
+
     # Third-party submodules are added by the root CMakeLists.txt before we
     # get here, so zlibstatic / cjson / littlefs are already real targets that
     # bouffalo_sdk's umbrella can pull into its INTERFACE link list.

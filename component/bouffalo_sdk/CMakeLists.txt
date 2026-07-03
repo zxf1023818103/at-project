@@ -54,9 +54,10 @@ add_subdirectory(bflb_async_event)
 if(NOT "${BOUFFALO_CHIP}" STREQUAL "bl602")
     add_subdirectory(bflb_power_mgmt)
 endif()
-# (bflb_lwip_port removed — the lwIP stack is being replaced by FreeRTOS-Plus-TCP.
-# The WiFi driver's netif glue that used it is being rewritten onto a
-# FreeRTOS-Plus-TCP NetworkInterface.)
+# FreeRTOS-Plus-TCP NetworkInterface for the wl80211 driver (BL616 / BL616CL) —
+# replaces the removed lwIP netif glue. Self-gates to the wl80211 chips (early
+# return() on bl602); re-supplies wl80211_tcpip_input / wl80211_output_raw.
+add_subdirectory(freertos_tcp_port)
 
 # Bouffalo's littlefs XIP-flash backend (lfs_xip_init + the four lfs_config
 # read/prog/erase/sync callbacks). Always built so consumers of the
@@ -305,6 +306,17 @@ endif()
 target_link_libraries(bouffalo_sdk INTERFACE
     bflb_littlefs_port
 )
+# FreeRTOS-Plus-TCP: the wl80211 NetworkInterface bridge + the core stack + its
+# BufferAllocation/compiler port. Only defined on the wl80211 chips (bl616/cl);
+# all three sit in the --start-group below so the stack<->bridge<->driver symbol
+# cycle (wl80211_tcpip_input etc.) resolves at the final image link.
+if(TARGET bouffalo_freertos_tcp)
+    target_link_libraries(bouffalo_sdk INTERFACE
+        bouffalo_freertos_tcp
+        freertos_plus_tcp
+        freertos_plus_tcp_port
+    )
+endif()
 if(TARGET blecontroller)
     target_link_libraries(bouffalo_sdk INTERFACE blecontroller)
 endif()

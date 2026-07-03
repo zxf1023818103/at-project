@@ -96,6 +96,12 @@ static int hal_wifi_start_firmware_task(void) {
 }
 #endif // defined BL606P || defined BL808 || defined BL616 || defined BL616CL
 
+#if defined BL616 || defined BL616CL
+// FreeRTOS-Plus-TCP bring-up (component/bouffalo_sdk/freertos_tcp_port): register the
+// STA interface + DHCP endpoint + start the IP task. Called once the WiFi driver is up.
+extern "C" void bouffalo_tcp_bringup(void);
+#endif // defined BL616 || defined BL616CL
+
 #if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
 void wifi_event_handler(uint32_t code, uint32_t code2) {
     (void) code2;
@@ -114,6 +120,13 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
         }
         case CODE_WIFI_ON_MGMR_DONE: {
             printf("[APP] [EVT] %s, CODE_WIFI_ON_MGMR_DONE\n", __func__);
+#if defined BL616 || defined BL616CL
+            // Bring up FreeRTOS-Plus-TCP now (driver is up, MAC is valid): register
+            // the STA interface + DHCP endpoint + start the IP task. The stack then
+            // waits on phy-link (wifi_mgmr_sta_state_get) before sending DHCP, so it
+            // is safe to init before association.
+            bouffalo_tcp_bringup();
+#endif // defined BL616 || defined BL616CL
             wifi_do_fast_connect();
             break;
         }
