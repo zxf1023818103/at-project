@@ -10,17 +10,14 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <lwip/netifapi.h>
-#include <lwip/dns.h>
 
 #ifdef BL602_MATTER_SUPPORT
-#include <lwip/dhcp6.h>
 #endif
 
 #include <utils_tlv_bl.h>
 #include <bl60x_fw_api.h>
 //#include <dns_server.h>
-#include <dhcp_server.h>
+/* lwIP dhcp_server removed — no AP address server in the STA-only slice. */
 #include "bl_main.h"
 #include "wifi_mgmr.h"
 #include "wifi_mgmr_profile.h"
@@ -432,11 +429,11 @@ static bool stateGlobalGuard_fw_scan(void *ch, struct event *event)
 
     if (channel_num) {
         bflb_os_printf("------>>>>>> Scan CMD fixed channels_num:%u\r\n", channel_num);
-        bl_main_scan(&wifiMgmr.wlan_sta.netif, ch_req->channels, channel_num, &bssid, ssid, scan_mode, duration_scan);
+        bl_main_scan(wifiMgmr.wlan_sta.mac, ch_req->channels, channel_num, &bssid, ssid, scan_mode, duration_scan);
     } else {
         /*normal scan command*/
         bflb_os_printf("------>>>>>> Scan CMD\r\n");
-        bl_main_scan(&wifiMgmr.wlan_sta.netif, NULL, 0, &bssid, ssid, scan_mode, duration_scan);
+        bl_main_scan(wifiMgmr.wlan_sta.mac, NULL, 0, &bssid, ssid, scan_mode, duration_scan);
     }
 
     return false;
@@ -561,15 +558,15 @@ static bool stateGlobalGuard_AP(void *ev, struct event *event )
         return false;
     }
 
-    if (bl_main_if_add(0, &(wifiMgmr.wlan_ap.netif), &(wifiMgmr.wlan_ap.vif_index))) {
+    if (bl_main_if_add(0, wifiMgmr.wlan_ap.mac, &(wifiMgmr.wlan_ap.vif_index))) {
         bflb_os_printf(DEBUG_HEADER "%s: add AP iface failed\r\n", __func__);
         return false;
     }
     ap = (wifi_mgmr_ap_msg_t*)msg->data;
 
-    if (ap->use_dhcp_server) {
-        dhcpd_start(&(wifiMgmr.wlan_ap.netif), -1, -1);
-    }
+    /* AP DHCP server (dhcpd_start) removed with lwIP — the STA-only FreeRTOS+TCP
+     * slice does not run the AP address server yet. */
+    (void)ap->use_dhcp_server;
 
     if (ap->max_sta_supported >= 0) {
         bflb_os_printf(DEBUG_HEADER "Conf max sta supported %d;\r\n", ap->max_sta_supported);
@@ -610,11 +607,7 @@ static bool stateGlobalGuard_stop(void *ev, struct event *event )
     bl_main_if_remove(BL_VIF_AP);
     bflb_os_printf(DEBUG_HEADER "Stopping DHCP on AP interface...\r\n");
 
-    // netifapi_netif_set_addr(&(wifiMgmr.wlan_ap.netif), NULL, NULL, NULL);
-err_t dhcp_server_stop(struct netif *netif);
-    netifapi_netif_common(&(wifiMgmr.wlan_ap.netif), NULL, dhcp_server_stop);
-    // bflb_os_printf(DEBUG_HEADER "Removing ETH interface ...\r\n");
-    // netifapi_netif_remove(&(wifiMgmr.wlan_ap.netif));
+    /* AP DHCP server stop removed with lwIP (STA-only FreeRTOS+TCP slice). */
     wifiMgmr.inf_ap_enabled = 0;
     platform_post_event(EV_WIFI, CODE_WIFI_ON_AP_STOPPED, 0);
 
@@ -741,7 +734,7 @@ static bool stateGlobalGuard_connect(void *ev, struct event *event )
         return false;
     }
 
-    if (bl_main_if_add(1, &wifiMgmr.wlan_sta.netif, &wifiMgmr.wlan_sta.vif_index)) {
+    if (bl_main_if_add(1, wifiMgmr.wlan_sta.mac, &wifiMgmr.wlan_sta.vif_index)) {
         bflb_os_printf(DEBUG_HEADER "%s: add STA iface failed\r\n", __func__);
         return false;
     }
@@ -786,7 +779,7 @@ static void stateExit( void *stateData, struct event *event )
 {
     if (_pending_task_is_set(WIFI_MGMR_PENDING_TASK_SCAN_BIT)) {
         bflb_os_printf(DEBUG_HEADER "Pending Scan Sent\r\n");
-        bl_main_scan(&wifiMgmr.wlan_sta.netif, NULL, 0, (struct mac_addr *)&mac_addr_bcst, NULL, 0, 0);
+        bl_main_scan(wifiMgmr.wlan_sta.mac, NULL, 0, (struct mac_addr *)&mac_addr_bcst, NULL, 0, 0);
         _pending_task_clr_safely(WIFI_MGMR_PENDING_TASK_SCAN_BIT);
     }
 
@@ -1055,42 +1048,12 @@ static void __run_reload_tsen(void)
 
 static void __sta_setup_ip(bool use_dhcp)
 {
-    uint32_t ip, mask, gw, dns1, dns2;
-    ip4_addr_t addr_ipaddr;
-    ip4_addr_t addr_netmask;
-    ip4_addr_t addr_gw;
-    ip_addr_t addr_val;
-
-    bflb_os_enter_critical();
-    ip = wifiMgmr.wlan_sta.ipv4.ip;
-    mask = wifiMgmr.wlan_sta.ipv4.mask;
-    gw = wifiMgmr.wlan_sta.ipv4.gw;
-    dns1 = wifiMgmr.wlan_sta.ipv4.dns1;
-    dns2 = wifiMgmr.wlan_sta.ipv4.dns2;
-    bflb_os_exit_critical();
-
-    if (ip) {
-        /*use static IP address*/
-        bflb_os_printf(DEBUG_HEADER "Static IP Starting...%p\r\n", &(wifiMgmr.wlan_sta.netif));
-
-        ip4_addr_set_u32(&addr_ipaddr, dns1);
-        ip_addr_copy_from_ip4(addr_val, addr_ipaddr);
-        dns_setserver(0, &addr_val);
-        ip4_addr_set_u32(&addr_ipaddr, dns2);
-        ip_addr_copy_from_ip4(addr_val, addr_ipaddr);
-        dns_setserver(1, &addr_val);
-
-        ip4_addr_set_u32(&addr_ipaddr, ip);
-        ip4_addr_set_u32(&addr_netmask, mask);
-        ip4_addr_set_u32(&addr_gw, gw);
-        wifi_netif_dhcp_stop(&(wifiMgmr.wlan_sta.netif));
-        netifapi_netif_set_addr(&(wifiMgmr.wlan_sta.netif), &addr_ipaddr, &addr_netmask, &addr_gw);
-    } else {
-        /*use DHCP*/
-        if (use_dhcp) {
-            bflb_os_printf(DEBUG_HEADER "DHCP Starting...%p\r\n", &(wifiMgmr.wlan_sta.netif));
-            wifi_netif_dhcp_start(&(wifiMgmr.wlan_sta.netif));
-        }
+    /* lwIP removed: DHCP is automatic (FreeRTOS-Plus-TCP endpoint bWantDHCP, kicked
+     * from the driver connect indication). A configured static IP (wlan_sta.ipv4.ip)
+     * is not yet wired into the FreeRTOS+TCP endpoint — TODO; falls back to DHCP. */
+    (void)use_dhcp;
+    if (wifiMgmr.wlan_sta.ipv4.ip) {
+        bflb_os_printf(DEBUG_HEADER "Static IP not supported in the STA FreeRTOS+TCP slice; using DHCP\r\n");
     }
 }
 
@@ -1169,8 +1132,9 @@ static void stateConnectedIPNoAction_disconn( void *oldStateData, struct event *
     );
 
     wifiMgmr.wlan_sta.sta.rssi = 0;
-    wifi_netif_dhcp_stop(&(wifiMgmr.wlan_sta.netif));
-    netifapi_netif_set_addr(&(wifiMgmr.wlan_sta.netif), NULL, NULL, NULL);
+    wifi_netif_dhcp_stop();
+    /* lwIP netifapi_netif_set_addr(clear) removed — the FreeRTOS+TCP endpoint's IP is
+     * managed by DHCP / phy-link state. */
 }
 
 const static struct state stateConnectedIPNo = {
@@ -1242,8 +1206,9 @@ static void stateConnectedIPYes_action( void *oldStateData, struct event *event,
             (char*)newStateData
     );
     wifiMgmr.wlan_sta.sta.rssi = 0;
-    wifi_netif_dhcp_stop(&(wifiMgmr.wlan_sta.netif));
-    netifapi_netif_set_addr(&(wifiMgmr.wlan_sta.netif), NULL, NULL, NULL);
+    wifi_netif_dhcp_stop();
+    /* lwIP netifapi_netif_set_addr(clear) removed — the FreeRTOS+TCP endpoint's IP is
+     * managed by DHCP / phy-link state. */
 }
 static void sta_network_info_dump(void)
 {
@@ -1290,7 +1255,7 @@ static void stateConnectedIPYes_enter( void *stateData, struct event *event )
     platform_post_event(EV_WIFI, CODE_WIFI_ON_GOT_IP, 0);
     if (_pending_task_is_set(WIFI_MGMR_PENDING_TASK_SCAN_BIT)) {
         bflb_os_printf(DEBUG_HEADER "Pending Scan Sent\r\n");
-        bl_main_scan(&wifiMgmr.wlan_sta.netif, NULL, 0, (struct mac_addr *)&mac_addr_bcst, NULL, 0, 0);
+        bl_main_scan(wifiMgmr.wlan_sta.mac, NULL, 0, (struct mac_addr *)&mac_addr_bcst, NULL, 0, 0);
         _pending_task_clr_safely(WIFI_MGMR_PENDING_TASK_SCAN_BIT);
     }
 }
@@ -1479,7 +1444,7 @@ void helper_record_dump();
 
     if (_pending_task_is_set(WIFI_MGMR_PENDING_TASK_SCAN_BIT)) {
         bflb_os_printf(DEBUG_HEADER "Pending Scan Sent\r\n");
-        bl_main_scan(&wifiMgmr.wlan_sta.netif, NULL, 0, (struct mac_addr *)&mac_addr_bcst, NULL, 0, 0);
+        bl_main_scan(wifiMgmr.wlan_sta.mac, NULL, 0, (struct mac_addr *)&mac_addr_bcst, NULL, 0, 0);
         _pending_task_clr_safely(WIFI_MGMR_PENDING_TASK_SCAN_BIT);
     }
 }

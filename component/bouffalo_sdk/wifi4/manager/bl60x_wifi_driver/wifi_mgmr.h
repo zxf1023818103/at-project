@@ -214,7 +214,8 @@ struct wlan_netif {
         uint32_t dns1;
         uint32_t dns2;
     } ipv4;
-    struct netif netif;
+    /* lwIP `struct netif` removed — the FreeRTOS-Plus-TCP interface/endpoint live in
+     * component/bouffalo_sdk/freertos_tcp_port/bl602_netif.c (static, one STA vif). */
     union {
         struct {
             int8_t rssi;

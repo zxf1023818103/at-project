@@ -102,6 +102,10 @@ static int hal_wifi_start_firmware_task(void) {
 extern "C" void bouffalo_tcp_bringup(void);
 #endif // defined BL616 || defined BL616CL
 
+#if defined BL602 || defined BL702
+static void bl602_wifi_connect_task(void *arg);   // defined below main; used in wifi_event_handler
+#endif
+
 #if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
 void wifi_event_handler(uint32_t code, uint32_t code2) {
     (void) code2;
@@ -128,14 +132,32 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
             bouffalo_tcp_bringup();
 #endif // defined BL616 || defined BL616CL
             wifi_do_fast_connect();
+#if defined BL602 || defined BL702
+            // HW DHCP bring-up test: associate to the test AP from a task, NOT here.
+            // wifi_event_handler runs with the scheduler suspended, and
+            // wifi_mgmr_sta_connect() blocks on a semaphore (connect result) -> asserts
+            // if called directly. The connect triggers wifi4 STA-enable ->
+            // wifi_eth_sta_enable -> bl602_tcp_bringup() (FreeRTOS+TCP IPInit), then the
+            // connect indication kicks DHCP. TODO: proper provisioning (env / AT command).
+            xTaskCreate(bl602_wifi_connect_task, (char *)"wifi_conn", 1024, NULL,
+                        tskIDLE_PRIORITY + 2, NULL);
+#endif // defined BL602 || defined BL702
             break;
         }
         case CODE_WIFI_ON_SCAN_DONE: {
             printf("[APP] [EVT] %s, CODE_WIFI_ON_SCAN_DONE\n", __func__);
             break;
         }
+        case CODE_WIFI_ON_CONNECTING: {
+            printf("[APP] [EVT] %s, CODE_WIFI_ON_CONNECTING\n", __func__);
+            break;
+        }
         case CODE_WIFI_ON_CONNECTED: {
             printf("[APP] [EVT] %s, CODE_WIFI_ON_CONNECTED\n", __func__);
+            break;
+        }
+        case CODE_WIFI_ON_PRE_GOT_IP: {
+            printf("[APP] [EVT] %s, CODE_WIFI_ON_PRE_GOT_IP\n", __func__);
             break;
         }
         case CODE_WIFI_ON_GOT_IP: {
@@ -195,6 +217,44 @@ static void bflb_nimble_boot_task(void *arg) {
 }
 #endif // CONFIG_NIMBLE_HOST
 
+#if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
+// Runs AFTER vTaskStartScheduler() — lwIP's tcpip_init() used to defer on_tcpip_init_done
+// to its tcpip thread (post-scheduler). Without lwIP we call it from this one-shot task,
+// because on BL602/BL702 it does wifi_task_create(), which uses FreeRTOS software timers;
+// pre-scheduler the timer daemon task does not exist yet and xTimerGetTimerDaemonTaskHandle
+// asserts. (Other Bouffalo chips: on_tcpip_init_done body is a no-op.)
+static void bflb_net_bootstrap_task(void *arg) {
+    (void)arg;
+    on_tcpip_init_done(NULL);
+    vTaskDelete(NULL);
+}
+#endif
+
+#if defined BL602 || defined BL702
+// HW DHCP test: associate to the test AP from a normal task context (blocking connect
+// must not run in the scheduler-suspended wifi_event_handler).
+static void bl602_wifi_connect_task(void *arg) {
+    (void)arg;
+    // CRITICAL: wifi_mgmr_sta_enable() must run BEFORE connecting. It calls
+    // wifi_eth_sta_enable(), which reads the efuse MAC into wifiMgmr.wlan_sta.mac.
+    // Without it wlan_sta.mac stays all-zero, so the connect handler's
+    // bl_main_if_add(1, wlan_sta.mac) programs the STA vif with a ZERO MAC -> the
+    // firmware builds the 802.11 auth request with source address 00:00:00:00:00:00
+    // -> the AP never answers -> "auth or associate frame response timeout".
+    // The vendor's wifi_sta_connect CLI calls wifi_mgmr_sta_enable() first; our
+    // connect code was skipping it. (Confirmed on HW via gdb: the transmitted auth
+    // frame's addr2/SA was 00:00:00:00:00:00.)
+    (void)wifi_mgmr_sta_enable();   // side effect: loads efuse MAC into wlan_sta.mac
+    // Scan first: the wifi4 connect uses cached scan results; without a scan it
+    // fails "SSID error, scan no bssid and channel". Give the scan time to complete.
+    wifi_mgmr_scan(NULL, NULL);
+    vTaskDelay(pdMS_TO_TICKS(4000));
+    wifi_mgmr_sta_connect(NULL, (char *)"ZengOTA", (char *)"123456789",
+                          NULL, NULL, 0, 0);
+    vTaskDelete(NULL);
+}
+#endif
+
 int main(void) {
     board_init();
     // Lock bottom 3 MB of flash against accidental writes; must run after
@@ -215,12 +275,13 @@ int main(void) {
     bflb_mtd_init();
     easyflash_init();
 #if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
-    // lwIP has been removed on Bouffalo — the network stack is being switched to
-    // FreeRTOS-Plus-TCP. TODO(freertos-plus-tcp): FreeRTOS_IPInit_Multi() + the
-    // Bouffalo NetworkInterface bring-up goes here. For now still start the WiFi
-    // driver thread that the lwIP tcpip_init callback used to kick (BL602/BL702
-    // need wifi_task_create(); other Bouffalo chips: no-op body).
-    on_tcpip_init_done(NULL);
+    // lwIP has been removed on Bouffalo — the network stack is switching to
+    // FreeRTOS-Plus-TCP. Defer the old lwIP tcpip_init callback (BL602/BL702:
+    // wifi_task_create()) to a post-scheduler task — it must not run in main()
+    // because it uses FreeRTOS timers (see bflb_net_bootstrap_task above).
+    // TODO(freertos-plus-tcp): FreeRTOS_IPInit_Multi() + the NetworkInterface bring-up.
+    xTaskCreate(bflb_net_bootstrap_task, (char *)"net_boot", 512, NULL,
+                tskIDLE_PRIORITY + 1, NULL);
 #else
     // ameba platforms still run lwIP.
     tcpip_init(on_tcpip_init_done, NULL);

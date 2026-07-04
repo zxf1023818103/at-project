@@ -1,10 +1,6 @@
 #include <string.h>
+#include "bl_compat.h"   /* FreeRTOS.h (was pulled in transitively by lwIP) + err_t shims */
 #include <bl60x_fw_api.h>
-#include <lwip/tcpip.h>
-#include <lwip/netifapi.h>
-#include <lwip/dns.h>
-//#include <ethernetif.h>
-//#include <bl_wifi.h>
 #include <utils_hex.h>
 #include <semphr.h>
 
@@ -36,7 +32,6 @@ BL_Sem_t scan_sig = NULL;
 
 extern int wifi_mgmr_internel_init(void);
 extern int bl606a0_wifi_init(wifi_conf_t *conf);
-err_t bl606a0_wifi_netif_init(struct netif *netif);
 static scan_complete_cb_t scan_cb;
 static void* scan_data;
 
@@ -114,66 +109,24 @@ void nd6_set_cb(struct netif *netif, void (*cb)(struct netif *netif, u8_t ip_ind
 }
 #endif
 
-static void wifi_eth_sta_enable(struct netif *netif, uint8_t mac[6])
+static void wifi_eth_sta_enable(uint8_t mac[6])
 {
-    ip4_addr_t ipaddr;
-    ip4_addr_t netmask;
-    ip4_addr_t gw;
-
-#if 0
-    IP4_ADDR(&ipaddr, 192, 168, 11, 111);
-    IP4_ADDR(&netmask, 255, 255, 255, 0);
-    IP4_ADDR(&gw, 192, 168, 11, 1);
-#else
-    ipaddr.addr = 0;
-    netmask.addr = 0;
-    gw.addr = 0;
-#endif
-
-    memcpy(netif->hwaddr, mac, 6);//overwrite mac addressin netif
-    if (mac_is_unvalid(netif->hwaddr)) {
-        /* set netif MAC hardware address */
-        wifi_hosal_efuse_read_mac(netif->hwaddr);
-        if (mac_is_unvalid(netif->hwaddr)) {
-            /*Make sure we have a default valid MAC address*/
-            //TODO generate a random mac address
-            netif->hwaddr[0] =  0xC0;
-            netif->hwaddr[1] =  0x50;
-            netif->hwaddr[2] =  0x43;
-            netif->hwaddr[3] =  0xC9;
-            netif->hwaddr[4] =  0x00;
-            netif->hwaddr[5] =  0x01;
+    /* Ensure a valid STA MAC (efuse, else a fixed default). Was written into the
+     * lwIP netif->hwaddr; now written straight into the caller's wlan_sta.mac. */
+    if (mac_is_unvalid(mac)) {
+        wifi_hosal_efuse_read_mac(mac);
+        if (mac_is_unvalid(mac)) {
+            mac[0] = 0xC0; mac[1] = 0x50; mac[2] = 0x43;
+            mac[3] = 0xC9; mac[4] = 0x00; mac[5] = 0x01;
         }
-        /*since hwaddr is change, so we back over-write mac*/
-        memcpy(mac, netif->hwaddr, 6);//overwrite mac address in netif
     }
 
-    /* - netif_add(struct netif *netif, struct ip_addr *ipaddr,
-    *  struct ip_addr *netmask, struct ip_addr *gw,
-    *  void *state, err_t (* init)(struct netif *netif),
-    *  err_t (* input)(struct pbuf *p, struct netif *netif))
-    *
-    *  Adds your network interface to the netif_list. Allocate a struct
-    *  netif and pass a pointer to this structure as the first argument.
-    *  Give pointers to cleared ip_addr structures when using DHCP,
-    *  or fill them with sane numbers otherwise. The state pointer may be NULL.
-    *
-    * The init function pointer must point to a initialization function for
-    * your ethernet netif interface. The following code illustrates it's use.*/
-
-    netif->name[0] = 's';
-    netif->name[1] = 't';
-#ifdef CFG_NETBUS_WIFI_ENABLE
-    g_netbus_wifi_mgmr_env.sta_netif = netif;
-#endif
-    netifapi_netif_add(netif, &ipaddr, &netmask, &gw, NULL, &bl606a0_wifi_netif_init, &tcpip_input);
-
-#ifdef CONFIG_ENABLE_IPV6_ADDR_CALLBACK
-    nd6_set_cb(netif, netif_nd6_callback);
-#endif
-
-    netifapi_netif_set_default(netif);
-    netifapi_netif_set_up(netif);
+    /* Bring up FreeRTOS-Plus-TCP for the STA vif: register the interface + a DHCP
+     * endpoint (MAC read from wlan_sta.mac) and start the IP task. Replaces the lwIP
+     * netifapi_netif_add + set_default + set_up. See
+     * component/bouffalo_sdk/freertos_tcp_port/bl602_netif.c. */
+    extern void bl602_tcp_bringup(void);
+    bl602_tcp_bringup();
 }
 
 int wifi_mgmr_psk_cal(char *password, char *ssid, int ssid_len, char *output)
@@ -232,7 +185,7 @@ wifi_interface_t wifi_mgmr_sta_enable(void)
     bflb_os_printf("---------STA enable\r\n");
     wifiMgmr.wlan_sta.mode = 0;//sta mode
     //TODO check wifiMgmr.wlan_sta status
-    wifi_eth_sta_enable(&(wifiMgmr.wlan_sta.netif), wifiMgmr.wlan_sta.mac);
+    wifi_eth_sta_enable(wifiMgmr.wlan_sta.mac);
     return &(wifiMgmr.wlan_sta);
 }
 
@@ -241,15 +194,7 @@ int wifi_mgmr_sta_disable(wifi_interface_t *interface)
     return wifi_mgmr_api_idle();
 }
 
-struct netif *wifi_mgmr_sta_netif_get(void)
-{
-    return &wifiMgmr.wlan_sta.netif;
-}
-
-struct netif *wifi_mgmr_ap_netif_get(void)
-{
-    return &wifiMgmr.wlan_ap.netif;
-}
+/* wifi_mgmr_{sta,ap}_netif_get() removed with lwIP (returned struct netif*). */
 
 int wifi_mgmr_sta_mac_set(uint8_t mac[6])
 {
@@ -284,45 +229,24 @@ int wifi_mgmr_sta_mac_get(uint8_t mac[6])
     return 0;
 }
 
+/* Live IPv4 config from the FreeRTOS-Plus-TCP STA endpoint (was the lwIP netif). */
+extern int bl602_tcp_ip4_get(uint32_t *addr, uint32_t *mask, uint32_t *gw, uint32_t *dns);
+
 int wifi_mgmr_sta_ip_get(uint32_t *ip, uint32_t *gw, uint32_t *mask)
 {
     if (ip == NULL || gw == NULL || mask == NULL) {
         return -1;
     }
-
-    *ip = netif_ip4_addr(&wifiMgmr.wlan_sta.netif)->addr;
-    *mask = netif_ip4_netmask(&wifiMgmr.wlan_sta.netif)->addr;
-    *gw = netif_ip4_gw(&wifiMgmr.wlan_sta.netif)->addr;
-
-    return 0;
+    return bl602_tcp_ip4_get(ip, mask, gw, NULL);
 }
 
 int wifi_mgmr_sta_dns_get(uint32_t *dns1, uint32_t *dns2)
 {
-    const ip_addr_t* dns;
-
     if (dns1 == NULL || dns2 == NULL) {
         return -1;
     }
-
-    if (!netif_is_link_up(&wifiMgmr.wlan_sta.netif)) {
-        ip_addr_set_any(0, (ip_addr_t*)dns1);
-        ip_addr_set_any(0, (ip_addr_t*)dns2);
-        return 0;
-    }
-
-    /*Get DNS1*/
-    dns = dns_getserver(0);
-    *dns1 = ip_addr_get_ip4_u32(dns);
-
-    /*Get DNS2*/
-    if (DNS_MAX_SERVERS > 1) {
-        dns = dns_getserver(1);
-        *dns2 = ip_addr_get_ip4_u32(dns);
-    } else {
-        *dns2 = 0;
-    }
-
+    bl602_tcp_ip4_get(NULL, NULL, NULL, dns1);
+    *dns2 = 0;   /* FreeRTOS-Plus-TCP endpoint exposes one DNS here */
     return 0;
 }
 
@@ -403,23 +327,9 @@ int wifi_mgmr_sta_disconnect(void)
 
 int wifi_sta_ip4_addr_get(uint32_t *addr, uint32_t *mask, uint32_t *gw, uint32_t *dns)
 {
-    struct netif *ni = &wifiMgmr.wlan_sta.netif;
-
-    if (addr) {
-        *addr = netif_ip4_addr(ni)->addr;
-    }
-    if (mask) {
-        *mask = netif_ip4_netmask(ni)->addr;
-    }
-    if (gw) {
-        *gw = netif_ip4_gw(ni)->addr;
-    }
-    if (dns) {
-        const ip_addr_t *ip;
-        ip = dns_getserver(0);
-        *dns = ip_addr_get_ip4_u32(ip);
-    }
-    return 0;
+    /* Read the live IPv4 config from the FreeRTOS-Plus-TCP endpoint (was the lwIP netif). */
+    extern int bl602_tcp_ip4_get(uint32_t *addr, uint32_t *mask, uint32_t *gw, uint32_t *dns);
+    return bl602_tcp_ip4_get(addr, mask, gw, dns);
 }
 
 int wifi_mgmr_sta_pm_ops(void *arg)
@@ -561,48 +471,18 @@ void wifi_mgmr_sta_passphr_set(char *passphr)
 
 void wifi_mgmr_sta_psk_set(char *psk) __attribute__ ((alias ("wifi_mgmr_sta_passphr_set")));
 
-static void wifi_eth_ap_enable(struct netif *netif, uint8_t mac[6])
+static void wifi_eth_ap_enable(uint8_t mac[6])
 {
-    ip4_addr_t ipaddr;
-    ip4_addr_t netmask;
-    ip4_addr_t gw;
-
-#if 1
-    IP4_ADDR(&ipaddr, 192, 168, 11, 1);//XXX address will be configured again by dhcpd
-    IP4_ADDR(&netmask, 255, 255, 255, 0);
-    IP4_ADDR(&gw, 0, 0, 0, 0);
-#else
-    ipaddr.addr = 0;
-    netmask.addr = 0;
-    gw.addr = 0;
-#endif
-
-    memcpy(netif->hwaddr, mac, 6);//overwrite mac addressin netif
-    if (mac_is_unvalid(netif->hwaddr)) {
-        /* set netif MAC hardware address */
-        wifi_hosal_efuse_read_mac(netif->hwaddr);
-        if (mac_is_unvalid(netif->hwaddr)) {
-            /*Make sure we have a default valid MAC address*/
-            //TODO generate a random mac address
-            netif->hwaddr[0] =  0xC0;
-            netif->hwaddr[1] =  0x50;
-            netif->hwaddr[2] =  0x43;
-            netif->hwaddr[3] =  0xC9;
-            netif->hwaddr[4] =  0x00;
-            netif->hwaddr[5] =  0x01;
+    /* AP mode is not wired into the STA-only FreeRTOS+TCP slice (no lwIP netif / no
+     * address server). Just ensure a valid MAC; the fw AP still comes up via
+     * bl_main_if_add / bl_main_apm_start, only the host IP interface is absent. */
+    if (mac_is_unvalid(mac)) {
+        wifi_hosal_efuse_read_mac(mac);
+        if (mac_is_unvalid(mac)) {
+            mac[0] = 0xC0; mac[1] = 0x50; mac[2] = 0x43;
+            mac[3] = 0xC9; mac[4] = 0x00; mac[5] = 0x01;
         }
-        /*since hwaddr is change, so we back over-write mac*/
-        memcpy(mac, netif->hwaddr, 6);//overwrite mac address in netif
     }
-
-#ifdef CFG_NETBUS_WIFI_ENABLE
-    g_netbus_wifi_mgmr_env.ap_netif = netif;
-#endif
-    netif->name[0] = 'a';
-    netif->name[1] = 'p';
-
-    netifapi_netif_add(netif, &ipaddr, &netmask, &gw, NULL, &bl606a0_wifi_netif_init, &tcpip_input);
-    netifapi_netif_set_up(netif);
 }
 
 wifi_interface_t wifi_mgmr_ap_enable()
@@ -618,7 +498,7 @@ wifi_interface_t wifi_mgmr_ap_enable()
     bflb_os_printf("---------AP enable\r\n");                                                                                          
                                                                                                                                     
     wifiMgmr.wlan_ap.mode = 1;//ap mode                                                                                              
-    wifi_eth_ap_enable(&(wifiMgmr.wlan_ap.netif), wifiMgmr.wlan_ap.mac);
+    wifi_eth_ap_enable(wifiMgmr.wlan_ap.mac);
 
     return &(wifiMgmr.wlan_ap);
 }
@@ -662,9 +542,8 @@ int wifi_mgmr_ap_ip_get(uint32_t *ip, uint32_t *gw, uint32_t *mask)
         return -1;
     }
 
-    *ip = netif_ip4_addr(&wifiMgmr.wlan_ap.netif)->addr;
-    *mask = netif_ip4_netmask(&wifiMgmr.wlan_ap.netif)->addr;
-    *gw = netif_ip4_gw(&wifiMgmr.wlan_ap.netif)->addr;
+    /* No AP IP interface in the STA-only FreeRTOS+TCP slice. */
+    *ip = 0; *mask = 0; *gw = 0;
 
     return 0;
 }

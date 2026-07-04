@@ -87,3 +87,11 @@ target_link_libraries(wifi4_manager
     PRIVATE
         wifi4_internal_headers
 )
+
+# Build the wifi4 driver at -O2, matching the upstream bouffalo_sdk. The rest of
+# our app builds at -O3 (Release), but the WiFi MAC driver (bl_tx / bl_main /
+# ipc_host — hardware TX descriptors + firmware IPC handoff) is timing/ordering
+# sensitive and -O3's aggressive reordering/inlining breaks the auth/assoc TX
+# path (auth-frame-response-timeout on connect while scan/RX still work). -O2
+# comes after the global -O3 on the command line, so it wins.
+target_compile_options(wifi4_manager PRIVATE -O2 -fno-builtin)

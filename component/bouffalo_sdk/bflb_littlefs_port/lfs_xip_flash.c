@@ -66,6 +66,19 @@ lfs_t *lfs_xip_init(struct lfs_context *lfs_xip_ctx, struct lfs_config *cfg)
           info.size);
     lfs_xip_ctx->flash_addr = info.offset;
     cfg->block_count = info.size / cfg->block_size;
+    /* The PSM partition (info.size, e.g. bl602dk = 0xfa000 = 250 blocks) can be larger
+     * than the shared cross-platform LittleFS geometry: 960 KB = 240 blocks, with the
+     * top of PSM reserved (see the shared project/lfs.bin embedded at 0x300000 and
+     * component/littlefs_config/lfs_config.h LFS_CFG_REGION_SIZE=0x0F0000). block_count is
+     * baked into the LFS superblock, so deriving it from the full partition size (250)
+     * makes the embedded 240-block image fail to mount with "Invalid block count
+     * (240 != 250)". Cap to the shared region so the same lfs.bin mounts on every platform. */
+    {
+        lfs_size_t shared_blocks = 0x0F0000u / cfg->block_size;   /* 960 KB -> 240 */
+        if (cfg->block_count > shared_blocks) {
+            cfg->block_count = shared_blocks;
+        }
+    }
     bflb_mtd_close(handle);
 #else
     lfs_xip_ctx->flash_addr = CONFIG_LITTLEFS_FLASH_ADDRESS;

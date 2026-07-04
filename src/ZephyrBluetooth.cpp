@@ -5,12 +5,14 @@
 namespace at {
 
 ZephyrBluetooth::ZephyrBluetooth(string deviceName) : Task(), m_callbackQueue(API_TASK_IO_MSG_QUEUE_SIZE) {
+#if defined(CONFIG_BLUETOOTH)
 #if defined BL602 || defined BL702
     ::ble_controller_init(configMAX_PRIORITIES - 1);
 #endif // defined BL602 || defined BL702
 #if defined BL606P || defined BL808 || defined BL616 || defined BL616CL
     ::btble_controller_init(configMAX_PRIORITIES - 1);
 #endif // defined BL606P || defined BL808 || defined BL616 || defined BL616CL
+#endif // CONFIG_BLUETOOTH
     // HCI-only build: the Zephyr BLE host was removed from bflb_zypher_bluetooth
     // (only the HCI transport + controller remain). hci_driver_init() wires the HCI
     // transport up into the host receive path (bt_recv/bt_hci_driver_register), which

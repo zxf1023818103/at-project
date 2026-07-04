@@ -104,7 +104,9 @@ int bt_le_adv_update_data(const struct bt_data *ad, size_t ad_len,
 #include <board.h>
 #include <bflb_mtd.h>
 #include <rfparam_adapter.h>
+#if defined(CONFIG_BLUETOOTH)
 #include <ble_lib_api.h>
+#endif
 #endif // defined BL602 || defined BL702
 
 #if defined BL606P || defined BL808 || defined BL616 || defined BL616CL

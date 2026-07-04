@@ -27,6 +27,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>                  /* strcasecmp / strncasecmp (mDNS name match) */
+#include "bflb_sec_trng.h"           /* bflb_trng_readlen — HW TRNG for the DHCP xid / TCP ISN */
 
 #include "wl80211.h"                  /* struct iovec, ALIGN4_HI, WL80211_VIF_* enum, wl80211_tcpip_input proto */
 
@@ -277,20 +278,11 @@ int bouffalo_wlan_get_mac( uint8_t mac[ 6 ] )
 }
 
 /* ===== Application hooks the stack requires ================================ */
-static uint32_t prvRand32( void )
-{
-    static uint32_t ulSeed = 0x9e3779b9u;
-    ulSeed ^= ( uint32_t ) xTaskGetTickCount() + 0x1234567u;
-    ulSeed ^= ulSeed << 13;
-    ulSeed ^= ulSeed >> 17;
-    ulSeed ^= ulSeed << 5;
-    return ulSeed;
-}
-
+/* Random for the DHCP xid / TCP ISN: the BL616 hardware TRNG (bflb_sec_trng, the
+ * same engine the mbedTLS entropy port uses). bflb_trng_readlen returns 0 on OK. */
 BaseType_t xApplicationGetRandomNumber( uint32_t * pulNumber )
 {
-    *pulNumber = prvRand32();
-    return pdTRUE;
+    return ( bflb_trng_readlen( ( uint8_t * ) pulNumber, sizeof( *pulNumber ) ) == 0 ) ? pdTRUE : pdFALSE;
 }
 
 uint32_t ulApplicationGetNextSequenceNumber( uint32_t ulSourceAddress,
@@ -298,9 +290,11 @@ uint32_t ulApplicationGetNextSequenceNumber( uint32_t ulSourceAddress,
                                              uint32_t ulDestinationAddress,
                                              uint16_t usDestinationPort )
 {
+    uint32_t v = 0;
     ( void ) ulSourceAddress; ( void ) usSourcePort;
     ( void ) ulDestinationAddress; ( void ) usDestinationPort;
-    return prvRand32();
+    ( void ) bflb_trng_readlen( ( uint8_t * ) &v, sizeof( v ) );
+    return v;
 }
 
 const char * pcApplicationHostnameHook( void )

@@ -322,7 +322,17 @@ SECTIONS
         __HeapLimit = .;
     } > ram_memory
 
-    __HeapLimit = ORIGIN(ram_memory) + LENGTH(ram_memory);
+    /* Cap the heap at the WiFi RAM region start, NOT the end of ram_memory.
+     * ram_wifi (the WiFi driver .wifibss / MAC TX-RX descriptors + firmware EM,
+     * __wifi_bss_start=0x42042000..0x4204c000) is carved out of the TOP of
+     * ram_memory. The upstream SDK sets __HeapLimit to the end of ram_memory,
+     * which makes the TLSF heap overlap the WiFi region — a latent bug the
+     * vendor reference apps never hit because their heap usage stays low. Our
+     * large app (mbedTLS + LittleFS + FreeRTOS-Plus-TCP + NimBLE + AT) grows the
+     * heap up into 0x42042000+, corrupting the WiFi MAC TX descriptors -> WiFi
+     * TX (auth/assoc) fails while RX (scan, runs early) still works. Cap at
+     * ORIGIN(ram_wifi) so allocations can never reach the WiFi region. */
+    __HeapLimit = ORIGIN(ram_wifi);
     ASSERT(__HeapLimit - __HeapBase >= HeapMinSize, "heap region overflow")
 
     /*CFG FW used in code*/

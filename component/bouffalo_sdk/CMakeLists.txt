@@ -399,6 +399,12 @@ target_link_options(bouffalo_sdk INTERFACE
     -Wl,-u,_memalign_r
     -Wl,-u,_sbrk_r
     -Wl,-u,_sbrk
+    # Force-pull the sprintf/snprintf wrappers from bflb_libc. libstdc++'s
+    # cp-demangle.o (linked implicitly after --end-group) references
+    # __wrap_sprintf, which the archive scan can't reach back for if nothing
+    # earlier in the group referenced it (an LTO-sensitive ordering issue).
+    -Wl,-u,__wrap_sprintf
+    -Wl,-u,__wrap_snprintf
     -Wno-maybe-uninitialized
 )
 

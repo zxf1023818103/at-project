@@ -41,14 +41,27 @@ lfs.bin: $(RESOURCE_FILES)
 
 lfs_image: lfs.bin
 
+# Bouffalo: the CMake/bflb_image_tool build leaves the PSM partition (LFS @ 0x300000)
+# blank (0xFF), which makes the runtime LittleFS mount fault while formatting before the
+# scheduler is up. Mirror the amebad flow: overlay the SAME project/lfs.bin at 0x300000
+# (seek 768 * 4 KB) into the 4 MB whole_flash_data.bin so LFS mounts clean (no format).
+define bflb_embed_lfs
+	@echo "[$(1)] embed lfs.bin -> PSM @ 0x300000 in at_$(1)_whole_flash_data.bin"
+	@dd if=lfs.bin of=bouffalo/build_$(1)/at_$(1)_whole_flash_data.bin bs=4096 seek=768 conv=notrunc status=none
+	@md5sum bouffalo/build_$(1)/at_$(1)_whole_flash_data.bin
+endef
+
 bl602: lfs.bin
 	$(MAKE) -C bouffalo CHIP=bl602 BOARD=bl602dk
+	$(call bflb_embed_lfs,bl602)
 
 bl616: lfs.bin
 	$(MAKE) -C bouffalo CHIP=bl616 BOARD=bl616dk
+	$(call bflb_embed_lfs,bl616)
 
 bl616cl: lfs.bin
 	$(MAKE) -C bouffalo CHIP=bl616cl BOARD=bl616cldk
+	$(call bflb_embed_lfs,bl616cl)
 
 amebad: lfs.bin
 	$(MAKE) -C amebad

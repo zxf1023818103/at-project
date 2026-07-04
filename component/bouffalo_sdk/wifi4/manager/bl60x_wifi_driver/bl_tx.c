@@ -9,12 +9,13 @@
 
 #include <string.h>
 #include <stdio.h>
-#include <netif/etharp.h>
+#include <FreeRTOS.h>          /* pvPortMalloc / vPortFree for the TX block (was lwIP mem/pbuf) */
 #include <bflb_os_private.h>
 
 #include "bl_tx.h"
 #include "bl_irqs.h"
 #include "bl_utils.h"
+#include "mm.h"           /* kmalloc(MM_FLAG_HEAP_WRAM_0) / kfree for the ram_wifi TX block */
 
 #define RETRY_LIMIT_REACHED_BIT    (1 << 16)
 #define LIFETIME_EXPIRED_BIT       (1 << 17)
@@ -33,6 +34,11 @@ static uint32_t tx_cntrl_sta_trigger = 0;
 static uint32_t tx_cntrl_sta_trigger_pending = 0;
 extern struct bl_hw wifi_hw;
 int internel_cal_size_tx_hdr = sizeof(struct bl_txhdr);
+
+/* WiFi MTU + 14 eth hdr; was pulled via lwIP before. */
+#ifndef WIFI_MTU_SIZE
+#define WIFI_MTU_SIZE 1514
+#endif
 
 void  bl_irq_handler(void);
 #ifdef CFG_NETBUS_WIFI_ENABLE
@@ -177,34 +183,22 @@ static void bl_tx_push(struct bl_sta* sta, struct txdesc_host *txdesc_host, void
 {
     struct hostdesc *host = NULL;
     struct ethhdr *ethhdr = NULL;
-    struct pbuf *p = NULL, *q = NULL;
-    void* buf_ptr = NULL;
-    uint16_t link_offset_len = 0, loop = 0;
+    uint8_t *block = NULL;
+    uint16_t link_offset_len = 0;
+
+    (void)ptxbuf;   /* firmware txbuf pool is disabled (#if 0 in ipc_*); the payload
+                     * block itself lives in ram_wifi so the MAC DMA can read it. */
 
     /* Get hostdesc */
     memset((void*)txdesc_host->pad_txdesc, 0, sizeof(txdesc_host->pad_txdesc));
     host = &(((struct txdesc_upper*)txdesc_host->pad_txdesc)->host);
 
-#if 0
-    struct txbuf_host *txbuf = (struct txbuf_host*)ptxbuf;
-    if ((void*)txhdr->p != (void*)txbuf)
-    {
-        /* Get pbuf */
-        p = (struct pbuf *)txhdr->p;
-        /* Get ethernet header in pbuf */
-        ethhdr = (struct ethhdr *)((uint8_t*)p->payload + PBUF_LINK_ENCAPSULATION_HLEN);
-    }
-    else
-    {
-        /* Get ethernet header in txbuf */
-        ethhdr = (struct ethhdr *)((uint8_t*)txbuf->buf + PBUF_LINK_ENCAPSULATION_HLEN);
-    }
-#else
-    /* Get pbuf */
-    p = (struct pbuf *)txhdr->p;
-    /* Get ethernet header in pbuf */
-    ethhdr = (struct ethhdr *)((uint8_t*)p->payload + PBUF_LINK_ENCAPSULATION_HLEN);
-#endif
+    /* The tx "packet" is the [HLEN headroom | ethhdr | payload] block from
+     * bl602_ll_output (txhdr->p), allocated in the WiFi RAM heap (ram_wifi) so the
+     * WiFi MAC TX DMA can fetch the payload -- a pvPortMalloc block in ram_memory
+     * DMAs as all-zeros (frame ACKs but the AP drops the zeroed EAPOL). */
+    block  = (uint8_t *)txhdr->p;
+    ethhdr = (struct ethhdr *)(block + PBUF_LINK_ENCAPSULATION_HLEN);
 
     /* eth header is skipped in the header */
     link_offset_len = sizeof(struct ethhdr) + PBUF_LINK_ENCAPSULATION_HLEN;
@@ -220,100 +214,15 @@ static void bl_tx_push(struct bl_sta* sta, struct txdesc_host *txdesc_host, void
     host->packet_addr = (uint32_t)(0x11111111); // FIXME we use this magic for unvaild packet_addr
     host->flags       = 0;
 
-    /*
-     * Buffer transfer and descriptor tranform
-     */
-#if 0
-    /* Get right buffer pointer */
-    struct bl_txhdr *new_bl_txhdr = NULL;
-    uint16_t len = 0;
-    void* ptr    = (void*)txbuf->buf;
-    buf_ptr      = (void*)txbuf;
-
-    /* Whether this packet is the first time */
-    if ((void*)txhdr->p != (void*)txbuf)
-    {
-        /* Copy buf from pbuf to txdesc_host->eth_packet */
-        uint16_t align_src = RWNX_HWTXHDR_ALIGN_PADS((uint32_t)p->payload);
-        uint16_t align_dst = RWNX_HWTXHDR_ALIGN_PADS((uint32_t)ptr);
-        new_bl_txhdr = (struct bl_txhdr*)((uint8_t*)ptr+align_dst);
-
-        /* Copy txhdr */
-        memcpy(ptr + align_dst, p->payload + align_src, sizeof(struct bl_txhdr));
-        /* Copy packet */
-        for (q = p; q != NULL; q = q->next)
-        {
-            if (0 == loop)
-            {
-                memcpy(ptr + PBUF_LINK_ENCAPSULATION_HLEN,
-                       q->payload + PBUF_LINK_ENCAPSULATION_HLEN,
-                       q->len - PBUF_LINK_ENCAPSULATION_HLEN);
-            }
-            else
-            {
-                memcpy(ptr + len, q->payload, q->len);
-            }
-            len += q->len;
-            loop++;
-        }
-
-        memcpy(new_bl_txhdr, txhdr, sizeof(struct bl_txhdr));
-        new_bl_txhdr->p = (uint32_t*)txbuf;
-
-        /* Free pbuf, dont need it anymore */
-        pbuf_free(p);
-    }
-    else
-    {
-        new_bl_txhdr = txhdr;
-        len = new_bl_txhdr->len;
-    }
-
-    /* Packet to pbuf_chained_ptr */
-    host->pbuf_chained_ptr[0] = (uint32_t)((uint8_t*)ptr + link_offset_len);
-    host->pbuf_chained_len[0] = len - link_offset_len;
-    host->status_addr = (uint32_t)(&(new_bl_txhdr->status));
-#else
-    /* Get right buffer pointer, NO Copy */
-    buf_ptr = (void*)p;
-
-    /* Pbuf to pbuf_chained_ptr */
-    for (q = p; q != NULL; q = q->next)
-    {
-        if (0 == loop)
-        {
-            /* The first pbuf */
-            host->pbuf_chained_ptr[loop] = (uint32_t)((uint8_t*)p->payload + link_offset_len);
-            host->pbuf_chained_len[loop] = q->len - link_offset_len;
-        }
-        else
-        {
-            /* Chained pbuf after */
-            host->pbuf_chained_ptr[loop] = (uint32_t)(q->payload);
-            host->pbuf_chained_len[loop] = q->len;
-        }
-        loop++;
-    }
-    if (loop >= 4)
-    {
-        /* exceed the limit for pbuf chained */
-        bflb_os_log_warn("[TX] [PBUF] Please fix for bigger chained pbuf, total_len %d\r\n",
-                        p->tot_len);
-    }
-    else if (loop > 2)
-    {
-        bflb_os_log_warn("[TX] [LOOP] Chain Used %d\r\n", loop);
-    }
+    /* Single linear segment: payload starts after [HLEN | ethhdr]. */
+    host->pbuf_chained_ptr[0] = (uint32_t)(block + link_offset_len);
+    host->pbuf_chained_len[0] = txhdr->len - link_offset_len;
     host->status_addr = (uint32_t)(&(txhdr->status));
 
-    /* No pbuf_free */
-#endif
+    /* host_id == the block, freed on txdone via bl_tx_cfm. */
+    host->pbuf_addr   = (uint32_t)block;
 
-    /* Give right buf ptr */
-    host->pbuf_addr   = (uint32_t)buf_ptr;
-
-    /* IPC push */
-    ipc_host_txdesc_push(wifi_hw.ipc_env, buf_ptr);
+    ipc_host_txdesc_push(wifi_hw.ipc_env, block);
 
 #ifdef CFG_BL_STATISTIC
     wifi_hw.stats.cfm_balance++;
@@ -337,17 +246,10 @@ int bl_tx_cfm(void *pthis, void *host_id)
      *    b. groupcast, MUST DESC_DONE_TX_BIT, return (1), other to c.
      *    c. return (0)
      */
-#if 0
-    /* Host_id is txdesc_host->eth_packet */
-    void *buf = ((struct txbuf_host*)host_id)->buf;
-    txhdr = (struct bl_txhdr*)(buf + RWNX_HWTXHDR_ALIGN_PADS((uint32_t)buf));
-    eth = (struct ethhdr *)((uint32_t)buf + PBUF_LINK_ENCAPSULATION_HLEN);
-#else
-    /* Host_id is pbuf */
-    struct pbuf *p = (struct pbuf*)host_id;
-    txhdr = (struct bl_txhdr*)(((uint32_t)p->payload) + RWNX_HWTXHDR_ALIGN_PADS((uint32_t)p->payload));
-    eth = (struct ethhdr *)(((uint32_t)p->payload) + PBUF_LINK_ENCAPSULATION_HLEN);
-#endif
+    /* Host_id is the [HLEN | ethhdr | payload] block from bl602_ll_output (ram_wifi). */
+    uint8_t *block = (uint8_t*)host_id;
+    txhdr = (struct bl_txhdr*)(block + RWNX_HWTXHDR_ALIGN_PADS((uint32_t)block));
+    eth = (struct ethhdr *)(block + PBUF_LINK_ENCAPSULATION_HLEN);
 
     /* Read status in the TX control header */
     value = txhdr->status.value;
@@ -396,12 +298,8 @@ int bl_tx_cfm(void *pthis, void *host_id)
     /* Get customer cb param */
     custom_cfm = txhdr->custom_cfm;
 
-    /* Release buf */
-#if 0
-    ipc_host_txbuf_free((struct txbuf_host *)host_id);
-#else
-    pbuf_free(p);
-#endif
+    /* Release the WiFi-RAM block allocated in bl602_ll_output. */
+    kfree(block);
 
 #ifdef CFG_NETBUS_WIFI_ENABLE
     update_tx_pbuf_free_cnt_to_scratch_reg();
@@ -422,7 +320,6 @@ void bl_tx_try_flush(int param, struct ke_tx_fc *tx_fc_field)
 {
     struct txdesc_host *txdesc_host = NULL;
     struct bl_txhdr          *txhdr = NULL;
-    void                     *txbuf = NULL;
     struct bl_sta              *sta = NULL;
     uint32_t sta_trigger = 0;
 
@@ -495,30 +392,18 @@ void bl_tx_try_flush(int param, struct ke_tx_fc *tx_fc_field)
                     break;
                 }
 
-#if 0
-                /* Get txbuf_host */
-                txbuf = (struct txbuf_host *)ipc_host_txbuf_get(wifi_hw.ipc_env);
-                if (!txbuf)
-                {
-                    bflb_os_log_warn("[TX] no more txbuf, wait!\n\r");
-                    tx_cntrl_sta_trigger_pending |= BIT_STA(i);
-                    break;
-                }
-#endif
-                /* Get packet */
+                /* Get packet (the payload block lives in ram_wifi; no separate
+                 * firmware txbuf is used -- that pool is #if 0 in ipc_host). */
                 bflb_os_enter_critical();
                 txhdr = (struct bl_txhdr *)utils_list_pop_front(&sta->waiting_list);
                 bflb_os_exit_critical();
                 if (!txhdr)
                 {
-#if 0
-                    ipc_host_txbuf_free(txbuf);
-#endif
                     break;
                 }
 
                 /* Packet push */
-                bl_tx_push(sta, txdesc_host, (void*)txbuf, txhdr);
+                bl_tx_push(sta, txdesc_host, NULL, txhdr);
             }
         }
     }
@@ -526,90 +411,72 @@ void bl_tx_try_flush(int param, struct ke_tx_fc *tx_fc_field)
     /* Reset trigger flags */
 }
 
-#ifdef CFG_NETBUS_WIFI_ENABLE
-err_t bl_output(struct bl_hw *bl_hw, int is_sta, struct pbuf *p, struct bl_tx_cfm *custom_cfm, uint8_t from_local)
-#else
-err_t bl_output(struct bl_hw *bl_hw, int is_sta, struct pbuf *p, struct bl_tx_cfm *custom_cfm)
-#endif
+/* FreeRTOS-Plus-TCP TX entry (replaces the pbuf-based bl_output). Takes one linear
+ * ethernet frame (ethhdr + payload) and copies it into a firmware TX block laid out
+ * exactly like the old pbuf did after pbuf_header(HLEN):
+ *   [ HLEN(48) headroom: align | bl_txhdr | reserved ] [ ethhdr | payload ]
+ * The block replaces the pbuf as the tx "packet"; bl_tx_push reads it as a single
+ * segment and bl_tx_cfm vPortFree()s it on txdone. */
+int bl602_ll_output(int is_sta, void *frame, uint16_t frame_len, void *cfm)
 {
-    struct ethhdr  *ethhdr;
+    struct ethhdr   *ethhdr;
     struct bl_txhdr *txhdr;
-    struct bl_sta    *sta;
+    struct bl_sta   *sta;
+    struct bl_tx_cfm default_cfm = { NULL, NULL };   /* no tx-done cb; block freed in bl_tx_cfm */
+    struct bl_tx_cfm *use_cfm = cfm ? (struct bl_tx_cfm *)cfm : &default_cfm;
     int sta_id;
     uint16_t align_offset, link_desc_len;
+    uint8_t *block;
 
-    /* NULL protection */
-    if (!bl_hw || !p)
-    {
-        bflb_os_printf("[TX] NULL parameters!\r\n");
-        return ERR_CONN;
+    if (!frame || frame_len == 0 || frame_len > WIFI_MTU_SIZE) {
+        return -1;
     }
 
-    /* Get ethernet header first */
-    ethhdr = (struct ethhdr *)(p->payload);
+    /* Allocate from the WiFi RAM heap (ram_wifi): the WiFi MAC TX DMA can only
+     * fetch the payload from ram_wifi, not from the general ram_memory heap that
+     * pvPortMalloc uses -- a ram_memory block DMAs as an all-zero payload (the
+     * frame still gets an 802.11 ACK, but the AP drops the zeroed EAPOL and the
+     * WPA2 4-way handshake times out). Matches the vendor, whose lwIP PBUF_RAM
+     * pool lives in .wifi_ram. */
+    block = kmalloc(PBUF_LINK_ENCAPSULATION_HLEN + frame_len, MM_FLAG_HEAP_WRAM_0);
+    if (!block) {
+        return -1;
+    }
+    /* frame (ethhdr+payload) sits right after the HLEN headroom */
+    memcpy(block + PBUF_LINK_ENCAPSULATION_HLEN, frame, frame_len);
+    ethhdr = (struct ethhdr *)(block + PBUF_LINK_ENCAPSULATION_HLEN);
 
-    /* Get sta_id */
     sta_id = bl_tx_cntrl_get_sta_id(is_sta, IS_BC_MC(ethhdr->h_dest[0]), (struct mac_addr*)ethhdr->h_dest);
-    if (sta_id < 0)
-    {
-        bflb_os_printf("[TX] Cant find valid sta_id, drop! (is_sta: %d, is_bc_mc: %d, proto: %04x)\r\n",
-                     is_sta, IS_BC_MC(ethhdr->h_dest[0]), ethhdr->h_proto);
-        return ERR_IF;
+    if (sta_id < 0) {
+        kfree(block);
+        return -1;
     }
     sta = &wifi_hw.sta_table[sta_id];
 
-    /* Make room in the header for tx */
-    if (pbuf_header(p, PBUF_LINK_ENCAPSULATION_HLEN)) {
-        bflb_os_printf("[TX] Reserve room failed for header\r\n");
-        return ERR_IF;
-    }
-
-    /* Check reserved len for link
-     *           PBUF_LINK_ENCAPSULATION_HLEN (48)
-     * | align (8) | struct bl_txhdr (24) | reserved (16) |
-     */
-    align_offset = RWNX_HWTXHDR_ALIGN_PADS((uint32_t)p->payload);
+    /* bl_txhdr sits in the headroom, 8-aligned; must fit in HLEN. */
+    align_offset  = RWNX_HWTXHDR_ALIGN_PADS((uint32_t)block);
     link_desc_len = align_offset + sizeof(struct bl_txhdr) + 16;
     if (link_desc_len > PBUF_LINK_ENCAPSULATION_HLEN) {
-        bflb_os_printf("[TX] link_header size is %ld vs header %u\r\n",
-                     link_desc_len, PBUF_LINK_ENCAPSULATION_HLEN);
-        return ERR_BUF;
+        kfree(block);
+        return -1;
     }
-
-    /* Use aligned link_header */
-    txhdr = (struct bl_txhdr *)((char *)p->payload + align_offset);
+    txhdr = (struct bl_txhdr *)(block + align_offset);
     memset(txhdr, 0, sizeof(struct bl_txhdr));
-
-    /* Fill-in txhdr */
-    if (custom_cfm) {
-        memcpy(&txhdr->custom_cfm, custom_cfm, sizeof(*custom_cfm));
-    }
-    txhdr->p        = (uint32_t*)p; // XXX pattention to this filed
-    txhdr->len      = p->tot_len;
+    memcpy(&txhdr->custom_cfm, use_cfm, sizeof(*use_cfm));
+    txhdr->p        = (uint32_t*)block;                        /* the block, freed on txdone */
+    txhdr->len      = PBUF_LINK_ENCAPSULATION_HLEN + frame_len; /* mimics old p->tot_len */
     txhdr->vif_type = is_sta;
     txhdr->sta_id   = sta_id;
 
-    /* Ref this pbuf to avoid pbuf release */
-#ifdef CFG_NETBUS_WIFI_ENABLE
-    if (from_local) {
-        pbuf_ref(p);
-    }
-#else
-    pbuf_ref(p);
-#endif
-
-    /* Push packet into waiting_list */
     bflb_os_enter_critical();
     utils_list_push_back(&sta->waiting_list, &(txhdr->item));
     tx_cntrl_sta_trigger |= BIT_STA(sta_id);
-    /* Whether trigger irq */
-    if (bl_tx_cntrl_check_fc(sta))
-    {
+    if (bl_tx_cntrl_check_fc(sta)) {
         bl_irq_handler();
     }
     bflb_os_exit_critical();
 
-    return ERR_OK;
+    return 0;
 }
 
 void bl_tx_cntrl_link_up(struct bl_sta *sta)
@@ -644,6 +511,7 @@ int bl_tx_find_sta_by_mac(uint8_t vif_idx, struct mac_addr *mac)
     return -1;
 }
 
+#if 0  /* AP intra-BSS forwarding (pbuf-based) — not built in the STA-only FreeRTOS+TCP slice */
 /**
  * @brief Forward a unicast frame to a specific STA (intra-BSS forwarding)
  */
@@ -744,3 +612,4 @@ err_t bl_tx_intra_bss_broadcast(struct pbuf *p, int src_sta_idx)
 
     return ERR_OK;
 }
+#endif  /* AP intra-BSS forwarding */

@@ -18,6 +18,10 @@ extern void log_start(void);
 
 extern uint32_t __HeapBase;
 extern uint32_t __HeapLimit;
+/* WiFi RAM heap (ram_wifi) -- the WiFi MAC TX/RX DMA can only reach this region,
+ * so bl602_ll_output allocates its TX payload block here via kmalloc(MM_FLAG_HEAP_WRAM_0). */
+extern uint32_t _heap_wifi_start;
+extern uint32_t _heap_wifi_size;
 
 static struct bflb_device_s *uart0;
 
@@ -152,10 +156,15 @@ void ram_heap_init(void)
     heap_len = ((size_t)&__HeapLimit - (size_t)&__HeapBase);
     mm_register_heap(MM_HEAP_OCRAM_0, "OCRAM", MM_ALLOCATOR_TLSF, &__HeapBase, heap_len);
 
+    /* wifi RAM heap init (ram_wifi) -- MAC-DMA-accessible TX/RX payload buffers */
+    mm_register_heap(MM_HEAP_WRAM_0, "WRAM", MM_ALLOCATOR_TLSF, &_heap_wifi_start, (uintptr_t)&_heap_wifi_size);
+
     /* ram info dump */
     printf("dynamic memory init success\r\n"
-           "  ocram heap size: %d Kbyte \r\n",
-           ((size_t)&__HeapLimit - (size_t)&__HeapBase) / 1024);
+           "  ocram heap size: %d Kbyte \r\n"
+           "  wram  heap size: %d Kbyte \r\n",
+           ((size_t)&__HeapLimit - (size_t)&__HeapBase) / 1024,
+           ((size_t)&_heap_wifi_size) / 1024);
 }
 
 extern int main(void);

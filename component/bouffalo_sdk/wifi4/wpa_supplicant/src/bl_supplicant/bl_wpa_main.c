@@ -63,19 +63,8 @@ int wpa_get_key(uint8_t *ifx, int *alg, u8 *addr, int *key_idx,
 
 void wpa_sendto_wrapper(bool is_sta, void *buffer, u16 len, struct bl_custom_tx_cfm *tx_cfm)
 {
-    struct pbuf *p;
-
-    p = pbuf_alloc(PBUF_RAW_TX, len, PBUF_RAM);
-    if (!p) {
-        return;
-    }
-
-    if (ERR_OK != pbuf_take(p, buffer, len)) {
-        pbuf_free(p);
-        return;
-    }
-    bl_wifi_eth_tx(p, is_sta, tx_cfm);
-    pbuf_free(p);
+    /* lwIP removed: hand the linear EAPOL frame straight to the firmware TX path. */
+    bl_wifi_eth_tx(buffer, len, is_sta, tx_cfm);
 }
 
 void wpa_deauthenticate(uint8_t sta_idx, u8 reason_code)

@@ -1,6 +1,6 @@
 #ifndef __WIFI_MGMR_EXT_H__
 #define __WIFI_MGMR_EXT_H__
-#include <lwip/netif.h>
+/* lwIP removed — network stack is FreeRTOS-Plus-TCP (component/bouffalo_sdk/freertos_tcp_port). */
 #include <wifi_hosal.h>
 #include <bl60x_fw_api.h>
 
@@ -228,8 +228,7 @@ void wifi_mgmr_get_wifi_channel_conf(wifi_conf_t *wifi_chan_conf);
 
 wifi_interface_t wifi_mgmr_sta_enable(void);
 int wifi_mgmr_sta_disable(wifi_interface_t *interface);
-struct netif *wifi_mgmr_sta_netif_get(void);
-struct netif *wifi_mgmr_ap_netif_get(void);
+/* wifi_mgmr_{sta,ap}_netif_get() removed with lwIP (returned struct netif*). */
 int wifi_mgmr_sta_mac_set(uint8_t mac[6]);
 int wifi_mgmr_sta_mac_get(uint8_t mac[6]);
 int wifi_mgmr_sta_ip_get(uint32_t *ip, uint32_t *gw, uint32_t *mask);
