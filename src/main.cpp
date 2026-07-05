@@ -1524,6 +1524,7 @@ extern "C" void bouffalo_tcp_bringup(void);
 
 #if defined BL602 || defined BL702
 static void bl602_wifi_connect_task(void *arg);   // defined below main; used in wifi_event_handler
+static void bl602_conn_event(int connected);      // connect result (CONNECTED/DISCONNECT) -> connect task
 #endif
 
 #if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
@@ -1574,6 +1575,9 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
         }
         case CODE_WIFI_ON_CONNECTED: {
             printf("[APP] [EVT] %s, CODE_WIFI_ON_CONNECTED\n", __func__);
+#if defined BL602 || defined BL702
+            bl602_conn_event(1);   // wake the connect task: association succeeded
+#endif
             break;
         }
         case CODE_WIFI_ON_PRE_GOT_IP: {
@@ -1582,10 +1586,17 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
         }
         case CODE_WIFI_ON_GOT_IP: {
             printf("[APP] [EVT] %s, CODE_WIFI_ON_GOT_IP\n", __func__);
+            // Start coreSNTP now that DHCP gave us an IP (same as AmebaD's network-up hook), rather
+            // than pre-IP from main() where the first rounds just log [SNTP] socket FAILED and back
+            // off. sntp_sync_start() is idempotent (starts once), so repeated GOT_IP events are safe.
+            { extern void sntp_sync_start(void); sntp_sync_start(); }
             break;
         }
         case CODE_WIFI_ON_DISCONNECT: {
             printf("[APP] [EVT] %s, CODE_WIFI_ON_DISCONNECT\n", __func__);
+#if defined BL602 || defined BL702
+            bl602_conn_event(0);   // wake the connect task: association failed/dropped
+#endif
             break;
         }
         case CODE_WIFI_ON_AP_STARTED: {
@@ -1653,24 +1664,84 @@ static void bflb_net_bootstrap_task(void *arg) {
 #if defined BL602 || defined BL702
 // HW DHCP test: associate to the test AP from a normal task context (blocking connect
 // must not run in the scheduler-suspended wifi_event_handler).
+#define BL602_WIFI_SSID  "ZengOTA"
+#define BL602_WIFI_PASS  "123456789"
+
+// ---- scan-complete signal (used only on the fallback / discovery path) ----
+static TaskHandle_t s_bl602_scan_waiter;
+static void bl602_scan_done_cb(void *data, void *param) {
+    (void)data; (void)param;
+    TaskHandle_t t = s_bl602_scan_waiter;
+    if (t != NULL) { s_bl602_scan_waiter = NULL; xTaskNotifyGive(t); }
+}
+// Full directed active scan for the target SSID; connect the instant the scan-complete callback
+// fires (3 s safety cap). Returns 0 + fills *ap when the SSID was found.
+static int bl602_scan_find(wifi_mgmr_ap_item_t *ap) {
+    s_bl602_scan_waiter = xTaskGetCurrentTaskHandle();
+    wifi_mgmr_scan_adv(NULL, bl602_scan_done_cb, NULL, 0, NULL, BL602_WIFI_SSID, 0, 0);
+    ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(3000));
+    return wifi_mgmr_scan_ap((char *)BL602_WIFI_SSID, ap);   // 0 = found
+}
+
+// ---- connect-result signal: wifi_mgmr_sta_connect is async, so block on the driver's
+//      CODE_WIFI_ON_CONNECTED (ok) / CODE_WIFI_ON_DISCONNECT (fail) event (from wifi_event_handler). ----
+static TaskHandle_t   s_bl602_conn_waiter;
+static volatile int   s_bl602_conn_ok;
+static void bl602_conn_event(int connected) {
+    TaskHandle_t t = s_bl602_conn_waiter;
+    if (t != NULL) { s_bl602_conn_ok = connected; s_bl602_conn_waiter = NULL; xTaskNotifyGive(t); }
+}
+// Post an async connect on `chan` (0 = let the driver scan/pick) and wait for the result (6 s cap).
+// Returns 0 on association success.
+static int bl602_try_connect(uint8_t chan) {
+    s_bl602_conn_ok = 0;
+    s_bl602_conn_waiter = xTaskGetCurrentTaskHandle();
+    wifi_mgmr_sta_connect(NULL, (char *)BL602_WIFI_SSID, (char *)BL602_WIFI_PASS,
+                          NULL, NULL, 0, chan);
+    if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(6000)) == 0) {
+        s_bl602_conn_waiter = NULL;   // timeout -> treat as failure
+        return -1;
+    }
+    return s_bl602_conn_ok ? 0 : -1;
+}
+
 static void bl602_wifi_connect_task(void *arg) {
     (void)arg;
-    // CRITICAL: wifi_mgmr_sta_enable() must run BEFORE connecting. It calls
-    // wifi_eth_sta_enable(), which reads the efuse MAC into wifiMgmr.wlan_sta.mac.
-    // Without it wlan_sta.mac stays all-zero, so the connect handler's
-    // bl_main_if_add(1, wlan_sta.mac) programs the STA vif with a ZERO MAC -> the
-    // firmware builds the 802.11 auth request with source address 00:00:00:00:00:00
-    // -> the AP never answers -> "auth or associate frame response timeout".
-    // The vendor's wifi_sta_connect CLI calls wifi_mgmr_sta_enable() first; our
-    // connect code was skipping it. (Confirmed on HW via gdb: the transmitted auth
-    // frame's addr2/SA was 00:00:00:00:00:00.)
-    (void)wifi_mgmr_sta_enable();   // side effect: loads efuse MAC into wlan_sta.mac
-    // Scan first: the wifi4 connect uses cached scan results; without a scan it
-    // fails "SSID error, scan no bssid and channel". Give the scan time to complete.
-    wifi_mgmr_scan(NULL, NULL);
-    vTaskDelay(pdMS_TO_TICKS(4000));
-    wifi_mgmr_sta_connect(NULL, (char *)"ZengOTA", (char *)"123456789",
-                          NULL, NULL, 0, 0);
+    // wifi_mgmr_sta_enable() loads the efuse MAC into wlan_sta.mac (else the STA vif has a ZERO MAC
+    // and the AP never answers the auth frame). Must precede connect.
+    (void)wifi_mgmr_sta_enable();
+
+    // Fast path (like AmebaD): the last channel we connected on is cached in env WIFI_CHANNEL.
+    // Connect DIRECTLY on it with NO scan — a non-zero chan_id makes the wifi4 connect probe just
+    // that one channel for the BSSID. Only if that fails (AP moved / gone) drop the cache and fall
+    // back to a full scan.
+    const char *ec = getenv("WIFI_CHANNEL");
+    int cached = (ec && ec[0]) ? atoi(ec) : 0;
+    if (cached >= 1 && cached <= 14) {
+        printf("[WF] %s cached ch=%d -> direct connect (no scan)\n", BL602_WIFI_SSID, cached);
+        if (bl602_try_connect((uint8_t)cached) == 0) {
+            vTaskDelete(NULL);
+            return;
+        }
+        printf("[WF] cached ch=%d connect failed -> clear cache + full scan\n", cached);
+        unsetenv("WIFI_CHANNEL");
+    }
+
+    // Fallback: full directed scan to (re)discover the channel, connect, and cache it on success.
+    wifi_mgmr_ap_item_t ap;
+    if (bl602_scan_find(&ap) == 0) {
+        printf("[WF] %s ch=%u rssi=%d -> connect\n", BL602_WIFI_SSID, (unsigned)ap.channel, (int)ap.rssi);
+        // Cache the channel the scan actually FOUND the AP on (definitive), so the next boot goes
+        // straight to the direct-connect fast path. Don't gate this on the connect result — a
+        // residual DISCONNECT from the failed cached attempt can race the connect notification.
+        char cbuf[8];
+        snprintf(cbuf, sizeof(cbuf), "%u", (unsigned)ap.channel);
+        setenv("WIFI_CHANNEL", cbuf, 1);
+        bl602_try_connect(ap.channel);
+    } else {
+        printf("[WF] %s not found; connecting with driver scan fallback\n", BL602_WIFI_SSID);
+        bl602_try_connect(0);
+    }
     vTaskDelete(NULL);
 }
 #endif
@@ -1744,9 +1815,12 @@ int main(void) {
     pkcs11_cli_register();              // pkcs11: corePKCS11 token self-test (keygen/sign/verify)
 #endif
 
-    // coreSNTP UTC time sync — idempotent + self-retrying, so start it once here; it syncs
-    // once WiFi/DHCP bring the network up. Gives 'date'/'sntp_update' + log timestamps real UTC.
+    // coreSNTP UTC time sync. BL602/BL702 post CODE_WIFI_ON_GOT_IP (bl602_netif.c), so they start
+    // SNTP from that event (above) — after DHCP, like AmebaD. The other Bouffalo chips (bl616/cl,
+    // bouffalo_netif.c) don't post GOT_IP, so start it here; it self-retries until the network is up.
+#if !defined(BL602) && !defined(BL702)
     sntp_sync_start();
+#endif
 
 #if defined(CONFIG_NIMBLE_HOST)
     xTaskCreate(bflb_nimble_boot_task, (char *)"nimble_boot", 1024, NULL, 3, NULL);
