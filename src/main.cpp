@@ -1413,6 +1413,8 @@ int main(void)
 // + the AT framework (C++ classes). AmebaD's branch is self-contained (its own includes above) and
 // its Common.h path still assumes lwIP, so keep all of this out of the AmebaD compile.
 #if !defined(CONFIG_PLATFORM_8721D) && !defined(CONFIG_PLATFORM_8710C)
+#include <stdlib.h>   /* setenv / getenv (default TZ) */
+#include <time.h>     /* tzset */
 #include "Common.h"
 #include "AtTask.h"
 #include "TestTask.h"
@@ -1698,6 +1700,18 @@ int main(void) {
     if (vfs_lfs_mount() != nullptr) {
         env_init();
     }
+
+    // Default the wall clock + log timestamps to China Standard Time (UTC+8) so `date` and the
+    // printf log prefix read local time (same as AmebaD). Only set TZ when unset/empty (a persisted
+    // or user `setenv TZ ...` is kept); tzset() loads it into newlib's _timezone. This also seeds
+    // the first env var, so `env` isn't empty on a fresh device (it persists to KV/TZ).
+    {
+        const char *tz = getenv("TZ");
+        if ((tz == nullptr) || (tz[0] == '\0'))
+            setenv("TZ", "CST-8", 1);
+    }
+    tzset();
+
 #if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
     // lwIP has been removed on Bouffalo — the network stack is switching to
     // FreeRTOS-Plus-TCP. Defer the old lwIP tcpip_init callback (BL602/BL702:
