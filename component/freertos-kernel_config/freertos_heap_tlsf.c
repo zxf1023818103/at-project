@@ -18,17 +18,41 @@
 #include "mm.h"          /* shared tlsf_config: mem_manager_init / mm_register_heap / kmalloc / ... */
 
 /* ---- tlsf_config critical section (strong override of the weak defaults) ---- *
- * Used before the scheduler starts (first allocations are C ctors / stdio), so it
- * uses the FreeRTOS interrupt-mask save/restore (safe in task + ISR + pre-scheduler
- * context) rather than a mutex. No CMSIS include needed. */
+ * The heap is shared across tasks (e.g. the WiFi RX driver task allocates network
+ * buffers while the TCP/IP task allocates/frees them), so this MUST provide real
+ * mutual exclusion: it saves the current interrupt-enable state and disables
+ * interrupts, then restores. Nestable + ISR- + pre-scheduler-safe (no mutex, so
+ * usable by the first allocations from C ctors / stdio, before the scheduler).
+ *
+ * Per-arch, because the FreeRTOS interrupt-mask primitive differs:
+ *  - Cortex-M (AmebaD): portSET/CLEAR_INTERRUPT_MASK_FROM_ISR raise/restore BASEPRI.
+ *  - RISC-V (Bouffalo BL60x/BL61x): those two macros are NO-OPS in the RISC-V port
+ *    (they assume the trap handler already masked interrupts on ISR entry), so using
+ *    them in TASK context gives ZERO protection -> concurrent malloc/free from two
+ *    tasks corrupts the TLSF free-list. Save+clear mstatus.MIE (bit 3) directly. */
 uintptr_t mm_lock_save(void)
 {
+#if defined( __riscv )
+    uintptr_t mstatus;
+    /* Atomic: read mstatus into %0, then clear MIE (bit 3) -> interrupts off. */
+    __asm volatile ( "csrrci %0, mstatus, 8" : "=r" ( mstatus ) :: "memory" );
+    return mstatus;
+#else
     return (uintptr_t)portSET_INTERRUPT_MASK_FROM_ISR();
+#endif
 }
 
 void mm_unlock_restore(uintptr_t flags)
 {
+#if defined( __riscv )
+    /* Re-enable interrupts only if MIE was set before (so nested locks stay off). */
+    if( ( flags & 0x8U ) != 0U )
+    {
+        __asm volatile ( "csrsi mstatus, 8" ::: "memory" );
+    }
+#else
     portCLEAR_INTERRUPT_MASK_FROM_ISR((UBaseType_t)flags);
+#endif
 }
 
 /* Heap-region registration lives in the shared ram_heap_init()

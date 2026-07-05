@@ -26,7 +26,10 @@
  *    the MQTT client is low-rate, so shrink the per-socket RX/TX buffers + window hard to give the
  *    tight NS heap back ~50 KB. 6*1460 still comfortably streams the AWS server cert handshake. */
 #define ipconfigUSE_TCP_WIN                      1
-#if defined( AMEBAD_NET_LOW_MEM )
+/* BL602/BL702 have only ~176 KB RAM, far less than AmebaD/BL616: the "big" 35 KB per-socket
+ * buffers + 40 descriptors exhaust the TLSF heap under load (iperf RX OOM'd -> the malloc-fail
+ * hook bricked the chip). Force them onto the small tier, same as AmebaD's low-mem MQTT images. */
+#if defined( AMEBAD_NET_LOW_MEM ) || defined( BL602 ) || defined( BL702 )
     #define ipconfigTCP_WIN_SEG_COUNT           16
     #define ipconfigTCP_RX_BUFFER_LENGTH        ( 6 * 1460 )    /* ~8.5 KB */
     #define ipconfigTCP_TX_BUFFER_LENGTH        ( 6 * 1460 )    /* ~8.5 KB */
@@ -61,7 +64,7 @@
 
 /* Network buffer descriptors (BufferAllocation_2 = heap, each ~MTU+pad ~1.6 KB). 40 for TCP
  * throughput; 14 is plenty for the low-rate MQTT client and saves ~42 KB of NS heap. */
-#if defined( AMEBAD_NET_LOW_MEM )
+#if defined( AMEBAD_NET_LOW_MEM ) || defined( BL602 ) || defined( BL702 )
     #define ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS  24   /* was 14: too tight for the TLS handshake's
                                                           * bursty bidirectional flight (server ~6KB in +
                                                           * client flight out + ACKs + concurrent WiFi RX)
