@@ -54,7 +54,7 @@ target_link_libraries(macsw PUBLIC
     "${_macsw_config_lib}"
     bflb_lhal
     ${BOUFFALO_CHIP}_std
-    bflb_freertos_port
+    freertos_port
     # macsw.h pulls phy.h / wl_api.h from bl${chip}_phyrf
     ${BOUFFALO_CHIP}_phyrf
     # macsw_plat.c pulls bl_lp.h from bflb_sys

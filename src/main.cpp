@@ -257,6 +257,7 @@ static void bl602_wifi_connect_task(void *arg) {
 
 int main(void) {
     board_init();
+    log_lock_init();   // install the rxi-logger FreeRTOS-mutex lock before any log_* (SDK LOG_*/rfparam)
     // Lock bottom 3 MB of flash against accidental writes; must run after
     // flash driver init (board_init) and before anything that writes flash
     // (OTA / EasyFlash). Top 1 MB stays writable for PSM (LittleFS).
@@ -293,6 +294,27 @@ int main(void) {
 #endif
 
     at::make_shared<at::AtTask>()->startAsync("AtTask", 256 * 12, 4);
+
+    // Interactive FreeRTOS-Plus-CLI console on uart0 (the log/console port) — same command set
+    // as AmebaD (ls/cat/setenv/date/...). AtTask keeps uart1, so no RX contention.
+    monitor_start();
+    bouffalo_monitor_cmds_register();   // reboot
+    fs_cli_register();                  // ls/cat/rm/mkdir/mv/cp/touch/hexdump/df/mkfs/chmod + hashes
+    env_cli_register();                 // setenv/getenv/env
+    time_cli_register();                // date/uptime/sntp_update
+    zip_cli_register();                 // zip/unzip (minizip over the VFS)
+    iperf_cli_register();               // iperf [server|tx|udp] throughput test
+#ifdef AT_CRYPTO_SELFTESTS
+    // Opt-in diagnostic image (make CRYPTO_SELFTESTS=ON): the Mbed TLS crypto self-tests. Default
+    // OFF because all three together overflow bl602's xip_memory region (~100 KB over).
+    bench_cli_register();               // bench: Mbed TLS crypto microbenchmark ([MCB] scores)
+    crt_bundle_cli_register();          // crt_bundle: Mozilla CA root bundle info/verify/addca
+    pkcs11_cli_register();              // pkcs11: corePKCS11 token self-test (keygen/sign/verify)
+#endif
+
+    // coreSNTP UTC time sync — idempotent + self-retrying, so start it once here; it syncs
+    // once WiFi/DHCP bring the network up. Gives 'date'/'sntp_update' + log timestamps real UTC.
+    sntp_sync_start();
 
 #if defined(CONFIG_NIMBLE_HOST)
     xTaskCreate(bflb_nimble_boot_task, (char *)"nimble_boot", 1024, NULL, 3, NULL);

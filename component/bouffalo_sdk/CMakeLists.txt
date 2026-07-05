@@ -19,7 +19,7 @@
 # BOUFFALO_CHIP) + FREERTOS_HEAP and add_subdirectory's the kernel itself — so freertos_kernel
 # / FreeRTOS already exist here. Bouffalo's RISC-V-specific config (atomic_rtos.h path + mtime
 # / trap-handler defs + the kernel-header feed) is attached to freertos_config from the
-# bflb_freertos_port COMPONENT; it resolves at generate time, so it still reaches the kernel's
+# freertos_port COMPONENT; it resolves at generate time, so it still reaches the kernel's
 # compile.
 if(NOT TARGET freertos_kernel)
     message(FATAL_ERROR
@@ -30,13 +30,14 @@ endif()
 # bflb_autoconf must come first: its INTERFACE forces -include autoconf.h
 # into every TU that links it (transitively, via bflb_lhal below).
 add_subdirectory(bflb_autoconf)
-add_subdirectory(bflb_freertos_port)
+add_subdirectory(freertos_port)
 add_subdirectory(bflb_sdk_version)
 add_subdirectory(bflb_sysinit)
 # std must be added before lhal — lhal links against ${BOUFFALO_CHIP}_std.
 add_subdirectory(${BOUFFALO_CHIP}_std)
 add_subdirectory(bflb_lhal)
-add_subdirectory(bflb_log)
+# bflb_log was deleted — logging is the cross-platform rxi_log (component/rxi_log_config, added at
+# the component/ root), with the SDK's LOG_*/BFLB_LOG_* routed through bflb_log_compat.h.
 # tlsf_config moved to the shared top-level component (component/tlsf_config), added by the
 # repo-root CMakeLists before this subtree; the `tlsf_config` target already exists.
 add_subdirectory(bflb_block_pool)
@@ -161,6 +162,8 @@ set_source_files_properties(
 #   bflb_nuttx_compat   the 3 NuttX SDK compat headers the WiFi adapter still needs
 add_subdirectory(syscall_port)
 add_subdirectory(bflb_nuttx_compat)
+add_subdirectory(monitor_port)        # Bouffalo port for the shared console engine (component/monitor_config)
+add_subdirectory(mbedtls_bench_port)  # RISC-V mcycle timer override for the shared mbedtls_bench (component/mbedtls_bench_config)
 add_subdirectory(bflb_getopt)
 add_subdirectory(bflb_list)
 add_subdirectory(bflb_queue)
@@ -244,7 +247,7 @@ add_library(bouffalo_sdk INTERFACE)
 target_link_libraries(bouffalo_sdk INTERFACE
     bflb_autoconf
     bflb_sdk_version
-    bflb_freertos_port
+    freertos_port
     ${BOUFFALO_CHIP}_std
     bflb_lhal
     # newlib retarget core (usage reqs: <dirent.h> + transitive at_console) + the
@@ -255,7 +258,7 @@ target_link_libraries(bouffalo_sdk INTERFACE
     bouffalo_syscall_port
     bflb_nuttx_compat
     tlsf_config
-    bflb_log
+    rxi_log             # the single cross-platform logger (bflb_log deleted; SDK LOG_* via bflb_log_compat.h)
     bflb_block_pool
     bflb_timestamp
     bflb_partition
@@ -325,6 +328,50 @@ endif()
 target_link_libraries(bouffalo_sdk INTERFACE
     lfs_port
 )
+# The cross-platform interactive console: the shared engine + command modules + the Bouffalo
+# port. All inside bouffalo_sdk's --start-group (they cross-ref: engine<->port seam, cmds pull
+# the VFS/littlefs/mbedcrypto). main() calls monitor_start() + the *_cli_register() functions.
+target_link_libraries(bouffalo_sdk INTERFACE
+    monitor
+    monitor_cmds
+    monitor_port
+    freertos_cli
+)
+# coreSNTP UTC time sync (component/sntp_time_config) — pulls coreSNTP + backoffAlgorithm
+# transitively; main() calls sntp_sync_start(). Gives bl602 real UTC (date/sntp_update/timestamps).
+target_link_libraries(bouffalo_sdk INTERFACE sntp_time)
+
+# zip/unzip console commands (component/monitor_config zip_cmd -> minizip). bl602's newlib malloc
+# is syscall_config's malloc -> pvPortMalloc -> TLSF (big heap), so no --wrap needed (unlike AmebaD's
+# tiny _sbrk arena). main() calls zip_cli_register().
+target_link_libraries(bouffalo_sdk INTERFACE zip_cmd)
+
+# iperf throughput probes (component/iperf_config) — main() registers the `iperf` console command.
+target_link_libraries(bouffalo_sdk INTERFACE iperf)
+
+# The Mbed TLS crypto self-tests (bench + crt_bundle + pkcs11) are OPT-IN, mirroring AmebaD's
+# BENCH/CRT_BUNDLE/PKCS11=ON images: linking all three pulls RSA/full-ECP/ChaChaPoly + the ~56 KB
+# CA bundle + corePKCS11/PSA, which overflows bl602's xip_memory region by ~100 KB. Default OFF so
+# the base image (monitor/sntp/zip/iperf) fits; `make ... CRYPTO_SELFTESTS=ON` (-> -DAT_CRYPTO_SELFTESTS=ON)
+# builds a diagnostic image with the `bench`/`crt_bundle`/`pkcs11` console commands. main() gates the
+# matching *_cli_register() calls on AT_CRYPTO_SELFTESTS, propagated to the app via the INTERFACE define.
+option(AT_CRYPTO_SELFTESTS "Bouffalo: build the Mbed TLS crypto self-tests (bench/crt_bundle/pkcs11)" OFF)
+if(AT_CRYPTO_SELFTESTS)
+    # Mbed TLS crypto microbenchmark (component/mbedtls_bench_config) + its RISC-V mcycle timer
+    # override (mbedtls_bench_port); the bench pulls extra mbedcrypto symbols (RSA/full-ECP/ChaChaPoly)
+    # resolved in the --start-group with the mbedtls archives below. mbedtls_bench_port supplies
+    # bench_timer_* (mcycle CSR + bflb clock).
+    target_link_libraries(bouffalo_sdk INTERFACE mbedtls_bench mbedtls_bench_port)
+    # Compressed Mozilla CA root bundle + the `crt_bundle` command (component/esp_crt_bundle_config).
+    # crt_bundle_cli pulls esp_crt_bundle (mbedx509/mbedcrypto, in the --start-group below). No
+    # network_transport on bl602 -> the `connect` subcommand is compiled out; info/verify/addca remain.
+    target_link_libraries(bouffalo_sdk INTERFACE crt_bundle_cli)
+    # corePKCS11 token self-test + the `pkcs11` command (component/pkcs11_selftest_config): corepkcs11
+    # + the fopen POSIX PAL over LittleFS + mbedcrypto PSA (resolved in the --start-group below).
+    target_link_libraries(bouffalo_sdk INTERFACE pkcs11_selftest)
+    target_compile_definitions(bouffalo_sdk INTERFACE AT_CRYPTO_SELFTESTS)
+endif()
+
 # FreeRTOS-Plus-TCP: the wl80211 NetworkInterface bridge + the core stack + its
 # BufferAllocation/compiler port. Only defined on the wl80211 chips (bl616/cl);
 # all three sit in the --start-group below so the stack<->bridge<->driver symbol

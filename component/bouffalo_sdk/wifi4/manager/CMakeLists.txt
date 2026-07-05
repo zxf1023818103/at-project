@@ -73,7 +73,7 @@ endif()
 
 # Wi-Fi driver pulls heavily from the firmware archive's symbol set, plus
 # the CFG_*/RW_* defines and headers it carries — link transitively.
-# Lhal (bflb_irq.h), bflb_log (formatted printk), FreeRTOS (queues / tasks)
+# Lhal (bflb_irq.h), rxi_log (formatted printk), FreeRTOS (queues / tasks)
 # are required at compile time. lwIP (netif/etharp.h, lwip/pbuf.h …) is
 # also needed but isn't linked here — matching the pattern used by every
 # other extracted Bouffalo component, lwIP gets onto the include / link
@@ -82,7 +82,7 @@ target_link_libraries(wifi4_manager
     PUBLIC
         wifi4_firmware
         bflb_lhal
-        bflb_log
+        rxi_log
         freertos_kernel
     PRIVATE
         wifi4_internal_headers

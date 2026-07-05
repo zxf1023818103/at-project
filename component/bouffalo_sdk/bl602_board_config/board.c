@@ -14,7 +14,6 @@
 
 #include "ram_heap.h"   /* shared ram_heap_init() (freertos-kernel_config) */
 
-extern void log_start(void);
 
 static struct bflb_device_s *uart0;
 
@@ -177,7 +176,6 @@ void board_init(void)
 
     printf("cgen1:%08x\r\n", getreg32(BFLB_GLB_CGEN1_BASE));
 
-    log_start();
 #if defined(CONFIG_BFLB_LOG)
     rtc = bflb_device_get_by_name("rtc");
 #endif

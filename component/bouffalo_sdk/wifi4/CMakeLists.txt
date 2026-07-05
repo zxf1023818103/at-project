@@ -72,7 +72,7 @@ target_include_directories(wifi4_internal_headers INTERFACE
 target_link_libraries(wifi4_internal_headers INTERFACE
     bflb_list
     bflb_math
-    bflb_log
+    rxi_log
     bflb_ring_buffer
     freertos_plus_tcp
     freertos_config

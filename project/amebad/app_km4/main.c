@@ -38,8 +38,10 @@
  * (pre-scheduler banner, AWS mount) are unaffected; snprintf/sprintf keep the _rtl_ versions. */
 #undef printf
 
-/* console: FreeRTOS-Plus-CLI over the LOGUART (component/amebad/monitor) */
-extern void amebad_monitor_start(void);
+/* console: the shared FreeRTOS-Plus-CLI engine (component/monitor_config) + the AmebaD
+ * port (component/amebad/monitor_port: LOGUART RX + KM0/KM4 switch + reboot/dw/ew/flash/efuse) */
+extern void monitor_start(void);
+extern void amebad_monitor_cmds_register(void);
 
 /* ROM/fwlib CPU clock select (rtl8721d_system.h; CLK_KM4_200M comes in via ameba_soc.h). */
 extern void SystemSetCpuClk(unsigned char CpuClk);
@@ -889,8 +891,8 @@ static void wifi_bringup_thread( void *param )
     /* corePKCS11 token self-test: needs LittleFS mounted (above) for the PAL + the scheduler
      * (mbedTLS FreeRTOS threading mutexes). Independent of WiFi. See pkcs11_selftest.c. */
     {
-        extern void amebad_pkcs11_selftest( void );
-        amebad_pkcs11_selftest();
+        extern void pkcs11_selftest_run( void );   /* component/pkcs11_selftest_config */
+        pkcs11_selftest_run();
     }
 #endif
 
@@ -1326,15 +1328,17 @@ int main(void)
 #endif
 #endif
 
-    /* Console: FreeRTOS-Plus-CLI over the LOGUART (component/amebad/monitor). KM4 owns the
-     * console at boot; `>>` / `km0` hand it to KM0. It POLLS the UART (LOGUART_Readable) and
-     * never enables the RX IRQ, so it sidesteps the ROM "Irq 3 Fun Not Assign" storm an
-     * enabled-but-unhandled RX line causes. Dropped from the QUIC image (the handshake
-     * self-test is autonomous): removing the monitor from KM4 image2 shrinks .text and shifts
-     * the XIP layout to dodge the boot-hang (doc/amebad_xip_layout_boot_hang.md); that image's
-     * console stays output-only (DiagPrintf TX is unaffected). */
+    /* Console: the shared FreeRTOS-Plus-CLI engine (component/monitor_config) over the LOGUART
+     * via the AmebaD port (component/amebad/monitor_port). KM4 owns the console at boot; `>>` /
+     * `km0` hand it to KM0. KM4 RX is IRQ-driven (a StreamBuffer fed by the LOGUART RX ISR — the
+     * registered handler is what makes enabling the line safe, avoiding the ROM "Irq 3 Fun Not
+     * Assign" storm); KM0 polls. Dropped from the QUIC image (the handshake self-test is
+     * autonomous): removing the monitor from KM4 image2 shrinks .text and shifts the XIP layout
+     * to dodge the boot-hang (doc/amebad_xip_layout_boot_hang.md); that image's console stays
+     * output-only (DiagPrintf TX is unaffected). */
 #ifndef AT_PROJECT_QUIC
-    amebad_monitor_start();
+    monitor_start();                    /* shared engine: line editor + generic version/heap/tasks/echo */
+    amebad_monitor_cmds_register();     /* AmebaD port cmds: reboot / dw / ew / flash / efuse / >> / km0 / km4 */
     /* Filesystem (ls/cat/rm/rmdir/mkdir/mv/cp/touch/hexdump/df/mkfs) + time/SNTP
      * (date/uptime/sntp_update) console commands, registered into the same CLI list the
      * monitor uses — like aws_cli_register() below, so the shared monitor stays untouched.

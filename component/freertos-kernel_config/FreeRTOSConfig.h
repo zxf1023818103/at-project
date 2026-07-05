@@ -235,6 +235,7 @@ extern int  freertos_ready_to_sleep(void);
 #define configTIMER_TASK_PRIORITY                (configMAX_PRIORITIES - 1)
 #define configTIMER_QUEUE_LENGTH                 4
 #define configTIMER_TASK_STACK_DEPTH             (1024)
+#define configCOMMAND_INT_MAX_OUTPUT_SIZE        2048   /* FreeRTOS-Plus-CLI output buffer (component/monitor_config console) */
 #ifndef uartPRIMARY_PRIORITY
 #define uartPRIMARY_PRIORITY                     (configMAX_PRIORITIES - 3)
 #endif

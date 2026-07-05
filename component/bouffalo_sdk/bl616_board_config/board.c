@@ -26,7 +26,6 @@
 #include "mm.h"
 #include "ram_heap.h"   /* shared ram_heap_init() (freertos-kernel_config): OCRAM + WRAM */
 
-extern void log_start(void);
 
 /* PSRAM heap symbols stay board-local: PSRAM needs board_psram_x8_init() HW bring-up,
  * which can't live in the cross-platform ram_heap.c (see board_psram_heap_init below). */
@@ -452,7 +451,6 @@ void board_init(void)
     HBN_Get_Xtal_Value(&xtal_value);
     printf("xtal:%dHz(%s)\r\n", xtal_value, ((getreg32(AON_BASE + AON_XTAL_CFG_OFFSET) >> 3) & 0x01) ? "oscillator" : "crystal");
 
-    log_start();
 
 #if (defined(CONFIG_LUA) || defined(CONFIG_BFLB_LOG) || defined(CONFIG_FATFS))
     rtc = bflb_device_get_by_name("rtc");

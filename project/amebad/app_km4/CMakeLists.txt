@@ -6,6 +6,12 @@ cmake_minimum_required(VERSION 3.20)
 project(app_km4 C CXX ASM)
 get_filename_component(AT_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 set(AT_ROOT "${AT_ROOT}" CACHE INTERNAL "at-project repo root")
+# ROMKAT links the ROM mbedTLS 2.4.0 (ABI-incompatible with upstream mbedcrypto), so fs_cli's
+# md5/sha*sum are compiled out. Tell monitor_config before it is added (AMEBAD_ENABLE_ROM_KAT is
+# a -D cache var, so it is already set here even though the option() default is declared later).
+if(AMEBAD_ENABLE_ROM_KAT)
+    set(AT_FS_CLI_HASH OFF)
+endif()
 add_subdirectory(${AT_ROOT}/component ${CMAKE_BINARY_DIR}/component)
 # __FILE__ basename for this app's logs (moved from the deleted root CMakeLists).
 add_compile_options("-fmacro-prefix-map=${CMAKE_CURRENT_LIST_DIR}/=")
@@ -103,10 +109,10 @@ option(AMEBAD_ENABLE_ROM_KAT "Build the ROM mbedTLS 2.4.0 / HW-crypto boot self-
 # explicit include, same as the AWS block below. time_cli.c's sntp_sync_once() is a weak
 # stub unless sntp_time.c (make SNTP=ON) provides the strong def.
 if(NOT AMEBAD_ENABLE_QUIC)
+    # fs/env/time_cli moved to the shared component/monitor_config (monitor_cmds, in _diag_grp
+    # below); wifi_cli (wifi forget + resolve/ip6) stays AmebaD-local. All still registered from
+    # main() after monitor_start(). FS_CLI_HASH now gated in monitor_config via AT_FS_CLI_HASH.
     target_sources(target_img2_km4 PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/fs_cli.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/time_cli.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/env_cli.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/wifi_cli.c")
     target_include_directories(target_img2_km4 PRIVATE
         "${AT_ROOT}/component/freertos-cli_config/freertos-cli")
@@ -114,13 +120,6 @@ if(NOT AMEBAD_ENABLE_QUIC)
     # mounts LittleFS + env_init()s globally now, so the WIFI_* / DHCP_* / NTP_SERVER env vars work
     # and persist in EVERY non-QUIC image (not just AWS). __real_setenv resolves to libc's setenv.
     target_link_options(target_img2_km4 PRIVATE "-Wl,--wrap=setenv" "-Wl,--wrap=unsetenv")
-    # fs_cli's md5sum/sha*sum ride the standard upstream Mbed TLS module API (mbedcrypto,
-    # linked via _hash_grp / the feature _grp). Compiled out in a ROMKAT=ON build, which
-    # links the ABI-incompatible ROM mbedTLS instead.
-    if(NOT AMEBAD_ENABLE_ROM_KAT)
-        set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/fs_cli.c"
-                     APPEND PROPERTY COMPILE_DEFINITIONS FS_CLI_HASH=1)
-    endif()
 endif()
 
 # minizip (ZIP archive) console commands (zip/unzip over the LittleFS VFS) — DEMO only. Built
@@ -132,9 +131,9 @@ endif()
 # from minizip's PUBLIC include via the group.
 set(_mz_grp "")
 if(NOT AMEBAD_ENABLE_QUIC AND NOT AMEBAD_ENABLE_AWS_IOT)
-    set(_mz_grp ",minizip,zlibstatic")
-    target_sources(target_img2_km4 PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/zip_cli.c")
+    # zip_cli.c moved to component/monitor_config (target zip_cmd, which links minizip + zlibstatic).
+    # All three are leaf/EXCLUDE_FROM_ALL libs needing libc/libgcc, so they ride the cross_refs group.
+    set(_mz_grp ",zip_cmd,minizip,zlibstatic")
     # zlib's zcalloc + minizip's ALLOC bottom out in libc malloc, which on AmebaD uses newlib's
     # tiny 4 KB _sbrk arena — far too small for deflate (~tens of KB) / minizip's 64 KB buffer
     # (faults inside deflate). Redirect every libc allocation in this image to the FreeRTOS/TLSF
@@ -307,7 +306,7 @@ endif()
 # AT-command / monitor shell libs: linked by default, dropped from the QUIC
 # image (shell init is gated off in main.c under AT_PROJECT_QUIC). Removing them
 # changes the KM4 image2 XIP relative layout (boot-hang dodge) and shrinks it.
-set(_diag_grp ",amebad_monitor,amebad_monitor_common,freertos_cli")
+set(_diag_grp ",monitor,monitor_port,monitor_cmds,freertos_cli")
 
 set(_quic_grp "")
 if(AMEBAD_ENABLE_QUIC)
@@ -329,29 +328,26 @@ endif()
 # archive names; the _config/umbrella INTERFACEs don't expand inside LINK_GROUP).
 set(_pk11_grp "")
 if(AMEBAD_ENABLE_PKCS11)
-    set(_pk11_grp ",corepkcs11,mbedcrypto,mbedx509,mbedtls,mbedtls_port,mbedtls_config")
-    set(_pal "${AT_ROOT}/component/corepkcs11_config/corepkcs11/source/portable/os")
-    target_sources(target_img2_km4 PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/pkcs11_selftest.c"
-        "${_pal}/core_pkcs11_pal_utils.c"      # label <-> filename
-        "${_pal}/posix/core_pkcs11_pal.c")     # fopen-based PAL over the AmebaD VFS/LittleFS
-    target_include_directories(target_img2_km4 PRIVATE "${_pal}")
-    set_source_files_properties(
-        "${_pal}/core_pkcs11_pal_utils.c" "${_pal}/posix/core_pkcs11_pal.c"
-        PROPERTIES COMPILE_OPTIONS "-w")       # silence vendor PAL warnings under -Werror
+    # pkcs11_selftest.c + the fopen POSIX PAL moved to the shared component/pkcs11_selftest_config
+    # (target pkcs11_selftest). Its archive rides the cross_refs group alongside corepkcs11/mbedcrypto
+    # /mbedx509. main() auto-runs pkcs11_selftest_run() under AT_PROJECT_PKCS11 (the `pkcs11` console
+    # command in the shared lib is unused here — this image auto-runs it instead).
+    set(_pk11_grp ",pkcs11_selftest,corepkcs11,mbedcrypto,mbedx509,mbedtls,mbedtls_port,mbedtls_config")
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_PKCS11)
 endif()
 
 # Crypto microbenchmark (AMEBAD_ENABLE_CRYPTOBENCH): the [MCB] scores for upstream Mbed TLS
-# v3.6.4 software crypto (SHA/AES/GCM/ChaChaPoly + ECDSA/ECDHE/X25519/RSA), the apples-to-apples
-# successor to the removed wolfCrypt [WCB] bench. mbedcrypto + the FreeRTOS-threading/entropy glue
+# v3.6.4 crypto (SHA/AES/GCM/ChaChaPoly + ECDSA/ECDHE/X25519/RSA), the apples-to-apples successor
+# to the removed wolfCrypt [WCB] bench. The bench itself moved to the shared cross-platform
+# component/mbedtls_bench_config (target mbedtls_bench, with a bench_timer_* seam — ARM SysTick
+# here, RISC-V mcycle on bl602). Its archive + mbedcrypto + the FreeRTOS-threading/entropy glue
 # join the cross_refs group (real archive names; the _config umbrellas don't expand in LINK_GROUP).
+# main() auto-runs mbedtls_bench() under AT_PROJECT_CRYPTOBENCH (the `bench` console command in the
+# shared lib is unused here — this image auto-runs it instead).
 set(_bench_grp "")
 if(AMEBAD_ENABLE_CRYPTOBENCH)
-    set(_bench_grp ",mbedcrypto,mbedx509,mbedtls,mbedtls_port,mbedtls_config")
-    target_sources(target_img2_km4 PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/mbedtls_bench.c")
+    set(_bench_grp ",mbedtls_bench,mbedcrypto,mbedx509,mbedtls,mbedtls_port,mbedtls_config")
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_CRYPTOBENCH)
 endif()
@@ -404,9 +400,13 @@ if(AMEBAD_ENABLE_AWS_IOT)
     # creds.useCrtBundle assignments in aws_iot_demo.c / ota_http.c / ota_app.c and the transport
     # hooks (the transport libs get the macro from component/network_transport).
     if(AMEBAD_ENABLE_CRT_BUNDLE STREQUAL "ON")
-        set(_aws_grp "${_aws_grp},esp_crt_bundle")
-        target_sources(target_img2_km4 PRIVATE
-            "${CMAKE_CURRENT_SOURCE_DIR}/crt_bundle_cli.c")   # `crt_bundle` console command
+        # crt_bundle_cli.c + esp_crt_bundle moved to the shared component/esp_crt_bundle_config. The
+        # `crt_bundle` command now rides the cross_refs group as the crt_bundle_cli archive (alongside
+        # esp_crt_bundle/mbedx509/mbedcrypto); crt_bundle_cli sees network_transport at configure time
+        # so its `connect` subcommand (CRT_BUNDLE_HAVE_TLS_TRANSPORT) is compiled in. main() registers
+        # it (crt_bundle_cli_register). esp_crt_bundle_config is still linked for the esp_crt_bundle.h
+        # include path on aws_iot_demo.c / ota_http.c (creds.useCrtBundle).
+        set(_aws_grp "${_aws_grp},crt_bundle_cli,esp_crt_bundle")
         target_link_libraries(target_img2_km4 PRIVATE esp_crt_bundle_config)
         target_compile_definitions(target_img2_km4 PRIVATE AMEBAD_ENABLE_CRT_BUNDLE)
     endif()
@@ -497,9 +497,11 @@ target_link_libraries(target_img2_km4 PRIVATE backoffalgorithm_config)
 # lib (no --start-group). No TLS / TF-M needed (auth-less SNTP). main.c's network-up hook starts the
 # async client (sntp_sync_start). Excluded only from QUIC (no console + XIP-layout-sensitive).
 if(NOT AMEBAD_ENABLE_QUIC)
-    target_link_libraries(target_img2_km4 PRIVATE coresntp_config backoffalgorithm_config)
+    # sntp_time.c moved to the shared component/sntp_time_config (target sntp_time; it links
+    # coreSNTP + backoffAlgorithm + rxi_log transitively). time_selftest.c + rtc_time.c stay
+    # AmebaD-local — they provide the strong rtc_time_store / time_selftest_run weak-hooks sntp_time calls.
+    target_link_libraries(target_img2_km4 PRIVATE sntp_time)
     target_sources(target_img2_km4 PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/sntp_time.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/time_selftest.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/rtc_time.c")   # mirror SNTP UTC into the HW RTC + seed at boot (rtc_api in amebad_mbed)
 endif()
@@ -592,11 +594,9 @@ endif()
 # iperf3_config but its mmap/pthread/cJSON path corrupted the TLSF heap on TX.)
 option(AMEBAD_ENABLE_IPERF "Build the homegrown iperf2 throughput probes" OFF)
 if(AMEBAD_ENABLE_IPERF)
-    target_sources(target_img2_km4 PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/iperf_client.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/iperf_server.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/iperf_udp_client.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/iperf_udp_server.c")
+    # The four probes moved to the shared component/iperf_config (target iperf); main.c still
+    # auto-runs iperf_server_start() from the network-up hook (AT_PROJECT_IPERF).
+    target_link_libraries(target_img2_km4 PRIVATE iperf)
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/main.c"
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_IPERF)
 endif()

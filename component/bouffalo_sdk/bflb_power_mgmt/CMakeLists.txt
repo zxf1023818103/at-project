@@ -109,5 +109,5 @@ target_link_libraries(bflb_power_mgmt PUBLIC
     bflb_lhal
     ${BOUFFALO_CHIP}_std
     bflb_sys
-    bflb_freertos_port
+    freertos_port
 )

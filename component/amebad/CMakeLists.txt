@@ -255,7 +255,7 @@ endif()
 add_subdirectory(usrcfg)             # chip-gated: usrcfg_common (+ _lp on KM0 / _hp on KM4)
 # (freertos_port removed: its only lib was the heap_5 glue; heap registration is now the shared
 #  ram_heap_init() in component/freertos-kernel_config/ram_heap.c)
-add_subdirectory(monitor)            # chip-gated (image2 shell/monitor)
+add_subdirectory(monitor_port)       # chip-gated: AmebaD port for the shared console engine (component/monitor_config)
 add_subdirectory(osdep)              # KM4-gated internally (osdep/os abstraction)
 add_subdirectory(mbed)               # KM4-gated: flattened mbed HAL (amebad_mbed: flash_api.c + headers), consumed by wifi
 add_subdirectory(mbedtls_rom)        # KM4-gated: headers to call ROM mbedTLS 2.4.0 as SW (no build)

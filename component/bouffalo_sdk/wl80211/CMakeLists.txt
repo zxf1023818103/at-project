@@ -58,7 +58,7 @@ target_link_libraries(wl80211 PUBLIC
     "${_wl80211_lib}"
     bflb_lhal
     ${BOUFFALO_CHIP}_std
-    bflb_freertos_port
+    freertos_port
     # wl80211.h pulls "queue/queue.h" + "tree/tree.h" (header-only utils)
     bflb_queue
     bflb_tree
@@ -73,7 +73,7 @@ target_link_libraries(wl80211 PUBLIC
     # supplicant.c #include "bl_wpa.h"
     bl_wpa_supplicant
     # wifi_mgmr.c / supplicant.c #include "log.h"
-    bflb_log
+    rxi_log
 )
 
 # Upstream wraps every wl80211 source in -Werror -Wno-unused-function

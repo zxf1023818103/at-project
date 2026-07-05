@@ -22,7 +22,7 @@ target_link_libraries(rfparam PUBLIC
     bflb_lhal
     ${BOUFFALO_CHIP}_std
     ${BOUFFALO_CHIP}_phyrf
-    bflb_log
+    rxi_log
 )
 
 if(CONFIG_RFPARAM_TLV_FIXED_ADDRESS)

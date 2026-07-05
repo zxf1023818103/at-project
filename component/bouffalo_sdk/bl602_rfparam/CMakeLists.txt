@@ -6,7 +6,7 @@
 # Deps:
 #   bl602_std    — bl602_aon.h, bl602_hbn.h
 #   bl602_phyrf  — phy_trpc.h, wl_api.h
-#   bflb_log     — log.h
+#   rxi_log     — log.h
 #   FreeRTOS     — FreeRTOS.h, portable.h (rfparam_adapter.c needs these
 #                  at COMPILE time, so we have to link a FreeRTOS target
 #                  here — non-RTOS builds of bl602_rfparam aren't real,
@@ -24,8 +24,8 @@ target_include_directories(bl602_rfparam PUBLIC
 target_link_libraries(bl602_rfparam PUBLIC
     bl602_std
     bl602_phyrf
-    bflb_log
-    bflb_freertos_port
+    rxi_log
+    freertos_port
 )
 
 if(CONFIG_RFPARAM_TLV_FIXED_ADDRESS)

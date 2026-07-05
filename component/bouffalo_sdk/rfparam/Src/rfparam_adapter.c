@@ -20,7 +20,7 @@
 #endif
 
 #define DBG_TAG "rfparam"
-#include "log.h"
+#include "bflb_log_compat.h"   /* bflb LOG_* -> rxi log_* (bflb_log deleted) */
 
 BFLB_LOG_DEFINE_TAG(RFPARAM, DBG_TAG, true);
 

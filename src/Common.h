@@ -70,6 +70,22 @@ extern write_reconnect_ptr p_roaming_start_callback;
 #include <wifi_mgmr_ext.h>
 extern "C" void *vfs_lfs_mount(void);   // lfs_port: idempotent PSM LittleFS mount
 extern "C" void  env_init(void);        // syscall_config/env.c: load /KV files into environ
+// Interactive FreeRTOS-Plus-CLI console (component/monitor_config) — started from main() on
+// uart0; same command set as AmebaD. AtTask keeps uart1 (separate UART, no RX contention).
+extern "C" {
+    void monitor_start(void);                  // shared engine: version/heap/tasks/echo + line editor
+    void bouffalo_monitor_cmds_register(void); // Bouffalo port: reboot
+    void fs_cli_register(void);                 // ls/cat/rm/mkdir/mv/cp/touch/hexdump/df/mkfs/chmod + hashes
+    void env_cli_register(void);                // setenv/getenv/env/unsetenv
+    void time_cli_register(void);               // date/uptime/sntp_update
+    void sntp_sync_start(void);                 // coreSNTP UTC time sync (component/sntp_time_config)
+    void zip_cli_register(void);                // zip/unzip (component/monitor_config zip_cmd -> minizip)
+    void log_lock_init(void);                   // rxi logger FreeRTOS-mutex lock (component/rxi_log_config)
+    void iperf_cli_register(void);              // `iperf [server|tx|udp]` throughput command (component/iperf_config)
+    void bench_cli_register(void);              // `bench` Mbed TLS crypto microbenchmark (component/mbedtls_bench_config)
+    void crt_bundle_cli_register(void);         // `crt_bundle` Mozilla CA root bundle command (component/esp_crt_bundle_config)
+    void pkcs11_cli_register(void);             // `pkcs11` corePKCS11 token self-test command (component/pkcs11_selftest_config)
+}
 // The Zephyr BLE host + HCI transport (blestack) were removed from
 // bflb_zypher_bluetooth — only the prebuilt controller remains — so the Zephyr
 // host headers (bluetooth.h / l2cap.h / gatt.h / hci_core.h / hci_driver.h) no

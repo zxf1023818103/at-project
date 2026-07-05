@@ -126,7 +126,7 @@ target_include_directories(nimble SYSTEM PUBLIC
 target_link_libraries(nimble PUBLIC
     freertos_kernel
     freertos_config
-    bflb_freertos_port
+    freertos_port
     bflb_lhal
     ${_ctrl}
     mbedcrypto

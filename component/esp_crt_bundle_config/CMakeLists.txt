@@ -42,3 +42,19 @@ target_compile_options(esp_crt_bundle PRIVATE -w)
 # Umbrella INTERFACE (伞形): consumers link `esp_crt_bundle_config`.
 add_library(esp_crt_bundle_config INTERFACE)
 target_link_libraries(esp_crt_bundle_config INTERFACE esp_crt_bundle)
+
+# `crt_bundle` console command (crt_bundle_cli.c): info / verify <pem> / addca — validate the
+# bundle against a cert file or add a CA at runtime. The optional `connect <host> <port>` subcommand
+# does a LIVE TLS handshake to check a real server against the bundle; it needs a TLS client
+# transport (component/network_transport), so it's compiled in only where that target exists
+# (amebad-family). On bl602 the command keeps the portable info/verify/addca ops. Shared across
+# platforms: AmebaD registers it in the AWS image; bl602 in main() (crt_bundle_cli_register).
+add_library(crt_bundle_cli STATIC EXCLUDE_FROM_ALL crt_bundle_cli.c)
+target_link_libraries(crt_bundle_cli PUBLIC esp_crt_bundle freertos_cli rxi_log FreeRTOS)
+target_compile_options(crt_bundle_cli PRIVATE -w)
+if(TARGET network_transport)
+    # transport_tls.h (TLS_FreeRTOS_Connect/Disconnect + NetworkCredentials_t). The symbols resolve
+    # at the image link where network_transport is already pulled (amebad AWS group).
+    target_compile_definitions(crt_bundle_cli PRIVATE CRT_BUNDLE_HAVE_TLS_TRANSPORT)
+    target_link_libraries(crt_bundle_cli PRIVATE network_transport)
+endif()

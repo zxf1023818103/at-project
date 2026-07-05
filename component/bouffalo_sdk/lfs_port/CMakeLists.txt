@@ -1,46 +1,11 @@
-# component/bouffalo_sdk/lfs_port — Bouffalo XIP-flash block-device backend for
-# upstream littlefs (target lfs_port), plus the shared fd-VFS mount hook
-# vfs_lfs_mount(). Mirrors component/amebad/lfs_port (same target name: lfs_port). Extracted
-# from bouffalo_sdk/components/fs/littlefs/port/.
-#
-# What it provides:
-#   lfs_xip_flash_{read,prog,erase,sync}   the lfs_config callbacks
-#   lfs_xip_init                            convenience initializer
-#   struct lfs_context                      lfs_t + per-fs lock + flash
-#                                           addr / partition name
-#   <lfs_port.h>                            the public header above
-#
-# Backing storage:
-#   - If CONFIG_LITTLEFS_FLASH_ADDRESS is defined, the fs uses a hardcoded
-#     absolute flash offset (also requires LITTLEFS_FLASH_SIZE).
-#   - Otherwise lfs_xip_init resolves the partition by name (default
-#     "PSM") via bflb_partition / bflb_mtd at runtime.
-#
-# CONFIG_FREERTOS enables LFS_THREADSAFE + the per-fs giant-lock
-# semaphore. Off for bare-metal — none of our build paths exercise that.
+# component/bouffalo_sdk/lfs_port — Bouffalo LittleFS flash port for the shared LittleFS
+# service (component/littlefs_config). Supplies the four flash diskio callbacks over the bflb
+# flash HAL + the vfs_lfs_mount() hook via lfs_config_mount() — the same mount path AmebaD uses
+# (component/amebad/lfs_port), so the whole VFS + df/chmod + mkfs (lfs_config_format) share one
+# consistent mount. Target `lfs_port` (unified with AmebaD).
+add_library(lfs_port STATIC vfs_lfs_mount.c)
 
-add_library(lfs_port STATIC
-    lfs_xip_flash.c
-    vfs_lfs_mount.c   # the shared fd-VFS mount hook (was easyflash_init's mount)
-)
-
-target_include_directories(lfs_port PUBLIC
-    "${CMAKE_CURRENT_SOURCE_DIR}"
-)
-
-# Upstream littlefs needs LFS_THREADSAFE defined to compile the locking
-# hooks; same flag flips bflb's giant-lock paths on. Always on in our
-# build (every consumer here is on FreeRTOS).
-target_compile_definitions(lfs_port PUBLIC
-    LFS_THREADSAFE
-)
-
-# bflb_flash / bflb_l1c / bflb_mtd come from lhal + bflb_mtd; lfs.h from
-# upstream littlefs; log.h from bflb_log; FreeRTOS from the kernel.
-target_link_libraries(lfs_port PUBLIC
-    littlefs
-    bflb_lhal
-    bflb_mtd
-    bflb_log
-    freertos_kernel
-)
+# littlefs (lfs.h; it carries the PUBLIC LFS_THREADSAFE) + lfs_config (geometry + the mount
+# lifecycle + the giant lock). bflb_lhal is the flash HAL (bflb_flash.h) — implementation detail.
+target_link_libraries(lfs_port PUBLIC  littlefs lfs_config)
+target_link_libraries(lfs_port PRIVATE bflb_lhal)

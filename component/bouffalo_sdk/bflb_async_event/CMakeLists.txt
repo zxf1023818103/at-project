@@ -12,4 +12,4 @@ target_include_directories(bflb_async_event PUBLIC
 )
 
 # Both .c sources #include <FreeRTOS.h>.
-target_link_libraries(bflb_async_event PUBLIC bflb_freertos_port)
+target_link_libraries(bflb_async_event PUBLIC freertos_port)

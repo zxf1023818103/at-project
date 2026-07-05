@@ -134,7 +134,7 @@ endif()
 target_link_libraries(bflb_lhal PUBLIC
     ${BOUFFALO_CHIP}_std
     bflb_autoconf
-    bflb_freertos_port
+    freertos_port
 )
 
 target_sources(bflb_lhal PRIVATE config/${BOUFFALO_CHIP}/device_table.c)

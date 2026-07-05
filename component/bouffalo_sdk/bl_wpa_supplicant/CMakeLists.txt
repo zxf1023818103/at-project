@@ -71,7 +71,7 @@ target_compile_options(bl_wpa_supplicant PRIVATE
 # block in component/thirdparty/CMakeLists.txt.
 target_link_libraries(bl_wpa_supplicant PUBLIC
     bflb_lhal
-    bflb_freertos_port
+    freertos_port
     mbedcrypto
     # wl80211/include/wl80211.h pulls "queue/queue.h" + "tree/tree.h"
     bflb_queue

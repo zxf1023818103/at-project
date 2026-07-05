@@ -50,17 +50,23 @@ add_subdirectory(corejson_config)           # coreJSON parser (OTA job-document 
 add_subdirectory(tinycbor_config)           # TinyCBOR (OTA MQTT data-plane block decode) — ota_config dep
 add_subdirectory(ota_config)                # AWS IoT OTA Agent v3.3.0 — links corejson_config + tinycbor_config + freertos_config
 add_subdirectory(coresntp_config)           # coreSNTP SNTPv4 client static lib + core_sntp_config.h
-add_subdirectory(freertos-cli_config)       # FreeRTOS-Plus-CLI V202212.00 static lib
+add_subdirectory(sntp_time_config)          # coreSNTP UTC time-sync app glue (sntp_time; strong sntp_sync_once)
+add_subdirectory(iperf_config)              # iperf2 throughput probes over FreeRTOS+TCP (iperf + `iperf` console cmd)
+add_subdirectory(freertos-cli_config)       # FreeRTOS-Plus-CLI V202212.00 static lib (freertos_cli)
+add_subdirectory(monitor_config)            # cross-platform interactive console: engine (monitor) + fs/env/time cmds (monitor_cmds)
 add_subdirectory(nimble_config)             # INTERFACE: NimBLE syscfg + upstream include surface
 add_subdirectory(mcumgr_config)             # apache/mynewt-mcumgr 0.7.0 SMP core (img+os groups) over tinycbor v7 shim — BLE DFU (MCUMGR=ON)
 add_subdirectory(syscall_config)            # newlib retarget OBJECT lib (VFS + malloc + byte-order); PRIVATE-links freertos-plus-tcp_config + at_console
 add_subdirectory(c-ares_config)             # c-ares async DNS resolver (compiled only when linked / targeted; wired in under CARES=ON)
 add_subdirectory(rxi_log_config)            # rxi log.c (leveled logger) + FreeRTOS-mutex lock via log_set_lock
 add_subdirectory(mbedtls_config)            # upstream Mbed TLS v3.6.4 -> mbedcrypto / mbedx509 / mbedtls
-add_subdirectory(esp_crt_bundle_config)     # compressed Mozilla CA root bundle (CRT_BUNDLE=ON) over mbedtls_config
 add_subdirectory(corepkcs11_config)         # PKCS#11 software token over mbedcrypto/mbedx509 (PAL consumer-supplied)
+add_subdirectory(pkcs11_selftest_config)    # corePKCS11 token self-test (pkcs11_selftest + `pkcs11` cmd) + the LittleFS POSIX PAL
+add_subdirectory(mbedtls_bench_config)      # upstream Mbed TLS microbenchmark (mbedtls_bench) + `bench` cmd (BENCH=ON / bl602 always)
 add_subdirectory(picotls_config)            # TLS 1.3 core + mbedTLS/PSA backend (picotls_mbedtls) for ngtcp2 QUIC
 add_subdirectory(network_transport)         # TransportInterface_t impls over mbedtls_config + freertos-plus-tcp_config — coreMQTT TLS transport
+add_subdirectory(esp_crt_bundle_config)     # compressed Mozilla CA root bundle (CRT_BUNDLE=ON) + `crt_bundle` cmd; AFTER network_transport
+                                            # so crt_bundle_cli's if(TARGET network_transport) sees it (enables the `connect` subcommand)
 endif()  # NOT BOUFFALO_CHIP
 
 # lfs_image — host-side LittleFS image builder (cross-platform). Dual-mode CMakeLists: add_subdirectory
@@ -127,6 +133,39 @@ if(BOUFFALO_CHIP)
     # so bouffalo_sdk below can force-include $<TARGET_OBJECTS:syscall_config>. Its deps
     # (FreeRTOS heap + littlefs + freertos-plus-tcp_config + at_console) all exist by now.
     add_subdirectory(syscall_config)
+
+    # FreeRTOS-Plus-CLI core + the cross-platform interactive console. Added here too (like
+    # freertos-plus-tcp_config / syscall_config, in both branches) so bl602 gets the same
+    # console (ls/cat/setenv/date) as AmebaD; the bl602 monitor_port glue lives in bouffalo_sdk.
+    # monitor_config depends on freertos_cli + at_console, so it comes after freertos-cli_config.
+    add_subdirectory(freertos-cli_config)
+    add_subdirectory(monitor_config)
+
+    # rxi log (component/rxi_log_config) is now the SINGLE project logger — the Bouffalo-specific
+    # bflb_log was deleted; the SDK's LOG_*/BFLB_LOG_* route to rxi via bflb_log_compat.h. main()
+    # calls log_lock_init(). Output -> at_console (uart0), line-timestamped.
+    add_subdirectory(rxi_log_config)
+
+    # coreSNTP UTC time sync for bl602 (same as AmebaD: date/sntp_update/log timestamps become
+    # real UTC). coreSNTP + backoffAlgorithm were NOT-BOUFFALO-only until now. freertos-plus-tcp_config
+    # (added above) supplies the UDP sockets + DHCP opt-42 server; sntp_time logs via a printf shim
+    # (no rxi_log, whose log.h collides with bflb_log's on Bouffalo).
+    add_subdirectory(coresntp_config)
+    add_subdirectory(backoffalgorithm_config)
+    add_subdirectory(sntp_time_config)
+    add_subdirectory(iperf_config)   # iperf throughput probes + the `iperf` console command
+    add_subdirectory(mbedtls_bench_config)   # Mbed TLS crypto microbenchmark + the `bench` console command
+                                             # (RISC-V mcycle timer override lives in bouffalo_sdk/mbedtls_bench_port)
+    # Compressed Mozilla CA root bundle + the `crt_bundle` console command (info/verify/addca).
+    # esp_crt_bundle links mbedtls_config (mbedcrypto/mbedx509), pulled into the image by bouffalo_sdk
+    # below. No network_transport on bl602 -> crt_bundle_cli compiles without the `connect` subcommand.
+    add_subdirectory(esp_crt_bundle_config)
+
+    # corePKCS11 software token + its self-test (pkcs11_selftest + the `pkcs11` console command) + the
+    # upstream fopen-based PAL over LittleFS. corepkcs11/pkcs11_selftest link mbedcrypto/mbedx509 (PSA)
+    # via mbedtls_config, pulled into the image by bouffalo_sdk below. Same reused POSIX PAL as AmebaD.
+    add_subdirectory(corepkcs11_config)
+    add_subdirectory(pkcs11_selftest_config)
 
     # Third-party submodules are added by the root CMakeLists.txt before we
     # get here, so zlibstatic / cjson / littlefs are already real targets that

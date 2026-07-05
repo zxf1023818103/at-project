@@ -55,7 +55,7 @@ target_link_libraries(wifi4_bflb_adapter
     PUBLIC
         wifi4_firmware
         bflb_lhal
-        bflb_log
+        rxi_log
         bflb_async_event
         freertos_kernel
     PRIVATE
