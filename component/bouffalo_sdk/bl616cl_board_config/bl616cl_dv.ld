@@ -358,8 +358,8 @@ SECTIONS
       . = ALIGN(16);
     } > ram_wifi
 
-    PROVIDE( _heap_wifi_start = . );
-    PROVIDE( _heap_wifi_size = ORIGIN(ram_wifi) + LENGTH(ram_wifi) - _heap_wifi_start );
+    PROVIDE( _heap_wram_start = . );
+    PROVIDE( _heap_wram_size = ORIGIN(ram_wifi) + LENGTH(ram_wifi) - _heap_wram_start );
     PROVIDE(__LD_CONFIG_EM_SEL = __EM_SIZE);
     ASSERT((wifi_ram_max_size + __EM_SIZE) <= 160K,"wifi ram overflow")
 }

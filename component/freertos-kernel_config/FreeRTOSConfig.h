@@ -131,15 +131,16 @@ extern uint32_t SystemCoreClock;
 
 #else
 /* ----------------- KM0 (Cortex-M23, LP) ----------------- */
-/* (Software timers are ON, via the common section. They used to crash KM0's scheduler start, but
- * the real cause was heap exhaustion — the 20 KB ucHeap couldn't fit the timer task+queue, so
- * xTimerCreateTimerTask's malloc returned NULL, vTaskStartScheduler returned, and KM0 unwound
- * all the way out to the boot ROM (0x49a2 dead-loop). See doc/amebad_km0_scheduler_and_runtime_flash.md.
- * Now configSUPPORT_STATIC_ALLOCATION is on (common): the idle + timer TASKS are static (.bss, via
- * freertos_port/freertos_static_mem.c), off-heap — so the heap no longer needs the ~1.7 KB those
- * tasks took, and it's trimmed to 24 KB to make BD_RAM room for the new static .bss.) */
+/* KM0's heap is now registered by the shared ram_heap_init() (ram_heap.c) from the app_km0
+ * linker symbols: the main region __HeapBase..__HeapLimit spans all SRAM left above the image
+ * (BD_RAM ceiling 0x8F000, ~25 KB), plus the reclaimed ROM-BSS scratch (0x80A00, 0x1600) as a
+ * secondary heap — so configTOTAL_HEAP_SIZE below no longer sizes a static ucHeap; it is kept
+ * only as documentation of the ~24-25 KB budget. History: KM0's scheduler start is heap-exhaustion
+ * sensitive (a 20 KB ucHeap once couldn't fit the timer task+queue -> vTaskStartScheduler returned
+ * -> boot-ROM 0x49a2 dead-loop; see doc/amebad_km0_scheduler_and_runtime_flash.md). The idle + timer
+ * TASKS are static (.bss, via freertos_config/freertos_static_mem.c), off-heap. */
 #define configENABLE_FPU                                0
-#define configTOTAL_HEAP_SIZE                           ( ( size_t ) ( 24 * 1024 ) ) /* idle/timer tasks now static (.bss), off-heap; BD_RAM ceiling ~31K from ucHeap@~0x87460. */
+#define configTOTAL_HEAP_SIZE                           ( ( size_t ) ( 24 * 1024 ) ) /* informational only; actual heap = __HeapBase..__HeapLimit + ROM-BSS (see ram_heap.c / app_km0 .ld) */
 #define configUSE_APPLICATION_TASK_TAG                  0
 #define configUSE_IDLE_HOOK                             1
 #define configUSE_MALLOC_FAILED_HOOK                    0
@@ -205,7 +206,7 @@ extern int  freertos_ready_to_sleep(void);
 
 #include <stdio.h>
 
-/* The build also passes -DconfigMTIME(CMP)_BASE_ADDRESS via bflb_freertos_port;
+/* The build also passes -DconfigMTIME(CMP)_BASE_ADDRESS via freertos_port;
  * guard with #ifndef so this header doesn't redefine. */
 #ifndef configMTIME_BASE_ADDRESS
 #if defined(BL602) || defined(BL702) || defined(BL702L)

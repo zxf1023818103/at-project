@@ -78,8 +78,17 @@ SECTIONS
 		__end__ = .;
 		end = __end__;
 		KEEP(*(.heap*))
-		__HeapLimit = .;
+		/* Extend the main heap to the top of BD_RAM (bl602-style cap; was size-0). Nothing
+		 * else lands in BD_RAM after this (.xip_image2.text -> KM0_IMG2, retention -> RETENTION_RAM),
+		 * so [__HeapBase, __HeapLimit) is all the SRAM left above the image. */
+		__HeapLimit = ORIGIN(BD_RAM) + LENGTH(BD_RAM);
 	} > BD_RAM
+
+	/* Secondary heap = the reclaimable ROM-BSS scratch (0x80A00..0x82000, ROM used < 0x809ce).
+	 * Fed to the shared ram_heap_init() as MM_HEAP_WRAM_0 via the common _heap_wram_* contract
+	 * (the symbol's ADDRESS carries the value, matching the Bouffalo idiom). */
+	_heap_wram_start = 0x00080A00;
+	_heap_wram_size  = 0x1600;
 
 	.xip_image2.text : 
 	{

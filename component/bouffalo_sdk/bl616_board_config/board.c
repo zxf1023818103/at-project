@@ -24,11 +24,12 @@
 #include "board_flash_psram.h"
 
 #include "mm.h"
+#include "ram_heap.h"   /* shared ram_heap_init() (freertos-kernel_config): OCRAM + WRAM */
 
 extern void log_start(void);
 
-extern uint32_t __HeapBase;
-extern uint32_t __HeapLimit;
+/* PSRAM heap symbols stay board-local: PSRAM needs board_psram_x8_init() HW bring-up,
+ * which can't live in the cross-platform ram_heap.c (see board_psram_heap_init below). */
 extern uint32_t __psram_heap_base;
 extern uint32_t __psram_limit;
 
@@ -36,9 +37,6 @@ extern uint32_t __psram_data_start__;
 extern uint32_t __psram_data_end__;
 extern uint32_t __psram_noinit_data_start__;
 extern uint32_t __psram_noinit_data_end__;
-
-extern uint32_t _heap_wifi_start;
-extern uint32_t _heap_wifi_size;
 
 #ifdef CONFIG_CONSOLE_WO
 static struct bflb_device_s *wo;
@@ -360,18 +358,11 @@ void bflb_wfa_init(void)
 }
 #endif
 
-void ram_heap_init(void)
+/* OCRAM + WiFi-DMA WRAM heaps are registered by the shared ram_heap_init()
+ * (component/freertos-kernel_config/ram_heap.c). PSRAM stays board-local because it needs
+ * board_psram_x8_init() hardware bring-up; board_init() calls this right after ram_heap_init(). */
+static void board_psram_heap_init(void)
 {
-    size_t heap_len;
-
-    /* ram heap init */
-    mem_manager_init();
-
-    /* ocram heap init */
-    heap_len = ((size_t)&__HeapLimit - (size_t)&__HeapBase);
-    mm_register_heap(MM_HEAP_OCRAM_0, "OCRAM", MM_ALLOCATOR_TLSF, &__HeapBase, heap_len);
-    mm_register_heap(MM_HEAP_WRAM_0, "WRAM", MM_ALLOCATOR_TLSF, &_heap_wifi_start, (uintptr_t)&_heap_wifi_size);
-
 #ifdef CONFIG_PSRAM
     /* psram init */
     if (board_psram_x8_init() != SUCCESS) {
@@ -380,29 +371,16 @@ void ram_heap_init(void)
     }
 
     /* psram heap init */
-    heap_len = ((size_t)&__psram_limit - (size_t)&__psram_heap_base);
 #ifndef CONFIG_PSRAM_SKIP_REGISTER_HEAP
-    mm_register_heap(MM_HEAP_PSRAM_0, "PSRAM", MM_ALLOCATOR_TLSF, &__psram_heap_base, heap_len);
+    mm_register_heap(MM_HEAP_PSRAM_0, "PSRAM", MM_ALLOCATOR_TLSF, &__psram_heap_base,
+                     (size_t)&__psram_limit - (size_t)&__psram_heap_base);
 #endif
-
-    /* ram info dump */
-    printf("dynamic memory init success\r\n"
-           "  ocram heap size: %d Kbyte, \r\n"
-           "  psram heap size: %d Kbyte\r\n",
-           ((size_t)&__HeapLimit - (size_t)&__HeapBase) / 1024,
-           ((size_t)&__psram_limit - (size_t)&__psram_heap_base) / 1024);
-
 #else
     /* check psram data */
     if (&__psram_data_end__ - &__psram_data_start__ > 0 || &__psram_noinit_data_end__ - &__psram_noinit_data_start__ > 0) {
         puts("psram data already exists, please enable CONFIG_PSRAM\r\n");
         while (1) {}
     }
-
-    /* ram info dump */
-    printf("dynamic memory init success\r\n"
-           "  ocram heap size: %d Kbyte \r\n",
-           ((size_t)&__HeapLimit - (size_t)&__HeapBase) / 1024);
 #endif
 }
 
@@ -448,8 +426,9 @@ void board_init(void)
     /* console init (uart or wo) */
     console_init();
 
-    /* ram and heap init (including psram) */
+    /* ram and heap init: shared OCRAM + WRAM, then board-local PSRAM */
     ram_heap_init();
+    board_psram_heap_init();
 
     /* boot info dump */
     bl_show_log();

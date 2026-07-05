@@ -281,8 +281,10 @@ SECTIONS
       . = ALIGN(16);
     } > ram_wifi
 
-    PROVIDE( _heap_wifi_start = . );
-    PROVIDE( _heap_wifi_size = ORIGIN(ram_wifi) + LENGTH(ram_wifi) - _heap_wifi_start );
+    /* Secondary (WiFi-DMA WRAM) heap span. Named _heap_wram_* to match the shared
+     * ram_heap_init() contract + the MM_HEAP_WRAM_0 "WRAM" heap it feeds. */
+    PROVIDE( _heap_wram_start = . );
+    PROVIDE( _heap_wram_size = ORIGIN(ram_wifi) + LENGTH(ram_wifi) - _heap_wram_start );
 
     .bss (NOLOAD) :
     {

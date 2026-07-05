@@ -29,7 +29,10 @@
 
 #if (tskKERNEL_VERSION_MAJOR>=10) && (tskKERNEL_VERSION_MINOR>=2)
 #include "freertos_backtrace_ext.h"
-#include "freertos_heap5_config.h"
+/* ram_heap_init() — the cross-platform heap registrar (component/freertos-kernel_config/ram_heap.c),
+ * called from app_start. Declared here rather than #include "ram_heap.h" so freertos-kernel_config
+ * need not be on every ameba_soc.h consumer's include path. */
+void ram_heap_init(void);
 #endif
 
 #include "semphr.h"

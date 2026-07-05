@@ -1,11 +1,13 @@
 /*
- * freertos_static_mem.c — static memory for the Idle + Timer tasks.
+ * freertos_static_mem.c — static memory for the Idle + Timer tasks (cross-platform).
  *
- * Required once configSUPPORT_STATIC_ALLOCATION == 1 (now enabled for all platforms in
- * FreeRTOSConfig.h): this FreeRTOS (V10.6.2) has no configKERNEL_PROVIDED_STATIC_MEMORY default,
- * so the kernel calls vApplicationGetIdle/TimerTaskMemory to get the idle/timer task's static
- * buffers. Built per-core via freertos_port, so configMINIMAL_STACK_SIZE / configTIMER_TASK_STACK_DEPTH
- * resolve to the KM0 vs KM4 values. Weak so a platform image may override if it needs custom sizing.
+ * Required once configSUPPORT_STATIC_ALLOCATION == 1 (on for all platforms in FreeRTOSConfig.h):
+ * this FreeRTOS has no configKERNEL_PROVIDED_STATIC_MEMORY default, so the kernel calls
+ * vApplicationGetIdle/TimerTaskMemory to obtain the idle/timer task's static buffers. Built as
+ * part of freertos_config, which every platform compiles with its own FreeRTOSConfig.h, so
+ * configMINIMAL_STACK_SIZE / configTIMER_TASK_STACK_DEPTH resolve to that build's values (e.g. the
+ * AmebaD KM0 vs KM4 sizes, or the Bouffalo per-chip sizes). Weak so a platform image may override
+ * for custom sizing. Previously duplicated in every platform's freertos_port; folded here.
  */
 #include "FreeRTOS.h"
 #include "task.h"

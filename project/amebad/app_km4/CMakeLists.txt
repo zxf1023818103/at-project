@@ -634,7 +634,7 @@ target_link_libraries(target_img2_km4 PRIVATE
     # EXCLUDE_FROM_ALL lib CMake would otherwise sink it past -lc/-lgcc and leave
     # those undefined. amebad_mbed (flash_api) is lfs_port's backend. (The upstream
     # mbedcrypto/mbedx509 + picotls/ngtcp2 crypto join per-feature via the _grp vars.)
-    "$<LINK_GROUP:cross_refs,FreeRTOS,freertos_port,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,freertos_plus_tcp,freertos_plus_tcp_port,amebad_wlan,amebad_wps,amebad_lfs_port,amebad_mbed,lfs_config,littlefs,rxi_log${_diag_grp}${_hci_grp}${_quic_grp}${_pk11_grp}${_bench_grp}${_aws_grp}${_mz_grp}${_hash_grp}>"
+    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,freertos_plus_tcp,freertos_plus_tcp_port,amebad_wlan,amebad_wps,amebad_lfs_port,amebad_mbed,lfs_config,littlefs,rxi_log${_diag_grp}${_hci_grp}${_quic_grp}${_pk11_grp}${_bench_grp}${_aws_grp}${_mz_grp}${_hash_grp}>"
     m
     stdc++
     c
@@ -698,9 +698,9 @@ if(AMEBAD_TFM_BOOT)
     # Clamp the NS FreeRTOS heap top below TF-M's secure RAM. tfm_s runs cached-XIP
     # (code in flash, not RAM), so the only secure SRAM is S_DATA
     # (0x10070000..0x1007FFFF); app_km4 as the NSPE must keep its heap (and
-    # everything else) under that or os_heap_init faults the moment heap5 touches
+    # everything else) under that or ram_heap_init faults the moment the heap touches
     # the secure region. __tz_sram_top__ feeds rlx8721d_img2_is.ld's __sram_end__
-    # and MUST equal region_defs.h S_DATA_START. This is the os_heap_init-hang fix:
+    # (= __HeapLimit) and MUST equal region_defs.h S_DATA_START. This is the heap-hang fix:
     # previously the NS heap ran up to BD_RAM_NS top 0x1007C000, overlapping the secure
     # window. 2026-06-24: raised 0x10060000 -> 0x10070000 (TF-M S_DATA 120 KB -> 56 KB),
     # +64 KB of NS heap.

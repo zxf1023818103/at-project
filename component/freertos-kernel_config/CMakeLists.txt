@@ -19,6 +19,10 @@
 #       freertos_heap_tlsf.c    FreeRTOS heap surface over the shared tlsf_config
 #       freertos_heap_none.c       empty FREERTOS_HEAP stub
 #       freertos_hooks.c           idle / stack-overflow / malloc-failed hooks (printf)
+#       freertos_static_mem.c      idle + timer task static buffers (configSUPPORT_STATIC_ALLOCATION)
+#       ram_heap.c                 the single cross-platform ram_heap_init() — registers the
+#                                  __HeapBase/__HeapLimit (+ _heap_wram_* / __psram_*) linker
+#                                  regions as tlsf_config heaps; every platform's boot calls it
 #     This is ALSO the kernel's mandated `freertos_config` target (the upstream
 #     FreeRTOS-Kernel links any target of that name for FreeRTOSConfig.h), so it
 #     PUBLIC-exposes this dir (FreeRTOSConfig.h + freertos_backtrace_ext.h).
@@ -40,6 +44,8 @@ add_library(freertos_config STATIC
     freertos_heap_tlsf.c   # FreeRTOS heap surface over the shared tlsf_config (TLSF)
     freertos_heap_none.c      # empty FREERTOS_HEAP stub (kernel compiles no heap_N.c)
     freertos_hooks.c
+    freertos_static_mem.c     # idle + timer task static buffers (was duplicated per-platform)
+    ram_heap.c                # the single cross-platform ram_heap_init() (linker-symbol driven)
 )
 
 # PUBLIC: this dir (FreeRTOSConfig.h for the kernel + freertos_backtrace_ext.h) and the

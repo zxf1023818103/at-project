@@ -27,8 +27,9 @@
 #                    (rtl8721dlp_* — KM0 flash/intf/pinmap/sleep), usrcfg_hp
 #                    (rtl8721dhp_* — KM4 trustzone/interface).
 #
-#   freertos_port    The AmebaD heap_5 memory-map glue lib `freertos_port`
-#                    (freertos_heap5_config.c -> vPortDefineHeapRegions). The upstream
+#   (heap)           Heap registration is the shared ram_heap_init()
+#                    (component/freertos-kernel_config/ram_heap.c), driven by the app's linker
+#                    symbols; the AmebaD-only freertos_port heap_5 glue lib is gone. The upstream
 #                    FreeRTOS-Kernel (-> `FreeRTOS`) + per-core port/heap is built by
 #                    component/freertos-kernel_config; the kernel/glue header bundle +
 #                    the freertos_config <- amebad_sdk_includes attach are inline below.
@@ -140,11 +141,9 @@ add_subdirectory(platform_stdlib)    # header-only libc-retarget header (amebad_
 # main.h) is now in-tree, owned by the app component: app_km0 (KM0) /
 # app_km4 (KM4). Chip-gated below via _proj_cfg_inc.
 
-# amebad_freertos_headers — the FreeRTOS HEADER bundle for AmebaD (moved here from
-# component/amebad/freertos_port, which is now just the heap_5 glue lib): the upstream kernel's
-# FreeRTOS.h (include/) + portmacro.h (per-core port dir) + the freertos_port glue headers
-# (freertos_service.h / freertos_heap5_config.h). INTERFACE so it carries only include dirs —
-# linking the kernel STATIC would cycle back via freertos_config. Per-core port path
+# amebad_freertos_headers — the FreeRTOS HEADER bundle for AmebaD: the upstream kernel's
+# FreeRTOS.h (include/) + portmacro.h (per-core port dir). INTERFACE so it carries only include
+# dirs — linking the kernel STATIC would cycle back via freertos_config. Per-core port path
 # (km0 = ARMv6-M CM0; km4 image2 = ARMv8-M CM33, no-TrustZone non-secure).
 if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
     set(_frt_port_path "GCC/ARM_CM0")
@@ -154,7 +153,6 @@ endif()
 set(_frt_src "${AT_ROOT}/component/freertos-kernel_config/freertos-kernel")
 add_library(amebad_freertos_headers INTERFACE)
 target_include_directories(amebad_freertos_headers SYSTEM INTERFACE
-    "${AT_ROOT}/component/amebad/freertos_port"   # freertos_service.h / freertos_heap5_config.h
     "${_frt_src}/include"
     "${_frt_src}/portable/${_frt_port_path}")
 
@@ -255,7 +253,8 @@ if(TARGET freertos_config)
 endif()
 # ----------------------------------------- end folded sdk_headers -----------------------------
 add_subdirectory(usrcfg)             # chip-gated: usrcfg_common (+ _lp on KM0 / _hp on KM4)
-add_subdirectory(freertos_port)      # AmebaD heap_5 memory-map glue lib `freertos_port` (kernel built by freertos-kernel_config)
+# (freertos_port removed: its only lib was the heap_5 glue; heap registration is now the shared
+#  ram_heap_init() in component/freertos-kernel_config/ram_heap.c)
 add_subdirectory(monitor)            # chip-gated (image2 shell/monitor)
 add_subdirectory(osdep)              # KM4-gated internally (osdep/os abstraction)
 add_subdirectory(mbed)               # KM4-gated: flattened mbed HAL (amebad_mbed: flash_api.c + headers), consumed by wifi
