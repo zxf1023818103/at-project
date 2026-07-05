@@ -40,6 +40,19 @@ target_include_directories(freertos_plus_tcp SYSTEM PUBLIC "${CMAKE_CURRENT_SOUR
 target_compile_options(freertos_plus_tcp PRIVATE -w)
 target_compile_options(freertos_plus_tcp_port PRIVATE -w)
 
+# at_netif.c — the cross-platform STA NetworkInterface helper: the descriptor +
+# prvInitialise/prvGetPhyLinkStatus/prvOutput, the DHCP IPv4 bring-up, the RX-submit
+# tail, and the single-per-image stack callbacks (random / hostname / DNS-query /
+# network-event). Shared by the amebad Realtek bridge (amebad_freertos_tcp) and the
+# Bouffalo bl602 / wl80211 bridges (bouffalo_freertos_tcp), which thread their WiFi
+# driver in via at_netif_ops_t. Compiled INTO the core stack target so it lands in
+# every networking image's link path automatically (the stack is already inside each
+# image's --start-group, and both bridges link freertos_plus_tcp PUBLIC) — no
+# link-group churn. Warnings kept on for our file (the stack itself is built -w).
+target_sources(freertos_plus_tcp PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/at_netif.c")
+set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/at_netif.c"
+    PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra")
+
 # Umbrella INTERFACE (伞形): header-only consumers (syscall_config) link
 # `freertos-plus-tcp_config` to get FreeRTOSIPConfig.h + the FreeRTOS_IP API headers.
 # (Archive consumers — the app_km4 link group, the Realtek bridge — link freertos_plus_tcp
