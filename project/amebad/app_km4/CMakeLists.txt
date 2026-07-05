@@ -84,7 +84,7 @@ add_executable(target_img2_km4
     "${CMAKE_CURRENT_SOURCE_DIR}/wifi_scan_compat.c"    # weak wifi_mode + connect/EAP/promisc stubs
     "${CMAKE_CURRENT_SOURCE_DIR}/freertos_tcp_compat.c" # weak lwip stubs (lwip IP not linked; FreeRTOS+TCP instead)
 )
-# (lfs_selftest moved into the amebad_lfs_port archive so ALL LittleFS .text is
+# (lfs_selftest moved into the lfs_port archive so ALL LittleFS .text is
 # pinned to the XIP tail by the ld script — keeps boot/WiFi code addresses stable.)
 
 # ROM-mbedTLS self-test image (make ROMKAT=ON): builds the ROM mbedTLS 2.4.0 KAT +
@@ -628,13 +628,13 @@ target_link_libraries(target_img2_km4 PRIVATE
     syscall_config       # OBJECT lib: cross-platform newlib retarget (VFS + malloc + byte-order), force-included so its strong defs beat libc's ENOSYS stubs
     amebad_syscall_port  # OBJECT lib: AmebaD console backend (strong at_console_default_backend -> LOGUART), also force-included
     amebad_mbedtls_rom   # INTERFACE: ROM mbedTLS 2.4.0 headers + MBEDTLS_CONFIG_FILE (no archive)
-    # LittleFS (amebad_lfs_port + lfs_config + littlefs) and its flash backend
+    # LittleFS (lfs_port + lfs_config + littlefs) and its flash backend
     # (amebad_mbed) join the group: littlefs is a leaf needing libc (printf/strspn)
     # + libgcc (__popcountsi2), which follow the group, and as a transitive
     # EXCLUDE_FROM_ALL lib CMake would otherwise sink it past -lc/-lgcc and leave
     # those undefined. amebad_mbed (flash_api) is lfs_port's backend. (The upstream
     # mbedcrypto/mbedx509 + picotls/ngtcp2 crypto join per-feature via the _grp vars.)
-    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,freertos_plus_tcp,freertos_plus_tcp_port,amebad_wlan,amebad_wps,amebad_lfs_port,amebad_mbed,lfs_config,littlefs,rxi_log${_diag_grp}${_hci_grp}${_quic_grp}${_pk11_grp}${_bench_grp}${_aws_grp}${_mz_grp}${_hash_grp}>"
+    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,freertos_plus_tcp,freertos_plus_tcp_port,amebad_wlan,amebad_wps,lfs_port,amebad_mbed,lfs_config,littlefs,rxi_log${_diag_grp}${_hci_grp}${_quic_grp}${_pk11_grp}${_bench_grp}${_aws_grp}${_mz_grp}${_hash_grp}>"
     m
     stdc++
     c

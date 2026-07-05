@@ -337,9 +337,9 @@ void testUartInStream1() {
 
 // Read the prefilled KV "test_key_1" (placed in project/resource/KV/test_key_1
 // and packed into lfs.bin by mklfs), then round-trip a fresh key. Verifies the
-// same lfs.bin reads correctly through EasyFlash on Bouffalo and rt_kv on
-// Ameba. Not wired into routine() automatically — call from main or any task
-// once boot finishes, e.g. `testFileSystem1();`.
+// same lfs.bin reads correctly through POSIX env (component/syscall_config over
+// /KV littlefs files) on Bouffalo and rt_kv on Ameba. Not wired into routine()
+// automatically — call from main or any task once boot finishes.
 void testFileSystem1() {
     static const char kExpectedKey[] = "test_key_1";
     static const char kExpectedVal[] = "lfs-rocks";       // matches project/resource/KV/test_key_1
@@ -350,22 +350,26 @@ void testFileSystem1() {
 
 #if defined BL602 || defined BL702 || defined BL606P || defined BL808 \
  || defined BL616 || defined BL616CL
-    size_t got = 0;
-    ef_get_env_blob(kExpectedKey, buf, sizeof(buf), &got);
-    printf("[lfs] ef_get_env_blob(%s) -> got=%u buf='%.*s'\n",
-           kExpectedKey, static_cast<unsigned>(got), static_cast<int>(got), buf);
-    if (got == kExpectedLen && memcmp(buf, kExpectedVal, kExpectedLen) == 0) {
+    // POSIX env over /KV (component/syscall_config/env.c, loaded by env_init) --
+    // was lfs_easyflash ef_*_blob. Same /KV littlefs files rt_kv reads on Ameba.
+    const char *val = getenv(kExpectedKey);
+    ::strncpy(buf, val ? val : "", sizeof(buf) - 1);
+    printf("[lfs] getenv(%s) -> '%s'\n", kExpectedKey, buf);
+    if (val != nullptr && ::strlen(buf) == kExpectedLen &&
+        memcmp(buf, kExpectedVal, kExpectedLen) == 0) {
         printf("[lfs] PASS: prefilled KV matches\n");
     } else {
         printf("[lfs] FAIL: expected '%s' (%u bytes)\n",
                kExpectedVal, static_cast<unsigned>(kExpectedLen));
     }
 
-    ef_set_env_blob(kRoundtripKey, kRoundtripVal, ::strlen(kRoundtripVal));
+    setenv(kRoundtripKey, kRoundtripVal, 1);
     ::memset(buf, 0, sizeof(buf));
-    ef_get_env_blob(kRoundtripKey, buf, sizeof(buf), &got);
-    printf("[lfs] round-trip %s -> got=%u buf='%.*s'\n",
-           kRoundtripKey, static_cast<unsigned>(got), static_cast<int>(got), buf);
+    {
+        const char *rt = getenv(kRoundtripKey);
+        ::strncpy(buf, rt ? rt : "", sizeof(buf) - 1);
+    }
+    printf("[lfs] round-trip %s -> '%s'\n", kRoundtripKey, buf);
 
 #elif defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C
     // 不调 rt_kv_init: 它无脑 mkdir("KV") 并打印 "mkdir kv failed, mayed already exist"，

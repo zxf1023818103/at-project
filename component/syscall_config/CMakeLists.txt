@@ -25,8 +25,16 @@
 # add_subdirectory'd by the consuming platform (AmebaD KM4), not at the repo root —
 # freertos-plus-tcp_config is KM4-gated. lfs.h (littlefs) is the only universally-present dep.
 add_library(syscall_config OBJECT newlib_syscalls.c env.c time_base.c
-            bsd_socket.c     # BSD-sockets/POSIX-net layer over FreeRTOS-Plus-TCP (socket/select/getaddrinfo/...)
-            pthread_shim.c)  # the pthread slice iperf3 needs, over FreeRTOS tasks/mutexes
+            bsd_socket.c)    # BSD-sockets/POSIX-net layer over FreeRTOS-Plus-TCP (socket/select/getaddrinfo/...)
+
+# pthread_shim.c — the pthread slice iperf3 needs, over FreeRTOS tasks/mutexes. Its
+# handle cast (*m = (pthread_mutex_t)(uintptr_t)sem) assumes newlib makes pthread_mutex_t
+# an integer handle — true on AmebaD's ARM newlib, but Bouffalo's t-head newlib makes it
+# an aggregate struct, so this TU won't compile there. iperf3 is AmebaD-only, so gate it
+# out on Bouffalo — the single platform-specific seam in this otherwise neutral component.
+if(NOT BOUFFALO_CHIP)
+    target_sources(syscall_config PRIVATE pthread_shim.c)
+endif()
 
 # PUBLIC: syscalls.h (vfs_lfs_mount / fd_open_socket / env_init hooks) AND our
 # self-contained <dirent.h> (newlib's <sys/dirent.h> is a `#error` stub) — placed

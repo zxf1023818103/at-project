@@ -78,8 +78,10 @@ add_subdirectory(lfs_image)
 #                        consumers link. Pulls in upstream mbedtls (config +
 #                        HW-crypto ALTs come from the mbedtls_port adapter).
 #                        (The lwIP stack has been removed — the network stack
-#                        is being switched to FreeRTOS-Plus-TCP.)
-#   lfs_easyflash        EasyFlash KV API on top of upstream littlefs.
+#                        is being switched to FreeRTOS-Plus-TCP. libc is now
+#                        newlib + the shared component/syscall_config, same as
+#                        AmebaD; the Bouffalo-specific bflb_libc + lfs_easyflash
+#                        KV were deleted — NV is POSIX env over /KV.)
 # (lfs_image — the cross-platform host-side LittleFS image builder — is added unconditionally above.)
 if(BOUFFALO_CHIP)
     # Target chip selection. Typical usage is to set this through a chip
@@ -118,19 +120,18 @@ if(BOUFFALO_CHIP)
     # so bouffalo_sdk below can link freertos_plus_tcp / freertos_plus_tcp_port.
     add_subdirectory(freertos-plus-tcp_config)
 
+    # Cross-platform newlib retarget OBJECT lib (the POSIX fd VFS + <dirent.h> +
+    # malloc + env + time + BSD sockets/select over FreeRTOS-Plus-TCP). Bouffalo now
+    # uses the SAME libc as AmebaD (newlib + syscall_config) — the old Bouffalo-specific
+    # bflb_libc was deleted. Added here (like freertos-plus-tcp_config, in both branches)
+    # so bouffalo_sdk below can force-include $<TARGET_OBJECTS:syscall_config>. Its deps
+    # (FreeRTOS heap + littlefs + freertos-plus-tcp_config + at_console) all exist by now.
+    add_subdirectory(syscall_config)
+
     # Third-party submodules are added by the root CMakeLists.txt before we
     # get here, so zlibstatic / cjson / littlefs are already real targets that
     # bouffalo_sdk's umbrella can pull into its INTERFACE link list.
     add_subdirectory(bouffalo_sdk)
-
-    # lfs_easyflash lives at this level (not inside bouffalo_sdk) because it
-    # depends on a target the bouffalo_sdk subtree defines (bflb_littlefs_port).
-    # It self-registers into the bouffalo_sdk umbrella aggregate from its OWN CMakeLists
-    # (target_link_libraries(bouffalo_sdk INTERFACE <self>) there), and the --start/--end
-    # link-group is owned by bouffalo_sdk/CMakeLists.txt — so this subtree umbrella stays
-    # add_subdirectory-only.
-    # (lwip_dhcpd removed — the lwIP stack is being replaced by FreeRTOS-Plus-TCP.)
-    add_subdirectory(lfs_easyflash)
 endif()
 
 # =====================================================================

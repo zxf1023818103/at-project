@@ -284,7 +284,7 @@ add_subdirectory(nimble_port)        # KM4-gated: NimBLE host stack (`nimble` li
 # byte-order) is added by the parent component/CMakeLists.txt; here we add the AmebaD
 # console backend (in-tree). Both OBJECT libs, linked into the image by app_km4.
 add_subdirectory(syscall_port)       # KM4-gated: AmebaD console backend (amebad_syscall_port OBJECT lib: console_loguart/lpuart) + vfs_lfs_mount via lfs_port
-add_subdirectory(lfs_port)           # KM4-gated: AmebaD flash adapter for LittleFS (amebad_lfs_port; diskio over flash_api + mount) + attaches the AmebaD LittleFS self-test gates onto lfs_config
+add_subdirectory(lfs_port)           # KM4-gated: AmebaD flash adapter for LittleFS (lfs_port; diskio over flash_api + mount) + attaches the AmebaD LittleFS self-test gates onto lfs_config
 
 add_subdirectory(image_tool)         # defines amebad_make_{boot,image2}_all_bin*(...) + amebad_make_image_all_bin()
                                      #   (-> target amebad_image_all, wraps build_image_all.py). Build HELPER

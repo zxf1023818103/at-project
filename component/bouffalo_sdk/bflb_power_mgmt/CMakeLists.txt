@@ -35,13 +35,14 @@ if(CONFIG_PM_MANAGER)
         pm_manager.c
     )
     # pm_manager.c pulls in <lwip/tcpip.h> (needs rework for FreeRTOS-Plus-TCP),
-    # <wifi_mgmr_ext.h>; clock_manager.c pulls in "easyflash.h". Each lib's PUBLIC
-    # include dirs propagate here. Pick the wifi mgmr by CONFIG_* (TARGET check would
-    # be order-dependent on add_subdirectory). This whole block is gated CONFIG_PM_MANAGER
+    # <wifi_mgmr_ext.h>. Pick the wifi mgmr by CONFIG_* (TARGET check would be
+    # order-dependent on add_subdirectory). This whole block is gated CONFIG_PM_MANAGER
     # (currently off); lwipcore was removed with the lwIP stack.
-    target_link_libraries(bflb_power_mgmt PRIVATE
-        lfs_easyflash
-    )
+    #
+    # clock_manager.c persists RC-cal/clock-source via easyflash's ef_get/set_env_blob
+    # (binary KV), but component/lfs_easyflash was DELETED (Bouffalo now uses POSIX env
+    # over /KV, string-only). Before enabling CONFIG_PM_MANAGER, port clock_manager.c's
+    # two blob call sites to the VFS (open + read/write "/KV/<key>" via syscall_config).
     if(CONFIG_WL80211)
         target_link_libraries(bflb_power_mgmt PRIVATE wl80211)
     elseif(CONFIG_WIFI4)

@@ -63,7 +63,7 @@ add_subdirectory(freertos_tcp_port)
 # read/prog/erase/sync callbacks). Always built so consumers of the
 # `littlefs` target from component/thirdparty/ find a backend; tiny
 # when nothing links it.
-add_subdirectory(bflb_littlefs_port)
+add_subdirectory(lfs_port)   # lfs_port (mirrors component/amebad/lfs_port)
 
 # mbedtls port surface — mbedtls_port carries the runtime glue + HACC/PKA-backed alt impls AND
 # (via its mbedtls_cfg INTERFACE) the whole Bouffalo mbedTLS config: MBEDTLS_USER_CONFIG_FILE
@@ -154,7 +154,13 @@ set_source_files_properties(
 # platform/bouffalo_sdk/components/utils/. All are header-only INTERFACEs
 # or small STATIC libs; pull them all in unconditionally — they're tiny
 # and consumers opt-in via target_link_libraries.
-add_subdirectory(bflb_libc)
+# bflb_libc (the Bouffalo-specific newlib retarget + printf + NuttX stdlib/string)
+# was deleted — Bouffalo now uses the SAME libc as AmebaD: newlib + the shared
+# component/syscall_config. Only two residues remain on the Bouffalo side:
+#   syscall_port        the platform console backend (bflb_uart) for syscall_config
+#   bflb_nuttx_compat   the 3 NuttX SDK compat headers the WiFi adapter still needs
+add_subdirectory(syscall_port)
+add_subdirectory(bflb_nuttx_compat)
 add_subdirectory(bflb_getopt)
 add_subdirectory(bflb_list)
 add_subdirectory(bflb_queue)
@@ -241,7 +247,13 @@ target_link_libraries(bouffalo_sdk INTERFACE
     bflb_freertos_port
     ${BOUFFALO_CHIP}_std
     bflb_lhal
-    bflb_libc
+    # newlib retarget core (usage reqs: <dirent.h> + transitive at_console) + the
+    # Bouffalo console backend + the NuttX compat headers. The OBJECT libs' objects
+    # are force-included separately via $<TARGET_OBJECTS:> below (they don't flow
+    # through this INTERFACE intermediary).
+    syscall_config
+    bouffalo_syscall_port
+    bflb_nuttx_compat
     tlsf_config
     bflb_log
     bflb_block_pool
@@ -269,6 +281,13 @@ endif()
 target_sources(bouffalo_sdk INTERFACE
     $<TARGET_OBJECTS:bflb_sdk_version>
     $<TARGET_OBJECTS:${BOUFFALO_CHIP}_board_config>
+    # newlib retarget core + Bouffalo console backend. Force-included as objects
+    # (not archive members) so their STRONG defs win: syscall_config's _open/_read/
+    # _write/_lseek/malloc/_sbrk/environ beat libc's ENOSYS/brk stubs, and
+    # bouffalo_syscall_port's at_console_default_backend beats the dispatcher's weak
+    # default. An archive member wouldn't be pulled to override (no undefined ref).
+    $<TARGET_OBJECTS:syscall_config>
+    $<TARGET_OBJECTS:bouffalo_syscall_port>
 )
 if(CONFIG_RF)
     target_link_libraries(bouffalo_sdk INTERFACE ${BOUFFALO_CHIP}_phyrf)
@@ -296,7 +315,7 @@ if(TARGET rfparam)
     target_link_libraries(bouffalo_sdk INTERFACE rfparam)
 endif()
 
-# Port adapter libs that always get built (bflb_littlefs_port carries headers
+# Port adapter libs that always get built (lfs_port carries headers
 # downstream consumers transitively need even when nothing
 # references the symbols). Plus the chip's prebuilt BLE/BT controller when
 # CONFIG_BLUETOOTH is on. Stitching them in the umbrella here so that downstream projects don't
@@ -304,7 +323,7 @@ endif()
 # `target_link_libraries(<exe> PRIVATE bouffalo_sdk)`.
 # (mbedtls_port is linked further down, AFTER the upstream mbedtls archives — see there.)
 target_link_libraries(bouffalo_sdk INTERFACE
-    bflb_littlefs_port
+    lfs_port
 )
 # FreeRTOS-Plus-TCP: the wl80211 NetworkInterface bridge + the core stack + its
 # BufferAllocation/compiler port. Only defined on the wl80211 chips (bl616/cl);
@@ -365,46 +384,30 @@ if(TARGET sdk_intf_lib)
     target_link_libraries(zlibstatic PRIVATE sdk_intf_lib)
 endif()
 
-# Open a linker group around the umbrella's transitive archives + force-pull
-# SDK's newlib retargets. Closing --end-group is deferred to project scope
-# by component/CMakeLists.txt's _bouffalo_sdk_close_link_group() — that's
-# the only way to guarantee the `-Wl,--end-group` token is appended past
-# every external lib (cjson / mbedtls / …) the umbrella links
-# above, since `target_link_options` emits before `target_link_libraries`
-# in the final link line.
+# Open a linker group around the umbrella's transitive archives. Closing --end-group
+# is deferred to project scope by component/CMakeLists.txt's
+# _bouffalo_sdk_close_link_group() — the only way to guarantee the `-Wl,--end-group`
+# token lands past every external lib (cjson / mbedtls / …) the umbrella links, since
+# `target_link_options` emits before `target_link_libraries` in the final link line.
 #
 # Reasons for each piece:
 #   --start-group: bouffalo_sdk has cyclic refs across archives
 #       (bl<chip>_std <-> bflb_sysinit, wifi_manager <-> wpa_supplicant,
-#        libc nuttx-stdlib <-> everything pulling memset/strlen,
-#        libfirmware.a <-> wifi_manager, …) that single-pass ld can't
-#       resolve.
-#   -u,_malloc_r etc.: SDK's port_memory.c retargets newlib's _malloc_r /
-#       _sbrk_r / friends to kmalloc() (mm subsystem), but it ships as an
-#       archive member with no consumer-side reference. Without these -u
-#       refs newlib's own _malloc_r (which goes through `ecall SYS_brk`,
-#       unserviced on bare metal) wins -> heap_end=0 -> first malloc faults.
-#   -Wno-maybe-uninitialized: the toolchain enables -flto on link, so gcc
-#       replays compilation of every TU inside the prebuilt vendor archives
-#       (libwl80211_*.a / libphyrf_*.a — shipped LTO-fat with jenkins-build
-#       paths baked into DWARF). That replay surfaces upstream warnings
+#        libfirmware.a <-> wifi_manager, …) that single-pass ld can't resolve.
+#   --wrap=setenv/unsetenv: env.c (syscall_config) intercepts setenv/unsetenv to
+#       persist to /KV littlefs files (__real_setenv / __wrap_setenv) — same as
+#       AmebaD app_km4. (The old -u,_malloc_r/_sbrk_r/__wrap_sprintf force-pulls are
+#       gone: syscall_config's malloc/_sbrk are force-included as OBJECTs above, and
+#       printf/sprintf now come from newlib — bflb_libc's wrapped printf was deleted.)
+#   -Wno-maybe-uninitialized: the toolchain enables -flto on link, so gcc replays
+#       compilation of every TU inside the prebuilt vendor archives (libwl80211_*.a /
+#       libphyrf_*.a — shipped LTO-fat). That replay surfaces upstream warnings
 #       (cntrl.c / ap.c / scan.c / phy.h) we can't touch. Compile-time
 #       -Wmaybe-uninitialized stays on for the project's own sources.
 target_link_options(bouffalo_sdk INTERFACE
     -Wl,--start-group
-    -Wl,-u,_malloc_r
-    -Wl,-u,_free_r
-    -Wl,-u,_calloc_r
-    -Wl,-u,_realloc_r
-    -Wl,-u,_memalign_r
-    -Wl,-u,_sbrk_r
-    -Wl,-u,_sbrk
-    # Force-pull the sprintf/snprintf wrappers from bflb_libc. libstdc++'s
-    # cp-demangle.o (linked implicitly after --end-group) references
-    # __wrap_sprintf, which the archive scan can't reach back for if nothing
-    # earlier in the group referenced it (an LTO-sensitive ordering issue).
-    -Wl,-u,__wrap_sprintf
-    -Wl,-u,__wrap_snprintf
+    -Wl,--wrap=setenv
+    -Wl,--wrap=unsetenv
     -Wno-maybe-uninitialized
 )
 
@@ -412,8 +415,8 @@ target_link_options(bouffalo_sdk INTERFACE
 # (not a link option) so CMake appends it to INTERFACE_LINK_LIBRARIES — emitted AFTER
 # the link-options block and after every archive the umbrella transitively pulls. The
 # cmake_language(DEFER) to project scope guarantees it is the very LAST entry, past
-# every external lib (cjson / mbedtls / the late lfs_easyflash
-# self-registration). Lives here with --start-group (was in component/CMakeLists.txt).
+# every external lib (cjson / mbedtls / …) the umbrella and its subtrees pull in.
+# Lives here with --start-group (was in component/CMakeLists.txt).
 function(_bouffalo_sdk_close_link_group)
     target_link_libraries(bouffalo_sdk INTERFACE -Wl,--end-group)
 endfunction()

@@ -273,7 +273,12 @@ int main(void) {
         return 0;
     }
     bflb_mtd_init();
-    easyflash_init();
+    // Mount LittleFS (PSM) via the shared VFS hook + load POSIX env from /KV --
+    // same libc/env model as AmebaD (replaces easyflash_init; vfs_lfs_mount is
+    // idempotent, so the lazy mount from the first open() is a no-op after this).
+    if (vfs_lfs_mount() != nullptr) {
+        env_init();
+    }
 #if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
     // lwIP has been removed on Bouffalo — the network stack is switching to
     // FreeRTOS-Plus-TCP. Defer the old lwIP tcpip_init callback (BL602/BL702:

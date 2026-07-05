@@ -64,8 +64,12 @@ extern write_reconnect_ptr p_roaming_start_callback;
 #endif // defined CONFIG_PLATFORM_AMEBALITE || defined CONFIG_PLATFORM_AMEBASMART || defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2
 
 #if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
-#include <easyflash.h>
+// KV/NV is now POSIX env (setenv/getenv, persisted to /KV littlefs files by
+// component/syscall_config/env.c) — same as AmebaD. The Bouffalo-specific
+// lfs_easyflash (<easyflash.h>) was removed; these two hooks replace easyflash_init.
 #include <wifi_mgmr_ext.h>
+extern "C" void *vfs_lfs_mount(void);   // lfs_port: idempotent PSM LittleFS mount
+extern "C" void  env_init(void);        // syscall_config/env.c: load /KV files into environ
 // The Zephyr BLE host + HCI transport (blestack) were removed from
 // bflb_zypher_bluetooth — only the prebuilt controller remains — so the Zephyr
 // host headers (bluetooth.h / l2cap.h / gatt.h / hci_core.h / hci_driver.h) no
