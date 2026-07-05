@@ -51,7 +51,8 @@ target_link_libraries(esp_crt_bundle_config INTERFACE esp_crt_bundle)
 # platforms: AmebaD registers it in the AWS image; bl602 in main() (crt_bundle_cli_register).
 add_library(crt_bundle_cli STATIC EXCLUDE_FROM_ALL crt_bundle_cli.c)
 target_link_libraries(crt_bundle_cli PUBLIC esp_crt_bundle freertos_cli rxi_log FreeRTOS)
-target_compile_options(crt_bundle_cli PRIVATE -w)
+# -w silences the vendor-adjacent CLI; the prefix-map collapses its rxi log __FILE__ to a basename.
+target_compile_options(crt_bundle_cli PRIVATE -w "-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=")
 if(TARGET network_transport)
     # transport_tls.h (TLS_FreeRTOS_Connect/Disconnect + NetworkCredentials_t). The symbols resolve
     # at the image link where network_transport is already pulled (amebad AWS group).

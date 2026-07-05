@@ -21,6 +21,8 @@ set_source_files_properties(
 
 target_include_directories(pkcs11_selftest PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")   # pkcs11_selftest.h
 target_include_directories(pkcs11_selftest PRIVATE "${_pal}")                      # core_pkcs11_pal_utils.h
+# rxi log __FILE__ -> basename for our TUs (the map is path-filtered, so the vendored PAL elsewhere is untouched).
+target_compile_options(pkcs11_selftest PRIVATE "-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=")
 
 # corepkcs11: the token + core_pkcs11_config.h/core_pkcs11.h. mbedtls_config: the platform's mbedTLS
 # config context (PSA + threading-alt + mbedcrypto/mbedx509) as transitive usage requirements, so the

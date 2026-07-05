@@ -12,6 +12,9 @@
 #                  here — non-RTOS builds of bl602_rfparam aren't real,
 #                  the SDK's own use of this lib is RTOS-only).
 
+# rfparam_adapter.c logs via bflb_log_compat.h -> rxi; collapse __FILE__ to a basename.
+add_compile_options("-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=")
+
 add_library(bl602_rfparam STATIC
     rfparam_adapter.c
     rfparam_rftlv.c

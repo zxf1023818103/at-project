@@ -185,9 +185,17 @@ extern uint32_t SystemCoreClock;
 #define configPRE_SLEEP_PROCESSING( x )                 ( freertos_pre_sleep_processing((unsigned int *)&x) )
 #define configPOST_SLEEP_PROCESSING( x )                ( freertos_post_sleep_processing((unsigned int *)&x) )
 #define portSUPPRESS_TICKS_AND_SLEEP( xExpectedIdleTime ) vPortSuppressTicksAndSleep( xExpectedIdleTime )
+/* C-linkage: these are defined in C (SDK PMU glue). The shared main is now compiled as C++ on
+ * AmebaD, so the declarations must not get C++ linkage (would conflict with the C definitions). */
+#ifdef __cplusplus
+extern "C" {
+#endif
 extern void freertos_pre_sleep_processing(unsigned int *expected_idle_time);
 extern void freertos_post_sleep_processing(unsigned int *expected_idle_time);
 extern int  freertos_ready_to_sleep(void);
+#ifdef __cplusplus
+}
+#endif
 #define traceLOW_POWER_IDLE_BEGIN()
 #define traceLOW_POWER_IDLE_END()
 #define configUSE_WAKELOCK_PMU                          1

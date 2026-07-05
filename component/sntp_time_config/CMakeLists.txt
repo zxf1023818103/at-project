@@ -7,6 +7,9 @@
 #
 # The AmebaD HW-RTC mirror (rtc_time_store) and the newlib date self-test (time_selftest_run)
 # are WEAK hooks — AmebaD app_km4 provides the strong defs; bl602 links no-ops.
+# rxi log lines print __FILE__: map this dir's prefix away so they show basenames, not full paths.
+add_compile_options("-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=")
+
 add_library(sntp_time STATIC EXCLUDE_FROM_ALL sntp_time.c)
 target_include_directories(sntp_time PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")   # sntp_time.h
 

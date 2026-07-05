@@ -10,6 +10,9 @@
 # context — the platform's mbedTLS config surface (public headers + the shared mbedtls_user_config.h
 # + the MBEDTLS_*_ALT include wiring) — which propagates as transitive usage requirements when we
 # link mbedtls_config, so the bench TUs compile identically to the library on BOTH platforms.
+# rxi log lines print __FILE__: map this dir's prefix away so they show basenames, not full paths.
+add_compile_options("-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=")
+
 add_library(mbedtls_bench STATIC EXCLUDE_FROM_ALL
     mbedtls_bench.c
     bench_cli.c

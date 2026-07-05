@@ -9,6 +9,9 @@ if("${BOUFFALO_CHIP}" STREQUAL "bl602")
         "rfparam: BL602 should link bl602_rfparam, not this component.")
 endif()
 
+# rfparam_adapter.c logs via bflb_log_compat.h -> rxi; collapse __FILE__ toward a basename.
+add_compile_options("-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/Src/=")
+
 add_library(rfparam STATIC
     Src/rfparam_adapter.c
     Src/rfparam_rftlv.c
