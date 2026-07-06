@@ -22,8 +22,6 @@
 #include "cares_resolve.h"
 #endif
 
-extern void wifi_forget( void );   /* main.c */
-
 #if ( ipconfigUSE_IPv6 != 0 )
 /* `ip6`: list every IPv6 address the stack holds (link-local fe80:: + any SLAAC global from the RA). */
 static BaseType_t cmd_ip6( char * out, size_t outlen, const char * cmd )
@@ -93,24 +91,6 @@ static BaseType_t cmd_resolve( char * out, size_t outlen, const char * cmd )
     return pdFALSE;
 }
 
-static BaseType_t cmd_wifi( char * out, size_t outlen, const char * cmd )
-{
-    BaseType_t   plen = 0;
-    const char * p = FreeRTOS_CLIGetParameter( cmd, 1, &plen );
-
-    if( ( p != NULL ) && ( plen == 6 ) && ( strncmp( p, "forget", 6 ) == 0 ) )
-    {
-        wifi_forget();
-        snprintf( out, outlen, "wifi forget: disconnected, reconnect disabled, credentials erased\r\n" );
-    }
-    else
-    {
-        snprintf( out, outlen, "usage: wifi forget\r\n" );
-    }
-
-    return pdFALSE;
-}
-
 /* Realtek driver private-ioctl passthrough (the SDK's iwpriv mechanism): sends a private
  * command string to the wlan driver via rltk_wlan_control(SIOCDEVPRIVATE). Declared here
  * (avoid pulling rtw headers); same call wifi_get_mac_address() uses under the hood. */
@@ -145,15 +125,11 @@ static BaseType_t cmd_iwpriv( char * out, size_t outlen, const char * cmd )
     return pdFALSE;
 }
 
-void wifi_cli_register( void )
+/* The `wifi` command (forget/drop) is now the SHARED one in component/wifi_service_config
+ * (registered via its own wifi_cli_register()); this file registers only the amebad-specific
+ * driver commands (iwpriv / resolve / ip6). main() calls both. */
+void amebad_wifi_cli_register( void )
 {
-    static const CLI_Command_Definition_t cmd_wifi_def = {
-        "wifi",
-        "wifi:\r\n wifi forget - disconnect, stop reconnect, erase saved WiFi credentials\r\n",
-        cmd_wifi, -1
-    };
-    FreeRTOS_CLIRegisterCommand( &cmd_wifi_def );
-
     static const CLI_Command_Definition_t cmd_iwpriv_def = {
         "iwpriv",
         "iwpriv [cmd]:\r\n run a wlan driver private command (default read_mac -> WiFi MAC)\r\n",

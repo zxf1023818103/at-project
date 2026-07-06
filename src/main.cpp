@@ -30,6 +30,8 @@ extern "C" {
 #include "backoff_algorithm.h"    /* WiFi reconnect backoff-with-jitter */
 #include "at_log.h"               /* rxi log.c: log_info / log_error */
 #include "log_lock.h"             /* log_lock_init */
+#include "wifi_service.h"         /* shared WiFi provisioning + reconnect policy */
+#include "wifi_port.h"            /* the platform HAL it drives (implemented below) */
 }  // extern "C"
 /* ameba_soc.h -> platform_stdlib does `#define printf _rtl_printf`; undo it so printf flows
  * through _write -> at_console_write and picks up the [HH:MM:SS] prefix. */
@@ -63,7 +65,6 @@ extern void iperf_udp_server_start(void);
 #define WIFI_RECONNECT_BACKOFF_MAX_MS   ( 8000U )
 
 static NetworkInterface_t xInterface;
-static void wifi_monitor_thread( void * param );   /* small reconnect-monitor task (defined below) */
 /* NB: OpenOCD's FreeRTOS awareness needs the `uxTopUsedPriority` symbol - the kernel already exports
  * it (tasks.c), so we don't redefine it here. -rtos FreeRTOS is set in scripts/amebad_openocd.cfg. */
 static NetworkEndPoint_t  xEndPoint;
@@ -101,42 +102,9 @@ static void wifi_reassoc_set( int pending )
     else
         ( void ) wifi_event_clear( WIFI_REASSOC_PENDING_BIT );
 }
-/* wifi_monitor_thread's handle, so wifi_event_task can wake it the instant a DISCONNECT lands (instead
- * of the monitor polling every 3 s). */
-static TaskHandle_t s_monitorTask = NULL;
-/* Set by `wifi forget` (wifi_cli.c) to permanently stop the reconnect monitor after a deliberate
- * disconnect - the monitor checks it on wake and stays down instead of re-associating. */
-static volatile int s_wifiForget = 0;
+/* wifi_forget() / wifi_reconnect_enable() are now the SHARED ones in component/wifi_service_config
+ * (they erase WIFI_* + park/unpark the shared reconnect monitor); this file no longer defines them. */
 extern void FreeRTOS_NetworkDown( NetworkInterface_t * pxNetworkInterface );
-
-/* Console `wifi forget`: disconnect, stop reconnection, and erase the cached connection info from the
- * KV store - the credential (WIFI_SSID/PASSWORD/CHANNEL/SECURITY) and the DHCP lease cache
- * (DHCP_IP/GATEWAY/NETMASK/SERVER) - so the next boot does not re-use any of it. */
-void wifi_forget( void )
-{
-    extern int env_save( const char * name );
-    static const char * const keys[] = {
-        "WIFI_SSID", "WIFI_PASSWORD", "WIFI_CHANNEL", "WIFI_SECURITY",   /* connection credential */
-        "DHCP_IP", "DHCP_GATEWAY", "DHCP_NETMASK", "DHCP_SERVER",        /* cached DHCP lease */
-    };
-    unsigned i;
-
-    s_wifiForget = 1;
-    wifi_disconnect();         /* DISCONNECT -> "network DOWN"; the monitor wakes but stays down */
-    for( i = 0; i < sizeof( keys ) / sizeof( keys[ 0 ] ); i++ )
-    {
-        unsetenv( keys[ i ] );     /* drop from environ */
-        env_save( keys[ i ] );     /* getenv()==NULL -> removes KV/<name> (persistent erase) */
-    }
-    log_info( "[KM4] WiFi forgotten: disconnected, reconnect disabled, credentials + DHCP cache erased" );
-}
-
-/* Re-enable the reconnect monitor after a `wifi forget` - e.g. a fresh WPS connect supplied a new
- * network, so the monitor should resume re-associating on the next drop. */
-void wifi_reconnect_enable( void )
-{
-    s_wifiForget = 0;
-}
 
 /* Single consumer of the driver's WiFi events, blocked on the wifi_ind EventGroup (replacing three
  * callbacks that ran inline in the driver's own thread). Runs in its own task context, so the work is
@@ -159,10 +127,9 @@ static void wifi_event_task( void * param )
             if( wifi_link_up() )
             {
                 wifi_link_set( 0 );
-                wifi_reassoc_set( 1 );   /* until the monitor really re-associates, drop premature ups */
+                wifi_reassoc_set( 1 );   /* until the service really re-associates, drop premature ups */
                 FreeRTOS_NetworkDown( &xInterface );
-                if( s_monitorTask != NULL )
-                    xTaskNotifyGive( s_monitorTask );   /* wake the re-associate monitor immediately */
+                wifi_service_on_event( WIFI_SVC_EV_DISCONNECT );   /* wake the shared reconnect monitor */
             }
         }
         if( b & WIFI_EVENT_BIT( WIFI_EVENT_FOURWAY_HANDSHAKE_DONE ) )
@@ -837,6 +804,85 @@ static int scan_print_handler( char *buf, int buflen, char *target_ssid, void *u
     return 0;
 }
 
+/* ===== amebad WiFi HAL (wifi_port.h) — the connect mechanics the shared wifi_service drives. The
+ * network bring-up (wifi_on/netif/IPInit) + the wifi_event_task stay in wifi_bringup_thread below;
+ * only the connect strategy + reconnect monitor were the duplicated policy, now in wifi_service. ===== */
+extern "C" {
+unsigned wifi_port_task_stack_words( void ) { return 4096; }   /* RTK scan/connect + first-connect bench */
+int  wifi_port_enable( void ) { return 0; }                    /* bring-up already done by wifi_bringup_thread */
+void wifi_port_autoreconnect_disable( void ) { }               /* RTK driver-only build never autoreconnects */
+void wifi_port_disconnect( void ) { wifi_disconnect(); }
+int  wifi_port_sec_from_str( const char *s ) { return (int) wifi_sec_from_str( s ); }
+const char *wifi_port_sec_to_str( int sec ) { return wifi_sec_to_str( (rtw_security_t) sec ); }
+
+int wifi_port_scan( const char *ssid, uint8_t *chan, int *sec )
+{
+    /* 6-pass 5 GHz-preferring directed scan: 2.4 GHz here is congested + unreliable for the 4-way, and
+     * a probe-response timing race intermittently misses the dual-band AP's 5 GHz BSSID, so re-scan
+     * until it shows up (scan_print_handler keeps the best-seen across passes; fa accumulates). */
+    found_ap_t fa = { 0, 0, RTW_SECURITY_OPEN, 0 };
+    int scan_try;
+    for( scan_try = 0; scan_try < 6; scan_try++ )
+    {
+        log_info( "[KM4] scan for '%s' (prefer 5 GHz, try %d)...", ssid, scan_try + 1 );
+        wifi_scan_networks_with_ssid( scan_print_handler, &fa, 1000, (char *) ssid, strlen( ssid ) );
+        if( fa.found && fa.channel > 14 ) break;   /* got a 5 GHz BSSID */
+        vTaskDelay( pdMS_TO_TICKS( 200 ) );
+    }
+    if( !fa.found ) return -1;
+    if( chan ) *chan = fa.channel;
+    if( sec )  *sec = (int) fa.security;
+    return 0;
+}
+
+int wifi_port_connect( const char *ssid, const char *pass, uint8_t chan, int sec )
+{
+    extern void rltk_wlan_tx_deauth( unsigned char b_broadcast, unsigned char key_type );
+    rtw_security_t security = (rtw_security_t) sec;
+    int attempt, ok = 0;
+
+    if( security == RTW_SECURITY_UNKNOWN ) return -1;   /* need the security type from scan/cache to associate */
+
+    /* Broadcast deauth before each attempt flushes the AP's stale station entry for this MAC (the
+     * driver-only chip never deauthed on reset), so the assoc is accepted on the first try; the 8-try
+     * loop covers the rare transient status-30 reject. pscan restricts the connect probe to `chan`. */
+    for( attempt = 1; attempt <= 8; attempt++ )
+    {
+        u8 c = chan, ps = PSCAN_ENABLE;
+        rltk_wlan_tx_deauth( 1, 0 );
+        vTaskDelay( pdMS_TO_TICKS( 80 ) );
+        if( chan != 0 ) { wifi_set_pscan_chan( &c, &ps, 1 ); }
+        if( wifi_connect( (char *) ssid, security, (char *) pass,
+                          (int) strlen( ssid ), (int) strlen( pass ), 0, NULL ) == RTW_SUCCESS )
+        {
+            ok = 1;
+            break;
+        }
+        log_error( "[KM4] wifi_connect attempt %d FAILED, retrying...", attempt );
+        vTaskDelay( pdMS_TO_TICKS( 800 ) );
+    }
+    if( !ok ) return -1;
+
+    /* Post-associate (every connect): full power-save off + clear the reassoc hold so the re-DHCP's
+     * genuine network-up is honoured, then re-kick DHCP (fresh DISCOVER -> fast lease -> eNetworkUp
+     * -> WIFI_CONNECTED_BIT). */
+    wifi_set_power_mode( 0, 0 );
+    wifi_disable_powersave();
+    wifi_reassoc_set( 0 );
+    { int rssi = 0; wifi_get_rssi( &rssi ); log_info( "[KM4] associated; power-save off; RSSI %d dBm", rssi ); }
+    FreeRTOS_NetworkDown( &xInterface );
+
+    /* First associate only (guarded so it does not re-run on every reconnect): the upstream Mbed TLS
+     * microbenchmark / ROM-mbedTLS KAT diagnostic, which used to sit inline after the initial connect. */
+#if defined(AT_PROJECT_CRYPTOBENCH)
+    { static int benched = 0; if( !benched ) { benched = 1; extern void mbedtls_bench( void ); mbedtls_bench(); } }
+#elif defined(AMEBAD_ROM_KAT)
+    { static int katted = 0; if( !katted ) { katted = 1; extern void rom_mbedtls_kat( void ); rom_mbedtls_kat(); } }
+#endif
+    return 0;
+}
+}  // extern "C"
+
 static void wifi_bringup_thread( void *param )
 {
     char mac_str[ 20 ] = { 0 };   /* wifi_get_mac_address fills "xx:xx:xx:xx:xx:xx" */
@@ -1015,185 +1061,6 @@ static void wifi_bringup_thread( void *param )
     }
 #endif
 
-    /* Connect to the provisioned WIFI_SSID the explicit way (wifi_connect_simple leaves security
-     * UNKNOWN and pscan-restricts its own scan): FIRST do a directed FULL
-     * all-channel scan (no pscan set yet) so we reliably find the AP + its real
-     * channel + security, PRINT every result, THEN pscan that channel and connect
-     * with the discovered security type. */
-    {
-        /* Boot connection from the provisioned env: WIFI_SSID / WIFI_PASSWORD. With no built-in
-         * default credential, an unprovisioned device stays offline until WIFI_SSID/WIFI_PASSWORD are
-         * set over the console or a `wps pbc` supplies them. If WIFI_CHANNEL + WIFI_SECURITY were
-         * cached on a prior connect, skip the multi-second scan and go straight to pscan + connect. */
-        const char *kSsid = getenv( "WIFI_SSID" );
-        const char *kPass = getenv( "WIFI_PASSWORD" );
-        found_ap_t  fa = { 0, 0, RTW_SECURITY_OPEN, 0 };
-        u8 ch;
-        int need_scan = 1;
-        if( kSsid == NULL || kPass == NULL )
-        {
-            log_warn( "[KM4] no WIFI_SSID/PASSWORD provisioned - staying offline "
-                      "(setenv WIFI_SSID/WIFI_PASSWORD or run `wps pbc`)" );
-            vTaskDelete( NULL );
-            return;
-        }
-        {
-            const char    *ce = getenv( "WIFI_CHANNEL" );
-            rtw_security_t sc = wifi_sec_from_str( getenv( "WIFI_SECURITY" ) );
-            if( ce != NULL && ce[ 0 ] != '\0' && sc != RTW_SECURITY_UNKNOWN )
-            {
-                fa.found = 1;
-                fa.channel = (unsigned char) atoi( ce );
-                fa.security = sc;
-                need_scan = 0;
-                log_info( "[KM4] '%s' cached: ch=%d sec=%s -> skip scan",
-                            kSsid, fa.channel, getenv( "WIFI_SECURITY" ) );
-            }
-        }
-
-        /* PMF / 802.11w: keep it OFF (0 = no MFP support). We tried advertising
-         * MFP-capable (1) and MFP-required (2) via rltk_set_pmf so the AP could keep
-         * management-protection=required, but the RTL8721D closed driver's PMF *data
-         * path* is unreliable: auth + 4-way handshake + key install all succeed, yet
-         * unicast data (the DHCP DISCOVER) intermittently never gets through, so DHCP
-         * stays 0.0.0.0. Measured on a PMF=required AP: MFP=1 ~1/3 boots got an IP,
-         * MFP=2 0/2; vs MFP=0 + AP management-protection=allowed which is 2/2 stable.
-         * So we disable PMF on the chip and run the AP as 'allowed' (its wpa3 clients
-         * still use PMF). CONFIG_IEEE80211W is enabled in the driver (wlan/autoconf.h);
-         * the value enum is comment-only in wifi_conf.h, hence the literal. */
-        wifi_set_mfp_support( 0 );
-        /* NB: the regulatory channel plan (WIFI_COUNTRY / WIFI_CHANPLAN, else CN default) is set in
-         * the wifi_set_country_code() override above, which the driver calls once during wifi_on. */
-
-        /* The directed all-channel scan intermittently captures only the 2.4 GHz
-         * BSSID and misses the dual-band AP's 5 GHz one (probe-response timing).
-         * 2.4 GHz is congested here and unreliable for the 4-way handshake (see
-         * scan_print_handler), so re-scan a few times until the 5 GHz BSSID shows
-         * up; settle for 2.4 GHz only if 5 GHz never appears. fa accumulates
-         * across passes (the 5 GHz-preferring handler keeps the best seen so far). */
-wifi_connect_attempt:
-        if( need_scan )
-        {
-            int scan_try;
-            fa.found = 0;
-            for( scan_try = 0; scan_try < 6; scan_try++ )
-            {
-                log_info( "[KM4] scan for '%s' (prefer 5 GHz, try %d)...",
-                            kSsid, scan_try + 1 );
-                wifi_scan_networks_with_ssid( scan_print_handler, &fa, 1000,
-                                              (char *) kSsid, strlen( kSsid ) );
-                if( fa.found && fa.channel > 14 ) break;   /* got a 5 GHz BSSID */
-                vTaskDelay( pdMS_TO_TICKS( 200 ) );
-            }
-            if( !fa.found )
-            {
-                log_error( "[KM4] '%s' not found in scan - abort", kSsid );
-                vTaskDelete( NULL );
-                return;
-            }
-            log_info( "[KM4] found '%s' ch=%d rssi=%d sec=0x%x; pscan + connect...",
-                        kSsid, fa.channel, fa.rssi, (unsigned) fa.security );
-            /* Cache channel + security so the next boot skips the scan. */
-            {
-                char chbuf[ 8 ];
-                snprintf( chbuf, sizeof( chbuf ), "%d", fa.channel );
-                env_set_if_changed( "WIFI_CHANNEL", chbuf );
-                env_set_if_changed( "WIFI_SECURITY", wifi_sec_to_str( fa.security ) );
-            }
-        }
-        ch = fa.channel;
-        /* This AP (MikroTik) intermittently answers the first assoc with status
-         * 30 = "rejected temporarily; try again later". It's transient, so retry
-         * a handful of times (re-arming pscan each attempt - the driver consumes
-         * the pscan channel list on each connect) before giving up. */
-        {
-            int attempt, ok = 0;
-            /* The AP rejects the first assoc with status 30 because it still holds
-             * this MAC's stale station entry (the driver-only chip never sent a
-             * deauth on reset, so the AP keeps the old session across our reboot).
-             * Sending a broadcast deauth before each attempt flushes that entry, so
-             * the assoc is accepted on the first try - verified 3/3 (no status 30,
-             * no retry needed). b_broadcast=1, key_type=0. The 8-try loop below now
-             * just covers the rare genuinely-transient reject. */
-            extern void rltk_wlan_tx_deauth( unsigned char b_broadcast, unsigned char key_type );
-            for( attempt = 1; attempt <= 8; attempt++ )
-            {
-                u8 c = ch, ps = PSCAN_ENABLE;
-                log_info( "[KM4] tx_deauth(broadcast) before attempt %d", attempt );
-                rltk_wlan_tx_deauth( 1, 0 );
-                vTaskDelay( pdMS_TO_TICKS( 80 ) );
-                wifi_set_pscan_chan( &c, &ps, 1 );
-                if( wifi_connect( (char *) kSsid, fa.security, (char *) kPass,
-                                  (int) strlen( kSsid ), (int) strlen( kPass ), 0, NULL ) == RTW_SUCCESS )
-                {
-                    ok = 1;
-                    break;
-                }
-                log_error( "[KM4] wifi_connect attempt %d FAILED, retrying...", attempt );
-                vTaskDelay( pdMS_TO_TICKS( 800 ) );
-            }
-            if( !ok )
-            {
-                if( !need_scan )
-                {
-                    /* The cached WIFI_CHANNEL/SECURITY are stale (AP moved channel / changed
-                     * security). Drop the cache and fall back to a full scan in this same boot. */
-                    log_error( "[KM4] cached-channel connect failed - clearing cache, rescanning" );
-                    env_set_if_changed( "WIFI_CHANNEL", "" );
-                    env_set_if_changed( "WIFI_SECURITY", "" );
-                    need_scan = 1;
-                    goto wifi_connect_attempt;
-                }
-                log_error( "[KM4] wifi_connect FAILED (gave up)" );
-                vTaskDelete( NULL );
-                return;
-            }
-        }
-    }
-    /* Throughput: fully disable power-save (IPS + LPS off). */
-    wifi_set_power_mode( 0, 0 );
-    wifi_disable_powersave();
-    {
-        int rssi = 0;
-        wifi_get_rssi( &rssi );
-        log_info( "[KM4] associated; power-save off; RSSI %d dBm; waiting for DHCP...", rssi );
-    }
-    /* DHCP was started at FreeRTOS_IPInit_Multi() above, while the link was still down, so its first
-     * DISCOVER was lost and the next retransmit is ~5 s out (slow first lease). Now that we are
-     * associated, restart DHCP so a fresh DISCOVER goes out immediately -> lease in ~1 s. The eNetworkDown
-     * this raises is silent (s_everUp is still 0 - the network has never been up), so no boot "network
-     * DOWN" is printed. */
-    FreeRTOS_NetworkDown( &xInterface );
-
-    /* Upstream Mbed TLS v3.6.4 microbenchmark ([MCB] scores) - the apples-to-apples
-     * successor to the removed wolfCrypt [WCB] bench. Runs here at 200 MHz, after
-     * associate, so the timebase matches the old wolfCrypt run. Replaces the ROM-mbedTLS
-     * KAT in this image (the ROM mbedTLS 2.4.0 TU is not linked alongside upstream). */
-#if defined(AT_PROJECT_CRYPTOBENCH)
-    {
-        extern void mbedtls_bench( void );
-        mbedtls_bench();
-    }
-#elif defined(AMEBAD_ROM_KAT)
-    /* ROM mbedTLS KAT (pure software crypto in the A-cut mask ROM). Only in the explicit
-     * ROMKAT=ON diagnostic image: the default/console images now link upstream Mbed TLS
-     * (mbedcrypto, for fs_cli's md5sum/sha*sum), whose strong symbols would override the ROM
-     * ones and break the KAT — so the ROM TU is built (and called) only when upstream is NOT
-     * linked. The wolfCrypt benchmarks were removed with the wolfSSL retirement. */
-    {
-        extern void rom_mbedtls_kat( void );
-        rom_mbedtls_kat();
-    }
-    /* HW IPSEC engine compare is gated off: CRYPTO_Init faults (SecureFault) - the
-     * crypto peripheral (~0x48012000) is secure-attributed and unreachable from
-     * this NS driver-only image. Re-enable to retest. */
-#if 0
-    {
-        extern void rom_hwcrypto_compare( void );
-        rom_hwcrypto_compare();
-    }
-#endif
-#endif /* !AT_PROJECT_QUIC && !AT_PROJECT_PKCS11 */
 
     /* Start the consumer of the driver's link-state events. It blocks on the wifi_ind EventGroup
      * (set by wifi_indication for every event) - DISCONNECT marks the IP stack down at the real drop
@@ -1202,95 +1069,14 @@ wifi_connect_attempt:
     if( xTaskCreate( wifi_event_task, "wifi_evt", 512, NULL, tskIDLE_PRIORITY + 4, NULL ) != pdPASS )
         log_error( "[KM4] xTaskCreate(wifi_evt) failed" );
 
-    /* Hand off to a dedicated reconnect-monitor task, then free this 16 KB bring-up stack: the
-     * monitor only re-runs wifi_connect (cached-channel re-associate) on a link drop, so it needs a
-     * far smaller stack than the bring-up path (initial all-channel scan + 4-way + crypto bench). */
-    if( xTaskCreate( wifi_monitor_thread, "wifi_mon", 1536, NULL,
-                     tskIDLE_PRIORITY + 3, &s_monitorTask ) != pdPASS )
-        log_error( "[KM4] xTaskCreate(wifi_mon) failed" );
+    /* Hand off to the shared WiFi provisioning + reconnect service (component/wifi_service_config):
+     * it reads WIFI_SSID/WIFI_PASSWORD, connects via the cached channel or a scan, caches the channel,
+     * and supervises the link -- driving the amebad wifi_port_* HAL above (the connect mechanics) --
+     * replacing the old inline connect strategy + wifi_monitor_thread. Same service bl602 uses. This
+     * bring-up task's setup is done, so it exits (freeing its 16 KB stack; the service task carries
+     * its own via wifi_port_task_stack_words). */
+    wifi_service_start();
     vTaskDelete( NULL );
-}
-
-/* WiFi reconnect monitor - its own small task (the bring-up task hands off here and exits). The driver's
- * autoreconnect is disabled and nothing else re-runs wifi_connect, so without this the device would wedge
- * (the agent task spins retrying TLS with no link). It blocks until wifi_event_task signals a DISCONNECT,
- * then re-associates with the cached channel and FreeRTOS_NetworkDown(&xInterface) so the IP task re-runs
- * DHCP -> eNetworkUp -> the network-up hook (aws_iot_demo_start's once-guard makes the re-entry a no-op;
- * the running agent task reconnects MQTT itself - the path that pre-b3c848b spawned a duplicate aws_agent
- * + HardFaulted). */
-static void wifi_monitor_thread( void * param )
-{
-    extern void rltk_wlan_tx_deauth( unsigned char b_broadcast, unsigned char key_type );
-
-    ( void ) param;
-
-    for( ;; )
-    {
-        /* Block until wifi_event_task notifies a DISCONNECT (right after it drops the IP stack). */
-        ( void ) ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
-        if( wifi_link_up() )       /* already recovered before we ran - nothing to do */
-            continue;
-        if( s_wifiForget )         /* `wifi forget` was issued - stay down, never re-associate */
-            continue;
-
-        /* The driver's own autoreconnect is disabled, so there is nothing to wait for - re-associate
-         * immediately (no hold-off). The eNetworkDown raised by the DISCONNECT event already logged
-         * "network DOWN"; below we re-associate and re-DHCP. */
-        {
-            const char    *ssid = getenv( "WIFI_SSID" );
-            const char    *pass = getenv( "WIFI_PASSWORD" );
-            const char    *ce   = getenv( "WIFI_CHANNEL" );
-            rtw_security_t sec  = wifi_sec_from_str( getenv( "WIFI_SECURITY" ) );
-            u8             ch   = ( ce != NULL && ce[ 0 ] != '\0' ) ? (u8) atoi( ce ) : 0;
-            BackoffAlgorithmContext_t backoff;
-
-            /* No built-in default credential: only re-associate when the network is fully provisioned. */
-            if( ssid == NULL || pass == NULL || sec == RTW_SECURITY_UNKNOWN )
-            {
-                log_warn( "[KM4] WiFi not provisioned - not re-associating "
-                          "(setenv WIFI_SSID/WIFI_PASSWORD/WIFI_SECURITY or run `wps pbc`)" );
-                continue;
-            }
-            log_info( "[KM4] WiFi link down - re-associating..." );
-
-            /* Truncated exponential backoff-with-jitter between re-associate attempts, RETRY_FOREVER:
-             * keep trying until the AP returns, but back off (1->8 s) instead of hammering wifi_connect
-             * at a fixed rate. Same backoffAlgorithm the AWS agent + SNTP retry loops use. */
-            BackoffAlgorithm_InitializeParams( &backoff, WIFI_RECONNECT_BACKOFF_BASE_MS,
-                                               WIFI_RECONNECT_BACKOFF_MAX_MS,
-                                               BACKOFF_ALGORITHM_RETRY_FOREVER );
-            /* Stop the instant WIFI_CONNECTED_BIT goes true - whether the driver's own autoreconnect or our
-             * wifi_connect won the race - so we never double-associate. The FOURWAY_HANDSHAKE_DONE event
-             * (which sets WIFI_CONNECTED_BIT) re-DHCPs, so the monitor itself never touches the IP layer. */
-            while( !wifi_link_up() )
-            {
-                uint16_t nextBackoff = WIFI_RECONNECT_BACKOFF_MAX_MS;
-                rltk_wlan_tx_deauth( 1, 0 );
-                vTaskDelay( pdMS_TO_TICKS( 80 ) );
-                if( ch != 0 )
-                {
-                    u8 c = ch, ps = PSCAN_ENABLE;
-                    wifi_set_pscan_chan( &c, &ps, 1 );
-                }
-                if( wifi_connect( (char *) ssid, sec, (char *) pass,
-                                  (int) strlen( ssid ), (int) strlen( pass ), 0, NULL ) == RTW_SUCCESS )
-                    break;   /* connected; FOURWAY_HANDSHAKE_DONE sets WIFI_CONNECTED_BIT + re-DHCPs */
-                /* Tick count is the per-attempt jitter seed (RETRY_FOREVER never returns Exhausted). */
-                ( void ) BackoffAlgorithm_GetNextBackoff( &backoff, ( uint32_t ) xTaskGetTickCount(),
-                                                          &nextBackoff );
-                log_error( "[KM4] wifi_connect failed - retry in %u ms", ( unsigned ) nextBackoff );
-                vTaskDelay( pdMS_TO_TICKS( nextBackoff ) );
-            }
-            wifi_set_power_mode( 0, 0 );
-            wifi_disable_powersave();
-            log_info( "[KM4] WiFi re-associated" );
-            wifi_reassoc_set( 0 );   /* really associated now -> honour the re-DHCP's genuine network-up */
-            /* The earlier DHCP fallback (eNotUsingLeasedAddress) stopped the DHCP timer, so kick it again
-             * now that we hold a real link - this drives a real lease -> eNetworkUp -> WIFI_CONNECTED_BIT.
-             * (No-op'd by the hook's s_downLogged so it does not re-print "network DOWN".) */
-            FreeRTOS_NetworkDown( &xInterface );
-        }
-    }
 }
 
 int main(void)
@@ -1343,7 +1129,8 @@ int main(void)
     { extern void fs_cli_register(void);   fs_cli_register();   }
     { extern void time_cli_register(void); time_cli_register(); }
     { extern void env_cli_register(void);  env_cli_register();  }   /* setenv/getenv/env (all images) */
-    { extern void wifi_cli_register(void); wifi_cli_register(); }   /* wifi forget (disconnect + erase) */
+    { extern void wifi_cli_register(void); wifi_cli_register(); }        /* shared `wifi` forget/drop */
+    { extern void amebad_wifi_cli_register(void); amebad_wifi_cli_register(); }  /* iwpriv/resolve/ip6 */
 #ifdef AMEBAD_ENABLE_MINIZIP
     { extern void zip_cli_register(void);  zip_cli_register();  }   /* zip/unzip demo (non-AWS images) */
 #endif

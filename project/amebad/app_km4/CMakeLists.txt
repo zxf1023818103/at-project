@@ -497,6 +497,10 @@ endif()
 # non-QUIC / AWS-only, and the monitor is compiled unconditionally.
 target_link_libraries(target_img2_km4 PRIVATE backoffalgorithm_config)
 
+# Shared WiFi provisioning + reconnect policy (component/wifi_service_config). main() calls
+# wifi_service_start(); the amebad wifi_port_* HAL + event routing live in src/main.cpp.
+target_link_libraries(target_img2_km4 PRIVATE wifi_service)
+
 # coreSNTP UTC time-sync is DEFAULT-ON in every non-QUIC image: plain SNTPv4 over UDP/FreeRTOS-Plus-
 # TCP feeding newlib's wall clock (time_base.c via amebad_set_unix_time). coreSNTP is a leaf — it
 # reaches the network only through the UdpTransportInterface_t callbacks — so it links as an ordinary
