@@ -20,6 +20,15 @@ endif
 
 BOARD     ?= $(CHIP)dk
 BUILD_DIR ?= build_$(CHIP)
+# AWS TLS-over-TCP backend for bl602 (component/aws_iot_config picks the transport):
+#   mbedtls (default) = mbedTLS 1.2/1.3, IN 6144 -- the heap-tight default that fits bl602.
+#   picotls           = TLS 1.3 only (picotls_core + picotls_mbedtls). Larger buffers; may not fit
+#                       bl602's heap. `fallback` is not wired for bouffalo yet.
+# Switch requires a clean configure (make distclean or rm build_<chip>): the CMake cache is sticky.
+TLS_BACKEND ?= mbedtls
+ifeq ($(filter $(TLS_BACKEND),mbedtls picotls),)
+$(error TLS_BACKEND must be 'mbedtls' or 'picotls')
+endif
 
 # Pick the riscv toolchain bundled with the Bouffalo SDK submodule.
 TOOLCHAIN_BIN := $(realpath $(AT_PROJECT_ROOT)/platform/toolchain_gcc_t-head_linux/bin)
@@ -37,7 +46,8 @@ all: build
 $(BUILD_DIR)/CMakeCache.txt: CMakeLists.txt proj.conf
 	$(CMAKE) -S . -B $(BUILD_DIR) -G "$(GENERATOR)" \
 	    -DCMAKE_TOOLCHAIN_FILE=$(CHIP_TOOLCHAIN) \
-	    -DBOUFFALO_BOARD=$(BOARD)
+	    -DBOUFFALO_BOARD=$(BOARD) \
+	    -DBOUFFALO_TLS_BACKEND=$(TLS_BACKEND)
 
 configure: $(BUILD_DIR)/CMakeCache.txt
 

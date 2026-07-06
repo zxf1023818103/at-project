@@ -446,6 +446,12 @@ target_link_libraries(bouffalo_sdk INTERFACE
     mbedtls_port
 )
 
+# TLS_BACKEND=picotls (bl602 AWS): picotls_core + picotls_mbedtls ride mbedcrypto/PSA + have circular
+# refs with it, so they belong inside the --start-group above (same as AmebaD's _aws_grp).
+if("${BOUFFALO_CHIP}" STREQUAL "bl602" AND BOUFFALO_TLS_BACKEND STREQUAL "picotls")
+    target_link_libraries(bouffalo_sdk INTERFACE picotls_core picotls_mbedtls)
+endif()
+
 # Bouffalo SDK keeps its -march/-mabi/include flags on the sdk_intf_lib
 # INTERFACE target. Without linking against it zlib gets the toolchain's
 # default ABI (RV64GC) and bl616 link fails with "ABI is incompatible

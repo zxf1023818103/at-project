@@ -28,6 +28,14 @@ add_library(aws_secret_store_file STATIC EXCLUDE_FROM_ALL
 target_link_libraries(aws_secret_store_file PUBLIC aws_provision_core)
 
 # --- bl602 telemetry client ------------------------------------------------------------------------
+# The TLS backend is switchable via BOUFFALO_TLS_BACKEND (project/bouffalo/Makefile TLS_BACKEND):
+# mbedtls (default, IN 6144 -- fits bl602's heap) or picotls (TLS 1.3; larger buffers, may not fit).
+# Both export the same TLS_FreeRTOS_* API; transport_tls.h resolves to the linked backend's header.
+if(BOUFFALO_TLS_BACKEND STREQUAL "picotls")
+    set(_aws_tls network_transport_picotls)
+else()
+    set(_aws_tls network_transport_mbedtls)
+endif()
 add_library(aws_iot STATIC EXCLUDE_FROM_ALL
     aws_telemetry.c
 )
@@ -36,7 +44,7 @@ target_link_libraries(aws_iot PUBLIC
     aws_provision_core
     aws_secret_store_file
     coremqtt_config
-    network_transport_mbedtls
+    ${_aws_tls}
     mbedtls_config
     freertos_cli
 )
