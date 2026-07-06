@@ -66,6 +66,7 @@ add_subdirectory(pkcs11_selftest_config)    # corePKCS11 token self-test (pkcs11
 add_subdirectory(mbedtls_bench_config)      # upstream Mbed TLS microbenchmark (mbedtls_bench) + `bench` cmd (BENCH=ON / bl602 always)
 add_subdirectory(picotls_config)            # TLS 1.3 core + mbedTLS/PSA backend (picotls_mbedtls) for ngtcp2 QUIC
 add_subdirectory(network_transport)         # TransportInterface_t impls over mbedtls_config + freertos-plus-tcp_config — coreMQTT TLS transport
+add_subdirectory(aws_iot_config)            # shared AWS provisioning + `aws` CLI (aws_provision_core); AmebaD links it, bl602 also gets aws_iot telemetry
 add_subdirectory(esp_crt_bundle_config)     # compressed Mozilla CA root bundle (CRT_BUNDLE=ON) + `crt_bundle` cmd; AFTER network_transport
                                             # so crt_bundle_cli's if(TARGET network_transport) sees it (enables the `connect` subcommand)
 endif()  # NOT BOUFFALO_CHIP
@@ -154,6 +155,11 @@ if(BOUFFALO_CHIP)
     add_subdirectory(coresntp_config)
     add_subdirectory(backoffalgorithm_config)
     add_subdirectory(sntp_time_config)
+    # AWS IoT telemetry (make AWS=ON): coreMQTT + the mbedTLS TLS transport (network_transport).
+    # No coreMQTT-Agent / OTA (those don't fit bl602's heap) -- direct MQTT publish over TLS.
+    add_subdirectory(coremqtt_config)      # coreMQTT v5.0.2
+    add_subdirectory(network_transport)    # TransportInterface_t (network_transport_mbedtls) over FreeRTOS+TCP
+    add_subdirectory(aws_iot_config)       # minimal AWS IoT telemetry (aws_iot; the `aws` console command)
     add_subdirectory(iperf_config)   # iperf throughput probes + the `iperf` console command
     add_subdirectory(wifi_service_config)   # shared WiFi provisioning + reconnect policy (wifi_service) over the wifi_port HAL
     add_subdirectory(mbedtls_bench_config)   # Mbed TLS crypto microbenchmark + the `bench` console command

@@ -1160,14 +1160,17 @@ int main(void)
             env_init();
     }
 #ifdef AT_PROJECT_AWS_IOT
-    /* AWS: the PSA-access mutex (pre-scheduler) + the `set` / `blemac` provisioning commands +
-     * the `ota_http <url>` OTA-over-HTTP(S) command. */
+    /* AWS: the shared `aws` provisioning command (component/aws_iot_config) + the AmebaD TF-M PSA
+     * diagnostics (pstest/xiptest) + the `ota_http <url>` OTA-over-HTTP(S) command. aws_provision_init()
+     * is a shared weak no-op (the AmebaD PSA-access mutex was neutralized). */
     {
         extern void aws_provision_init(void);
         extern void aws_cli_register(void);
+        extern void aws_platform_diag_register(void);
         extern void ota_http_register(void);
         aws_provision_init();
         aws_cli_register();
+        aws_platform_diag_register();
         ota_http_register();
     }
 #endif
@@ -1379,6 +1382,11 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
             { extern void sntp_sync_start(void); sntp_sync_start(); }
 #if defined BL602 || defined BL702
             wifi_service_on_event(WIFI_SVC_EV_GOTIP);
+            // Auto-start AWS telemetry once DHCP is up (bl602 only). Idempotent + a no-op until the
+            // device is provisioned, so it Just Works after `aws endpoint/ca/cert/key ...`; no manual
+            // `aws start`, and it comes back on every reboot/reconnect. The connect loop self-heals
+            // until SNTP supplies real UTC (needed for the mbedTLS server-cert validity check).
+            { extern void aws_telemetry_start(void); aws_telemetry_start(); }
 #endif
             break;
         }
@@ -1514,6 +1522,17 @@ void wifi_port_disconnect(void) {
 }
 int wifi_port_sec_from_str(const char *s) { (void)s; return -1; }   // wifi4 auto-detects security
 const char *wifi_port_sec_to_str(int sec) { (void)sec; return ""; }
+
+// AWS IoT platform hook (component/aws_iot_config): the WiFi STA MAC is the Thing name / MQTT client
+// ID / telemetry topic. Fills "aabbccddeeff" + NUL (out_len must be >= 13). 0 = ok.
+int aws_get_mac(char *out, size_t out_len) {
+    uint8_t mac[6];
+    if (out == NULL || out_len < 13) return -1;
+    if (wifi_mgmr_sta_mac_get(mac) != 0) return -1;
+    snprintf(out, out_len, "%02x%02x%02x%02x%02x%02x",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    return 0;
+}
 }  // extern "C"
 #endif
 
@@ -1567,7 +1586,10 @@ int main(void) {
     tcpip_init(on_tcpip_init_done, NULL);
 #endif
 
-    at::make_shared<at::AtTask>()->startAsync("AtTask", 256 * 12, 4);
+    // TEMP heap-budget measurement (AWS-fit): drop AtTask (12 KB stack over uart1) to reclaim ~12 KB
+    // of idle heap. The FreeRTOS-Plus-CLI console on uart0 (below) stays; only the AT-command surface
+    // over uart1 is gone. Gate behind an AWS build flag once the budget is confirmed.
+    // at::make_shared<at::AtTask>()->startAsync("AtTask", 256 * 12, 4);
 
     // Interactive FreeRTOS-Plus-CLI console on uart0 (the log/console port) — same command set
     // as AmebaD (ls/cat/setenv/date/...). AtTask keeps uart1, so no RX contention.
@@ -1577,11 +1599,19 @@ int main(void) {
     env_cli_register();                 // setenv/getenv/env
     time_cli_register();                // date/uptime/sntp_update
     zip_cli_register();                 // zip/unzip (minizip over the VFS)
+#if !defined(BL602)
+    // iperf is stripped on bl602 (its ~16 KB static buffers are reclaimed for the AWS TLS handshake
+    // heap; see component/bouffalo_sdk/CMakeLists.txt). Other Bouffalo chips keep it.
     iperf_cli_register();               // iperf [server|tx|udp] throughput test
+#endif
 #if defined BL602 || defined BL702
     // The shared wifi_service (wifi forget/drop) — only BL602/BL702 supply the wifi_port_* HAL it
     // drives; BL616/BL616CL bring up WiFi differently and would leave wifi_port_* undefined.
     { extern void wifi_cli_register(void); wifi_cli_register(); }
+    // Minimal AWS IoT telemetry (`aws` command): provision endpoint/cert/key/ca + start the direct
+    // coreMQTT-over-mbedTLS publisher. Same libraries + credential model as AmebaD, telemetry slice
+    // only (no coreMQTT-Agent / OTA — those don't fit bl602's heap). aws_get_mac() below is its hook.
+    { extern void aws_cli_register(void); aws_cli_register(); }
 #endif
 #ifdef AT_CRYPTO_SELFTESTS
     // Opt-in diagnostic image (make CRYPTO_SELFTESTS=ON): the Mbed TLS crypto self-tests. Default

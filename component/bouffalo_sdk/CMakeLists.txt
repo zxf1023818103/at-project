@@ -347,11 +347,32 @@ target_link_libraries(bouffalo_sdk INTERFACE sntp_time)
 target_link_libraries(bouffalo_sdk INTERFACE zip_cmd)
 
 # iperf throughput probes (component/iperf_config) — main() registers the `iperf` console command.
-target_link_libraries(bouffalo_sdk INTERFACE iperf)
+# NOT on bl602: iperf's static ucTxBuf(8K)+ucRecvBuf(5.7K)+ucRxBuf(2K) = ~16 KB of .bss, which the
+# heap-tight bl602 needs for the AWS mutual-TLS handshake peak (freeing them drops __HeapBase and
+# gives the TLSF OCRAM pool a ~16 KB bigger *contiguous* run — the handshake was failing on
+# fragmentation, not total size). bl616/cl keep iperf. main() gates iperf_cli_register() the same way.
+if(NOT "${BOUFFALO_CHIP}" STREQUAL "bl602")
+    target_link_libraries(bouffalo_sdk INTERFACE iperf)
+endif()
 
 # Shared WiFi provisioning + reconnect policy (component/wifi_service_config). main() calls
 # wifi_service_start(); the bl602 wifi_port_* HAL impl + event routing live in src/main.cpp.
 target_link_libraries(bouffalo_sdk INTERFACE wifi_service)
+
+# Minimal AWS IoT telemetry (component/aws_iot_config): direct coreMQTT over the mbedTLS TLS
+# transport — same libraries + credential model as AmebaD, telemetry slice only (no coreMQTT-Agent /
+# OTA, which don't fit bl602's heap). Pulls coremqtt + network_transport_mbedtls + mbedtls (resolved
+# in the --start-group with the mbedtls archives below). bl602 only: aws_get_mac() + the aws_cli
+# registration in src/main.cpp are under `#if defined BL602`; bl616/cl would leave aws_get_mac
+# undefined. main() calls aws_cli_register(); the `aws` command provisions + starts telemetry.
+if("${BOUFFALO_CHIP}" STREQUAL "bl602")
+    target_link_libraries(bouffalo_sdk INTERFACE aws_iot)
+    # AWS credential provisioning pastes a ~1.6 KB base64 body as ONE `aws cert/key/ca <b64>` CLI
+    # argument. The shared monitor's line buffer defaults to 512 on RISC-V (monitor.c) — too small,
+    # so the paste would be silently truncated. Bump it to 2560 (same as AmebaD KM4). Costs ~2 KB
+    # .bss on the tight bl602 heap, but there's no other way to get the DER creds onto the device.
+    target_compile_definitions(monitor PRIVATE MONITOR_CLI_MAX_INPUT=2560)
+endif()
 
 # The Mbed TLS crypto self-tests (bench + crt_bundle + pkcs11) are OPT-IN, mirroring AmebaD's
 # BENCH/CRT_BUNDLE/PKCS11=ON images: linking all three pulls RSA/full-ECP/ChaChaPoly + the ~56 KB

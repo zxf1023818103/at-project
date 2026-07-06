@@ -30,6 +30,11 @@ extern uint32_t __HeapLimit;
 extern uint32_t _heap_wram_start __attribute__((weak));
 extern uint32_t _heap_wram_size  __attribute__((weak));
 
+/* Optional third pool: bl602 hands the free upper 16K of TCM0 (0x4200C000, unmapped by ITCM/DTCM)
+ * to the heap as MM_HEAP_EM_0. Other platforms leave these undefined (0 -> skipped). */
+extern uint32_t _heap_tcm0_start __attribute__((weak));
+extern uint32_t _heap_tcm0_size  __attribute__((weak));
+
 void ram_heap_init(void)
 {
     mem_manager_init();
@@ -42,5 +47,11 @@ void ram_heap_init(void)
     if ((uintptr_t)&_heap_wram_size) {
         mm_register_heap(MM_HEAP_WRAM_0, "WRAM", MM_ALLOCATOR_TLSF,
                          &_heap_wram_start, (uintptr_t)&_heap_wram_size);
+    }
+
+    /* third heap: bl602 free upper-16K of TCM0 (0 = absent on other platforms) */
+    if ((uintptr_t)&_heap_tcm0_size) {
+        mm_register_heap(MM_HEAP_EM_0, "TCM0", MM_ALLOCATOR_TLSF,
+                         &_heap_tcm0_start, (uintptr_t)&_heap_tcm0_size);
     }
 }

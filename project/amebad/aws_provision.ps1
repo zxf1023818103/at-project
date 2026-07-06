@@ -3,12 +3,12 @@
 aws_provision.ps1 — drive the AmebaD AWS=ON `set` console commands over the LOGUART
 to provision AWS IoT credentials at runtime, each to its storage by secrecy:
 
-  set endpoint <ats-endpoint>  -> env var "endpoint" (plain LittleFS KV/endpoint)
-  set cert <base64-body>       -> plain LittleFS DER file (aws_cert.der); path = env var "cert"
-  set key  <base64-body>       -> TF-M Internal Trusted Storage (the only secret)
+  aws endpoint <ats-endpoint>  -> env var "endpoint" (plain LittleFS KV/endpoint)
+  aws cert <base64-body>       -> plain LittleFS DER file (aws_cert.der); path = env var "cert"
+  aws key  <base64-body>       -> TF-M Internal Trusted Storage (the only secret)
 
 The host strips the PEM armor + newlines (Send-Pem) and sends the bare base64 body as ONE
-ordinary CLI line (`set cert <b64>` / `set key <b64>`); the device parses it with
+ordinary CLI line (`aws cert <b64>` / `aws key <b64>`); the device parses it with
 FreeRTOS_CLIGetParameter + mbedtls_base64_decode. The write is paced at 16 B / 6 ms so the
 polled LOGUART RX FIFO doesn't overrun (a dropped char would fail the base64 decode).
 
@@ -59,8 +59,8 @@ function Send-Pem([System.IO.Ports.SerialPort]$sp, [string]$sub, [string]$file) 
     # The device parses it with FreeRTOS_CLIGetParameter and mbedtls_base64_decode (no custom
     # streaming/ACK).
     $b64 = (Get-Content $file | Where-Object { $_ -notmatch '^\s*-----' -and $_.Trim() -ne '' }) -join ''
-    Write-Host "[prov] set $sub  ($($b64.Length) base64 chars from $file)"
-    $sent = Send-Paced $sp "set $sub $b64"
+    Write-Host "[prov] aws $sub  ($($b64.Length) base64 chars from $file)"
+    $sent = Send-Paced $sp "aws $sub $b64"
     Write-Host "[prov] sent $sent B; awaiting result ..."
     Read-Drain $sp 12 -Echo
 }
@@ -78,8 +78,8 @@ try {
     Read-Drain $sp 1 -Echo
 
     if ($Endpoint) {
-        Write-Host "[prov] set endpoint $Endpoint"
-        [void](Send-Paced $sp "set endpoint $Endpoint")   # paced: a full-rate line corrupts on the polled RX
+        Write-Host "[prov] aws endpoint $Endpoint"
+        [void](Send-Paced $sp "aws endpoint $Endpoint")   # paced: a full-rate line corrupts on the polled RX
         Read-Drain $sp 4 -Echo
     }
     if ($Cert) { Send-Pem $sp 'cert' (Resolve-Path $Cert) }

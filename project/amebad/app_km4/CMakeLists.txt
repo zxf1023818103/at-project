@@ -418,8 +418,7 @@ if(AMEBAD_ENABLE_AWS_IOT)
     endif()
     target_sources(target_img2_km4 PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/aws_iot_demo.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/aws_provision.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/aws_cli.c"                    # `set` / `blemac` console commands
+        "${CMAKE_CURRENT_SOURCE_DIR}/aws_platform.c"             # aws_get_mac (efuse) + `aws blemac/secchk` + TF-M pstest/xiptest
         "${CMAKE_CURRENT_SOURCE_DIR}/ota_http.c"                  # `ota_http <url>` command (coreHTTP + llhttp)
         "${CMAKE_CURRENT_SOURCE_DIR}/ota_flash.c"                 # runtime OTA slot write/toggle/reboot
         # AWS IoT OTA Agent over the shared coreMQTT-Agent: the agent foundation (queue/pool/
@@ -460,10 +459,23 @@ if(AMEBAD_ENABLE_AWS_IOT)
     # strncat is not otherwise pulled, so resolve it to the ROM _strncat (string_rom_km4.ld),
     # mirroring the global memcpy=_memcpy romalias above.
     target_link_options(target_img2_km4 PRIVATE "-Wl,--defsym=strncat=_strncat")
-    # FreeRTOS-Plus-CLI header for aws_cli.c (FreeRTOS_CLIRegisterCommand); the freertos_cli
+    # FreeRTOS-Plus-CLI header for aws_platform.c (FreeRTOS_CLIRegisterCommand); the freertos_cli
     # archive is already in the link group via _diag_grp.
     target_include_directories(target_img2_km4 PRIVATE
         "${AT_ROOT}/component/freertos-cli_config/freertos-cli")
+    # Shared AWS provisioning + `aws` console command (component/aws_iot_config aws_provision_core).
+    # The client-key backend is the TF-M ITS impl (AMEBAD_TFM_STORAGE) or the plain-file impl, compiled
+    # straight into the image (the ITS one needs the PSA/ITS headers this TF-M build already has).
+    # AWS_KEY_MAX 1536 (heap-tuned, vs the 2560 default) on the shared lib + the AWS app TUs.
+    target_link_libraries(target_img2_km4 PRIVATE aws_provision_core)
+    target_include_directories(target_img2_km4 PRIVATE "${AT_ROOT}/component/aws_iot_config")
+    target_compile_definitions(aws_provision_core PRIVATE AWS_KEY_MAX=1536)
+    target_compile_definitions(target_img2_km4 PRIVATE AWS_KEY_MAX=1536)
+    if(AMEBAD_TFM_STORAGE)
+        target_sources(target_img2_km4 PRIVATE "${AT_ROOT}/component/aws_iot_config/aws_secret_store_its.c")
+    else()
+        target_sources(target_img2_km4 PRIVATE "${AT_ROOT}/component/aws_iot_config/aws_secret_store_file.c")
+    endif()
     # (--wrap=setenv + the LittleFS mount + env_init are now global, in the NOT-QUIC block above.)
     set_property(SOURCE "${AT_MAIN_SRC}"
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_AWS_IOT)

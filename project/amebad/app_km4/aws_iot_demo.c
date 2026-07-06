@@ -35,7 +35,7 @@
 #include "backoff_algorithm.h"
 
 #include "aws_iot_config.h"
-#include "aws_provision.h"
+#include "aws_iot.h"        /* shared AWS component: aws_load_key / aws_get_mac / AWS_*_MAX */
 
 #include "freertos_agent_message.h"
 #include "freertos_command_pool.h"
@@ -144,7 +144,7 @@ static void prvWaitForProvisioning(void)
             s_certPath[sizeof(s_certPath) - 1] = '\0';
             break;
         }
-        log_info("[AWS] NOT provisioned (endpoint:%s cert:%s key:%s, free heap %u) - run: set endpoint <ep> / set cert <b64> / set key <b64>",
+        log_info("[AWS] NOT provisioned (endpoint:%s cert:%s key:%s, free heap %u) - run: aws endpoint <ep> / aws cert <b64> / aws key <b64>",
                  ep ? "ok" : "MISSING", cp ? "ok" : "MISSING", rk ? "MISSING" : "ok",
                  (unsigned)xPortGetFreeHeapSize());
         vTaskDelay(pdMS_TO_TICKS(5000));
@@ -224,7 +224,7 @@ static void aws_agent_task(void *param)
     s_net.pParams = &s_tlsParams;
     mbedtls_threading_freertos_init();
 
-    if (aws_get_ble_mac(s_mac, sizeof(s_mac)) != 0) {
+    if (aws_get_mac(s_mac, sizeof(s_mac)) != 0) {
         log_error("[AWS] efuse BLE MAC read FAIL - task exiting");
         vTaskDelete(NULL);
         return;

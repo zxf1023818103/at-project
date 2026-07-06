@@ -286,6 +286,14 @@ SECTIONS
     PROVIDE( _heap_wram_start = . );
     PROVIDE( _heap_wram_size = ORIGIN(ram_wifi) + LENGTH(ram_wifi) - _heap_wram_start );
 
+    /* Extra heap pool: TCM0 upper 16K (0x4200C000..0x42010000). The linker maps only TCM0's top 16K
+     * as ITCM (0x42010000+) and all of TCM1 as DTCM, leaving TCM0's bottom 32K unmapped. A boot canary
+     * showed the UPPER half of that (0x4200C000..0x42010000) survives WiFi + ROM SFlash + LFS + SNTP,
+     * while the lower 16K (0x42008000..) is ROM flash-call scratch. Hand the free upper 16K to the heap
+     * (ram_heap_init registers it as MM_HEAP_EM_0 "TCM0"). Reclaims ~16 KB for the tight bl602 heap. */
+    PROVIDE( _heap_tcm0_start = 0x4200C000 );
+    PROVIDE( _heap_tcm0_size  = 0x4000 );   /* 16K */
+
     .bss (NOLOAD) :
     {
         . = ALIGN(4);
