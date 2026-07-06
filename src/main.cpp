@@ -1419,6 +1419,8 @@ int main(void)
 #include "AtTask.h"
 #include "TestTask.h"
 #include "BoardFlashLock.h"
+#include "wifi_service.h"   /* shared WiFi provisioning + reconnect policy */
+#include "wifi_port.h"      /* the platform HAL it drives (implemented below) */
 #endif
 
 extern "C" {
@@ -1523,8 +1525,7 @@ extern "C" void bouffalo_tcp_bringup(void);
 #endif // defined BL616 || defined BL616CL
 
 #if defined BL602 || defined BL702
-static void bl602_wifi_connect_task(void *arg);   // defined below main; used in wifi_event_handler
-static void bl602_conn_event(int connected);      // connect result (CONNECTED/DISCONNECT) -> connect task
+static void bl602_conn_event(int connected);      // connect result (CONNECTED/DISCONNECT) -> wifi_port_connect
 #endif
 
 #if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
@@ -1554,14 +1555,12 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
 #endif // defined BL616 || defined BL616CL
             wifi_do_fast_connect();
 #if defined BL602 || defined BL702
-            // HW DHCP bring-up test: associate to the test AP from a task, NOT here.
-            // wifi_event_handler runs with the scheduler suspended, and
-            // wifi_mgmr_sta_connect() blocks on a semaphore (connect result) -> asserts
-            // if called directly. The connect triggers wifi4 STA-enable ->
-            // wifi_eth_sta_enable -> bl602_tcp_bringup() (FreeRTOS+TCP IPInit), then the
-            // connect indication kicks DHCP. TODO: proper provisioning (env / AT command).
-            xTaskCreate(bl602_wifi_connect_task, (char *)"wifi_conn", 1024, NULL,
-                        tskIDLE_PRIORITY + 2, NULL);
+            // Start the shared WiFi provisioning + reconnect service (component/wifi_service_config).
+            // It runs in its own task (a blocking connect must not run here: wifi_event_handler runs
+            // with the scheduler suspended and wifi_mgmr_sta_connect() blocks on a semaphore). It reads
+            // WIFI_SSID/WIFI_PASSWORD from env, connects via the cached channel or a scan, and supervises
+            // the link -- driving the bl602 wifi_port_* HAL above. Same service AmebaD uses.
+            wifi_service_start();
 #endif // defined BL602 || defined BL702
             break;
         }
@@ -1576,7 +1575,8 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
         case CODE_WIFI_ON_CONNECTED: {
             printf("[APP] [EVT] %s, CODE_WIFI_ON_CONNECTED\n", __func__);
 #if defined BL602 || defined BL702
-            bl602_conn_event(1);   // wake the connect task: association succeeded
+            bl602_conn_event(1);   // wake wifi_port_connect: association succeeded
+            wifi_service_on_event(WIFI_SVC_EV_CONNECTED);
 #endif
             break;
         }
@@ -1590,12 +1590,16 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
             // than pre-IP from main() where the first rounds just log [SNTP] socket FAILED and back
             // off. sntp_sync_start() is idempotent (starts once), so repeated GOT_IP events are safe.
             { extern void sntp_sync_start(void); sntp_sync_start(); }
+#if defined BL602 || defined BL702
+            wifi_service_on_event(WIFI_SVC_EV_GOTIP);
+#endif
             break;
         }
         case CODE_WIFI_ON_DISCONNECT: {
             printf("[APP] [EVT] %s, CODE_WIFI_ON_DISCONNECT\n", __func__);
 #if defined BL602 || defined BL702
-            bl602_conn_event(0);   // wake the connect task: association failed/dropped
+            bl602_conn_event(0);   // wake wifi_port_connect: association failed/dropped
+            wifi_service_on_event(WIFI_SVC_EV_DISCONNECT);
 #endif
             break;
         }
@@ -1662,88 +1666,68 @@ static void bflb_net_bootstrap_task(void *arg) {
 #endif
 
 #if defined BL602 || defined BL702
-// HW DHCP test: associate to the test AP from a normal task context (blocking connect
-// must not run in the scheduler-suspended wifi_event_handler).
-#define BL602_WIFI_SSID  "ZengOTA"
-#define BL602_WIFI_PASS  "123456789"
+// bl602 WiFi HAL (wifi_port.h): the driver mechanics behind the shared wifi_service policy. The
+// connect strategy (env creds, cached-channel direct connect, scan fallback, offline guard,
+// reconnect monitor, `wifi forget`) lives ONCE in component/wifi_service_config; this file only
+// bridges to wifi4's wifi_mgmr_* -- same seam AmebaD uses (its port is below, Stage B).
 
-// ---- scan-complete signal (used only on the fallback / discovery path) ----
+// ---- scan-complete signal (directed active scan) ----
 static TaskHandle_t s_bl602_scan_waiter;
 static void bl602_scan_done_cb(void *data, void *param) {
     (void)data; (void)param;
     TaskHandle_t t = s_bl602_scan_waiter;
     if (t != NULL) { s_bl602_scan_waiter = NULL; xTaskNotifyGive(t); }
 }
-// Full directed active scan for the target SSID; connect the instant the scan-complete callback
-// fires (3 s safety cap). Returns 0 + fills *ap when the SSID was found.
-static int bl602_scan_find(wifi_mgmr_ap_item_t *ap) {
-    s_bl602_scan_waiter = xTaskGetCurrentTaskHandle();
-    wifi_mgmr_scan_adv(NULL, bl602_scan_done_cb, NULL, 0, NULL, BL602_WIFI_SSID, 0, 0);
-    ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(3000));
-    return wifi_mgmr_scan_ap((char *)BL602_WIFI_SSID, ap);   // 0 = found
-}
 
 // ---- connect-result signal: wifi_mgmr_sta_connect is async, so block on the driver's
-//      CODE_WIFI_ON_CONNECTED (ok) / CODE_WIFI_ON_DISCONNECT (fail) event (from wifi_event_handler). ----
-static TaskHandle_t   s_bl602_conn_waiter;
-static volatile int   s_bl602_conn_ok;
+//      CODE_WIFI_ON_CONNECTED (ok) / CODE_WIFI_ON_DISCONNECT (fail) event (fed from wifi_event_handler). ----
+static TaskHandle_t s_bl602_conn_waiter;
+static volatile int s_bl602_conn_ok;
 static void bl602_conn_event(int connected) {
     TaskHandle_t t = s_bl602_conn_waiter;
     if (t != NULL) { s_bl602_conn_ok = connected; s_bl602_conn_waiter = NULL; xTaskNotifyGive(t); }
 }
-// Post an async connect on `chan` (0 = let the driver scan/pick) and wait for the result (6 s cap).
-// Returns 0 on association success.
-static int bl602_try_connect(uint8_t chan) {
+
+extern "C" {
+unsigned wifi_port_task_stack_words(void) { return 1024; }   // wifi4 scan/connect is light
+int wifi_port_enable(void) {
+    // wifi_mgmr_sta_enable() loads the efuse MAC into wlan_sta.mac (else the STA vif has a ZERO MAC
+    // and the AP never answers the auth frame). Must precede connect.
+    (void)wifi_mgmr_sta_enable();
+    return 0;
+}
+void wifi_port_autoreconnect_disable(void) {
+    // Kill wifi4's native timer-based reconnect so wifi_service is the single reconnect authority.
+    wifi_mgmr_sta_autoconnect_disable();
+}
+int wifi_port_scan(const char *ssid, uint8_t *chan, int *sec) {
+    wifi_mgmr_ap_item_t ap;
+    s_bl602_scan_waiter = xTaskGetCurrentTaskHandle();
+    wifi_mgmr_scan_adv(NULL, bl602_scan_done_cb, NULL, 0, NULL, (char *)ssid, 0, 0);
+    ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(3000));
+    if (wifi_mgmr_scan_ap((char *)ssid, &ap) != 0) return -1;   // not found
+    if (chan) *chan = ap.channel;
+    if (sec)  *sec = -1;   // wifi4 auto-detects security on connect (no WIFI_SECURITY cache)
+    return 0;
+}
+int wifi_port_connect(const char *ssid, const char *pass, uint8_t chan, int sec) {
+    (void)sec;   // wifi4 picks the security from the beacon; nothing to pass through
     s_bl602_conn_ok = 0;
     s_bl602_conn_waiter = xTaskGetCurrentTaskHandle();
-    wifi_mgmr_sta_connect(NULL, (char *)BL602_WIFI_SSID, (char *)BL602_WIFI_PASS,
-                          NULL, NULL, 0, chan);
+    // A non-zero chan makes the wifi4 connect probe just that one channel for the BSSID.
+    wifi_mgmr_sta_connect(NULL, (char *)ssid, (char *)pass, NULL, NULL, 0, chan);
     if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(6000)) == 0) {
-        s_bl602_conn_waiter = NULL;   // timeout -> treat as failure
+        s_bl602_conn_waiter = NULL;   // timeout -> failure
         return -1;
     }
     return s_bl602_conn_ok ? 0 : -1;
 }
-
-static void bl602_wifi_connect_task(void *arg) {
-    (void)arg;
-    // wifi_mgmr_sta_enable() loads the efuse MAC into wlan_sta.mac (else the STA vif has a ZERO MAC
-    // and the AP never answers the auth frame). Must precede connect.
-    (void)wifi_mgmr_sta_enable();
-
-    // Fast path (like AmebaD): the last channel we connected on is cached in env WIFI_CHANNEL.
-    // Connect DIRECTLY on it with NO scan — a non-zero chan_id makes the wifi4 connect probe just
-    // that one channel for the BSSID. Only if that fails (AP moved / gone) drop the cache and fall
-    // back to a full scan.
-    const char *ec = getenv("WIFI_CHANNEL");
-    int cached = (ec && ec[0]) ? atoi(ec) : 0;
-    if (cached >= 1 && cached <= 14) {
-        printf("[WF] %s cached ch=%d -> direct connect (no scan)\n", BL602_WIFI_SSID, cached);
-        if (bl602_try_connect((uint8_t)cached) == 0) {
-            vTaskDelete(NULL);
-            return;
-        }
-        printf("[WF] cached ch=%d connect failed -> clear cache + full scan\n", cached);
-        unsetenv("WIFI_CHANNEL");
-    }
-
-    // Fallback: full directed scan to (re)discover the channel, connect, and cache it on success.
-    wifi_mgmr_ap_item_t ap;
-    if (bl602_scan_find(&ap) == 0) {
-        printf("[WF] %s ch=%u rssi=%d -> connect\n", BL602_WIFI_SSID, (unsigned)ap.channel, (int)ap.rssi);
-        // Cache the channel the scan actually FOUND the AP on (definitive), so the next boot goes
-        // straight to the direct-connect fast path. Don't gate this on the connect result — a
-        // residual DISCONNECT from the failed cached attempt can race the connect notification.
-        char cbuf[8];
-        snprintf(cbuf, sizeof(cbuf), "%u", (unsigned)ap.channel);
-        setenv("WIFI_CHANNEL", cbuf, 1);
-        bl602_try_connect(ap.channel);
-    } else {
-        printf("[WF] %s not found; connecting with driver scan fallback\n", BL602_WIFI_SSID);
-        bl602_try_connect(0);
-    }
-    vTaskDelete(NULL);
+void wifi_port_disconnect(void) {
+    wifi_mgmr_sta_disconnect();
 }
+int wifi_port_sec_from_str(const char *s) { (void)s; return -1; }   // wifi4 auto-detects security
+const char *wifi_port_sec_to_str(int sec) { (void)sec; return ""; }
+}  // extern "C"
 #endif
 
 int main(void) {
@@ -1807,6 +1791,11 @@ int main(void) {
     time_cli_register();                // date/uptime/sntp_update
     zip_cli_register();                 // zip/unzip (minizip over the VFS)
     iperf_cli_register();               // iperf [server|tx|udp] throughput test
+#if defined BL602 || defined BL702
+    // The shared wifi_service (wifi forget/drop) — only BL602/BL702 supply the wifi_port_* HAL it
+    // drives; BL616/BL616CL bring up WiFi differently and would leave wifi_port_* undefined.
+    { extern void wifi_cli_register(void); wifi_cli_register(); }
+#endif
 #ifdef AT_CRYPTO_SELFTESTS
     // Opt-in diagnostic image (make CRYPTO_SELFTESTS=ON): the Mbed TLS crypto self-tests. Default
     // OFF because all three together overflow bl602's xip_memory region (~100 KB over).

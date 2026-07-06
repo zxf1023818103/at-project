@@ -52,6 +52,7 @@ add_subdirectory(ota_config)                # AWS IoT OTA Agent v3.3.0 — links
 add_subdirectory(coresntp_config)           # coreSNTP SNTPv4 client static lib + core_sntp_config.h
 add_subdirectory(sntp_time_config)          # coreSNTP UTC time-sync app glue (sntp_time; strong sntp_sync_once)
 add_subdirectory(iperf_config)              # iperf2 throughput probes over FreeRTOS+TCP (iperf + `iperf` console cmd)
+add_subdirectory(wifi_service_config)       # shared WiFi provisioning + reconnect policy (wifi_service) over the wifi_port HAL
 add_subdirectory(freertos-cli_config)       # FreeRTOS-Plus-CLI V202212.00 static lib (freertos_cli)
 add_subdirectory(monitor_config)            # cross-platform interactive console: engine (monitor) + fs/env/time cmds (monitor_cmds)
 add_subdirectory(nimble_config)             # INTERFACE: NimBLE syscfg + upstream include surface
@@ -154,6 +155,7 @@ if(BOUFFALO_CHIP)
     add_subdirectory(backoffalgorithm_config)
     add_subdirectory(sntp_time_config)
     add_subdirectory(iperf_config)   # iperf throughput probes + the `iperf` console command
+    add_subdirectory(wifi_service_config)   # shared WiFi provisioning + reconnect policy (wifi_service) over the wifi_port HAL
     add_subdirectory(mbedtls_bench_config)   # Mbed TLS crypto microbenchmark + the `bench` console command
                                              # (RISC-V mcycle timer override lives in bouffalo_sdk/mbedtls_bench_port)
     # Compressed Mozilla CA root bundle + the `crt_bundle` console command (info/verify/addca).

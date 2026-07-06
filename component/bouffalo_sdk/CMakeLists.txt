@@ -349,6 +349,10 @@ target_link_libraries(bouffalo_sdk INTERFACE zip_cmd)
 # iperf throughput probes (component/iperf_config) — main() registers the `iperf` console command.
 target_link_libraries(bouffalo_sdk INTERFACE iperf)
 
+# Shared WiFi provisioning + reconnect policy (component/wifi_service_config). main() calls
+# wifi_service_start(); the bl602 wifi_port_* HAL impl + event routing live in src/main.cpp.
+target_link_libraries(bouffalo_sdk INTERFACE wifi_service)
+
 # The Mbed TLS crypto self-tests (bench + crt_bundle + pkcs11) are OPT-IN, mirroring AmebaD's
 # BENCH/CRT_BUNDLE/PKCS11=ON images: linking all three pulls RSA/full-ECP/ChaChaPoly + the ~56 KB
 # CA bundle + corePKCS11/PSA, which overflows bl602's xip_memory region by ~100 KB. Default OFF so
