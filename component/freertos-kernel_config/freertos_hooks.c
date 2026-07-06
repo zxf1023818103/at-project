@@ -48,16 +48,20 @@ void vApplicationStackOverflowHook( TaskHandle_t xTask, char *pcTaskName )
 
 #if ( configUSE_MALLOC_FAILED_HOOK == 1 )
 /*
- * Malloc-failed hook (heap_5 pvPortMalloc). Reports the remaining heap and
- * halts. Kept dependency-light (no optional INCLUDE_* task APIs) so it compiles
- * regardless of which task-introspection helpers the config includes.
+ * Malloc-failed hook (TLSF pvPortMalloc). Logs the remaining heap and RETURNS - it does NOT halt.
+ * A failed allocation during a network/TLS operation (a bursty handshake, a big transient buffer)
+ * must fail *that operation* - mbedTLS / coreMQTT / FreeRTOS+TCP all propagate the NULL as an error
+ * and retry - not brick the whole device. (The old fail-fast halt turned every transient OOM under
+ * load into a dead chip; see the bl602 TLS-handshake / iperf-RX OOM history.) Logging is rate-limited
+ * so a burst of failures can't itself flood the console (or re-enter via a printf allocation).
  */
 void vApplicationMallocFailedHook( void )
 {
-	printf( "\n\r[%s] Malloc failed [free heap size: %d]\n\r", __FUNCTION__, xPortGetFreeHeapSize() );
-	taskDISABLE_INTERRUPTS();
-	for( ;; )
+	static uint32_t seen = 0;
+	if( ( seen++ & 0x1F ) == 0 )   /* every 32nd failure */
 	{
+		printf( "\n\r[%s] Malloc failed [free heap size: %d] (op fails + retries; not fatal)\n\r",
+		        __FUNCTION__, xPortGetFreeHeapSize() );
 	}
 }
 #endif /* configUSE_MALLOC_FAILED_HOOK */
