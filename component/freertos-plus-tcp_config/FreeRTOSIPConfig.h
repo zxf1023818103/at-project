@@ -26,13 +26,22 @@
  *    the MQTT client is low-rate, so shrink the per-socket RX/TX buffers + window hard to give the
  *    tight NS heap back ~50 KB. 6*1460 still comfortably streams the AWS server cert handshake. */
 #define ipconfigUSE_TCP_WIN                      1
-/* BL602/BL702 have only ~176 KB RAM, far less than AmebaD/BL616: the "big" 35 KB per-socket
- * buffers + 40 descriptors exhaust the TLSF heap under load (iperf RX OOM'd -> the malloc-fail
- * hook bricked the chip). Force them onto the small tier, same as AmebaD's low-mem MQTT images. */
+/* Two TCP-buffer tiers: a shared low-mem tier for the heap-tight MQTT/telemetry images, and the big
+ * throughput tier for iperf/QUIC/BL616.
+ *  - low-mem (AMEBAD_NET_LOW_MEM = AmebaD AWS/MINIMAL, and BL602/BL702 which are tighter still):
+ *    RX 4*1460 / TX 2*1460. Sized by BL602's hard limit — 6*1460 was tried on bl602 and *breaks* the
+ *    AWS path: the TLS handshake still succeeds, but the 17.5 KB per-socket buffers leave too little
+ *    TLSF heap for FreeRTOS+TCP (BufferAllocation_2, heap-on-demand) to allocate the network buffer
+ *    that receives the MQTT CONNACK, so it is silently dropped and MQTT_Connect times out
+ *    (MQTTNoDataAvailable). 4*1460 RX still streams the AWS server cert flight (mbedTLS reassembles
+ *    records in its own IN buffer as TCP windows). HW-verified on bl602: 4/2 connects + publishes;
+ *    6/6 never CONNACKs. AmebaD AWS/MINIMAL share it — a low-rate MQTT client; its ota_http HTTPS OTA
+ *    download from S3 still works, just with a smaller window (slower).
+ *  - default (iperf/QUIC/BL616 throughput): the big 24*1460 window. */
 #if defined( AMEBAD_NET_LOW_MEM ) || defined( BL602 ) || defined( BL702 )
     #define ipconfigTCP_WIN_SEG_COUNT           16
-    #define ipconfigTCP_RX_BUFFER_LENGTH        ( 6 * 1460 )    /* ~8.5 KB */
-    #define ipconfigTCP_TX_BUFFER_LENGTH        ( 6 * 1460 )    /* ~8.5 KB */
+    #define ipconfigTCP_RX_BUFFER_LENGTH        ( 4 * 1460 )    /* ~5.7 KB */
+    #define ipconfigTCP_TX_BUFFER_LENGTH        ( 2 * 1460 )    /* ~2.9 KB */
 #else
     #define ipconfigTCP_WIN_SEG_COUNT           64
     #define ipconfigTCP_RX_BUFFER_LENGTH        ( 24 * 1460 )   /* ~35 KB */

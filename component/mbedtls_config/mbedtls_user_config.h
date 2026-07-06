@@ -48,10 +48,14 @@
 #define MBEDTLS_PSA_ASSUME_EXCLUSIVE_BUFFERS
 
 /* ---- TLS record buffers — the KM4 NS heap is tight; default 16 KB IN + 16 KB OUT is too much.
- * IN 8 KB holds a real TLS-1.2 server's whole Certificate record (most ignore max_fragment);
- * OUT 2 KB == the max_fragment the transport requests. VARIABLE_BUFFER_LENGTH stays OFF (AWS
- * doesn't honor max_fragment, and the mid-handshake IN realloc was an intermittent hang). */
-#define MBEDTLS_SSL_IN_CONTENT_LEN       8192
+ * IN 6 KB holds an AWS/S3 server's per-record Certificate fragment (AWS fragments its chain into
+ * <6 KB records) and is far easier to place in a fragmented heap than 8 KB — the single largest
+ * allocation that tipped bl602's ~40 KB TLSF heap over at handshake time. Now uniform across all
+ * platforms. OUT 2 KB == the max_fragment the transport requests. VARIABLE_BUFFER_LENGTH stays OFF
+ * (AWS doesn't honor max_fragment, and the mid-handshake IN realloc was an intermittent hang).
+ * Caveat: the mbedTLS-1.2 fallback path (AmebaD ota_http / TLS_BACKEND=mbedtls) now caps a received
+ * Certificate record at 6144 B — fine for AWS/S3, whose records are proven <6 KB. */
+#define MBEDTLS_SSL_IN_CONTENT_LEN       6144
 #define MBEDTLS_SSL_OUT_CONTENT_LEN      2048
 
 /* ---- ECP RAM: AWS suite is ECDHE_RSA (P-256). Shrink the mul window + drop the fixed-point
