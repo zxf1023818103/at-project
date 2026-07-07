@@ -577,8 +577,11 @@ static void setOptionalConfigurations( SSLContext_t * pSslContext,
                     mbedtlsLowLevelCodeOrDefault( mbedtlsError ) ) );
     }
 
-    /* Set Maximum Fragment Length if enabled. */
-    #ifdef MBEDTLS_SSL_MAX_FRAGMENT_LENGTH
+    /* Set Maximum Fragment Length if enabled. TRANSPORT_MBEDTLS_NO_MFLN (bl602 AWS) skips OFFERING it:
+     * AWS IoT does not honour MFLN and sends its ~5.6 KB server-cert flight in records bigger than the
+     * 2 KB we'd advertise, so with MFLN negotiated mbedTLS caps the record below what AWS sends and the
+     * handshake stalls. The full 6144 IN buffer holds AWS's records, so not offering MFLN is lossless. */
+    #if defined( MBEDTLS_SSL_MAX_FRAGMENT_LENGTH ) && !defined( TRANSPORT_MBEDTLS_NO_MFLN )
 
         /* Enable the max fragment extension. AmebaD KM4: 2048 (not 4096) — it must match
          * MBEDTLS_SSL_OUT_CONTENT_LEN (mbedtls_user_config.h, trimmed to 2 KB to fit the NS
@@ -629,6 +632,17 @@ static TlsTransportStatus_t tlsSetup( NetworkContext_t * pNetworkContext,
         /* Per mbed TLS docs, mbedtls_ssl_config_defaults only fails on memory allocation. */
         returnStatus = TLS_TRANSPORT_INSUFFICIENT_MEMORY;
     }
+
+#ifdef TRANSPORT_MBEDTLS_MAX_TLS_1_2
+    /* Pin the maximum protocol to TLS 1.2 (bl602 AWS build). bl602's mbedTLS TLS 1.3 client handshake
+     * to AWS IoT fails negotiation, whereas AWS accepts TLS 1.2 ECDHE-RSA-AES128-GCM-SHA256 with the
+     * RSA-2048 client cert - the well-trodden mbedTLS mutual-auth path (AmebaD uses picotls for 1.3). */
+    if( returnStatus == TLS_TRANSPORT_SUCCESS )
+    {
+        mbedtls_ssl_conf_max_tls_version( &( pTlsTransportParams->sslContext.config ),
+                                          MBEDTLS_SSL_VERSION_TLS1_2 );
+    }
+#endif
 
     if( returnStatus == TLS_TRANSPORT_SUCCESS )
     {
@@ -698,8 +712,10 @@ static TlsTransportStatus_t tlsHandshake( NetworkContext_t * pNetworkContext,
 
     if( returnStatus == TLS_TRANSPORT_SUCCESS )
     {
-        /* Perform the TLS handshake. */
-        TickType_t handshakeTimeoutTicks = pdMS_TO_TICKS( 10000 );
+        /* Perform the TLS handshake. 30 s (was 10 s): tolerates TCP retransmits of the multi-record
+         * server-cert flight over a congested 2.4 GHz link (bl602 is 2.4 GHz-only) so a lost packet's
+         * retransmit doesn't blow the whole-handshake budget mid-flight. */
+        TickType_t handshakeTimeoutTicks = pdMS_TO_TICKS( 30000 );
         TimeOut_t handshakeStart;
         vTaskSetTimeOutState( &handshakeStart );
 

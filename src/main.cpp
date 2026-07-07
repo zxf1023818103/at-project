@@ -1534,7 +1534,11 @@ void app_console_register_platform(void)
     // mbedTLS TLS transport for https, which - like aws_iot - is only linked on bl602 (heap).
     { extern void ota_http_register(void); ota_http_register(); }
 #endif
-    zip_cli_register();                 // zip/unzip (minizip over the VFS)
+#ifndef BOUFFALO_AWS_OTA
+    zip_cli_register();                 // zip/unzip (minizip over the VFS). Dropped in the bl602 AWSOTA
+                                        // image: gc-sections then strips minizip's ~4 KB of .bss, which
+                                        // (living below __HeapBase) grows the heap for the AWS TLS handshake.
+#endif
     { extern void net_cli_register(void); net_cli_register(); }   // shared `resolve` / `ip6`
 #if !defined(BL602)
     // iperf is stripped on bl602 (its ~16 KB static buffers are reclaimed for the AWS TLS handshake

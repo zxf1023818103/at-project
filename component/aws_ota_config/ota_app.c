@@ -114,8 +114,15 @@ int ota_app_is_active( void )
 static uint8_t s_updateFilePath[ 256 ];
 static uint8_t s_certFilePath[ 256 ];
 static uint8_t s_streamName[ 64 ];
-static uint8_t s_decodeMem[ OTA_FILE_BLOCK_SIZE ];     /* otaconfigLOG2_FILE_BLOCK_SIZE=12 -> 4096 */
 static uint8_t s_fileBitmap[ OTA_MAX_BLOCK_BITMAP_SIZE ]; /* 128 */
+#ifdef AWS_STATIC_TASKS
+/* Heap-tight (bl602): the decode buffer is only used AFTER the MQTT connect, so heap-allocate it in
+ * ota_app_init() (post-handshake) instead of reserving OTA_FILE_BLOCK_SIZE of .bss that would shrink
+ * the heap the TLS handshake's 6 KB IN buffer must fit into. */
+static uint8_t * s_decodeMem;
+#else
+static uint8_t s_decodeMem[ OTA_FILE_BLOCK_SIZE ];     /* otaconfigLOG2_FILE_BLOCK_SIZE=12 -> 4096 */
+#endif
 #if OTA_APP_ENABLE_HTTP
 /* HTTP data plane: the OTA library copies the job's presigned-S3 URL here (pUpdateUrlPath) and the
  * "Connect:" auth scheme there. SigV4 presigned URLs run ~500-1500 chars (OTA_REQUEST_URL_MAX_SIZE). */
@@ -134,7 +141,11 @@ static char s_otaAuthScheme[ 48 ];
 #ifndef OTA_APP_NUM_EVENT_BUFFERS
 #define OTA_APP_NUM_EVENT_BUFFERS    ( 1U )
 #endif
+#ifdef AWS_STATIC_TASKS
+static OtaEventData_t * s_eventBuffers;   /* heap-allocated post-handshake (bl602 heap; see s_decodeMem) */
+#else
 static OtaEventData_t s_eventBuffers[ OTA_APP_NUM_EVENT_BUFFERS ];
+#endif
 static SemaphoreHandle_t s_bufferMutex = NULL;
 static StaticSemaphore_t s_bufferMutexStorage;
 
@@ -962,7 +973,19 @@ int ota_app_init( MQTTAgentContext_t * pAgent, const char * pThingName )
     {
         return -1;
     }
-    memset( s_eventBuffers, 0, sizeof( s_eventBuffers ) );
+#ifdef AWS_STATIC_TASKS
+    /* Allocate the decode + event buffers now (post-handshake): keeping them off .bss let the earlier
+     * TLS handshake use that heap. ota_app_init runs right after the first MQTT connect, when the heap
+     * has settled (steady MQTT uses only a couple of network buffers), so these allocations succeed. */
+    s_decodeMem    = ( uint8_t * ) pvPortMalloc( OTA_FILE_BLOCK_SIZE );
+    s_eventBuffers = ( OtaEventData_t * ) pvPortMalloc( sizeof( OtaEventData_t ) * OTA_APP_NUM_EVENT_BUFFERS );
+    if( ( s_decodeMem == NULL ) || ( s_eventBuffers == NULL ) )
+    {
+        OTA_APP_LOG( "OTA buffer malloc FAIL (decode=%p events=%p)", ( void * ) s_decodeMem, ( void * ) s_eventBuffers );
+        return -1;
+    }
+#endif
+    memset( s_eventBuffers, 0, sizeof( OtaEventData_t ) * OTA_APP_NUM_EVENT_BUFFERS );
 
     /* OTA application buffers. */
     memset( &s_otaBuffer, 0, sizeof( s_otaBuffer ) );
@@ -973,7 +996,7 @@ int ota_app_init( MQTTAgentContext_t * pAgent, const char * pThingName )
     s_otaBuffer.pStreamName        = s_streamName;
     s_otaBuffer.streamNameSize     = sizeof( s_streamName );
     s_otaBuffer.pDecodeMemory      = s_decodeMem;
-    s_otaBuffer.decodeMemorySize   = sizeof( s_decodeMem );
+    s_otaBuffer.decodeMemorySize   = OTA_FILE_BLOCK_SIZE;
     s_otaBuffer.pFileBitmap        = s_fileBitmap;
     s_otaBuffer.fileBitmapSize     = sizeof( s_fileBitmap );
 #if OTA_APP_ENABLE_HTTP
@@ -1025,21 +1048,11 @@ int ota_app_init( MQTTAgentContext_t * pAgent, const char * pThingName )
         return -1;
     }
 
-    /* Dedicated OTA agent task: OTA_EventProcessingTask runs the state machine. Under AWS_STATIC_TASKS
-     * (bl602) the stack comes from .bss so a heap fragmented by the live TLS session can't fail this
-     * (10 KB) contiguous allocation - it is created after the first MQTT connect, when the heap is tight. */
-#ifdef AWS_STATIC_TASKS
-    {
-        static StackType_t  s_otaStack[ otaconfigSTACK_SIZE ];
-        static StaticTask_t s_otaTcb;
-        if( xTaskCreateStatic( OTA_EventProcessingTask, "ota_agent", otaconfigSTACK_SIZE, NULL,
-                               otaconfigAGENT_PRIORITY, s_otaStack, &s_otaTcb ) == NULL )
-        {
-            OTA_APP_LOG( "xTaskCreateStatic(ota_agent) FAIL" );
-            return -1;
-        }
-    }
-#else
+    /* Dedicated OTA agent task: OTA_EventProcessingTask runs the state machine. Kept DYNAMIC (not a
+     * static .bss stack) on purpose: it is created only AFTER the first MQTT connect, so a dynamic
+     * stack is NOT reserved during the earlier TLS handshake - freeing that ~10 KB for the handshake's
+     * working set, which is the bl602 heap bottleneck. The agent task (aws_iot_demo.c) stays static so
+     * it is guaranteed to create; this one retries on the next reconnect if a fragmented heap fails it. */
     if( xTaskCreate( OTA_EventProcessingTask, "ota_agent",
                      otaconfigSTACK_SIZE, NULL,
                      otaconfigAGENT_PRIORITY, NULL ) != pdPASS )
@@ -1047,7 +1060,6 @@ int ota_app_init( MQTTAgentContext_t * pAgent, const char * pThingName )
         OTA_APP_LOG( "xTaskCreate(ota_agent) FAIL" );
         return -1;
     }
-#endif
 
     s_initialised = 1;
     OTA_APP_LOG( "agent initialised (thing '%s')", pThingName );

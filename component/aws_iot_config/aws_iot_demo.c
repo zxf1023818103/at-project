@@ -61,11 +61,14 @@ struct NetworkContext
     TlsTransportParams_t * pParams;
 };
 
+#ifndef AWS_NET_BUFFER_SZ
 #define AWS_NET_BUFFER_SZ      4736   /* MQTT data plane: hold a 4 KB OTA block PUBLISH. largest
                                         * packet pumped through the shared connection - OTA
                                         * job docs / 4 KB stream data blocks dwarf the tiny
                                         * telemetry PUBLISH, so this is bumped from the old
-                                        * 1 KB telemetry-only buffer. */
+                                        * 1 KB telemetry-only buffer. bl602 overrides to 2560
+                                        * (2 KB blocks) via -D to save heap. */
+#endif
 #define AWS_TLS_RECV_TMO_MS    1000
 #define AWS_TLS_SEND_TMO_MS    1000
 #define AWS_CONNECT_TMO_MS     8000
@@ -206,6 +209,8 @@ static int prvAgentConnect(bool *pSessionPresent)
     p.key = (const uint8_t *)s_key;  p.keyLen = s_keyLen;  p.clientId = s_mac;
     p.port = AWS_MQTT_PORT;  p.recvTmoMs = AWS_TLS_RECV_TMO_MS;  p.sendTmoMs = AWS_TLS_SEND_TMO_MS;
     p.keepAliveS = AWS_MQTT_KEEPALIVE_S;  p.rxReserveSize = AWS_TLS_RX_RESERVE;  p.backendMode = AWS_TLS_BACKEND_MODE;
+    log_info("[AWS] pre-handshake free heap %u min-ever %u", (unsigned)xPortGetFreeHeapSize(),
+             (unsigned)xPortGetMinimumEverFreeHeapSize());
     if (aws_connect_tls(&s_net, &s_creds, &transport, &connectInfo, &p) != 0) {
         return -1;   /* aws_connect_tls logged the failure + tore down the socket */
     }

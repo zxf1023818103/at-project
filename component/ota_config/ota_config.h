@@ -35,7 +35,14 @@
  *   - 16 KB (LOG2=14): idle heap ~44.5 KB -> 2nd (S3) TLS malloc FAILED.
  * So the keep-alive-drop reconnect count stays at ~273 blocks; the speed win comes from the ota_app
  * in-call reconnect-retry (OTA_HTTP_REQ_RETRIES) instead, not from fewer blocks. Pairs with picotls. */
+/* bl602/bl616 (AWSOTA=ON, MQTT data plane) use 2 KB blocks, not 4 KB: the ~26 KB free heap can't
+ * hold the 4 KB block's decode/net/event .bss AND leave a contiguous ~6 KB block for the mbedTLS TLS
+ * IN buffer (mbedtls_ssl_setup OOM'd at handshake). 2 KB blocks free ~6 KB of .bss. AmebaD keeps 4 KB. */
+#if defined(BL602) || defined(BL616) || defined(BL616CL)
+#define otaconfigLOG2_FILE_BLOCK_SIZE      ( 11UL )
+#else
 #define otaconfigLOG2_FILE_BLOCK_SIZE      ( 12UL )
+#endif
 
 /* Number of blocks requested per data-plane request. Keep small: the AmebaD PAL streams
  * blocks sequentially to ota_flash_feed (a sequential consumer), and a modest in-flight

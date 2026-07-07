@@ -180,6 +180,13 @@ if(BOUFFALO_CHIP)
     endif()
     add_subdirectory(picotls_config)       # TLS 1.3 core + mbedTLS/PSA backend (for TLS_BACKEND=picotls)
     add_subdirectory(network_transport)    # TransportInterface_t (network_transport_mbedtls / _picotls) over FreeRTOS+TCP
+    if(AT_ENABLE_AWS_OTA)
+        # bl602 AWS mutual-TLS to AWS IoT: pin mbedTLS to TLS 1.2 (its TLS 1.3 client handshake to AWS
+        # fails negotiation; AWS accepts 1.2 ECDHE-RSA-AES128-GCM-SHA256 with the EC/RSA client cert) +
+        # don't offer MFLN (AWS ignores it and sends >2 KB cert records, which a negotiated MFLN rejects).
+        target_compile_definitions(network_transport_mbedtls PRIVATE
+            TRANSPORT_MBEDTLS_MAX_TLS_1_2 TRANSPORT_MBEDTLS_NO_MFLN)
+    endif()
     add_subdirectory(corehttp_config)      # coreHTTP v3.1.3 + bundled llhttp, for the shared `ota_http` command
     add_subdirectory(ota_http_config)      # shared `ota_http <url>` sources (compiled into the app) + its deps
     add_subdirectory(c-ares_config)        # c-ares async DNS resolver (cares_port); compiled only when linked (CARES=ON)

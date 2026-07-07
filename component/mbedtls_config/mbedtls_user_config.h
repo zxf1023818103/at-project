@@ -63,6 +63,14 @@
 #define MBEDTLS_ECP_WINDOW_SIZE          2
 #define MBEDTLS_ECP_FIXED_POINT_OPTIM    0
 
+/* ---- MPI (RSA) modexp window: unset defaults to 6 -> the sliding-window table is 2^6=64 mpi
+ * temporaries (~8 KB of small allocs) during the client's RSA-2048 CertificateVerify sign. On the
+ * heap-tight bl602 (AWSOTA, ~48 KB free, fragmented by FreeRTOS+TCP network buffers) that exhausts
+ * the heap -> "RSA private key operation failed : BIGNUM - Memory allocation failed" mid-handshake.
+ * Window 1 = plain square-and-multiply (2 temporaries): a one-time handshake sign, so the speed loss
+ * is irrelevant. Bouffalo-only (AmebaD has its own mbedtls_port config). ---- */
+#define MBEDTLS_MPI_WINDOW_SIZE          1
+
 /* ---- TLS-1.2-only fallback build (TLS_BACKEND=fallback): the mbedTLS SSL stack is ONLY the 1.2
  * fallback; every 1.3 peer rides picotls (which uses mbedcrypto/x509, not the SSL layer). ---- */
 #ifdef MBEDTLS_TLS12_ONLY

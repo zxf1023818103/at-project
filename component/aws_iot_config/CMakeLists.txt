@@ -65,7 +65,11 @@ if(AT_ENABLE_AWS_OTA)
         AWS_STATIC_TASKS
         AWS_NO_TELEMETRY
         AWS_AGENT_STACK_WORDS=2048
+        AWS_NET_BUFFER_SZ=2560       # 2 KB OTA blocks (otaconfigLOG2_FILE_BLOCK_SIZE=11 on bl602)
+        AWS_KEY_MAX=1536             # RSA-2048 key DER ~1218 B; trims s_key .bss (grows the TLS heap)
     )
+    # Same key-buffer trim on the shared provisioning lib (aws_provision.c s_der / aws_load_key).
+    target_compile_definitions(aws_provision_core PRIVATE AWS_KEY_MAX=1536)
     target_include_directories(aws_iot PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(aws_iot PUBLIC
         aws_provision_core
