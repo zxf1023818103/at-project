@@ -55,6 +55,7 @@ add_subdirectory(iperf_config)              # iperf2 throughput probes over Free
 add_subdirectory(wifi_service_config)       # shared WiFi provisioning + reconnect policy (wifi_service) over the wifi_port HAL
 add_subdirectory(freertos-cli_config)       # FreeRTOS-Plus-CLI V202212.00 static lib (freertos_cli)
 add_subdirectory(monitor_config)            # cross-platform interactive console: engine (monitor) + fs/env/time cmds (monitor_cmds)
+add_subdirectory(app_startup_config)        # shared startup helpers (app_startup) both platform main()s call
 add_subdirectory(nimble_config)             # INTERFACE: NimBLE syscfg + upstream include surface
 add_subdirectory(mcumgr_config)             # apache/mynewt-mcumgr 0.7.0 SMP core (img+os groups) over tinycbor v7 shim — BLE DFU (MCUMGR=ON)
 add_subdirectory(syscall_config)            # newlib retarget OBJECT lib (VFS + malloc + byte-order); PRIVATE-links freertos-plus-tcp_config + at_console
@@ -142,6 +143,7 @@ if(BOUFFALO_CHIP)
     # monitor_config depends on freertos_cli + at_console, so it comes after freertos-cli_config.
     add_subdirectory(freertos-cli_config)
     add_subdirectory(monitor_config)
+    add_subdirectory(app_startup_config)   # shared startup helpers (app_startup) both platform main()s call
 
     # rxi log (component/rxi_log_config) is now the SINGLE project logger — the Bouffalo-specific
     # bflb_log was deleted; the SDK's LOG_*/BFLB_LOG_* route to rxi via bflb_log_compat.h. main()

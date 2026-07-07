@@ -323,6 +323,7 @@ if(AMEBAD_ENABLE_QUIC)
     set(_quic_grp ",ngtcp2_crypto_picotls,ngtcp2_static,picotls_core,picotls_mbedtls,mbedcrypto,mbedx509,mbedtls,mbedtls_port,mbedtls_config")
     target_sources(target_img2_km4 PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/quic_test.c")   # newlib syscalls now from the syscalls core
+
     set_property(SOURCE "${AT_MAIN_SRC}"
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_QUIC)
 endif()
@@ -512,6 +513,13 @@ target_link_libraries(target_img2_km4 PRIVATE backoffalgorithm_config)
 # Shared WiFi provisioning + reconnect policy (component/wifi_service_config). main() calls
 # wifi_service_start(); the amebad wifi_port_* HAL + event routing live in src/main.cpp.
 target_link_libraries(target_img2_km4 PRIVATE wifi_service)
+
+# Shared startup helpers (component/app_startup_config): app_env_time_init / app_console_start /
+# app_on_network_up, called from main() + the network-up hook. Linked unconditionally (even the QUIC
+# image, which drops the console libs, still calls app_on_network_up from its hook). Placed BEFORE the
+# --start-group below so its console-TU references into monitor/monitor_cmds/freertos_cli (which live in
+# _diag_grp inside the group) resolve; the network TU (app_startup_net.c) is self-contained.
+target_link_libraries(target_img2_km4 PRIVATE app_startup)
 
 # coreSNTP UTC time-sync is DEFAULT-ON in every non-QUIC image: plain SNTPv4 over UDP/FreeRTOS-Plus-
 # TCP feeding newlib's wall clock (time_base.c via amebad_set_unix_time). coreSNTP is a leaf — it

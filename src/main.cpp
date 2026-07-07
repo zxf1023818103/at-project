@@ -32,6 +32,7 @@ extern "C" {
 #include "log_lock.h"             /* log_lock_init */
 #include "wifi_service.h"         /* shared WiFi provisioning + reconnect policy */
 #include "wifi_port.h"            /* the platform HAL it drives (implemented below) */
+#include "app_startup.h"          /* shared startup helpers (app_env_time_init / app_console_start / app_on_network_up) */
 }  // extern "C"
 /* ameba_soc.h -> platform_stdlib does `#define printf _rtl_printf`; undo it so printf flows
  * through _write -> at_console_write and picks up the [HH:MM:SS] prefix. */
@@ -586,12 +587,8 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
                     log_info( "[KM4] DNS override -> %s / %s", d1, ( d2 != NULL ) ? d2 : "-" );
                 }
             }
-#ifdef AT_PROJECT_CARES
-            /* (Re)point the c-ares channel at the current DNS servers (DHCP-learned + the override
-             * above). cares_resolver_init() is a no-op after the first network-up. */
-            cares_resolver_init();
-            cares_resolver_set_servers();
-#endif
+            /* c-ares DNS re-point (CARES=ON) now runs from the shared app_on_network_up() below,
+             * via app_network_dns_reinit() (strong-overridden in component/c-ares_config). */
             if( ulDHCPNtpServerAddress != 0U )
             {
                 fmt_ipv4( ulDHCPNtpServerAddress, b, sizeof( b ) );
@@ -602,37 +599,9 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
                 log_info( "[KM4] DHCP NTP    (none - DHCP option 42 not received)" );
             }
         }
-#ifdef AT_PROJECT_QUIC
-        /* QUIC build: run the ngtcp2 + wolfSSL TLS1.3 handshake self-test against
-         * the WSL QUIC server instead of the iperf throughput probes (iperf TUs
-         * are not linked in this image). */
-        extern void quic_test_start( void );
-        quic_test_start();
-#else
-        /* coreSNTP UTC time-sync is default-on in every non-QUIC image: an async background task
-         * that fetches UTC over SNTP and backs newlib's _gettimeofday (time_base.c), so the logs
-         * (and TLS / OTA) see real wall-clock time. (Excluded from the layout-sensitive QUIC image.) */
-        { extern void sntp_sync_start( void ); sntp_sync_start(); }
-#if defined(AT_PROJECT_AWS_IOT)
-        /* AWS IoT Core MQTT/TLS demo: connect to AWS IoT over mutually-authenticated
-         * TLS and publish telemetry. Credentials: endpoint+cert from LittleFS, the
-         * private key from TF-M Protected Storage (provisioned via `set ...`). */
-        extern void aws_iot_demo_start( void );
-        aws_iot_demo_start();
-#elif defined(AT_PROJECT_IPERF)
-        /* Default throughput probe: device -> host TCP TX (the device-as-client
-         * upload that exercises the WiFi TX path). The UDP TX/RX + TCP-sink probes
-         * stay available for diagnostics. Homegrown iperf2 over FreeRTOS+TCP sockets
-         * with a static TX buffer — no iperf3 mmap/pthread/cJSON heap churn. */
-        /* IPv6 RX probe: device-as-server (host connects outbound -> no host firewall rule needed).
-         * Host: a raw TCP sender to [device link-local]%<ifindex>:5001 for ~15s; the device drains
-         * and prints the RX rate. (iperf_client_start is the device->host TX variant.) */
-        iperf_server_start();
-        ( void ) iperf_client_start;
-        ( void ) iperf_udp_client_start;
-        ( void ) iperf_udp_server_start;
-#endif
-#endif
+        /* Network services on link-up (SNTP + AWS / QUIC / iperf) via the shared seam;
+         * app_network_up_start_services() is strong-overridden for AmebaD just above main(). */
+        app_on_network_up();
     }
     else
     {
@@ -1079,6 +1048,75 @@ static void wifi_bringup_thread( void *param )
     vTaskDelete( NULL );
 }
 
+/* ---- shared-startup platform seams (component/app_startup_config) --------------------------------
+ * Strong overrides of app_startup.c's weak no-ops: called by app_console_start() (registers) and
+ * app_on_network_up() (network services). We're inside the amebad `extern "C"` block, so these keep
+ * C linkage and override the weak C symbols. */
+#ifndef AT_PROJECT_QUIC
+void app_console_register_platform(void)
+{
+    amebad_monitor_cmds_register();     /* AmebaD port cmds: reboot / dw / ew / flash / efuse / >> / km0 / km4 */
+    { extern void wifi_cli_register(void); wifi_cli_register(); }               /* shared `wifi` forget/drop */
+    { extern void amebad_wifi_cli_register(void); amebad_wifi_cli_register(); } /* iwpriv/resolve/ip6 */
+#ifdef AMEBAD_ENABLE_MINIZIP
+    { extern void zip_cli_register(void);  zip_cli_register();  }   /* zip/unzip demo (non-AWS images) */
+#endif
+#ifdef AMEBAD_SBOOT
+    { extern void sboot_cli_register(void); sboot_cli_register(); } /* secure-boot Ed25519 self-test */
+#endif
+#ifdef AMEBAD_ENABLE_CRT_BUNDLE
+    { extern void crt_bundle_cli_register(void); crt_bundle_cli_register(); } /* compressed CA root bundle */
+#endif
+#ifdef AMEBAD_ENABLE_WPS
+    { extern void wps_cli_register(void); wps_cli_register(); }     /* WPS (PBC/PIN) connect test */
+#endif
+#if defined(AMEBAD_EFUSE_DEBUG) && defined(AMEBAD_TFM_STORAGE)
+    { extern void efuse_burn_cli_register(void); efuse_burn_cli_register(); } /* DEBUG eFuse burn (provisioning) */
+#endif
+#ifdef AT_PROJECT_AWS_IOT
+    /* AWS: shared `aws` provisioning command (component/aws_iot_config) + AmebaD TF-M PSA diagnostics
+     * (pstest/xiptest) + `ota_http <url>`. aws_provision_init() is a shared weak no-op. */
+    {
+        extern void aws_provision_init(void);
+        extern void aws_cli_register(void);
+        extern void aws_platform_diag_register(void);
+        extern void ota_http_register(void);
+        aws_provision_init();
+        aws_cli_register();
+        aws_platform_diag_register();
+        ota_http_register();
+    }
+#endif
+}
+#endif /* !AT_PROJECT_QUIC */
+
+void app_network_up_start_services(void)
+{
+#ifdef AT_PROJECT_QUIC
+    /* QUIC build: run the ngtcp2 + picotls/mbedTLS TLS1.3 handshake self-test against the WSL QUIC
+     * server instead of the iperf throughput probes (iperf TUs are not linked in this image). */
+    extern void quic_test_start(void);
+    quic_test_start();
+#else
+    /* coreSNTP UTC time-sync (default-on in every non-QUIC image): an async task that fetches UTC and
+     * backs newlib's _gettimeofday (time_base.c), so logs / TLS / OTA see real wall-clock time. */
+    { extern void sntp_sync_start(void); sntp_sync_start(); }
+#if defined(AT_PROJECT_AWS_IOT)
+    /* AWS IoT Core MQTT/TLS demo: connect over mutual TLS and publish telemetry (endpoint+cert from
+     * LittleFS, key from TF-M Protected Storage). */
+    extern void aws_iot_demo_start(void);
+    aws_iot_demo_start();
+#elif defined(AT_PROJECT_IPERF)
+    /* Default throughput probe: device-as-server RX (host connects outbound -> no host firewall rule).
+     * The device->host TX + UDP probes stay available for diagnostics. */
+    iperf_server_start();
+    (void) iperf_client_start;
+    (void) iperf_udp_client_start;
+    (void) iperf_udp_server_start;
+#endif
+#endif /* AT_PROJECT_QUIC */
+}
+
 int main(void)
 {
     log_lock_init();   /* install the FreeRTOS-mutex lock before any log_* (pre-scheduler is fine) */
@@ -1111,80 +1149,25 @@ int main(void)
 #endif
 #endif
 
-    /* Console: the shared FreeRTOS-Plus-CLI engine (component/monitor_config) over the LOGUART
-     * via the AmebaD port (component/amebad/monitor_port). KM4 owns the console at boot; `>>` /
-     * `km0` hand it to KM0. KM4 RX is IRQ-driven (a StreamBuffer fed by the LOGUART RX ISR — the
-     * registered handler is what makes enabling the line safe, avoiding the ROM "Irq 3 Fun Not
-     * Assign" storm); KM0 polls. Dropped from the QUIC image (the handshake self-test is
-     * autonomous): removing the monitor from KM4 image2 shrinks .text and shifts the XIP layout
-     * to dodge the boot-hang (doc/amebad_xip_layout_boot_hang.md); that image's console stays
-     * output-only (DiagPrintf TX is unaffected). */
 #ifndef AT_PROJECT_QUIC
-    monitor_start();                    /* shared engine: line editor + generic version/heap/tasks/echo */
-    amebad_monitor_cmds_register();     /* AmebaD port cmds: reboot / dw / ew / flash / efuse / >> / km0 / km4 */
-    /* Filesystem (ls/cat/rm/rmdir/mkdir/mv/cp/touch/hexdump/df/mkfs) + time/SNTP
-     * (date/uptime/sntp_update) console commands, registered into the same CLI list the
-     * monitor uses — like aws_cli_register() below, so the shared monitor stays untouched.
-     * KM4-only: the VFS/LittleFS/newlib-time they use live behind libc, absent on KM0. */
-    { extern void fs_cli_register(void);   fs_cli_register();   }
-    { extern void time_cli_register(void); time_cli_register(); }
-    { extern void env_cli_register(void);  env_cli_register();  }   /* setenv/getenv/env (all images) */
-    { extern void wifi_cli_register(void); wifi_cli_register(); }        /* shared `wifi` forget/drop */
-    { extern void amebad_wifi_cli_register(void); amebad_wifi_cli_register(); }  /* iwpriv/resolve/ip6 */
-#ifdef AMEBAD_ENABLE_MINIZIP
-    { extern void zip_cli_register(void);  zip_cli_register();  }   /* zip/unzip demo (non-AWS images) */
-#endif
-#ifdef AMEBAD_SBOOT
-    { extern void sboot_cli_register(void); sboot_cli_register(); } /* secure-boot Ed25519 self-test */
-#endif
-#ifdef AMEBAD_ENABLE_CRT_BUNDLE
-    { extern void crt_bundle_cli_register(void); crt_bundle_cli_register(); } /* compressed CA root bundle */
-#endif
-#ifdef AMEBAD_ENABLE_WPS
-    { extern void wps_cli_register(void); wps_cli_register(); }     /* WPS (PBC/PIN) connect test */
-#endif
-#if defined(AMEBAD_EFUSE_DEBUG) && defined(AMEBAD_TFM_STORAGE)
-    { extern void efuse_burn_cli_register(void); efuse_burn_cli_register(); } /* DEBUG eFuse burn (provisioning) */
-#endif
-    /* Mount LittleFS + load the persisted environment (KV/) for ALL non-QUIC images, so the
-     * WIFI_* / DHCP_* / NTP_SERVER (and the AWS endpoint/cert) env vars work everywhere - not just
-     * the AWS image. lfs_config_mount is idempotent (a singleton), so this is harmless when
-     * lfs_selftest already mounted earlier. env_init() loads every KV/ file into newlib's environ;
-     * the --wrap=setenv hook (linked into every image) then auto-persists any runtime setenv to KV/. */
-    {
-        extern void *amebad_lfs_mount(void);
-        extern void  env_init(void);
-        void *lfs = amebad_lfs_mount();
-        log_info("[KM4] LittleFS mount %s", lfs ? "OK" : "FAILED");
-        if (lfs)
-            env_init();
-    }
-#ifdef AT_PROJECT_AWS_IOT
-    /* AWS: the shared `aws` provisioning command (component/aws_iot_config) + the AmebaD TF-M PSA
-     * diagnostics (pstest/xiptest) + the `ota_http <url>` OTA-over-HTTP(S) command. aws_provision_init()
-     * is a shared weak no-op (the AmebaD PSA-access mutex was neutralized). */
-    {
-        extern void aws_provision_init(void);
-        extern void aws_cli_register(void);
-        extern void aws_platform_diag_register(void);
-        extern void ota_http_register(void);
-        aws_provision_init();
-        aws_cli_register();
-        aws_platform_diag_register();
-        ota_http_register();
-    }
-#endif
-#endif
-
-    /* Default the wall clock + log timestamps to China Standard Time (UTC+8) so printf logs read
-     * local time. Only set it when TZ is unset/empty (a persisted/user TZ is kept); tzset() then
-     * loads it into newlib's _timezone (read by at_console_timestamp). */
+    /* LittleFS + persisted env + default TZ, then the shared console: the FreeRTOS-Plus-CLI engine
+     * (component/monitor_config) over the LOGUART via the AmebaD port + fs/env/time CLI
+     * (app_console_start), then the AmebaD platform/feature/AWS commands (app_console_register_platform,
+     * defined just above main). Dropped from the QUIC image (the handshake self-test is autonomous):
+     * removing the monitor from KM4 image2 shifts the XIP layout to dodge the boot-hang
+     * (doc/amebad_xip_layout_boot_hang.md); that image's console stays output-only. */
+    app_env_time_init();
+    app_console_start();
+#else
+    /* QUIC self-test image: no console/LFS/env (layout-sensitive). Default TZ only so any timestamped
+     * log still reads local time. */
     {
         const char *tz = getenv("TZ");
         if ((tz == NULL) || (tz[0] == '\0'))
             setenv("TZ", "CST-8", 1);
     }
     tzset();
+#endif
 
     /* WiFi+DHCP bring-up runs as its own task (wifi_connect blocks). */
     if (xTaskCreate(wifi_bringup_thread, "wifi_bringup", 4096, NULL,
@@ -1211,6 +1194,7 @@ int main(void)
 #include "BoardFlashLock.h"
 #include "wifi_service.h"   /* shared WiFi provisioning + reconnect policy */
 #include "wifi_port.h"      /* the platform HAL it drives (implemented below) */
+#include "app_startup.h"    /* shared startup helpers (app_env_time_init / app_console_start / app_on_network_up) */
 #endif
 
 extern "C" {
@@ -1376,17 +1360,12 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
         }
         case CODE_WIFI_ON_GOT_IP: {
             printf("[APP] [EVT] %s, CODE_WIFI_ON_GOT_IP\n", __func__);
-            // Start coreSNTP now that DHCP gave us an IP (same as AmebaD's network-up hook), rather
-            // than pre-IP from main() where the first rounds just log [SNTP] socket FAILED and back
-            // off. sntp_sync_start() is idempotent (starts once), so repeated GOT_IP events are safe.
-            { extern void sntp_sync_start(void); sntp_sync_start(); }
 #if defined BL602 || defined BL702
+            // GOT_IP fires only on BL602/BL702 (bl602_netif.c), after DHCP. Notify the wifi service,
+            // then run the shared network-up services via app_on_network_up() (DNS re-point for c-ares
+            // + coreSNTP + AWS telemetry). SNTP/telemetry are idempotent, so repeated GOT_IP is safe.
             wifi_service_on_event(WIFI_SVC_EV_GOTIP);
-            // Auto-start AWS telemetry once DHCP is up (bl602 only). Idempotent + a no-op until the
-            // device is provisioned, so it Just Works after `aws endpoint/ca/cert/key ...`; no manual
-            // `aws start`, and it comes back on every reboot/reconnect. The connect loop self-heals
-            // until SNTP supplies real UTC (needed for the mbedTLS server-cert validity check).
-            { extern void aws_telemetry_start(void); aws_telemetry_start(); }
+            app_on_network_up();
 #endif
             break;
         }
@@ -1536,6 +1515,50 @@ int aws_get_mac(char *out, size_t out_len) {
 }  // extern "C"
 #endif
 
+/* ---- shared-startup platform seams (component/app_startup_config) --------------------------------
+ * Strong overrides of app_startup.c's weak no-ops for the Bouffalo platform. We're inside the outer
+ * `extern "C"` block, so these keep C linkage and override the weak C symbols. app_console_start()
+ * calls the first; app_on_network_up() (from the GOT_IP handler) calls the second. */
+void app_console_register_platform(void)
+{
+    bouffalo_monitor_cmds_register();   // reboot
+    zip_cli_register();                 // zip/unzip (minizip over the VFS)
+#if !defined(BL602)
+    // iperf is stripped on bl602 (its ~16 KB static buffers are reclaimed for the AWS TLS handshake
+    // heap; see component/bouffalo_sdk/CMakeLists.txt). Other Bouffalo chips keep it.
+    iperf_cli_register();               // iperf [server|tx|udp] throughput test
+#endif
+#if defined BL602 || defined BL702
+    // The shared wifi_service `wifi` (forget/drop) + minimal AWS IoT telemetry (`aws`): only BL602/BL702
+    // supply the wifi_port_* HAL / fit the telemetry heap. Same libraries + credential model as AmebaD.
+    { extern void wifi_cli_register(void); wifi_cli_register(); }
+    { extern void aws_cli_register(void); aws_cli_register(); }
+#endif
+#ifdef AT_CRYPTO_SELFTESTS
+    // Opt-in diagnostic image (make CRYPTO_SELFTESTS=ON): the Mbed TLS crypto self-tests. Default OFF
+    // because all three together overflow bl602's xip_memory region (~100 KB over).
+    bench_cli_register();               // Mbed TLS crypto microbenchmark ([MCB] scores)
+    crt_bundle_cli_register();          // Mozilla CA root bundle info/verify/addca
+    pkcs11_cli_register();              // corePKCS11 token self-test (keygen/sign/verify)
+#endif
+}
+
+void app_network_up_start_services(void)
+{
+    // coreSNTP UTC time sync (idempotent). BL602/BL702 reach here from GOT_IP; the other Bouffalo chips
+    // start SNTP from main() instead (they don't post GOT_IP).
+    sntp_sync_start();
+#if defined BL602 || defined BL702
+    // Auto-start AWS telemetry once DHCP is up (bl602). Idempotent + a no-op until provisioned, so it
+    // Just Works after `aws endpoint/ca/cert/key ...`; the connect loop self-heals until SNTP supplies
+    // real UTC (needed for the mbedTLS server-cert validity check).
+    { extern void aws_telemetry_start(void); aws_telemetry_start(); }
+#endif
+#ifdef AT_PROJECT_QUIC
+    { extern void quic_test_start(void); quic_test_start(); }
+#endif
+}
+
 int main(void) {
     board_init();
     log_lock_init();   // install the rxi-logger FreeRTOS-mutex lock before any log_* (SDK LOG_*/rfparam)
@@ -1555,23 +1578,10 @@ int main(void) {
         return 0;
     }
     bflb_mtd_init();
-    // Mount LittleFS (PSM) via the shared VFS hook + load POSIX env from /KV --
-    // same libc/env model as AmebaD (replaces easyflash_init; vfs_lfs_mount is
-    // idempotent, so the lazy mount from the first open() is a no-op after this).
-    if (vfs_lfs_mount() != nullptr) {
-        env_init();
-    }
-
-    // Default the wall clock + log timestamps to China Standard Time (UTC+8) so `date` and the
-    // printf log prefix read local time (same as AmebaD). Only set TZ when unset/empty (a persisted
-    // or user `setenv TZ ...` is kept); tzset() loads it into newlib's _timezone. This also seeds
-    // the first env var, so `env` isn't empty on a fresh device (it persists to KV/TZ).
-    {
-        const char *tz = getenv("TZ");
-        if ((tz == nullptr) || (tz[0] == '\0'))
-            setenv("TZ", "CST-8", 1);
-    }
-    tzset();
+    // Mount LittleFS (PSM) via the shared VFS hook + load POSIX env from /KV + default TZ to CST-8 --
+    // the shared startup helper (component/app_startup_config), identical to AmebaD. vfs_lfs_mount()
+    // is idempotent, so the lazy mount from the first open() is a no-op after this.
+    app_env_time_init();
 
 #if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
     // lwIP has been removed on Bouffalo — the network stack is switching to
@@ -1591,35 +1601,10 @@ int main(void) {
     // over uart1 is gone. Gate behind an AWS build flag once the budget is confirmed.
     // at::make_shared<at::AtTask>()->startAsync("AtTask", 256 * 12, 4);
 
-    // Interactive FreeRTOS-Plus-CLI console on uart0 (the log/console port) — same command set
-    // as AmebaD (ls/cat/setenv/date/...). AtTask keeps uart1, so no RX contention.
-    monitor_start();
-    bouffalo_monitor_cmds_register();   // reboot
-    fs_cli_register();                  // ls/cat/rm/mkdir/mv/cp/touch/hexdump/df/mkfs/chmod + hashes
-    env_cli_register();                 // setenv/getenv/env
-    time_cli_register();                // date/uptime/sntp_update
-    zip_cli_register();                 // zip/unzip (minizip over the VFS)
-#if !defined(BL602)
-    // iperf is stripped on bl602 (its ~16 KB static buffers are reclaimed for the AWS TLS handshake
-    // heap; see component/bouffalo_sdk/CMakeLists.txt). Other Bouffalo chips keep it.
-    iperf_cli_register();               // iperf [server|tx|udp] throughput test
-#endif
-#if defined BL602 || defined BL702
-    // The shared wifi_service (wifi forget/drop) — only BL602/BL702 supply the wifi_port_* HAL it
-    // drives; BL616/BL616CL bring up WiFi differently and would leave wifi_port_* undefined.
-    { extern void wifi_cli_register(void); wifi_cli_register(); }
-    // Minimal AWS IoT telemetry (`aws` command): provision endpoint/cert/key/ca + start the direct
-    // coreMQTT-over-mbedTLS publisher. Same libraries + credential model as AmebaD, telemetry slice
-    // only (no coreMQTT-Agent / OTA — those don't fit bl602's heap). aws_get_mac() below is its hook.
-    { extern void aws_cli_register(void); aws_cli_register(); }
-#endif
-#ifdef AT_CRYPTO_SELFTESTS
-    // Opt-in diagnostic image (make CRYPTO_SELFTESTS=ON): the Mbed TLS crypto self-tests. Default
-    // OFF because all three together overflow bl602's xip_memory region (~100 KB over).
-    bench_cli_register();               // bench: Mbed TLS crypto microbenchmark ([MCB] scores)
-    crt_bundle_cli_register();          // crt_bundle: Mozilla CA root bundle info/verify/addca
-    pkcs11_cli_register();              // pkcs11: corePKCS11 token self-test (keygen/sign/verify)
-#endif
+    // Interactive FreeRTOS-Plus-CLI console on uart0 (same command set as AmebaD: ls/cat/setenv/date/...):
+    // the shared engine (app_console_start = monitor + fs/env/time) then the Bouffalo platform + feature
+    // commands (app_console_register_platform, defined above main). AtTask keeps uart1, so no RX contention.
+    app_console_start();
 
     // coreSNTP UTC time sync. BL602/BL702 post CODE_WIFI_ON_GOT_IP (bl602_netif.c), so they start
     // SNTP from that event (above) — after DHCP, like AmebaD. The other Bouffalo chips (bl616/cl,

@@ -337,6 +337,10 @@ target_link_libraries(bouffalo_sdk INTERFACE
     monitor_port
     freertos_cli
 )
+# Shared startup helpers (component/app_startup_config): app_env_time_init / app_console_start /
+# app_on_network_up, called from main() + the GOT_IP handler. Inside the --start-group (below), so its
+# references into monitor / *_cli_register + the platform seams (strong in src/main.cpp) re-scan cleanly.
+target_link_libraries(bouffalo_sdk INTERFACE app_startup)
 # coreSNTP UTC time sync (component/sntp_time_config) — pulls coreSNTP + backoffAlgorithm
 # transitively; main() calls sntp_sync_start(). Gives bl602 real UTC (date/sntp_update/timestamps).
 target_link_libraries(bouffalo_sdk INTERFACE sntp_time)
