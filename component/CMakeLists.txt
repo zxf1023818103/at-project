@@ -162,6 +162,7 @@ if(BOUFFALO_CHIP)
     add_subdirectory(coremqtt_config)      # coreMQTT v5.0.2
     add_subdirectory(picotls_config)       # TLS 1.3 core + mbedTLS/PSA backend (for TLS_BACKEND=picotls)
     add_subdirectory(network_transport)    # TransportInterface_t (network_transport_mbedtls / _picotls) over FreeRTOS+TCP
+    add_subdirectory(c-ares_config)        # c-ares async DNS resolver (cares_port); compiled only when linked (CARES=ON)
     add_subdirectory(aws_iot_config)       # minimal AWS IoT telemetry (aws_iot; the `aws` console command)
     add_subdirectory(iperf_config)   # iperf throughput probes + the `iperf` console command
     add_subdirectory(wifi_service_config)   # shared WiFi provisioning + reconnect policy (wifi_service) over the wifi_port HAL

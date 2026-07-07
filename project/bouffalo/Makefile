@@ -30,6 +30,16 @@ ifeq ($(filter $(TLS_BACKEND),mbedtls picotls),)
 $(error TLS_BACKEND must be 'mbedtls' or 'picotls')
 endif
 
+# c-ares async DNS resolver (component/c-ares_config), same cross-platform component AmebaD uses under
+# CARES=ON. OFF (default) = the FreeRTOS-Plus-TCP resolver (FreeRTOS_getaddrinfo). ON links cares_port
+# and stamps AT_PROJECT_CARES onto the DNS call sites (network_transport_sockets + sntp_time), so the
+# device resolves via c-ares (connected-UDP shim + select loop over component/syscall_config).
+# Switch requires a clean configure (make distclean or rm build_<chip>): the CMake cache is sticky.
+CARES ?= OFF
+ifeq ($(filter $(CARES),ON OFF),)
+$(error CARES must be 'ON' or 'OFF')
+endif
+
 # Pick the riscv toolchain bundled with the Bouffalo SDK submodule.
 TOOLCHAIN_BIN := $(realpath $(AT_PROJECT_ROOT)/platform/toolchain_gcc_t-head_linux/bin)
 export PATH := $(TOOLCHAIN_BIN):$(PATH)
@@ -47,7 +57,8 @@ $(BUILD_DIR)/CMakeCache.txt: CMakeLists.txt proj.conf
 	$(CMAKE) -S . -B $(BUILD_DIR) -G "$(GENERATOR)" \
 	    -DCMAKE_TOOLCHAIN_FILE=$(CHIP_TOOLCHAIN) \
 	    -DBOUFFALO_BOARD=$(BOARD) \
-	    -DBOUFFALO_TLS_BACKEND=$(TLS_BACKEND)
+	    -DBOUFFALO_TLS_BACKEND=$(TLS_BACKEND) \
+	    -DAT_ENABLE_CARES=$(CARES)
 
 configure: $(BUILD_DIR)/CMakeCache.txt
 

@@ -26,7 +26,15 @@ __RFTLV_HEAD1_L = (0x41524150); /* PAPA */
 MEMORY
 {
     fw_header_memory  (rx)  : ORIGIN = 0x23000000 - 0x1000, LENGTH = 4K
-    xip_memory  (rx)  : ORIGIN = 0x23000000, LENGTH = 1024K
+    /* XIP-executed code window. Bumped 1024K -> 1408K. The FW partition is 0x178000 (1.47 MB, see
+     * partition_cfg_4M.toml) so there is ample headroom; this is a linker region CAP, so a larger value
+     * costs nothing for images that don't use it. Drivers: the base image sat near the old 1024K cap;
+     * CARES=ON (c-ares .text) needs ~1152K; QUIC=ON (ngtcp2 + picotls, a diagnostic build -- see below)
+     * needs ~1260K. 1408K covers both with margin and stays < the 1504K partition.
+     * NB: bl602 QUIC is a DIAGNOSTIC build only -- it links here, but at runtime the QUIC task's 32 KB
+     * (QUIC_SMOKE) stack cannot be allocated from bl602's ~60 KB fragmented heap, so the self-test
+     * reports "task create FAILED" and does not run (bl616/bl616cl are the viable Bouffalo QUIC targets). */
+    xip_memory  (rx)  : ORIGIN = 0x23000000, LENGTH = 1408K
     itcm_memory (rx)  : ORIGIN = 0x22010000, LENGTH = 16K
     dtcm_memory (rx)  : ORIGIN = 0x42014000, LENGTH = 48K
     ram_memory  (!rx) : ORIGIN = 0x42020000, LENGTH = 176K

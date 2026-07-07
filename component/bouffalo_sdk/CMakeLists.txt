@@ -378,6 +378,23 @@ if("${BOUFFALO_CHIP}" STREQUAL "bl602")
     target_compile_definitions(monitor PRIVATE MONITOR_CLI_MAX_INPUT=2560)
 endif()
 
+# c-ares async DNS resolver (component/c-ares_config) — the SAME cross-platform resolver AmebaD uses
+# under CARES=ON (mirrors project/amebad/app_km4/CMakeLists.txt:631-643). make ... CARES=ON
+# (-> -DAT_ENABLE_CARES=ON) links cares_port and stamps AT_PROJECT_CARES onto the DNS call sites:
+#   network_transport_sockets (tcp_sockets_wrapper.c: the AWS TLS/MQTT resolve) and
+#   sntp_time (sntp_time.c: the SNTP resolve)
+# so both route through cares_resolve() (connected-UDP shim + select loop over syscall_config's BSD
+# shim) instead of FreeRTOS_getaddrinfo. app_on_network_up() (GOT_IP handler) then re-points the c-ares
+# channel at the DHCP-learned DNS via app_network_dns_reinit() (strong override in c-ares_config).
+# cares_port sits inside the umbrella's --start-group (below), so its cross-refs re-scan cleanly.
+if(AT_ENABLE_CARES)
+    target_link_libraries(bouffalo_sdk INTERFACE cares_port)
+    target_compile_definitions(network_transport_sockets PRIVATE AT_PROJECT_CARES)
+    target_link_libraries(network_transport_sockets PRIVATE cares_port)
+    target_compile_definitions(sntp_time PRIVATE AT_PROJECT_CARES)
+    target_link_libraries(sntp_time PRIVATE cares_port)
+endif()
+
 # The Mbed TLS crypto self-tests (bench + crt_bundle + pkcs11) are OPT-IN, mirroring AmebaD's
 # BENCH/CRT_BUNDLE/PKCS11=ON images: linking all three pulls RSA/full-ECP/ChaChaPoly + the ~56 KB
 # CA bundle + corePKCS11/PSA, which overflows bl602's xip_memory region by ~100 KB. Default OFF so

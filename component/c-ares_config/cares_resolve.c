@@ -29,6 +29,12 @@
 static SemaphoreHandle_t  s_lock;
 static int                s_lib_inited;
 static char               s_servers_csv[ 96 ];   /* DNS servers; applied to each transient channel */
+/* Set when the DNS server list must be (re)computed. app_network_dns_reinit() flips it on every
+ * network-up; the actual (logging, endpoint-iterating) cares_resolver_set_servers() then runs lazily
+ * inside cares_resolve() -- i.e. in the resolving task's context. This keeps app_network_dns_reinit()
+ * itself non-blocking so it is safe to call from Bouffalo's GOT_IP handler, which runs with the
+ * scheduler SUSPENDED (a blocking log-lock / semaphore take there trips a FreeRTOS assert). */
+static volatile int       s_servers_pending = 1;
 
 struct gai_ctx {
     int                        family;
@@ -95,7 +101,9 @@ void cares_resolver_init( void )
     {
         ( void ) ares_library_init( ARES_LIB_INIT_ALL );
         s_lib_inited = 1;
-        log_info( "[cares] ready" );
+        /* No log here: cares_resolver_init() may run from a scheduler-suspended event context
+         * (Bouffalo GOT_IP -> app_network_dns_reinit), where a blocking log-lock take asserts. The
+         * "[cares] servers=..." line from cares_resolver_set_servers() (run later in a task) suffices. */
     }
 }
 
@@ -200,6 +208,15 @@ int cares_resolve( const char * host, int family, struct freertos_sockaddr * out
         ( void ) xSemaphoreTake( s_lock, portMAX_DELAY );
     }
 
+    /* Apply a pending DNS-server refresh here, in the resolving task's context (safe to log / iterate
+     * the endpoint list), rather than from app_network_dns_reinit()'s possibly scheduler-suspended
+     * event context. Serialized by s_lock; runs once per network-up. */
+    if( s_servers_pending )
+    {
+        cares_resolver_set_servers();
+        s_servers_pending = 0;
+    }
+
     /* Build a fresh channel per resolve and tear it down at the end. Keeping a channel alive holds
      * its htables + rand state + the kept-warm UDP connection's in_buf on the heap (~12 KB) between
      * the infrequent connect/reconnect resolves; create-on-demand keeps the steady-state cost ~0. */
@@ -275,4 +292,16 @@ int cares_resolve( const char * host, int family, struct freertos_sockaddr * out
         ( void ) xSemaphoreGive( s_lock );
     }
     return rc;
+}
+
+/* Strong override of app_startup.c's weak app_network_dns_reinit(): when c-ares is linked (CARES=ON),
+ * the shared app_on_network_up() asks the resolver to re-point at the current DNS servers on the next
+ * resolve (DHCP-learned + the DNS_SERVER env override). Kept NON-BLOCKING (init = alloc-only, then a
+ * single flag write) because app_on_network_up() runs from Bouffalo's GOT_IP handler with the scheduler
+ * SUSPENDED; the actual set_servers() (which logs + walks the endpoint list) runs lazily inside
+ * cares_resolve(), in the resolving task's context. See component/app_startup_config. */
+void app_network_dns_reinit( void )
+{
+    cares_resolver_init();
+    s_servers_pending = 1;
 }
