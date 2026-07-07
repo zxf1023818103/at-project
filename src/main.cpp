@@ -1057,7 +1057,8 @@ void app_console_register_platform(void)
 {
     amebad_monitor_cmds_register();     /* AmebaD port cmds: reboot / dw / ew / flash / efuse / >> / km0 / km4 */
     { extern void wifi_cli_register(void); wifi_cli_register(); }               /* shared `wifi` forget/drop */
-    { extern void amebad_wifi_cli_register(void); amebad_wifi_cli_register(); } /* iwpriv/resolve/ip6 */
+    { extern void amebad_wifi_cli_register(void); amebad_wifi_cli_register(); } /* AmebaD-only `iwpriv` */
+    { extern void net_cli_register(void); net_cli_register(); }                 /* shared `resolve` / `ip6` */
 #ifdef AMEBAD_ENABLE_MINIZIP
     { extern void zip_cli_register(void);  zip_cli_register();  }   /* zip/unzip demo (non-AWS images) */
 #endif
@@ -1523,6 +1524,7 @@ void app_console_register_platform(void)
 {
     bouffalo_monitor_cmds_register();   // reboot
     zip_cli_register();                 // zip/unzip (minizip over the VFS)
+    { extern void net_cli_register(void); net_cli_register(); }   // shared `resolve` / `ip6`
 #if !defined(BL602)
     // iperf is stripped on bl602 (its ~16 KB static buffers are reclaimed for the AWS TLS handshake
     // heap; see component/bouffalo_sdk/CMakeLists.txt). Other Bouffalo chips keep it.

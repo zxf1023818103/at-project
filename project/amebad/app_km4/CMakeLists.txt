@@ -516,6 +516,10 @@ target_link_libraries(target_img2_km4 PRIVATE backoffalgorithm_config)
 # wifi_service_start(); the amebad wifi_port_* HAL + event routing live in src/main.cpp.
 target_link_libraries(target_img2_km4 PRIVATE wifi_service)
 
+# Shared network-diagnostic console commands (component/net_cli_config): `resolve` + `ip6`. main()'s
+# app_console_register_platform() calls net_cli_register(). AmebaD-specific `iwpriv` stays in wifi_cli.c.
+target_link_libraries(target_img2_km4 PRIVATE net_cli)
+
 # Shared startup helpers (component/app_startup_config): app_env_time_init / app_console_start /
 # app_on_network_up, called from main() + the network-up hook. Linked unconditionally (even the QUIC
 # image, which drops the console libs, still calls app_on_network_up from its hook). Placed BEFORE the
@@ -643,12 +647,14 @@ if(AMEBAD_ENABLE_CARES)
     target_link_libraries(target_img2_km4 PRIVATE cares_port)
     target_compile_definitions(network_transport_sockets PRIVATE AT_PROJECT_CARES)
     target_link_libraries(network_transport_sockets PRIVATE cares_port)   # for cares_resolve.h
+    # Shared `resolve` command (component/net_cli_config): c-ares path when stamped + cares_port for the header.
+    target_compile_definitions(net_cli PRIVATE AT_PROJECT_CARES)
+    target_link_libraries(net_cli PRIVATE cares_port)
     set_property(SOURCE
                  "${CMAKE_CURRENT_SOURCE_DIR}/sntp_time.c"
                  "${CMAKE_CURRENT_SOURCE_DIR}/ota_app.c"
                  "${CMAKE_CURRENT_SOURCE_DIR}/ota_http.c"
                  "${AT_MAIN_SRC}"
-                 "${CMAKE_CURRENT_SOURCE_DIR}/wifi_cli.c"
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_CARES)
 endif()
 

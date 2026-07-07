@@ -1,10 +1,11 @@
 /*
- * wifi_cli.c - WiFi management console command.
+ * wifi_cli.c - AmebaD-specific WiFi driver console command.
  *
- *   wifi forget - disconnect the current AP, permanently stop the reconnect monitor from
- *                 re-associating, and erase the saved credentials (WIFI_SSID/PASSWORD/CHANNEL/
- *                 SECURITY) from the KV store. The device stays offline until the credentials
- *                 are set again (e.g. `wps pbc`, `setenv WIFI_SSID ...`, or a reboot defaults).
+ *   iwpriv [cmd] - Realtek wlan-driver private ioctl passthrough (no bl602 equivalent).
+ *
+ * The cross-platform `resolve` + `ip6` commands moved to component/net_cli_config (net_cli_register);
+ * the `wifi` forget/drop command is in component/wifi_service_config (wifi_cli_register). main()'s
+ * app_console_register_platform() calls all three.
  */
 #include <stdio.h>
 #include <string.h>
@@ -12,84 +13,6 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "FreeRTOS_CLI.h"
-#include "FreeRTOS_IP.h"
-#include "FreeRTOS_Routing.h"
-#if ( ipconfigUSE_IPv6 != 0 )
-    #include "FreeRTOS_IPv6_Sockets.h"   /* FreeRTOS_inet_ntop6 */
-#endif
-#include "at_log.h"
-#ifdef AT_PROJECT_CARES
-#include "cares_resolve.h"
-#endif
-
-#if ( ipconfigUSE_IPv6 != 0 )
-/* `ip6`: list every IPv6 address the stack holds (link-local fe80:: + any SLAAC global from the RA). */
-static BaseType_t cmd_ip6( char * out, size_t outlen, const char * cmd )
-{
-    NetworkEndPoint_t * pxEP;
-    char                buf[ 48 ];
-    int                 n = 0;
-
-    ( void ) cmd;
-    for( pxEP = FreeRTOS_FirstEndPoint( NULL ); pxEP != NULL; pxEP = FreeRTOS_NextEndPoint( NULL, pxEP ) )
-    {
-        if( pxEP->bits.bIPv6 != pdFALSE_UNSIGNED )
-        {
-            FreeRTOS_inet_ntop6( pxEP->ipv6_settings.xIPAddress.ucBytes, buf, ( socklen_t ) sizeof( buf ) );
-            log_info( "[IPv6] addr %s/%u%s", buf, ( unsigned ) pxEP->ipv6_settings.uxPrefixLength,
-                      ( pxEP->bits.bWantRA != pdFALSE_UNSIGNED ) ? " (SLAAC)" : " (link-local)" );
-            n++;
-        }
-    }
-    snprintf( out, outlen, "ip6: %d IPv6 address(es) -> see [IPv6] log\r\n", n );
-    return pdFALSE;
-}
-#endif
-
-/* resolve <host> : look the name up through c-ares (uses the DNS servers from
- * cares_resolver_set_servers -- e.g. `set DNS_SERVER 2400:3200::1` for IPv6 AliDNS). */
-static BaseType_t cmd_resolve( char * out, size_t outlen, const char * cmd )
-{
-    BaseType_t   plen = 0;
-    const char * host = FreeRTOS_CLIGetParameter( cmd, 1, &plen );
-#ifdef AT_PROJECT_CARES
-    struct freertos_sockaddr fa;
-    char                     hbuf[ 80 ];
-
-    if( ( host == NULL ) || ( plen == 0 ) )
-    {
-        snprintf( out, outlen, "usage: resolve <hostname>\r\n" );
-        return pdFALSE;
-    }
-    if( plen >= ( BaseType_t ) sizeof( hbuf ) ) { plen = ( BaseType_t ) sizeof( hbuf ) - 1; }
-    memcpy( hbuf, host, ( size_t ) plen );
-    hbuf[ plen ] = '\0';
-
-    if( cares_resolve( hbuf, FREERTOS_AF_INET, &fa ) == 0 )
-    {
-        uint32_t ip = fa.sin_address.ulIP_IPv4;
-        snprintf( out, outlen, "resolve %s -> %u.%u.%u.%u  (A)\r\n", hbuf,
-                  ( unsigned ) ( ip & 0xffU ),          ( unsigned ) ( ( ip >> 8 ) & 0xffU ),
-                  ( unsigned ) ( ( ip >> 16 ) & 0xffU ), ( unsigned ) ( ( ip >> 24 ) & 0xffU ) );
-    }
-#if ( ipconfigUSE_IPv6 != 0 )
-    else if( cares_resolve( hbuf, FREERTOS_AF_INET6, &fa ) == 0 )
-    {
-        char ip6[ 48 ];
-        FreeRTOS_inet_ntop6( fa.sin_address.xIP_IPv6.ucBytes, ip6, ( socklen_t ) sizeof( ip6 ) );
-        snprintf( out, outlen, "resolve %s -> %s  (AAAA)\r\n", hbuf, ip6 );
-    }
-#endif
-    else
-    {
-        snprintf( out, outlen, "resolve %s -> FAILED\r\n", hbuf );
-    }
-#else
-    ( void ) host; ( void ) plen;
-    snprintf( out, outlen, "resolve: c-ares not built (make CARES=ON)\r\n" );
-#endif
-    return pdFALSE;
-}
 
 /* Realtek driver private-ioctl passthrough (the SDK's iwpriv mechanism): sends a private
  * command string to the wlan driver via rltk_wlan_control(SIOCDEVPRIVATE). Declared here
@@ -125,9 +48,8 @@ static BaseType_t cmd_iwpriv( char * out, size_t outlen, const char * cmd )
     return pdFALSE;
 }
 
-/* The `wifi` command (forget/drop) is now the SHARED one in component/wifi_service_config
- * (registered via its own wifi_cli_register()); this file registers only the amebad-specific
- * driver commands (iwpriv / resolve / ip6). main() calls both. */
+/* Registers only the AmebaD-specific `iwpriv` driver command. The shared `resolve`/`ip6` come from
+ * net_cli_register() (component/net_cli_config); main() calls both. */
 void amebad_wifi_cli_register( void )
 {
     static const CLI_Command_Definition_t cmd_iwpriv_def = {
@@ -136,20 +58,4 @@ void amebad_wifi_cli_register( void )
         cmd_iwpriv, -1
     };
     FreeRTOS_CLIRegisterCommand( &cmd_iwpriv_def );
-
-    static const CLI_Command_Definition_t cmd_resolve_def = {
-        "resolve",
-        "resolve <host>:\r\n look a hostname up via c-ares (servers from DNS_SERVER env / DHCP)\r\n",
-        cmd_resolve, 1
-    };
-    FreeRTOS_CLIRegisterCommand( &cmd_resolve_def );
-
-#if ( ipconfigUSE_IPv6 != 0 )
-    static const CLI_Command_Definition_t cmd_ip6_def = {
-        "ip6",
-        "ip6:\r\n list the device's IPv6 addresses (link-local + SLAAC)\r\n",
-        cmd_ip6, 0
-    };
-    FreeRTOS_CLIRegisterCommand( &cmd_ip6_def );
-#endif
 }

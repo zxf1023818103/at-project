@@ -363,6 +363,10 @@ endif()
 # wifi_service_start(); the bl602 wifi_port_* HAL impl + event routing live in src/main.cpp.
 target_link_libraries(bouffalo_sdk INTERFACE wifi_service)
 
+# Shared network-diagnostic console commands (component/net_cli_config): `resolve` + `ip6`. main()'s
+# app_console_register_platform() calls net_cli_register() on all Bouffalo chips.
+target_link_libraries(bouffalo_sdk INTERFACE net_cli)
+
 # Minimal AWS IoT telemetry (component/aws_iot_config): direct coreMQTT over the mbedTLS TLS
 # transport — same libraries + credential model as AmebaD, telemetry slice only (no coreMQTT-Agent /
 # OTA, which don't fit bl602's heap). Pulls coremqtt + network_transport_mbedtls + mbedtls (resolved
@@ -393,6 +397,9 @@ if(AT_ENABLE_CARES)
     target_link_libraries(network_transport_sockets PRIVATE cares_port)
     target_compile_definitions(sntp_time PRIVATE AT_PROJECT_CARES)
     target_link_libraries(sntp_time PRIVATE cares_port)
+    # Shared `resolve` command uses c-ares when stamped (else the FreeRTOS+TCP resolver fallback).
+    target_compile_definitions(net_cli PRIVATE AT_PROJECT_CARES)
+    target_link_libraries(net_cli PRIVATE cares_port)
 endif()
 
 # QUIC client self-test (component/quic_selftest_config): ngtcp2 + picotls/mbedTLS TLS 1.3 -- the SAME

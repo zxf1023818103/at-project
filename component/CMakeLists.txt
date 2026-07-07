@@ -53,6 +53,7 @@ add_subdirectory(coresntp_config)           # coreSNTP SNTPv4 client static lib 
 add_subdirectory(sntp_time_config)          # coreSNTP UTC time-sync app glue (sntp_time; strong sntp_sync_once)
 add_subdirectory(iperf_config)              # iperf2 throughput probes over FreeRTOS+TCP (iperf + `iperf` console cmd)
 add_subdirectory(wifi_service_config)       # shared WiFi provisioning + reconnect policy (wifi_service) over the wifi_port HAL
+add_subdirectory(net_cli_config)            # shared network-diagnostic console cmds: resolve / ip6 (net_cli)
 add_subdirectory(freertos-cli_config)       # FreeRTOS-Plus-CLI V202212.00 static lib (freertos_cli)
 add_subdirectory(monitor_config)            # cross-platform interactive console: engine (monitor) + fs/env/time cmds (monitor_cmds)
 add_subdirectory(app_startup_config)        # shared startup helpers (app_startup) both platform main()s call
@@ -168,6 +169,7 @@ if(BOUFFALO_CHIP)
     add_subdirectory(aws_iot_config)       # minimal AWS IoT telemetry (aws_iot; the `aws` console command)
     add_subdirectory(iperf_config)   # iperf throughput probes + the `iperf` console command
     add_subdirectory(wifi_service_config)   # shared WiFi provisioning + reconnect policy (wifi_service) over the wifi_port HAL
+    add_subdirectory(net_cli_config)        # shared network-diagnostic console cmds: resolve / ip6 (net_cli)
     add_subdirectory(mbedtls_bench_config)   # Mbed TLS crypto microbenchmark + the `bench` console command
                                              # (RISC-V mcycle timer override lives in bouffalo_sdk/mbedtls_bench_port)
     # Compressed Mozilla CA root bundle + the `crt_bundle` console command (info/verify/addca).
