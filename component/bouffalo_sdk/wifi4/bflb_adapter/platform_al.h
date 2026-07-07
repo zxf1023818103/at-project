@@ -4,9 +4,6 @@
 #ifndef __PLATFORM_AL_H__
 #define __PLATFORM_AL_H__
 
-#ifdef BOUFFALO_SDK
-#include "async_event.h"
-#endif
 typedef struct {
     int code;
 } platform_event_t;

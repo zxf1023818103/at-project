@@ -15,9 +15,6 @@
 #include "wifi_mgmr.h"
 #include "wl80211_mac.h"
 
-#if !defined(__NuttX__)
-#include "async_event.h"
-#endif
 
 static struct {
     uint8_t autoconnect : 1;
@@ -233,44 +230,68 @@ _RET:
 }
 
 #if !defined(__NuttX__)
-static void wl80211_event_handler(async_input_event_t ev, void *priv)
+/* Direct WiFi-event dispatch (bflb_async_event removed; aligns to AmebaD's synchronous wifi_indication).
+ * The driver posts WL80211_EVT_* via wl80211_post_event() -> wl80211_on_driver_event() (below), which
+ * translates them to CODE_WIFI_ON_* and fans out SYNCHRONOUSLY to the registered CODE_WIFI_ON_* handlers
+ * (no queue / timer-daemon deferral). Runs in the driver's posting task. */
+#define WL80211_MAX_WIFI_CB 3
+static void (*s_wifi_cbs[WL80211_MAX_WIFI_CB])(int code, int value);
+
+int wl80211_register_wifi_event(void (*cb)(int code, int value))
+{
+    for (int i = 0; i < WL80211_MAX_WIFI_CB; i++) {
+        if (s_wifi_cbs[i] == NULL) { s_wifi_cbs[i] = cb; return 0; }
+    }
+    return -1;
+}
+
+static void wl80211_dispatch_wifi(int code, int value)
+{
+    for (int i = 0; i < WL80211_MAX_WIFI_CB; i++) {
+        if (s_wifi_cbs[i] != NULL) { s_wifi_cbs[i](code, value); }
+    }
+}
+
+/* Driver-inbound: translate the WL80211_EVT_* code to CODE_WIFI_ON_* + spawn any deferred task. Called
+ * directly from wl80211_post_event() (wl80211_platform.c) - the old EV_WL80211 async filter. */
+void wl80211_on_driver_event(int code, int value)
 {
     void (*handler)(void) = NULL;
 
-    switch (ev->code) {
+    switch (code) {
         case WL80211_EVT_STA_CONNECTED:
             connect_ind_dump(0, 0);
-            async_post_event(EV_WIFI, CODE_WIFI_ON_CONNECTED, 0);
+            wl80211_dispatch_wifi(CODE_WIFI_ON_CONNECTED, 0);
             handler = connected_tsk;
             break;
 
         case WL80211_EVT_SCAN_DONE:
-            async_post_event(EV_WIFI, CODE_WIFI_ON_SCAN_DONE, 0);
+            wl80211_dispatch_wifi(CODE_WIFI_ON_SCAN_DONE, 0);
             handler = dump_scan_result;
             break;
 
         case WL80211_EVT_STA_DISCONNECTED:
-            connect_ind_dump((ev->value >> 16) & 0xFF, ev->value & 0xFF);
-            async_post_event(EV_WIFI, CODE_WIFI_ON_DISCONNECT, 0);
+            connect_ind_dump((value >> 16) & 0xFF, value & 0xFF);
+            wl80211_dispatch_wifi(CODE_WIFI_ON_DISCONNECT, 0);
             handler = disconnect_tsk;
             break;
 
         case WL80211_EVT_AP_STARTED:
-            async_post_event(EV_WIFI, CODE_WIFI_ON_AP_STARTED, 0);
+            wl80211_dispatch_wifi(CODE_WIFI_ON_AP_STARTED, 0);
             handler = start_dhcpd_tsk;
             break;
 
         case WL80211_EVT_AP_STOPPED:
-            async_post_event(EV_WIFI, CODE_WIFI_ON_AP_STOPPED, 0);
+            wl80211_dispatch_wifi(CODE_WIFI_ON_AP_STOPPED, 0);
             handler = stop_dhcpd_tsk;
             break;
 
         case WL80211_EVT_AP_STA_ADDED:
-            async_post_event(EV_WIFI, CODE_WIFI_ON_AP_STA_ADD, ev->value);
+            wl80211_dispatch_wifi(CODE_WIFI_ON_AP_STA_ADD, value);
             break;
 
         case WL80211_EVT_AP_STA_DEL:
-            async_post_event(EV_WIFI, CODE_WIFI_ON_AP_STA_DEL, ev->value);
+            wl80211_dispatch_wifi(CODE_WIFI_ON_AP_STA_DEL, value);
             break;
     }
 
@@ -280,9 +301,11 @@ static void wl80211_event_handler(async_input_event_t ev, void *priv)
     }
 }
 
-static void wifi_mgmr_event_handler(async_input_event_t ev, void *priv)
+/* The internal CODE_WIFI_ON_* handler (prints + housekeeping; does not forward further). Registered in
+ * wifi_mgmr_init via wl80211_register_wifi_event(). */
+static void wifi_mgmr_event_handler(int code, int value)
 {
-    switch (ev->code) {
+    switch (code) {
         case CODE_WIFI_ON_INIT_DONE: {
             wl80211_printf("[APP] [EVT] %s, CODE_WIFI_ON_INIT_DONE\r\n", __func__);
         } break;
@@ -299,7 +322,7 @@ static void wifi_mgmr_event_handler(async_input_event_t ev, void *priv)
             mm_sec_keydump();
         } break;
         case CODE_WIFI_ON_GOT_IP: {
-            if (ev->value && dhcp_ip_timeout) {
+            if (value && dhcp_ip_timeout) {
                 timeout_stop(dhcp_ip_timeout);
                 free(dhcp_ip_timeout);
                 dhcp_ip_timeout = NULL;
@@ -328,7 +351,7 @@ static void wifi_mgmr_event_handler(async_input_event_t ev, void *priv)
             wl80211_printf("[APP] [EVT] [AP] [DEL] %ld\r\n", rtos_now(0));
         } break;
         default: {
-            wl80211_printf("[APP] [EVT] Unknown code %u \r\n", ev->code);
+            wl80211_printf("[APP] [EVT] Unknown code %u \r\n", code);
         }
     }
 }
@@ -337,12 +360,13 @@ static void wifi_mgmr_event_handler(async_input_event_t ev, void *priv)
 void wifi_mgmr_init(void)
 {
 #if !defined(__NuttX__)
-    async_register_event_filter(EV_WL80211, wl80211_event_handler, NULL);
-    async_register_event_filter(EV_WIFI, wifi_mgmr_event_handler, NULL);
+    /* Direct dispatch: the EV_WL80211 driver events go straight to wl80211_on_driver_event() (called
+     * from wl80211_post_event); register the internal CODE_WIFI_ON_* handler here. */
+    wl80211_register_wifi_event(wifi_mgmr_event_handler);
 
     /* compat legacy wifi mgmr */
-    async_post_event(EV_WIFI, CODE_WIFI_ON_INIT_DONE, 0);
-    async_post_event(EV_WIFI, CODE_WIFI_ON_MGMR_DONE, 0);
+    wl80211_dispatch_wifi(CODE_WIFI_ON_INIT_DONE, 0);
+    wl80211_dispatch_wifi(CODE_WIFI_ON_MGMR_DONE, 0);
 #endif
 }
 

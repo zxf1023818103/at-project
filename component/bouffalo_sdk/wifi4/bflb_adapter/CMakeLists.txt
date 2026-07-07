@@ -49,14 +49,13 @@ target_compile_definitions(wifi4_bflb_adapter PUBLIC
 # OS-HAL needs FreeRTOS, PKA needs lhal/std register access. net_iperf
 # also needs lwIP sockets — same lwIP-handled-by-consumer convention as
 # wifi4_manager applies here. Everything depends on wifi4_firmware for
-# its CFG_*/RW_* defines, and plat_bouffalo_sdk.c hooks into the async
-# event bus via bflb_async_event's async_event.h.
+# its CFG_*/RW_* defines. plat_bouffalo_sdk.c now dispatches WiFi events
+# directly (bflb_async_event deleted).
 target_link_libraries(wifi4_bflb_adapter
     PUBLIC
         wifi4_firmware
         bflb_lhal
         rxi_log
-        bflb_async_event
         freertos_kernel
     PRIVATE
         wifi4_internal_headers

@@ -116,7 +116,8 @@ int bt_le_adv_update_data(const struct bt_data *ad, size_t ad_len,
 #endif // defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
 
 #if defined BL602 || defined BL702
-#include <async_event.h>
+// (async_event.h removed: WiFi events dispatch directly via the wifi4 adapter's platform_post_event;
+//  main.cpp registers with platform_register_event -- platform_al.h comes via the wifi4 SDK headers.)
 #include <timers.h>
 #include <bflb_irq.h>
 #include <bflb_uart.h>

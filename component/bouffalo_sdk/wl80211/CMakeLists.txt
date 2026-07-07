@@ -41,6 +41,9 @@ add_library(wl80211 STATIC
     country.c
     wl80211_platform.c
     supplicant.c
+    # weak no-op stubs for the lwIP-era _wifi_mgmr_sta_link_up/down + _wifi_mgmr_ap_*_dhcpd hooks that
+    # lived in the dropped lwip.c (FreeRTOS-Plus-TCP netif owns link/DHCP now); overridable.
+    wl80211_link_stubs.c
 )
 
 target_include_directories(wl80211 PUBLIC
@@ -66,8 +69,7 @@ target_link_libraries(wl80211 PUBLIC
     macsw
     # wl80211_platform.c #include "mm.h"
     tlsf_config
-    # wifi_mgmr.c / wl80211_platform.c #include "async_event.h"
-    bflb_async_event
+    # (bflb_async_event deleted: wifi_mgmr.c / wl80211_platform.c dispatch WiFi events directly now)
     # wifi_mgmr_cli.c #include "utils_getopt.h"
     bflb_getopt
     # supplicant.c #include "bl_wpa.h"

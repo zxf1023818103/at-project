@@ -17,8 +17,6 @@
 
 #include "wl80211.h"
 
-#include "async_event.h"
-
 extern int mfg_media_read_macaddr_with_lock(uint8_t mac[6], uint8_t reload);
 
 static TimerHandle_t timeout_tmr;
@@ -210,7 +208,10 @@ void rtos_start_evt_task(void (*handler)(void))
 */
 void wl80211_post_event(int code1, int code2)
 {
-    async_post_event(EV_WL80211, code1, code2);
+    /* Direct dispatch (bflb_async_event removed): call the driver-event translator synchronously
+     * instead of queuing an EV_WL80211 async event. Declared in wifi_mgmr.c. */
+    void wl80211_on_driver_event(int code, int value);
+    wl80211_on_driver_event(code1, code2);
 }
 
 // platform feature set index

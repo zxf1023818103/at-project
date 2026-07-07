@@ -45,7 +45,8 @@ add_subdirectory(bflb_timestamp)
 add_subdirectory(bflb_partition)
 add_subdirectory(bflb_mtd)
 add_subdirectory(bflb_sys)
-add_subdirectory(bflb_async_event)
+# bflb_async_event deleted: WiFi events now dispatch synchronously (wifi4 plat_bouffalo_sdk.c /
+# wl80211 wifi_mgmr.c), aligning to AmebaD's direct wifi_indication dispatch (no queue).
 # bflb_power_mgmt is a BL616+ thing (clock_manager + pm_manager + tickless
 # stack built around the LP-fw framework). BL602 predates all of this —
 # its bl_lp.h has no chip-specific impl, several SDK symbols
@@ -264,7 +265,6 @@ target_link_libraries(bouffalo_sdk INTERFACE
     bflb_partition
     bflb_mtd
     bflb_sys
-    bflb_async_event
     ${BOUFFALO_CHIP}_board_config
     # bflb_sysinit comes last so its archive is scanned AFTER bl<chip>_std,
     # which is the only thing that references sysinit_run_all.

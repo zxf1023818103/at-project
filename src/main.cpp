@@ -1249,28 +1249,16 @@ int write_fast_connect_data_to_flash(unsigned int offer_ip, unsigned int server_
 #endif // defined CONFIG_PLATFORM_AMEBALITE || defined CONFIG_PLATFORM_AMEBASMART || defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2
 
 #if defined BL602 || defined BL702
-static void event_cb_wifi_event(async_input_event_t event, void *private_data) {
-    (void) private_data;
+/* WiFi events now dispatch SYNCHRONOUSLY via the wifi4 adapter's platform_post_event (bflb_async_event
+ * removed, aligning to AmebaD's direct wifi_indication dispatch). Register this shim with
+ * platform_register_event; it runs in the POSTING task's context (the wifi_mgmr state-machine task, or
+ * the FreeRTOS+TCP IP task for GOT_IP) -- wifi_event_handler stays non-blocking (sets bits / notifies /
+ * spawns tasks). platform_event_t / platform_register_event come from platform_al.h (transitively
+ * included via the SDK wifi headers). */
+static void event_cb_wifi_event(platform_event_t *event, void *code2) {
+    (void) code2;
     void wifi_event_handler(uint32_t code, uint32_t code2);
-    wifi_event_handler(event->code, 0);
-}
-
-// async_event has no internal worker thread; it drains its queue when notify_cb fires.
-// Defer the drain to the FreeRTOS timer daemon via xTimerPendFunctionCall (same pattern
-// as components/wireless/wifi4/wifi4_adapter/bflb_adapter/plat_bouffalo_sdk.c).
-static void async_event_dispatch(void *arg1, uint32_t arg2) {
-    (void) arg1;
-    (void) arg2;
-    vTaskSuspendAll();
-    async_event_loop();
-    xTaskResumeAll();
-}
-
-static void async_event_wake(void) {
-    TickType_t wait = (xTimerGetTimerDaemonTaskHandle() == xTaskGetCurrentTaskHandle())
-                          ? 0
-                          : portMAX_DELAY;
-    xTimerPendFunctionCall(async_event_dispatch, nullptr, 0, wait);
+    wifi_event_handler((uint32_t) event->code, 0);
 }
 #endif // defined BL602 || defined BL702
 
@@ -1572,8 +1560,9 @@ int main(void) {
     hal_wifi_start_firmware_task();
 #endif // defined BL606P || defined BL808 || defined BL616 || defined BL616CL
 #if defined BL602 || defined BL702
-    async_event_init(async_event_wake);
-    async_register_event_filter(EV_WIFI, event_cb_wifi_event, NULL);
+    // Register the app WiFi-event handler with the wifi4 adapter's direct dispatcher (no async queue).
+    // wifi_mgmr also registers its internal handler; platform_post_event fans out to both.
+    platform_register_event(EV_WIFI, event_cb_wifi_event, NULL);
 #endif // defined BL602 || defined BL702
     if (0 != rfparam_init(0, NULL, 0)) {
         printf("rfparam_init() failed\n");

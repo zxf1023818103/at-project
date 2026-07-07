@@ -14,9 +14,14 @@
 #ifdef CFG_CHIP_BL602 
 #include "bl602.h"
 #endif
-/* User defined wifi event handler */
-extern void wifi_event_handler(uint32_t code1, uint32_t code2);
-static pfn_wifi_event pfn_event_handler;
+/* Direct synchronous WiFi-event dispatch (no bflb_async_event queue). wifi_mgmr posts events from its
+ * own tasks (the wifi_mgmr state-machine task / the FreeRTOS+TCP IP task for GOT_IP / net_boot for
+ * INIT_DONE); the registered handlers run INLINE in that posting context. Mirrors AmebaD's
+ * wifi_indication -> rtw_indicate_event_handle. Handlers MUST stay non-blocking (set a bit / notify /
+ * spawn a task). Two consumers register via platform_register_event(): wifi_mgmr's internal handler and
+ * the app's wifi_event_handler (src/main.cpp). */
+#define PLAT_MAX_EVENT_CB 3
+static struct { pfn_wifi_event cb; void *arg; } s_evt_cbs[PLAT_MAX_EVENT_CB];
 
 volatile bool sys_log_all_enable = 1;
 
@@ -42,67 +47,47 @@ void wifi_task_create(void) {
   platform_post_event(EV_WIFI, CODE_WIFI_ON_INIT_DONE, 0);
 }
 
-/* async event handler */
-static void async_event_handler(void *arg1, uint32_t arg2)
-{
-    /* XXX: Prevents blocking operations in the Timer context. */
-    vTaskSuspendAll();
-
-    async_event_loop();
-
-    xTaskResumeAll();
-}
-
-static void async_event_loop_wake(void)
-{
-    BaseType_t xReturn;
-    TickType_t wait = portMAX_DELAY;
-
-    if (xTimerGetTimerDaemonTaskHandle() == xTaskGetCurrentTaskHandle()) {
-        wait = 0;
-    }
-
-    xReturn = xTimerPendFunctionCall(async_event_handler, (void *)NULL, 0, wait);
-    configASSERT(xReturn == pdPASS);
-}
-
-static void wifi_async_event(async_input_event_t event, void *code2)
-{
-    platform_event_t ev = {
-        .code = event->code,
-    };
-    if (pfn_event_handler) {
-        pfn_event_handler(&ev, code2);
-    }
-}
-
 int platform_register_event(int catalogue, pfn_wifi_event cb, void *arg)
 {
-    pfn_event_handler = cb;
-    async_register_event_filter(EV_WIFI, wifi_async_event, arg);
-    return 0;
+    (void) catalogue;
+    for (int i = 0; i < PLAT_MAX_EVENT_CB; i++) {
+        if (s_evt_cbs[i].cb == NULL) {
+            s_evt_cbs[i].cb = cb;
+            s_evt_cbs[i].arg = arg;
+            return 0;
+        }
+    }
+    return -1;   /* callback table full - bump PLAT_MAX_EVENT_CB */
 }
 
 int platform_unregister_event(int catalogue, pfn_wifi_event cb, void *arg)
 {
-    async_unregister_event_filter(EV_WIFI, wifi_async_event, arg);
-    pfn_event_handler = NULL;
-    return 0;
+    (void) catalogue; (void) arg;
+    for (int i = 0; i < PLAT_MAX_EVENT_CB; i++) {
+        if (s_evt_cbs[i].cb == cb) {
+            s_evt_cbs[i].cb = NULL;
+            s_evt_cbs[i].arg = NULL;
+            return 0;
+        }
+    }
+    return -1;
 }
 
 /**
 ****************************************************************************************
-* @brief Post Event to upper layer
-*
-* @param[in] catalogue Type of event.
-* @param[in] code Code of event.
+* @brief Post a WiFi event to the upper layer - dispatched SYNCHRONOUSLY to every registered handler,
+*        in the posting task's context (no async queue / timer-daemon deferral). See s_evt_cbs.
 ****************************************************************************************
 */
-
 void platform_post_event(int catalogue, int code1, int code2)
 {
-    async_event_init(async_event_loop_wake);
-    async_post_event(EV_WIFI, code1, code2);
+    platform_event_t ev = { .code = code1 };
+    (void) catalogue;
+    for (int i = 0; i < PLAT_MAX_EVENT_CB; i++) {
+        if (s_evt_cbs[i].cb != NULL) {
+            s_evt_cbs[i].cb(&ev, (void *)(uintptr_t) code2);
+        }
+    }
 }
 
 int platform_wifi_enable_irq(void)
