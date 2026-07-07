@@ -19,6 +19,7 @@
 #include "transport_tls.h"        /* NetworkContext_t / NetworkCredentials_t / TLS_FreeRTOS_* */
 
 #include "aws_iot.h"
+#include "aws_connect.h"          /* shared TLS+MQTT connect handshake */
 
 /* --- config --------------------------------------------------------------- */
 #define AWS_MQTT_PORT          8883U
@@ -69,7 +70,7 @@ static bool prvEventCb(MQTTContext_t *pCtx, MQTTPacketInfo_t *pPacketInfo, MQTTD
     return true;
 }
 
-/* Load creds + build the transport, then TLS_FreeRTOS_Connect + MQTT_Connect. 0 = connected. */
+/* Load creds + the shared TLS handshake (aws_connect_tls), then MQTT_Init + MQTT_Connect. 0 = connected. */
 static int prvConnect(void)
 {
     const char  *ep = getenv("endpoint");
@@ -78,9 +79,9 @@ static int prvConnect(void)
     TransportInterface_t transport;
     MQTTFixedBuffer_t    netBuf;
     MQTTConnectInfo_t    conn;
-    TlsTransportStatus_t ts;
     MQTTStatus_t         st;
     bool                 sessionPresent = false;
+    aws_connect_params_t p;
 
     if (ep == NULL || ep[0] == '\0') {
         printf("[AWS] endpoint not set (setenv endpoint <xxx-ats.iot.<region>.amazonaws.com>)\r\n");
@@ -95,43 +96,22 @@ static int prvConnect(void)
     strncpy(s_endpoint, ep, sizeof(s_endpoint) - 1);
     s_net.pParams = &s_tlsParams;
 
-    /* Mutual TLS creds: server trust = the Amazon Root CA 1 provisioned to LittleFS (aws ca <b64>);
-     * client cert from LittleFS file; client key in RAM (s_key). SNI on (AWS requires it). The mbedTLS
-     * transport loads the CA + cert files itself (DER/PEM autodetect). */
-    memset(&s_creds, 0, sizeof(s_creds));
-    s_creds.pRootCa         = NULL;
-    s_creds.rootCaSize      = 0;
-    s_creds.pRootCaPath     = caPath;
-    s_creds.pClientCert     = NULL;
-    s_creds.pClientCertPath = certPath;
-    s_creds.pPrivateKey     = (const uint8_t *) s_key;
-    s_creds.privateKeySize  = s_keyLen;
-    s_creds.disableSni      = 0;
-
-    printf("[AWS] TLS connect %s:%u ...\r\n", s_endpoint, AWS_MQTT_PORT);
-    ts = TLS_FreeRTOS_Connect(&s_net, s_endpoint, AWS_MQTT_PORT, &s_creds, AWS_RECV_TMO_MS, AWS_SEND_TMO_MS);
-    if (ts != TLS_TRANSPORT_SUCCESS) {
-        printf("[AWS] TLS_FreeRTOS_Connect FAIL (%d)\r\n", (int) ts);
-        TLS_FreeRTOS_Disconnect(&s_net);   /* free whatever Connect allocated before failing (no leak on retry) */
-        return -1;
+    /* Shared handshake: NetworkCredentials fill + TLS_FreeRTOS_Connect + transport/connectInfo fill.
+     * bl602 = the default TLS backend (no rxReserve / picotls forcing), CA is a single LittleFS file. */
+    memset(&p, 0, sizeof(p));
+    p.endpoint = s_endpoint;  p.certPath = certPath;  p.caPath = caPath;
+    p.key = s_key;  p.keyLen = s_keyLen;  p.clientId = s_mac;
+    p.port = AWS_MQTT_PORT;  p.recvTmoMs = AWS_RECV_TMO_MS;  p.sendTmoMs = AWS_SEND_TMO_MS;
+    p.keepAliveS = AWS_KEEPALIVE_S;  p.rxReserveSize = 0;  p.backendMode = 0;
+    if (aws_connect_tls(&s_net, &s_creds, &transport, &conn, &p) != 0) {
+        return -1;   /* aws_connect_tls logged the failure + tore down the socket */
     }
-
-    transport.pNetworkContext = &s_net;
-    transport.send = TLS_FreeRTOS_send;
-    transport.recv = TLS_FreeRTOS_recv;
-    transport.writev = NULL;
 
     netBuf.pBuffer = s_netBuf;
     netBuf.size    = sizeof(s_netBuf);
 
     st = MQTT_Init(&s_mqtt, &transport, prvGetTimeMs, prvEventCb, &netBuf);
     if (st != MQTTSuccess) { printf("[AWS] MQTT_Init FAIL (%d)\r\n", (int) st); goto fail; }
-
-    memset(&conn, 0, sizeof(conn));
-    conn.cleanSession = true;
-    conn.pClientIdentifier = s_mac;
-    conn.clientIdentifierLength = (uint16_t) strlen(s_mac);
-    conn.keepAliveSeconds = AWS_KEEPALIVE_S;
 
     /* coreMQTT v5.0.2: the two trailing args are the MQTT-5 CONNECT / will property builders (unused). */
     st = MQTT_Connect(&s_mqtt, &conn, NULL, AWS_CONNECT_TMO_MS, &sessionPresent, NULL, NULL);

@@ -14,11 +14,18 @@ add_compile_options("-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=")
 add_library(aws_provision_core STATIC EXCLUDE_FROM_ALL
     aws_provision.c
     aws_cli.c
+    aws_connect.c
 )
 target_include_directories(aws_provision_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(aws_provision_core PUBLIC FreeRTOS mbedtls_config freertos_cli)
+# aws_connect.c needs coreMQTT (MQTTConnectInfo_t / TransportInterface_t) + the TLS transport header.
+# The TLS_FreeRTOS_* symbols resolve at the final image link (both AWS images link network_transport).
+target_link_libraries(aws_provision_core PRIVATE coremqtt_config)   # core_mqtt.h / core_mqtt_config.h
 target_include_directories(aws_provision_core PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/../freertos-cli_config/freertos-cli"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../coremqtt_config/coremqtt/source/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../coremqtt_config/coremqtt/source/interface"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../network_transport"
 )
 
 # --- default key backend: plain LittleFS DER file --------------------------------------------------

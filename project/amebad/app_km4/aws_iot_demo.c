@@ -36,6 +36,7 @@
 
 #include "aws_iot_config.h"
 #include "aws_iot.h"        /* shared AWS component: aws_load_key / aws_get_mac / AWS_*_MAX */
+#include "aws_connect.h"    /* shared TLS+MQTT connect handshake (aws_connect_tls) */
 
 #include "freertos_agent_message.h"
 #include "freertos_command_pool.h"
@@ -161,20 +162,19 @@ static int prvAgentConnect(bool *pSessionPresent)
     TransportInterface_t transport;
     MQTTConnectInfo_t connectInfo;
     MQTTStatus_t st;
-    TlsTransportStatus_t ts;
+    aws_connect_params_t p;
 
-    log_info("[AWS] connecting TLS to %s:%d ...", s_endpoint, AWS_MQTT_PORT);
-    ts = TLS_FreeRTOS_Connect(&s_net, s_endpoint, AWS_MQTT_PORT, &s_creds,
-                              AWS_TLS_RECV_TMO_MS, AWS_TLS_SEND_TMO_MS);
-    if (ts != TLS_TRANSPORT_SUCCESS) {
-        log_error("[AWS] TLS connect FAIL (%d)", (int)ts);
-        return -1;
+    /* Shared handshake: NetworkCredentials fill + TLS_FreeRTOS_Connect + transport/connectInfo fill.
+     * AmebaD forces picotls (TLS 1.3) + a 6 KB rx reserve (leaving heap for the OTA HTTP 2nd TLS), and
+     * the CA is the LittleFS `ca/` FOLDER (augments the Mozilla bundle in a CRT_BUNDLE build). */
+    memset(&p, 0, sizeof(p));
+    p.endpoint = s_endpoint;  p.certPath = s_certPath;  p.caPath = "ca";
+    p.key = (const uint8_t *)s_key;  p.keyLen = s_keyLen;  p.clientId = s_mac;
+    p.port = AWS_MQTT_PORT;  p.recvTmoMs = AWS_TLS_RECV_TMO_MS;  p.sendTmoMs = AWS_TLS_SEND_TMO_MS;
+    p.keepAliveS = AWS_MQTT_KEEPALIVE_S;  p.rxReserveSize = 6144;  p.backendMode = TLS_BACKEND_MODE_PICOTLS;
+    if (aws_connect_tls(&s_net, &s_creds, &transport, &connectInfo, &p) != 0) {
+        return -1;   /* aws_connect_tls logged the failure + tore down the socket */
     }
-
-    transport.pNetworkContext = &s_net;
-    transport.send = TLS_FreeRTOS_send;
-    transport.recv = TLS_FreeRTOS_recv;
-    transport.writev = NULL;
 
     /* (Re)initialise the agent over this transport: MQTTAgent_Init does MQTT_Init +
      * MQTT_InitStatefulQoS internally, using the records embedded in s_agent. */
@@ -197,12 +197,6 @@ static int prvAgentConnect(bool *pSessionPresent)
             return -2;
         }
     }
-
-    memset(&connectInfo, 0, sizeof(connectInfo));
-    connectInfo.cleanSession = true;
-    connectInfo.keepAliveSeconds = AWS_MQTT_KEEPALIVE_S;
-    connectInfo.pClientIdentifier = s_mac;
-    connectInfo.clientIdentifierLength = (uint16_t)strlen(s_mac);
 
     st = MQTT_Connect(&s_agent.mqttContext, &connectInfo, NULL, AWS_CONNECT_TMO_MS,
                       pSessionPresent, NULL, NULL);
@@ -235,25 +229,7 @@ static void aws_agent_task(void *param)
     snprintf(s_topic_cmd,  sizeof(s_topic_cmd),  AWS_TOPIC_CMD_FMT,  s_mac);
 
     prvWaitForProvisioning();
-
-    memset(&s_creds, 0, sizeof(s_creds));
-    /* Server trust: the `ca/` folder on LittleFS (shipped from project/resource/ca). In a
-     * CRT_BUNDLE=ON build it augments the embedded Mozilla bundle; in an OFF build it is the
-     * only trust source. No root CA is baked into the source. */
-    s_creds.pRootCaPath = "ca";
-    s_creds.pClientCert = NULL;
-    s_creds.clientCertSize = 0;
-    s_creds.pClientCertPath = s_certPath;
-    s_creds.pPrivateKey = (const uint8_t *)s_key;
-    s_creds.privateKeySize = s_keyLen;
-    s_creds.disableSni = 0;
-    /* MQTT here only carries small messages (telemetry, OTA job docs <1 KB), so an 8 KB picotls
-     * rxPlain reserve is ample - it leaves ~8 KB more heap for the OTA HTTP data plane's 2nd TLS
-     * (the 16 KB default is only needed for bulk TLS reads, which the HTTPS download owns instead). */
-    s_creds.rxReserveSize = 6144;
-    /* AWS IoT Core supports TLS 1.3 - force picotls so a transient handshake failure never silently
-     * downgrades the control/data session to TLS 1.2 via the fallback dispatcher. */
-    s_creds.backendMode = TLS_BACKEND_MODE_PICOTLS;
+    /* NetworkCredentials are now filled inside aws_connect_tls() (shared handshake) each connect. */
 
     /* The command-pointer queue the agent + app tasks rendezvous on. */
     s_agentMsgCtx.queue = xQueueCreateStatic(AWS_AGENT_QUEUE_LEN,
