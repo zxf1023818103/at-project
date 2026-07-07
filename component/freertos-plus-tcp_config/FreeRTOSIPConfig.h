@@ -40,7 +40,10 @@
  *  - default (iperf/QUIC/BL616 throughput): the big 24*1460 window. */
 #if defined( AMEBAD_NET_LOW_MEM ) || defined( BL602 ) || defined( BL702 )
     #define ipconfigTCP_WIN_SEG_COUNT           16
-    #define ipconfigTCP_RX_BUFFER_LENGTH        ( 4 * 1460 )    /* ~5.7 KB */
+    #define ipconfigTCP_RX_BUFFER_LENGTH        ( 4 * 1460 )    /* ~5.7 KB (holds AWS's ~5.6 KB
+                                                                 * server-cert flight; a bigger buffer
+                                                                 * can't get a contiguous heap block on
+                                                                 * bl602 -> socket connect fails). */
     #define ipconfigTCP_TX_BUFFER_LENGTH        ( 2 * 1460 )    /* ~2.9 KB */
 #else
     #define ipconfigTCP_WIN_SEG_COUNT           64
