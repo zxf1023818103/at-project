@@ -77,6 +77,40 @@ struct NetworkContext
 /* MQTT v5 ACK-properties buffer required by MQTTAgent_Init (QoS1/2 ack props). */
 #define AWS_ACK_PROPS_BUF_SZ   256
 
+/* --- platform-tunable knobs (defaults = AmebaD; bl602 overrides via -D in its CMake) ------------ *
+ * AmebaD forces picotls (TLS 1.3) + a 6 KB rx reserve so the OTA HTTPS 2nd data-plane TLS has heap
+ * headroom, and trusts the LittleFS `ca/` FOLDER. bl602 runs the MQTT data plane (single TLS, no 2nd
+ * connection) so it uses the default TLS backend, no rx reserve, and one provisioned CA file (env
+ * "ca"). The OTA data plane itself is selected by OTA_APP_ENABLE_HTTP in ota_app.c (AmebaD 1, bl602 0). */
+#ifndef AWS_TLS_RX_RESERVE
+#define AWS_TLS_RX_RESERVE     6144
+#endif
+#ifndef AWS_TLS_BACKEND_MODE
+#define AWS_TLS_BACKEND_MODE   TLS_BACKEND_MODE_PICOTLS
+#endif
+#ifndef AWS_AGENT_STACK_WORDS
+#define AWS_AGENT_STACK_WORDS  5120   /* MQTTAgent_CommandLoop + the one-shot mbedTLS handshake (~12 KB peak) */
+#endif
+#ifndef AWS_TELE_STACK_WORDS
+#define AWS_TELE_STACK_WORDS   1024
+#endif
+
+/* Server-trust path: AmebaD uses the `ca/` folder shipped in the image; bl602 (AWS_CA_USE_ENV) uses
+ * the CA file provisioned via `aws ca` (env "ca"), falling back to the aws_iot.h default file. */
+static const char * prvCaPath( void )
+{
+#ifdef AWS_CA_USE_ENV
+    const char * e = getenv( "ca" );
+    if( ( e != NULL ) && ( e[ 0 ] != '\0' ) )
+    {
+        return e;
+    }
+    return AWS_CA_PATH;
+#else
+    return "ca";
+#endif
+}
+
 static uint8_t s_net_buffer[AWS_NET_BUFFER_SZ];
 static uint8_t s_ack_props_buffer[AWS_ACK_PROPS_BUF_SZ];
 
@@ -168,10 +202,10 @@ static int prvAgentConnect(bool *pSessionPresent)
      * AmebaD forces picotls (TLS 1.3) + a 6 KB rx reserve (leaving heap for the OTA HTTP 2nd TLS), and
      * the CA is the LittleFS `ca/` FOLDER (augments the Mozilla bundle in a CRT_BUNDLE build). */
     memset(&p, 0, sizeof(p));
-    p.endpoint = s_endpoint;  p.certPath = s_certPath;  p.caPath = "ca";
+    p.endpoint = s_endpoint;  p.certPath = s_certPath;  p.caPath = prvCaPath();
     p.key = (const uint8_t *)s_key;  p.keyLen = s_keyLen;  p.clientId = s_mac;
     p.port = AWS_MQTT_PORT;  p.recvTmoMs = AWS_TLS_RECV_TMO_MS;  p.sendTmoMs = AWS_TLS_SEND_TMO_MS;
-    p.keepAliveS = AWS_MQTT_KEEPALIVE_S;  p.rxReserveSize = 6144;  p.backendMode = TLS_BACKEND_MODE_PICOTLS;
+    p.keepAliveS = AWS_MQTT_KEEPALIVE_S;  p.rxReserveSize = AWS_TLS_RX_RESERVE;  p.backendMode = AWS_TLS_BACKEND_MODE;
     if (aws_connect_tls(&s_net, &s_creds, &transport, &connectInfo, &p) != 0) {
         return -1;   /* aws_connect_tls logged the failure + tore down the socket */
     }
@@ -433,15 +467,40 @@ void aws_iot_demo_start(void)
     }
     s_started = 1;
 
-    /* 5120 words (20 KB), not 8192/32 KB: this task runs MQTTAgent_CommandLoop + the one-shot TLS
-     * handshake (mbedTLS RSA-2048 cert-chain verify peaks ~12 KB of stack), so 32 KB was ~2.6x over.
-     * Reclaiming 12 KB of heap is what lets the OTA HTTPS data plane open its 2nd concurrent TLS. */
-    if (xTaskCreate(aws_agent_task, "aws_agent", 5120, NULL,
+    /* 5120 words (20 KB) on AmebaD: MQTTAgent_CommandLoop + the one-shot TLS handshake (mbedTLS
+     * RSA-2048 cert-chain verify peaks ~12 KB of stack). bl602 (AWS_AGENT_STACK_WORDS=2048) runs the
+     * same in 8 KB (its handshake peak; proven by the telemetry client) and, under AWS_STATIC_TASKS,
+     * takes the stack from .bss so a heap fragmented by WiFi+DHCP can't fail the (16 KB) contiguous
+     * allocation - the observed `xTaskCreate(aws_agent) FAILED [free heap 45 KB]` on bl602. */
+#ifdef AWS_STATIC_TASKS
+    {
+        static StackType_t  s_agentStack[ AWS_AGENT_STACK_WORDS ];
+        static StaticTask_t s_agentTcb;
+        if (xTaskCreateStatic(aws_agent_task, "aws_agent", AWS_AGENT_STACK_WORDS, NULL,
+                              tskIDLE_PRIORITY + 3, s_agentStack, &s_agentTcb) == NULL)
+            log_error("[AWS] xTaskCreateStatic(aws_agent) FAILED");
+    }
+#else
+    if (xTaskCreate(aws_agent_task, "aws_agent", AWS_AGENT_STACK_WORDS, NULL,
                     tskIDLE_PRIORITY + 3, NULL) != pdPASS)
         log_error("[AWS] xTaskCreate(aws_agent) FAILED");
+#endif
 
-    /* 1024 words (4 KB): `tasks` high-water shows the telemetry task only ever used ~1.7 KB. */
-    if (xTaskCreate(aws_telemetry_task, "aws_tele", 1024, NULL,
+#ifndef AWS_NO_TELEMETRY
+    /* 1024 words (4 KB): `tasks` high-water shows the telemetry task only ever used ~1.7 KB. The bl602
+     * OTA build omits it (AWS_NO_TELEMETRY) to save heap - OTA job status is the liveness signal there. */
+#ifdef AWS_STATIC_TASKS
+    {
+        static StackType_t  s_teleStack[ AWS_TELE_STACK_WORDS ];
+        static StaticTask_t s_teleTcb;
+        if (xTaskCreateStatic(aws_telemetry_task, "aws_tele", AWS_TELE_STACK_WORDS, NULL,
+                              tskIDLE_PRIORITY + 2, s_teleStack, &s_teleTcb) == NULL)
+            log_error("[AWS] xTaskCreateStatic(aws_tele) FAILED");
+    }
+#else
+    if (xTaskCreate(aws_telemetry_task, "aws_tele", AWS_TELE_STACK_WORDS, NULL,
                     tskIDLE_PRIORITY + 2, NULL) != pdPASS)
         log_error("[AWS] xTaskCreate(aws_tele) FAILED");
+#endif
+#endif /* !AWS_NO_TELEMETRY */
 }

@@ -34,11 +34,21 @@
 #include "core_mqtt_agent.h"
 #include "subscription_manager.h"
 
+#include "at_log.h"                 /* rxi log.h enum must precede transport_tls.h's logging_levels.h LOG_* macros (mbedtls/fallback backend) */
+
+/* HTTP data plane is default-on (AmebaD: presigned-S3 download over a 2nd HTTPS TLS). BL602's
+ * MQTT-only build (~68 KB heap can't hold a 2nd TLS) sets OTA_APP_ENABLE_HTTP=0: the OTA agent
+ * then downloads file blocks over the shared MQTT/CBOR data plane (single TLS reused from
+ * telemetry), and none of coreHTTP / transport_tls / cares / urlparse is pulled in. */
+#ifndef OTA_APP_ENABLE_HTTP
+#define OTA_APP_ENABLE_HTTP    1
+#endif
+
+#if OTA_APP_ENABLE_HTTP
 /* HTTP data plane (presigned-S3 download over HTTPS): coreHTTP request builder + Send/parse,
  * the shared TLS transport (picotls/mbedTLS), plain FreeRTOS+TCP for http://, and the vendored
  * URL parser. Mirrors ota_http.c's transport setup; here it feeds the OTA agent file blocks. */
 #include "core_http_client.h"
-#include "at_log.h"                 /* rxi log.h enum must precede transport_tls.h's logging_levels.h LOG_* macros (mbedtls/fallback backend) */
 #include "transport_tls.h"          /* TLS_FreeRTOS_*, NetworkCredentials_t, TlsTransportParams_t */
 #include "transport_interface.h"
 #include "urlparse.h"
@@ -50,19 +60,23 @@
 #endif
 #include "FreeRTOS_DNS.h"
 
-#include "ota_app.h"
 #include "ota_http_interface.h"
+#endif /* OTA_APP_ENABLE_HTTP */
+
+#include "ota_app.h"
 
 /* Use the app's flushed at_log (printf is fully-buffered per-task on the LOGUART, so [OTA] printf
  * lines never surface). The first vararg is always a string literal, so the "[OTA] " concat works. */
 #define OTA_APP_LOG( ... )    log_info( "[OTA] " __VA_ARGS__ )
 
+#if OTA_APP_ENABLE_HTTP
 /* The TLS transport leaves struct NetworkContext incomplete; each consumer defines it (ota_http.c /
  * the AWS demo do the same). It holds just the TlsTransportParams_t the transport functions use. */
 struct NetworkContext
 {
     TlsTransportParams_t * pParams;
 };
+#endif
 
 /* The PAL interface getter (ota_pal.c). */
 extern const OtaPalInterface_t * ota_pal_get_interface( void );
@@ -102,10 +116,12 @@ static uint8_t s_certFilePath[ 256 ];
 static uint8_t s_streamName[ 64 ];
 static uint8_t s_decodeMem[ OTA_FILE_BLOCK_SIZE ];     /* otaconfigLOG2_FILE_BLOCK_SIZE=12 -> 4096 */
 static uint8_t s_fileBitmap[ OTA_MAX_BLOCK_BITMAP_SIZE ]; /* 128 */
+#if OTA_APP_ENABLE_HTTP
 /* HTTP data plane: the OTA library copies the job's presigned-S3 URL here (pUpdateUrlPath) and the
  * "Connect:" auth scheme there. SigV4 presigned URLs run ~500-1500 chars (OTA_REQUEST_URL_MAX_SIZE). */
 static char s_otaUrl[ 1536 ];
 static char s_otaAuthScheme[ 48 ];
+#endif
 
 /* OTA event-data buffer pool: the MQTT incoming-publish callback wraps a received
  * job-doc / file-block payload in one of these before OTA_SignalEvent(). The OTA agent
@@ -159,6 +175,7 @@ static OtaEventData_t * prvEventBufferGet( void )
     return pBuf;
 }
 
+#if OTA_APP_ENABLE_HTTP
 /* ============================================================ HTTP data plane ==
  * Download file blocks over HTTPS (or HTTP) from the presigned-S3 URL in the job document,
  * instead of the MQTT/CBOR data plane. The OTA library drives this via the OtaHttpInterface_t:
@@ -621,6 +638,7 @@ static OtaHttpStatus_t prvOtaHttpDeinit( void )
     memset( &s_http, 0, sizeof( s_http ) );
     return OtaHttpSuccess;
 }
+#endif /* OTA_APP_ENABLE_HTTP */
 
 /* ---------------------------------------------- MQTT-Agent command helpers ---- */
 /* A blocking completion handshake: each wrapper enqueues an MQTTAgent_* command with a
@@ -958,11 +976,13 @@ int ota_app_init( MQTTAgentContext_t * pAgent, const char * pThingName )
     s_otaBuffer.decodeMemorySize   = sizeof( s_decodeMem );
     s_otaBuffer.pFileBitmap        = s_fileBitmap;
     s_otaBuffer.fileBitmapSize     = sizeof( s_fileBitmap );
+#if OTA_APP_ENABLE_HTTP
     /* HTTP data plane: the OTA library copies the job's presigned URL + auth scheme here. */
     s_otaBuffer.pUrl               = ( uint8_t * ) s_otaUrl;
     s_otaBuffer.urlSize            = sizeof( s_otaUrl );
     s_otaBuffer.pAuthScheme        = ( uint8_t * ) s_otaAuthScheme;
     s_otaBuffer.authSchemeSize     = sizeof( s_otaAuthScheme );
+#endif
 
     /* OTA interfaces. */
     memset( &s_otaInterfaces, 0, sizeof( s_otaInterfaces ) );
@@ -981,11 +1001,19 @@ int ota_app_init( MQTTAgentContext_t * pAgent, const char * pThingName )
     s_otaInterfaces.mqtt.unsubscribe = prvOtaMqttUnsubscribe;
     s_otaInterfaces.mqtt.publish     = prvOtaMqttPublish;
 
+#if OTA_APP_ENABLE_HTTP
     /* HTTP data interface: download file blocks over HTTPS from the presigned S3 URL. The job's
      * "protocols":["HTTP"] + this non-NULL interface make setDataInterface pick HTTP (ota_interface.c). */
     s_otaInterfaces.http.init    = prvOtaHttpInit;
     s_otaInterfaces.http.request = prvOtaHttpRequest;
     s_otaInterfaces.http.deinit  = prvOtaHttpDeinit;
+#else
+    /* MQTT-only data plane (BL602): leave http.* NULL so setDataInterface picks MQTT/CBOR. The
+     * OTA job must advertise "protocols":["MQTT"] (or the agent rejects an HTTP-only job doc). */
+    s_otaInterfaces.http.init    = NULL;
+    s_otaInterfaces.http.request = NULL;
+    s_otaInterfaces.http.deinit  = NULL;
+#endif
 
     s_otaInterfaces.pal = *ota_pal_get_interface();
 
@@ -997,7 +1025,21 @@ int ota_app_init( MQTTAgentContext_t * pAgent, const char * pThingName )
         return -1;
     }
 
-    /* Dedicated OTA agent task: OTA_EventProcessingTask runs the state machine. */
+    /* Dedicated OTA agent task: OTA_EventProcessingTask runs the state machine. Under AWS_STATIC_TASKS
+     * (bl602) the stack comes from .bss so a heap fragmented by the live TLS session can't fail this
+     * (10 KB) contiguous allocation - it is created after the first MQTT connect, when the heap is tight. */
+#ifdef AWS_STATIC_TASKS
+    {
+        static StackType_t  s_otaStack[ otaconfigSTACK_SIZE ];
+        static StaticTask_t s_otaTcb;
+        if( xTaskCreateStatic( OTA_EventProcessingTask, "ota_agent", otaconfigSTACK_SIZE, NULL,
+                               otaconfigAGENT_PRIORITY, s_otaStack, &s_otaTcb ) == NULL )
+        {
+            OTA_APP_LOG( "xTaskCreateStatic(ota_agent) FAIL" );
+            return -1;
+        }
+    }
+#else
     if( xTaskCreate( OTA_EventProcessingTask, "ota_agent",
                      otaconfigSTACK_SIZE, NULL,
                      otaconfigAGENT_PRIORITY, NULL ) != pdPASS )
@@ -1005,6 +1047,7 @@ int ota_app_init( MQTTAgentContext_t * pAgent, const char * pThingName )
         OTA_APP_LOG( "xTaskCreate(ota_agent) FAIL" );
         return -1;
     }
+#endif
 
     s_initialised = 1;
     OTA_APP_LOG( "agent initialised (thing '%s')", pThingName );

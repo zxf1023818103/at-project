@@ -29,6 +29,7 @@ if(NOT TARGET FreeRTOS)
     add_subdirectory(freertos-posix_config)
     add_subdirectory(rtc_time_config)   # header-only seam (rtc_time.h) both platforms' RTC ports implement
     add_subdirectory(ota_flash_config)  # header-only OTA slot-writer interface (ota_flash.h) both platforms implement
+    add_subdirectory(aws_ota_config)    # shared AWS IoT OTA agent sources (ota_app/ota_pal + agent support), compiled per-app
 endif()
 
 # QUIC self-test option (ngtcp2 + picotls/mbedTLS TLS 1.3 — wolfSSL was retired). AmebaD app_km4
@@ -167,9 +168,16 @@ if(BOUFFALO_CHIP)
     add_subdirectory(coresntp_config)
     add_subdirectory(backoffalgorithm_config)
     add_subdirectory(sntp_time_config)
-    # AWS IoT telemetry (make AWS=ON): coreMQTT + the mbedTLS TLS transport (network_transport).
-    # No coreMQTT-Agent / OTA (those don't fit bl602's heap) -- direct MQTT publish over TLS.
+    # AWS IoT telemetry: coreMQTT + the mbedTLS TLS transport (network_transport). Default = direct MQTT
+    # publish over TLS (no agent/OTA). AWSOTA=ON adds the coreMQTT-Agent + FreeRTOS OTA v3.3.0 agent
+    # (MQTT data plane), sharing AmebaD's ota_app/ota_pal + agent support (component/aws_ota_config).
     add_subdirectory(coremqtt_config)      # coreMQTT v5.0.2
+    if(AT_ENABLE_AWS_OTA)
+        add_subdirectory(coremqtt-agent_config) # coreMQTT-Agent v2.0.0 (agent+telemetry+OTA share one connection)
+        add_subdirectory(corejson_config)       # coreJSON (OTA job-document parsing) -- ota_config dep
+        add_subdirectory(tinycbor_config)        # TinyCBOR (OTA MQTT data-plane block decode) -- ota_config dep
+        add_subdirectory(ota_config)             # AWS IoT OTA Agent v3.3.0 (MQTT data plane)
+    endif()
     add_subdirectory(picotls_config)       # TLS 1.3 core + mbedTLS/PSA backend (for TLS_BACKEND=picotls)
     add_subdirectory(network_transport)    # TransportInterface_t (network_transport_mbedtls / _picotls) over FreeRTOS+TCP
     add_subdirectory(corehttp_config)      # coreHTTP v3.1.3 + bundled llhttp, for the shared `ota_http` command

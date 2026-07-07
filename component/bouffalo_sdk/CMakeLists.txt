@@ -392,6 +392,12 @@ if("${BOUFFALO_CHIP}" STREQUAL "bl602")
     # so the paste would be silently truncated. Bump it to 2560 (same as AmebaD KM4). Costs ~2 KB
     # .bss on the tight bl602 heap, but there's no other way to get the DER creds onto the device.
     target_compile_definitions(monitor PRIVATE MONITOR_CLI_MAX_INPUT=2560)
+    # AWSOTA=ON: aws_iot is the coreMQTT-Agent + OTA variant (aws_iot_demo.c). Stamp BOUFFALO_AWS_OTA
+    # onto main.cpp so app_network_up_start_services() launches aws_iot_demo_start() (agent+telemetry+
+    # OTA) instead of aws_telemetry_start() (the lean telemetry-only client).
+    if(AT_ENABLE_AWS_OTA)
+        target_compile_definitions(bouffalo_sdk INTERFACE BOUFFALO_AWS_OTA)
+    endif()
 endif()
 
 # c-ares async DNS resolver (component/c-ares_config) — the SAME cross-platform resolver AmebaD uses

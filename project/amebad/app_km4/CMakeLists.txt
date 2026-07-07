@@ -421,19 +421,16 @@ if(AMEBAD_ENABLE_AWS_IOT)
         target_compile_definitions(target_img2_km4 PRIVATE AMEBAD_ENABLE_CRT_BUNDLE)
     endif()
     target_sources(target_img2_km4 PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/aws_iot_demo.c"
+        "${AT_ROOT}/component/aws_iot_config/aws_iot_demo.c"     # shared AWS agent+telemetry+OTA orchestration (compiled per-app; AmebaD defaults)
         "${CMAKE_CURRENT_SOURCE_DIR}/aws_platform.c"             # aws_get_mac (efuse) + `aws blemac/secchk` + TF-M pstest/xiptest
         "${OTA_HTTP_SOURCES}"                                    # shared `ota_http <url>` + urlparse (component/ota_http_config)
         "${CMAKE_CURRENT_SOURCE_DIR}/ota_flash.c"                 # the AmebaD OTA slot writer (impl of ota_flash.h)
         # AWS IoT OTA Agent over the shared coreMQTT-Agent: the agent foundation (queue/pool/
         # subscription dispatch), the OTA PAL (ota_flash + mbedTLS code-sign verify), and the OTA
-        # app wiring (OtaInterfaces_t + OTA_EventProcessingTask). The OTA lib (aws_ota) already
-        # builds ota_mqtt.c + ota_os_freertos.c into its archive, so only these app/port TUs are listed.
-        "${CMAKE_CURRENT_SOURCE_DIR}/freertos_agent_message.c"    # MQTTAgentMessageInterface_t over a FreeRTOS queue
-        "${CMAKE_CURRENT_SOURCE_DIR}/freertos_command_pool.c"     # static MQTTAgentCommand_t pool
-        "${CMAKE_CURRENT_SOURCE_DIR}/subscription_manager.c"      # topic-filter -> incoming-publish dispatch
-        "${CMAKE_CURRENT_SOURCE_DIR}/ota_pal.c"                   # OTA PAL (slot write + signature verify)
-        "${CMAKE_CURRENT_SOURCE_DIR}/ota_app.c"                   # OTA agent wiring (OTA_Init + task)
+        # app wiring (OtaInterfaces_t + OTA_EventProcessingTask) - now shared (component/aws_ota_config),
+        # compiled per-app. The OTA lib (aws_ota) already builds ota_mqtt.c + ota_os_freertos.c into
+        # its archive, so only these app/port TUs are listed.
+        "${AWS_OTA_SOURCES}"
         "${AT_ROOT}/component/amebad/mbed/efuse_api.c")   # efuse_logical_read (BLE MAC @ 0x190); not built into amebad_mbed
     set_source_files_properties("${AT_ROOT}/component/amebad/mbed/efuse_api.c"
         PROPERTIES COMPILE_OPTIONS "-w")
@@ -452,7 +449,7 @@ if(AMEBAD_ENABLE_AWS_IOT)
     # coreMQTT, aws_ota reaches MQTT only through the consumer-supplied OtaMqttInterface_t — so
     # they topo-sort ahead of the mbedTLS cross_refs group and link as ordinary libs. The OTA
     # PAL's mbedTLS signature verify (x509/pk) is already satisfied by the _aws_grp archives.
-    target_link_libraries(target_img2_km4 PRIVATE coremqtt-agent_config ota_config)
+    target_link_libraries(target_img2_km4 PRIVATE coremqtt-agent_config ota_config aws_ota_config)
     target_include_directories(target_img2_km4 PRIVATE
         "${AT_ROOT}/component/coremqtt-agent_config"
         "${AT_ROOT}/component/coremqtt-agent_config/coremqtt-agent/source/include"

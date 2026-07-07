@@ -51,6 +51,17 @@ ifeq ($(filter $(QUIC),ON OFF),)
 $(error QUIC must be 'ON' or 'OFF')
 endif
 
+# Full AWS IoT OTA agent (bl602 only): the coreMQTT-Agent + FreeRTOS OTA v3.3.0 agent over the MQTT
+# data plane (single TLS reused from telemetry), sharing AmebaD's ota_app/ota_pal + agent support
+# (component/aws_ota_config) + the bl602 slot writer. OFF (default) = the lean telemetry-only `aws`
+# client (aws_telemetry.c). ON pulls coreMQTT-Agent + ota/corejson/tinycbor and swaps in the shared
+# aws_iot_demo.c orchestration -- a heavier image (may stress bl602's flash/heap; the feasibility gate).
+# Switch requires a clean configure (make distclean or rm build_<chip>): the CMake cache is sticky.
+AWSOTA ?= OFF
+ifeq ($(filter $(AWSOTA),ON OFF),)
+$(error AWSOTA must be 'ON' or 'OFF')
+endif
+
 # Pick the riscv toolchain bundled with the Bouffalo SDK submodule.
 TOOLCHAIN_BIN := $(realpath $(AT_PROJECT_ROOT)/platform/toolchain_gcc_t-head_linux/bin)
 export PATH := $(TOOLCHAIN_BIN):$(PATH)
@@ -70,7 +81,8 @@ $(BUILD_DIR)/CMakeCache.txt: CMakeLists.txt proj.conf
 	    -DBOUFFALO_BOARD=$(BOARD) \
 	    -DBOUFFALO_TLS_BACKEND=$(TLS_BACKEND) \
 	    -DAT_ENABLE_CARES=$(CARES) \
-	    -DAT_ENABLE_QUIC=$(QUIC)
+	    -DAT_ENABLE_QUIC=$(QUIC) \
+	    -DAT_ENABLE_AWS_OTA=$(AWSOTA)
 
 configure: $(BUILD_DIR)/CMakeCache.txt
 

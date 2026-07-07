@@ -1562,10 +1562,15 @@ void app_network_up_start_services(void)
     // start SNTP from main() instead (they don't post GOT_IP).
     sntp_sync_start();
 #if defined BL602 || defined BL702
-    // Auto-start AWS telemetry once DHCP is up (bl602). Idempotent + a no-op until provisioned, so it
-    // Just Works after `aws endpoint/ca/cert/key ...`; the connect loop self-heals until SNTP supplies
-    // real UTC (needed for the mbedTLS server-cert validity check).
+    // Auto-start AWS once DHCP is up (bl602). Idempotent + a no-op until provisioned, so it Just Works
+    // after `aws endpoint/ca/cert/key ...`; the connect loop self-heals until SNTP supplies real UTC
+    // (needed for the mbedTLS server-cert validity check). AWSOTA=ON runs the shared agent+telemetry+OTA
+    // orchestration (aws_iot_demo.c); default runs the lean telemetry-only client (aws_telemetry.c).
+#ifdef BOUFFALO_AWS_OTA
+    { extern void aws_iot_demo_start(void); aws_iot_demo_start(); }
+#else
     { extern void aws_telemetry_start(void); aws_telemetry_start(); }
+#endif
 #endif
 #ifdef AT_PROJECT_QUIC
     { extern void quic_test_start(void); quic_test_start(); }
