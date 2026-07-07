@@ -709,10 +709,13 @@ static int picotls_ctx_once( void )
     /* picotls's ptls_mbedtls backend uses PSA; init it once (the mbedTLS transport's
      * initMbedtls() would normally do this, but it isn't linked on the picotls path).
      * Idempotent. mbedTLS threading is initialized by the application at startup. */
-    if( psa_crypto_init() != PSA_SUCCESS )
     {
-        LogError( ( "psa_crypto_init failed" ) );
-        return -1;
+        psa_status_t _ps = psa_crypto_init();
+        if( _ps != PSA_SUCCESS )
+        {
+            LogError( ( "psa_crypto_init failed: %d", (int) _ps ) );
+            return -1;
+        }
     }
 
     s_ptlsCtx.random_bytes = ptls_mbedtls_random_bytes;

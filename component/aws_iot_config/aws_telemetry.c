@@ -173,6 +173,12 @@ static void prvTelemetryTask(void *arg)
     uint32_t seq = 0;
     (void) arg;
 
+    /* Install the mbedTLS THREADING_ALT mutex funcs once, before any TLS/PSA use. The mbedTLS
+     * transport does this in its connect path, but the picotls backend (which calls psa_crypto_init,
+     * and PSA takes mbedTLS mutexes) does NOT -- so without this, TLS_BACKEND=picotls fails at
+     * psa_crypto_init with PSA_ERROR_SERVICE_FAILURE (-144). Idempotent; harmless for the mbedTLS path. */
+    mbedtls_platform_threading_init();
+
     /* Thing name / client ID / topic = the WiFi MAC (aws_get_mac is the platform hook). */
     if (aws_get_mac(s_mac, sizeof(s_mac)) != 0) strcpy(s_mac, "bl602unknown");
     snprintf(s_topic, sizeof(s_topic), "bl602/%s/telemetry", s_mac);
