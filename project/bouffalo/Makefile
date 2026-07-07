@@ -35,7 +35,7 @@ endif
 # and stamps AT_PROJECT_CARES onto the DNS call sites (network_transport_sockets + sntp_time), so the
 # device resolves via c-ares (connected-UDP shim + select loop over component/syscall_config).
 # Switch requires a clean configure (make distclean or rm build_<chip>): the CMake cache is sticky.
-CARES ?= OFF
+CARES ?= ON
 ifeq ($(filter $(CARES),ON OFF),)
 $(error CARES must be 'ON' or 'OFF')
 endif
