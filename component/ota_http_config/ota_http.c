@@ -95,14 +95,18 @@ static int conn_connect( conn_t * c, int is_https, const char * host, uint16_t p
         uint32_t ip;
         TickType_t rt = pdMS_TO_TICKS( OTA_HTTP_RECV_TMO_MS ), wt = pdMS_TO_TICKS( OTA_HTTP_SEND_TMO_MS );
 
-#ifdef AT_PROJECT_CARES
+        /* A dotted-decimal literal (e.g. a LAN OTA server) resolves directly - and must, since a
+         * DNS-less LAN can't look up a hostname. FreeRTOS_inet_addr returns 0 for a non-literal. */
+        ip = FreeRTOS_inet_addr( host );
+        if( ip == 0 )
         {
+#ifdef AT_PROJECT_CARES
             struct freertos_sockaddr fa;
             ip = ( cares_resolve( host, FREERTOS_AF_INET, &fa ) == 0 ) ? fa.sin_address.ulIP_IPv4 : 0U;
-        }
 #else
-        ip = FreeRTOS_gethostbyname( host );
+            ip = FreeRTOS_gethostbyname( host );
 #endif
+        }
         if( ip == 0 )
         {
             log_error( "[OTA] DNS lookup of %s failed", host );
@@ -329,10 +333,13 @@ static void ota_http_task( void * param )
 close:
     conn_close( &conn );
 out:
+#if ( INCLUDE_uxTaskGetStackHighWaterMark == 1 )
     /* Stack high-water (in WORDS still free) - the peak was the TLS handshake. Use it to right-size
-     * the 4096-word task stack below: free_words ~= headroom we can reclaim. */
-    log_info( "[OTA] task stack: %u of 4096 words still free (high-water)",
+     * the task stack below: free_words ~= headroom we can reclaim. (Diagnostic; skipped where the
+     * FreeRTOS config doesn't build uxTaskGetStackHighWaterMark, e.g. bl602.) */
+    log_info( "[OTA] task stack: %u words still free (high-water)",
               (unsigned) uxTaskGetStackHighWaterMark( NULL ) );
+#endif
 
     if( sink.status != 0 && sink.status != 200 )
         log_error( "[OTA] server returned HTTP %d", sink.status );

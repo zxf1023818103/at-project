@@ -298,6 +298,7 @@ if(AMEBAD_ENABLE_MCUMGR)
     target_sources(target_img2_km4 PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/smp_img_ota.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/smp_fs.c")     # fs_mgmt impl over the LittleFS POSIX VFS
+    target_link_libraries(target_img2_km4 PRIVATE ota_flash_config)   # ota_flash.h for smp_img_ota.c + ota_flash.c
     set_property(SOURCE "${AT_MAIN_SRC}"
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_MCUMGR
                  "AMEBAD_MCUMGR_FW_VERSION=\"${AMEBAD_FW_VERSION}\"")
@@ -422,8 +423,8 @@ if(AMEBAD_ENABLE_AWS_IOT)
     target_sources(target_img2_km4 PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/aws_iot_demo.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/aws_platform.c"             # aws_get_mac (efuse) + `aws blemac/secchk` + TF-M pstest/xiptest
-        "${CMAKE_CURRENT_SOURCE_DIR}/ota_http.c"                  # `ota_http <url>` command (coreHTTP + llhttp)
-        "${CMAKE_CURRENT_SOURCE_DIR}/ota_flash.c"                 # runtime OTA slot write/toggle/reboot
+        "${OTA_HTTP_SOURCES}"                                    # shared `ota_http <url>` + urlparse (component/ota_http_config)
+        "${CMAKE_CURRENT_SOURCE_DIR}/ota_flash.c"                 # the AmebaD OTA slot writer (impl of ota_flash.h)
         # AWS IoT OTA Agent over the shared coreMQTT-Agent: the agent foundation (queue/pool/
         # subscription dispatch), the OTA PAL (ota_flash + mbedTLS code-sign verify), and the OTA
         # app wiring (OtaInterfaces_t + OTA_EventProcessingTask). The OTA lib (aws_ota) already
@@ -433,14 +434,14 @@ if(AMEBAD_ENABLE_AWS_IOT)
         "${CMAKE_CURRENT_SOURCE_DIR}/subscription_manager.c"      # topic-filter -> incoming-publish dispatch
         "${CMAKE_CURRENT_SOURCE_DIR}/ota_pal.c"                   # OTA PAL (slot write + signature verify)
         "${CMAKE_CURRENT_SOURCE_DIR}/ota_app.c"                   # OTA agent wiring (OTA_Init + task)
-        "${CMAKE_CURRENT_SOURCE_DIR}/urlparse.c"                  # vendored URL parser (from ngtcp2)
         "${AT_ROOT}/component/amebad/mbed/efuse_api.c")   # efuse_logical_read (BLE MAC @ 0x190); not built into amebad_mbed
     set_source_files_properties("${AT_ROOT}/component/amebad/mbed/efuse_api.c"
         PROPERTIES COMPILE_OPTIONS "-w")
-    set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/urlparse.c"
+    set_source_files_properties("${AT_ROOT}/component/ota_http_config/urlparse.c"
         PROPERTIES COMPILE_OPTIONS "-w")                          # vendored 3rd-party: silence its warnings
-    # coreHTTP (request builder) + its bundled llhttp parser, for ota_http.c.
-    target_link_libraries(target_img2_km4 PRIVATE corehttp_config)
+    # Shared ota_http command (component/ota_http_config): urlparse.h + coreHTTP/llhttp/transport_tls/
+    # ota_flash.h include+link deps. coreHTTP (request builder + bundled llhttp parser) for ota_http.c.
+    target_link_libraries(target_img2_km4 PRIVATE ota_http_config corehttp_config)
     target_include_directories(target_img2_km4 PRIVATE
         "${AT_ROOT}/component/corehttp_config"
         "${AT_ROOT}/component/corehttp_config/corehttp/source/include"
@@ -535,8 +536,12 @@ target_link_libraries(target_img2_km4 PRIVATE app_startup)
 if(NOT AMEBAD_ENABLE_QUIC)
     # sntp_time.c moved to the shared component/sntp_time_config (target sntp_time; it links
     # coreSNTP + backoffAlgorithm + rxi_log transitively). time_selftest.c + rtc_time.c stay
-    # AmebaD-local — they provide the strong rtc_time_store / time_selftest_run weak-hooks sntp_time calls.
-    target_link_libraries(target_img2_km4 PRIVATE sntp_time)
+    # AmebaD-local — rtc_time.c is the AmebaD port of the shared RTC seam (rtc_time.h, target
+    # rtc_time), providing the strong rtc_time_store / rtc_time_seed (bl602 has its own port);
+    # time_selftest.c is the strong time_selftest_run weak-hook sntp_time calls.
+    # flash_cli: the shared `flash` lock/unlock/status command + board_flash_* helpers (boot lock +
+    # status print + the OTA path's unlock/relock). The board_flash_protect primitive is in monitor_port.
+    target_link_libraries(target_img2_km4 PRIVATE sntp_time rtc_time flash_cli)
     target_sources(target_img2_km4 PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/time_selftest.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/rtc_time.c")   # mirror SNTP UTC into the HW RTC + seed at boot (rtc_api in amebad_mbed)

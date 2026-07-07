@@ -33,6 +33,23 @@ target_include_directories(at PRIVATE
 
 target_link_libraries(at PRIVATE bouffalo_sdk)
 
+# Shared `ota_http <url>` command (component/ota_http_config): compiled into the app (per-image macros),
+# over coreHTTP + llhttp + the shared TLS transport, streaming into the BL602 OTA slot writer
+# (bouffalo_sdk/ota_flash_port). main() registers it from app_console_register_platform(). bl602 only:
+# its https path needs the mbedTLS TLS transport (TLS_FreeRTOS_*), which - like aws_iot - is only
+# linked on bl602 (bl616/cl leave it undefined). ota_flash_port itself (no TLS) rides all chips unused.
+if(BOUFFALO_CHIP STREQUAL "bl602")
+    target_sources(at PRIVATE ${OTA_HTTP_SOURCES})
+    set_source_files_properties("${AT_ROOT}/component/ota_http_config/urlparse.c" PROPERTIES COMPILE_OPTIONS "-w")
+    target_link_libraries(at PRIVATE ota_http_config corehttp_config)
+    target_include_directories(at PRIVATE
+        "${AT_ROOT}/component/corehttp_config"
+        "${AT_ROOT}/component/corehttp_config/corehttp/source/include"
+        "${AT_ROOT}/component/corehttp_config/corehttp/source/interface"
+        "${AT_ROOT}/component/corehttp_config/corehttp/source/dependency/3rdparty/llhttp/include"
+        "${AT_ROOT}/component/network_transport")   # transport_tls.h
+endif()
+
 # NimBLE host: main.cpp starts the shared nimble_start() from a boot task under this macro.
 if(CONFIG_NIMBLE_HOST)
     target_compile_definitions(at PRIVATE CONFIG_NIMBLE_HOST)

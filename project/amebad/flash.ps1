@@ -19,6 +19,14 @@ param(
     [switch]$Erase,         # -e true: full chip erase before write (wipes TF-M ITS/PS at 0x3F0000,
                             # which sits above the image so a normal flash leaves it stale/corrupt)
 
+    # The app write-protects the firmware region (bottom 3 MB) at boot, so the ImageTool can't
+    # overwrite image2 while it's locked (verify FAIL). By default we first send `flash unlock` over
+    # the console ($FlashPort @ $ConsoleBaud) so the region is writable when we drop into download mode
+    # (download mode doesn't re-run the app, so the SR stays unlocked). Best-effort: if the app isn't
+    # running (already halted / bricked) the send just times out and we continue. -NoUnlock skips it.
+    [switch]$NoUnlock,
+    [int]   $ConsoleBaud = 1500000,
+
     # AWS IoT provisioning (AWS=ON image): after the post-flash reset, drive the sibling
     # aws_provision.ps1 over the console ($FlashPort) to provision credentials by their storage:
     #   -Endpoint <ats-host>  -> env var "endpoint" (plain LittleFS KV/endpoint)
@@ -149,6 +157,31 @@ Write-Host "tool  : $exe"
 Write-Host "chip  : $Chip"
 Write-Host "boot  : $BootPort"
 Write-Host "flash : $FlashPort @ $Baudrate"
+
+# Pre-flash: unlock the firmware-region write-protect over the console, so the ImageTool can overwrite
+# image2 (the app re-locks the bottom 3 MB every boot). Best-effort; a running AT-project app answers
+# with "flash unlock: ... OK". No app / already halted -> times out and we continue.
+if (-not $NoUnlock) {
+    Write-Host "[unlock] flash unlock on $FlashPort @ $ConsoleBaud (pre-flash; -NoUnlock to skip) ..."
+    try {
+        $usp = New-Object System.IO.Ports.SerialPort $FlashPort, $ConsoleBaud, ([System.IO.Ports.Parity]::None), 8, ([System.IO.Ports.StopBits]::One)
+        $usp.ReadTimeout = 400
+        $usp.Open()
+        Start-Sleep -Milliseconds 200
+        $usp.DiscardInBuffer()
+        foreach ($ch in 'flash unlock'.ToCharArray()) { $usp.Write([string]$ch); Start-Sleep -Milliseconds 8 }
+        $usp.Write("`r")
+        $usb = New-Object System.Text.StringBuilder
+        $udl = (Get-Date).AddSeconds(2)
+        while ((Get-Date) -lt $udl) { try { $uc = $usp.ReadExisting(); if ($uc) { [void]$usb.Append($uc) } } catch {} Start-Sleep -Milliseconds 50 }
+        $usp.Close()
+        $uresp = ($usb.ToString() -replace '\s+', ' ').Trim()
+        if ($uresp -match 'unlock') { Write-Host "[unlock] $uresp" }
+        else { Write-Host "[unlock] no response (app not running / already in download mode) - continuing" }
+    } catch {
+        Write-Host "[unlock] skipped ($($_.Exception.Message))"
+    }
+}
 
 Enter-DownloadMode -Port $BootPort
 

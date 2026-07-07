@@ -33,6 +33,9 @@ extern "C" {
 #include "wifi_service.h"         /* shared WiFi provisioning + reconnect policy */
 #include "wifi_port.h"            /* the platform HAL it drives (implemented below) */
 #include "app_startup.h"          /* shared startup helpers (app_env_time_init / app_console_start / app_on_network_up) */
+#ifndef AT_PROJECT_QUIC
+#include "board_flash_lock.h"     /* cross-platform flash write-protect (flash_cli not linked in the QUIC image) */
+#endif
 }  // extern "C"
 /* ameba_soc.h -> platform_stdlib does `#define printf _rtl_printf`; undo it so printf flows
  * through _write -> at_console_write and picks up the [HH:MM:SS] prefix. */
@@ -885,6 +888,18 @@ static void wifi_bringup_thread( void *param )
     InterruptEn( IPC_IRQ, 5 );
     ipc_table_init();
 
+    /* Write-protect the firmware region (bottom 3 MB: boot + both OTA slots) against stray writes,
+     * matching bl602's boot-time lock (its main() calls at::lockFirmwareFlash). The top 1 MB (LittleFS
+     * + TF-M ITS) stays writable, so env/KV, secure storage and the LFS self-test below are unaffected;
+     * an OTA unlocks/relocks around its slot write (ota_flash.c). Done here (post-IPC) so
+     * FLASH_Write_Lock's KM0 park is ready, and nothing writes the bottom 3 MB before the first OTA.
+     * Gated with the console (flash_cli + monitor_port supply the flash lock); the QUIC image has
+     * neither the console nor OTA. board_flash_log_status() prints the resulting lock state. */
+#ifndef AT_PROJECT_QUIC
+    board_flash_lock_fw();
+    board_flash_log_status();
+#endif
+
     /* LittleFS bring-up + self-test: mount the on-flash FS (auto-formats if the
      * region is blank) and exercise read of the prefilled lfs.bin + a write/
      * read-back round trip. Runs here (scheduler up - the flash device lock and
@@ -1055,7 +1070,8 @@ static void wifi_bringup_thread( void *param )
 #ifndef AT_PROJECT_QUIC
 void app_console_register_platform(void)
 {
-    amebad_monitor_cmds_register();     /* AmebaD port cmds: reboot / dw / ew / flash / efuse / >> / km0 / km4 */
+    amebad_monitor_cmds_register();     /* AmebaD port cmds: reboot / dw / ew / flashdbg / efuse / >> / km0 / km4 */
+    flash_cli_register();               /* shared `flash` lock/unlock/status (component/flash_cli_config) */
     { extern void wifi_cli_register(void); wifi_cli_register(); }               /* shared `wifi` forget/drop */
     { extern void amebad_wifi_cli_register(void); amebad_wifi_cli_register(); } /* AmebaD-only `iwpriv` */
     { extern void net_cli_register(void); net_cli_register(); }                 /* shared `resolve` / `ip6` */
@@ -1193,6 +1209,7 @@ int main(void)
 #include "AtTask.h"
 #include "TestTask.h"
 #include "BoardFlashLock.h"
+#include "board_flash_lock.h"   /* cross-platform flash write-protect: board_flash_lock_fw / _log_status / flash_cli_register */
 #include "wifi_service.h"   /* shared WiFi provisioning + reconnect policy */
 #include "wifi_port.h"      /* the platform HAL it drives (implemented below) */
 #include "app_startup.h"    /* shared startup helpers (app_env_time_init / app_console_start / app_on_network_up) */
@@ -1511,6 +1528,12 @@ int aws_get_mac(char *out, size_t out_len) {
 void app_console_register_platform(void)
 {
     bouffalo_monitor_cmds_register();   // reboot
+    flash_cli_register();               // shared `flash` lock/unlock/status (component/flash_cli_config)
+#if defined BL602
+    // Shared `ota_http <url>` (bflb_flash + pt_table + inline-xz slot writer). bl602 only: it needs the
+    // mbedTLS TLS transport for https, which - like aws_iot - is only linked on bl602 (heap).
+    { extern void ota_http_register(void); ota_http_register(); }
+#endif
     zip_cli_register();                 // zip/unzip (minizip over the VFS)
     { extern void net_cli_register(void); net_cli_register(); }   // shared `resolve` / `ip6`
 #if !defined(BL602)
@@ -1554,8 +1577,12 @@ int main(void) {
     log_lock_init();   // install the rxi-logger FreeRTOS-mutex lock before any log_* (SDK LOG_*/rfparam)
     // Lock bottom 3 MB of flash against accidental writes; must run after
     // flash driver init (board_init) and before anything that writes flash
-    // (OTA / EasyFlash). Top 1 MB stays writable for PSM (LittleFS).
-    at::lockFirmwareFlash();
+    // (OTA / EasyFlash). Top 1 MB stays writable for PSM (LittleFS). The
+    // cross-platform helper (component/flash_cli_config, over board_flash_protect
+    // in bouffalo_sdk/board_flash_port) replaces the old at::lockFirmwareFlash;
+    // board_flash_log_status() prints the resulting lock state at boot.
+    board_flash_lock_fw();
+    board_flash_log_status();
 #if defined BL606P || defined BL808 || defined BL616 || defined BL616CL
     hal_wifi_start_firmware_task();
 #endif // defined BL606P || defined BL808 || defined BL616 || defined BL616CL
@@ -1573,6 +1600,12 @@ int main(void) {
     // the shared startup helper (component/app_startup_config), identical to AmebaD. vfs_lfs_mount()
     // is idempotent, so the lazy mount from the first open() is a no-op after this.
     app_env_time_init();
+
+    // Seed the wall clock from the retained hardware RTC (bflb_rtc HBN counter + the KV RTC_REF
+    // reference) so logs read real local time before SNTP re-syncs -- the bl602 analog of AmebaD's
+    // rtc_time_seed() in wifi_bringup_thread. Needs env loaded (app_env_time_init above) for RTC_REF;
+    // the strong port is component/bouffalo_sdk/rtc_time_port (a no-op elsewhere via the shared seam).
+    { extern int rtc_time_seed(void); rtc_time_seed(); }
 
 #if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
     // lwIP has been removed on Bouffalo — the network stack is switching to

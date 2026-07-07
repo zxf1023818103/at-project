@@ -47,4 +47,7 @@ elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     add_library(monitor_port STATIC monitor_cli.c monitor_plat_hp.c monitor_rom.c)
 endif()
 target_link_libraries(monitor_port PUBLIC monitor FreeRTOS)
+# board_flash_lock.h: monitor_rom.c (KM4) implements board_flash_protect / board_flash_read_status,
+# the AmebaD half of the cross-platform flash write-protect (component/flash_cli_config).
+target_include_directories(monitor_port PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../flash_cli_config")
 target_compile_options(monitor_port PRIVATE ${_monitor_warnings})

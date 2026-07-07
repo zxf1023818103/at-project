@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <time.h>
 
+#include "rtc_time.h"     /* the shared seam this file strong-implements (bl602 has its own port) */
 #include "rtc_api.h"      /* rtc_init / rtc_isenabled / rtc_read / rtc_write (mbed HAL) */
 #include "syscalls.h"     /* amebad_set_unix_time (time_base.c) */
 #include "at_log.h"          /* rxi log.c: log_info / log_error */

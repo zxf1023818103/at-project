@@ -198,7 +198,7 @@ static BaseType_t run_rom_cmd( mon_cmd_fn fn, const char *cmd, char *out, size_t
 {
     static char tok[ MON_MAX_ARGV ][ MON_ARG_LEN ];
     static u8  *argv[ MON_MAX_ARGV ];
-    u16 argc = 0;
+    u16 argc = 0, i;
 
     ( void ) outlen;
     while( argc < MON_MAX_ARGV )
@@ -211,6 +211,14 @@ static BaseType_t run_rom_cmd( mon_cmd_fn fn, const char *cmd, char *out, size_t
         tok[ argc ][ plen ] = '\0';
         argv[ argc ] = ( u8 * ) tok[ argc ];
         argc++;
+    }
+    /* Point the unused slots at an empty string (not the STALE pointers from a prior command): the ROM
+     * handlers (cmd_flash's status/read/write, cmd_efuse, ...) index argv[1]/argv[2] without always
+     * guarding argc, and _strcmp/_strtoul on a stale/garbage pointer hard-faults. "" is safe for both. */
+    for( i = argc; i < MON_MAX_ARGV; i++ )
+    {
+        tok[ i ][ 0 ] = '\0';
+        argv[ i ] = ( u8 * ) tok[ i ];
     }
     out[ 0 ] = '\0';              /* the ROM handler prints directly via MONITOR_LOG */
     fn( argc, argv );
@@ -248,7 +256,7 @@ static const CLI_Command_Definition_t kAmebadCmds[] = {
     { "reboot",  "reboot [uartburn]:\r\n watchdog-reset this core (uartburn -> UART download mode)\r\n", cmd_reboot, -1 },
     { "dw",      "dw <hexaddr>:\r\n dump a memory dword\r\n",                     cmd_dw,        -1 },
     { "ew",      "ew <hexaddr> <hexval>:\r\n write a memory dword\r\n",           cmd_ew,        -1 },
-    { "flash",   "flash <erase|read|write|status|cache|lock|unlock> ...:\r\n flash ops; lock <fw|all> / unlock = SR write-protect (KM4)\r\n", cmd_flash_, -1 },
+    { "flashdbg", "flashdbg <erase|read|write|status|cache> ...:\r\n AmebaD raw flash debug ops (KM4). lock/unlock/status = the cross-platform `flash` command\r\n", cmd_flash_, -1 },
     { "efuse",   "efuse <wmap|rmap|wraw|rraw> ...:\r\n efuse ops (wmap/wraw BURN efuse)\r\n", cmd_efuse_, -1 },
     { ">>",      ">>:\r\n hand the console to the other core\r\n",                cmd_sw_toggle, 0 },
     { "km0",     "km0:\r\n switch the console to KM0\r\n",                        cmd_sw_km0,    0 },

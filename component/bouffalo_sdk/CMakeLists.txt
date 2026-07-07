@@ -164,6 +164,9 @@ set_source_files_properties(
 add_subdirectory(syscall_port)
 add_subdirectory(bflb_nuttx_compat)
 add_subdirectory(monitor_port)        # Bouffalo port for the shared console engine (component/monitor_config)
+add_subdirectory(rtc_time_port)       # Bouffalo port for the shared RTC seam (component/rtc_time_config): bflb_rtc + KV
+add_subdirectory(board_flash_port)    # Bouffalo board_flash_protect for the shared flash write-protect (component/flash_cli_config)
+add_subdirectory(ota_flash_port)      # BL602 OTA slot writer (component/ota_flash_config) over bflb_flash + pt_table + xz
 add_subdirectory(mbedtls_bench_port)  # RISC-V mcycle timer override for the shared mbedtls_bench (component/mbedtls_bench_config)
 add_subdirectory(bflb_getopt)
 add_subdirectory(bflb_list)
@@ -344,6 +347,15 @@ target_link_libraries(bouffalo_sdk INTERFACE app_startup)
 # coreSNTP UTC time sync (component/sntp_time_config) — pulls coreSNTP + backoffAlgorithm
 # transitively; main() calls sntp_sync_start(). Gives bl602 real UTC (date/sntp_update/timestamps).
 target_link_libraries(bouffalo_sdk INTERFACE sntp_time)
+# Retained wall clock over the bflb_rtc HBN counter + KV (component/bouffalo_sdk/rtc_time_port): the
+# strong rtc_time_store / rtc_time_seed that sntp_time.c + main() call, mirroring AmebaD's rtc_time.c.
+target_link_libraries(bouffalo_sdk INTERFACE rtc_time_port)
+# Flash write-protect: the shared `flash` command + helpers (flash_cli) + the bl602 board_flash_protect
+# primitive (board_flash_port). main() calls board_flash_lock_fw() + board_flash_log_status() at boot;
+# app_console_register_platform() calls flash_cli_register().
+target_link_libraries(bouffalo_sdk INTERFACE flash_cli board_flash_port)
+# BL602 OTA slot writer (bflb_flash + pt_table + inline xz) for the shared `ota_http` command.
+target_link_libraries(bouffalo_sdk INTERFACE ota_flash_port)
 
 # zip/unzip console commands (component/monitor_config zip_cmd -> minizip). bl602's newlib malloc
 # is syscall_config's malloc -> pvPortMalloc -> TLSF (big heap), so no --wrap needed (unlike AmebaD's

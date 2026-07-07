@@ -8,6 +8,7 @@
  */
 
 #include "ameba_soc.h"
+#include "board_flash_lock.h"   /* board_flash_prot_t + the board_flash_* interface this file implements */
 
 #if defined  (__GNUC__)
 #pragma GCC diagnostic push
@@ -90,9 +91,75 @@ u32 cmd_write_word(u16 argc, u8  *argv[])
 	return 0;
 }
 
+/* AmebaD impl of the cross-platform firmware write-protect primitive (component/flash_cli_config,
+ * board_flash_lock.h). Drives the status-register BP/CMP bits: BOARD_FLASH_LOCK_FW => SR1=0x14 + SR2
+ * CMP=1 (bottom 3 MB: boot + both OTA slots locked, top 1 MB LittleFS/ITS writable); BOARD_FLASH_LOCK_ALL
+ * => SR1=0x1C (whole chip); BOARD_FLASH_UNLOCK => no protection. SR2/CMP via the chip-standard RDSR2
+ * 0x35 / WRSR2 0x31 UNCONDITIONALLY (flash_init_para.FLASH_Status2_exist reads 0 on this SiP even though
+ * the part HAS SR2, so gating on it would skip CMP and protect the wrong region). Wrapped in
+ * FLASH_Write_Lock so the raw RDSR/WRSR don't collide with XIP. The shared helpers (board_flash_lock_fw
+ * / _unlock), the `flash` command, and the boot status print live in flash_cli.c. */
+int board_flash_protect(board_flash_prot_t mode, u8 *o_sr1b, u8 *o_sr1a, u8 *o_sr2b, u8 *o_sr2a)
+{
+	u8 rdsr2 = flash_init_para.FLASH_cmd_rd_status2 ? flash_init_para.FLASH_cmd_rd_status2 : 0x35;
+	u8 wrsr2 = flash_init_para.FLASH_cmd_wr_status2 ? flash_init_para.FLASH_cmd_wr_status2 : 0x31;
+	u8 sr1_cur = 0, sr2_cur = 0, sr1_new, sr2_new, v1 = 0, v2 = 0;
+
+	FLASH_Write_Lock();
+	FLASH_RxCmd(flash_init_para.FLASH_cmd_rd_status, 1, &sr1_cur);
+	FLASH_RxCmd(rdsr2, 1, &sr2_cur);
+
+	if (mode == BOARD_FLASH_UNLOCK) {          /* clear all protection */
+		sr1_new = 0x00;
+		sr2_new = sr2_cur & ~0x40;
+	} else if (mode == BOARD_FLASH_LOCK_ALL) { /* lock the whole chip */
+		sr1_new = 0x1C;
+		sr2_new = sr2_cur & ~0x40;
+	} else {                                   /* lock the firmware region (default) */
+		sr1_new = 0x14;
+		sr2_new = sr2_cur | 0x40;
+	}
+
+	FLASH_SetStatus(flash_init_para.FLASH_cmd_wr_status, 1, &sr1_new);
+	FLASH_SetStatus(wrsr2, 1, &sr2_new);
+
+	FLASH_RxCmd(flash_init_para.FLASH_cmd_rd_status, 1, &v1);
+	FLASH_RxCmd(rdsr2, 1, &v2);
+	FLASH_Write_Unlock();
+
+	if (o_sr1b) *o_sr1b = sr1_cur;
+	if (o_sr1a) *o_sr1a = v1;
+	if (o_sr2b) *o_sr2b = sr2_cur;
+	if (o_sr2a) *o_sr2a = v2;
+	return (v1 == sr1_new) && (v2 == sr2_new);
+}
+
+/* AmebaD impl of board_flash_read_status: read SR1/SR2 without changing protection. */
+int board_flash_read_status(u8 *sr1, u8 *sr2)
+{
+	u8 rdsr2 = flash_init_para.FLASH_cmd_rd_status2 ? flash_init_para.FLASH_cmd_rd_status2 : 0x35;
+	u8 s1 = 0, s2 = 0;
+
+	FLASH_Write_Lock();
+	FLASH_RxCmd(flash_init_para.FLASH_cmd_rd_status, 1, &s1);
+	FLASH_RxCmd(rdsr2, 1, &s2);
+	FLASH_Write_Unlock();
+
+	if (sr1) *sr1 = s1;
+	if (sr2) *sr2 = s2;
+	return 1;
+}
+
 SHELL_ROM_TEXT_SECTION
 u32 cmd_flash(u16 argc,  u8  *argv[])
 {
+	/* No subcommand: run_rom_cmd passes argc=0 with a STALE static argv[] (leftover from a prior
+	 * command), so dereferencing argv[0] below would fault. Print usage and bail. */
+	if (argc < 1 || argv[0] == NULL) {
+		MONITOR_LOG("usage: flashdbg <erase|read|write|status|cache> ...\n");
+		return 0;
+	}
+
 	if (_strcmp((const char*)argv[0], "erase") == 0) {/* SPI Flash Chip Erase Command */
 		u32 AddrTemp = 0;
 	
@@ -235,55 +302,9 @@ u32 cmd_flash(u16 argc,  u8  *argv[])
 		}
 	}
 
-	if (_strcmp((const char*)argv[0], "lock") == 0 || _strcmp((const char*)argv[0], "unlock") == 0) {
-		/* SPI-NOR block write-protect via the status-register BP/CMP bits. Reversible; read/XIP
-		 * still work, only program/erase is blocked. Values match src/BoardFlashLock.cpp (verified
-		 * on the W25Q/GD25 4 MB SiP):
-		 *   lock fw  -> SR1=0x14 (TB=0,BP=101) + SR2 CMP=1 => bottom 3 MB (0..0x300000: boot +
-		 *               image2) locked, top 1 MB (LittleFS + TF-M ITS) still writable.
-		 *   lock all -> SR1=0x1C (TB=0,BP=111) + SR2 CMP=0 => entire 4 MB locked.
-		 *   unlock   -> SR1=0x00 + SR2 CMP=0               => no protection.
-		 * SR2/CMP is driven via the chip-standard RDSR2 0x35 / WRSR2 0x31 (overridden by the SDK
-		 * auto-detect opcodes when set) UNCONDITIONALLY: flash_init_para.FLASH_Status2_exist reads 0
-		 * on this SiP even though the part HAS SR2, so gating on it would skip CMP and protect the
-		 * wrong region (bare SR1=0x14 without CMP locks the TOP 1 MB, not the firmware). Same raw
-		 * approach BoardFlashLock.cpp uses. SR1 then SR2 written separately. Wrapped in
-		 * FLASH_Write_Lock (as the SDK flash_write_protect / the erase path do) so the raw RDSR/WRSR
-		 * don't collide with XIP. */
-		u8 rdsr2 = flash_init_para.FLASH_cmd_rd_status2 ? flash_init_para.FLASH_cmd_rd_status2 : 0x35;
-		u8 wrsr2 = flash_init_para.FLASH_cmd_wr_status2 ? flash_init_para.FLASH_cmd_wr_status2 : 0x31;
-		int do_lock = (argv[0][0] == 'l');
-		int all = (argc >= 2) && (_strcmp((const char*)argv[1], "all") == 0);
-		u8 sr1_cur = 0, sr2_cur = 0, sr1_new, sr2_new, v1 = 0, v2 = 0;
-		int ok;
-
-		FLASH_Write_Lock();
-		FLASH_RxCmd(flash_init_para.FLASH_cmd_rd_status, 1, &sr1_cur);
-		FLASH_RxCmd(rdsr2, 1, &sr2_cur);
-
-		if (!do_lock) {                 /* unlock: clear all protection */
-			sr1_new = 0x00;
-			sr2_new = sr2_cur & ~0x40;
-		} else if (all) {               /* lock the whole chip */
-			sr1_new = 0x1C;
-			sr2_new = sr2_cur & ~0x40;
-		} else {                        /* lock the firmware region (default) */
-			sr1_new = 0x14;
-			sr2_new = sr2_cur | 0x40;
-		}
-
-		FLASH_SetStatus(flash_init_para.FLASH_cmd_wr_status, 1, &sr1_new);
-		FLASH_SetStatus(wrsr2, 1, &sr2_new);
-
-		FLASH_RxCmd(flash_init_para.FLASH_cmd_rd_status, 1, &v1);
-		FLASH_RxCmd(rdsr2, 1, &v2);
-		FLASH_Write_Unlock();
-
-		ok = (v1 == sr1_new) && (v2 == sr2_new);
-		MONITOR_LOG("flash %s: SR1 %02x->%02x SR2 %02x->%02x %s\n",
-			do_lock ? (all ? "lock all" : "lock fw") : "unlock",
-			sr1_cur, v1, sr2_cur, v2, ok ? "OK" : "FAIL");
-	}
+	/* lock / unlock / status(bare) moved to the cross-platform `flash` command (component/flash_cli_config,
+	 * over board_flash_protect above). This ROM handler keeps only the AmebaD raw debug ops, registered
+	 * as `flashdbg`. */
 
 	return 0;
 }

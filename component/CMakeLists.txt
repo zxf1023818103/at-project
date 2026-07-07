@@ -27,6 +27,8 @@ if(NOT TARGET FreeRTOS)
     add_subdirectory(tlsf_config)
     add_subdirectory(freertos-kernel_config)
     add_subdirectory(freertos-posix_config)
+    add_subdirectory(rtc_time_config)   # header-only seam (rtc_time.h) both platforms' RTC ports implement
+    add_subdirectory(ota_flash_config)  # header-only OTA slot-writer interface (ota_flash.h) both platforms implement
 endif()
 
 # QUIC self-test option (ngtcp2 + picotls/mbedTLS TLS 1.3 — wolfSSL was retired). AmebaD app_km4
@@ -62,12 +64,14 @@ add_subdirectory(mcumgr_config)             # apache/mynewt-mcumgr 0.7.0 SMP cor
 add_subdirectory(syscall_config)            # newlib retarget OBJECT lib (VFS + malloc + byte-order); PRIVATE-links freertos-plus-tcp_config + at_console
 add_subdirectory(c-ares_config)             # c-ares async DNS resolver (compiled only when linked / targeted; wired in under CARES=ON)
 add_subdirectory(rxi_log_config)            # rxi log.c (leveled logger) + FreeRTOS-mutex lock via log_set_lock
+add_subdirectory(flash_cli_config)          # cross-platform flash write-protect: `flash` cmd + board_flash_* helpers (after freertos_cli + rxi_log)
 add_subdirectory(mbedtls_config)            # upstream Mbed TLS v3.6.4 -> mbedcrypto / mbedx509 / mbedtls
 add_subdirectory(corepkcs11_config)         # PKCS#11 software token over mbedcrypto/mbedx509 (PAL consumer-supplied)
 add_subdirectory(pkcs11_selftest_config)    # corePKCS11 token self-test (pkcs11_selftest + `pkcs11` cmd) + the LittleFS POSIX PAL
 add_subdirectory(mbedtls_bench_config)      # upstream Mbed TLS microbenchmark (mbedtls_bench) + `bench` cmd (BENCH=ON / bl602 always)
 add_subdirectory(picotls_config)            # TLS 1.3 core + mbedTLS/PSA backend (picotls_mbedtls) for ngtcp2 QUIC
 add_subdirectory(network_transport)         # TransportInterface_t impls over mbedtls_config + freertos-plus-tcp_config — coreMQTT TLS transport
+add_subdirectory(ota_http_config)           # shared `ota_http <url>` command sources (compiled per-app) + its include/link deps
 add_subdirectory(aws_iot_config)            # shared AWS provisioning + `aws` CLI (aws_provision_core); AmebaD links it, bl602 also gets aws_iot telemetry
 add_subdirectory(esp_crt_bundle_config)     # compressed Mozilla CA root bundle (CRT_BUNDLE=ON) + `crt_bundle` cmd; AFTER network_transport
                                             # so crt_bundle_cli's if(TARGET network_transport) sees it (enables the `connect` subcommand)
@@ -151,10 +155,15 @@ if(BOUFFALO_CHIP)
     # calls log_lock_init(). Output -> at_console (uart0), line-timestamped.
     add_subdirectory(rxi_log_config)
 
+    # Cross-platform flash write-protect (component/flash_cli_config): the `flash` lock/unlock/status
+    # command + board_flash_* helpers; the bl602 board_flash_protect primitive is in bouffalo_sdk's
+    # board_flash_port. main() calls board_flash_lock_fw() + board_flash_log_status() at boot.
+    add_subdirectory(flash_cli_config)
+
     # coreSNTP UTC time sync for bl602 (same as AmebaD: date/sntp_update/log timestamps become
     # real UTC). coreSNTP + backoffAlgorithm were NOT-BOUFFALO-only until now. freertos-plus-tcp_config
-    # (added above) supplies the UDP sockets + DHCP opt-42 server; sntp_time logs via a printf shim
-    # (no rxi_log, whose log.h collides with bflb_log's on Bouffalo).
+    # (added above) supplies the UDP sockets + DHCP opt-42 server; sntp_time logs through rxi_log
+    # (at_log.h), the single project logger on Bouffalo too (bflb_log deleted).
     add_subdirectory(coresntp_config)
     add_subdirectory(backoffalgorithm_config)
     add_subdirectory(sntp_time_config)
@@ -163,6 +172,8 @@ if(BOUFFALO_CHIP)
     add_subdirectory(coremqtt_config)      # coreMQTT v5.0.2
     add_subdirectory(picotls_config)       # TLS 1.3 core + mbedTLS/PSA backend (for TLS_BACKEND=picotls)
     add_subdirectory(network_transport)    # TransportInterface_t (network_transport_mbedtls / _picotls) over FreeRTOS+TCP
+    add_subdirectory(corehttp_config)      # coreHTTP v3.1.3 + bundled llhttp, for the shared `ota_http` command
+    add_subdirectory(ota_http_config)      # shared `ota_http <url>` sources (compiled into the app) + its deps
     add_subdirectory(c-ares_config)        # c-ares async DNS resolver (cares_port); compiled only when linked (CARES=ON)
     add_subdirectory(ngtcp2_config)        # ngtcp2 QUIC + the picotls crypto binding (compiled only when linked, QUIC=ON)
     add_subdirectory(quic_selftest_config) # ngtcp2 + picotls/mbedTLS QUIC client self-test (quic_selftest; QUIC=ON)

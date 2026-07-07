@@ -31,6 +31,8 @@
 static volatile ota_src_t  s_ota_holder = OTA_SRC_NONE;
 static volatile TickType_t s_ota_ble_until;   /* BLE claim self-expiry (abandoned upload) */
 
+static void ota_flash_close_session( void );   /* relock the fw region; defined below (with the externs) */
+
 /* Drop a BLE claim that hasn't been refreshed in a while - an upload whose phone disconnected would
  * otherwise hold the lock forever and block a later AWS job. Call inside a critical section. */
 static void ota_lock_expire_stale( void )
@@ -67,12 +69,24 @@ int ota_lock_try( ota_src_t src )
 
 void ota_lock_release( ota_src_t src )
 {
+    int was_holder = 0;
+
     taskENTER_CRITICAL();
     if( s_ota_holder == src )
     {
         s_ota_holder = OTA_SRC_NONE;
+        was_holder = 1;
     }
     taskEXIT_CRITICAL();
+
+    /* Belt-and-braces relock: an OTA that aborted BEFORE ota_flash_finish() (connect fail, bad header,
+     * HTTP parse error, ...) left the write session open. Close it here (outside the critical section -
+     * the SR write must not run scheduler-suspended). Idempotent: a no-op if finish already relocked or
+     * begin never opened a session. */
+    if( was_holder )
+    {
+        ota_flash_close_session();
+    }
 }
 
 ota_src_t ota_lock_holder( void )
@@ -98,6 +112,28 @@ extern void sys_reset( void );
  * SRAM) instead of the wfe-sleep that NimBLE's KM0 IRQs wake mid-program -> XIP-fetch -> the slot
  * write corrupts. We set it for the whole OTA write burst. */
 extern volatile unsigned int g_flash_spin_park;
+
+/* Firmware-region write-protect (SR BP/CMP): the cross-platform flash lock (component/flash_cli_config,
+ * board_flash_lock.h; AmebaD impl in monitor_port). The device write-protects the bottom 3 MB at boot,
+ * and BOTH OTA slots sit inside that region -- so the write burst MUST unlock first and relock after.
+ * WITHOUT this the erase/program silently no-op on a BP-locked sector (there is no read-back verify
+ * here, see the file header) and we would arm an unwritten slot -> brick. */
+#include "board_flash_lock.h"
+
+/* The firmware region is unlocked + KM0 spin-parked between ota_flash_begin() and the relock. This
+ * closes that window (relock + restore the wfe-sleep park); idempotent, so ota_flash_finish() (success
+ * AND every error return) and every caller abort path (via ota_lock_release) can all call it safely. */
+static volatile int s_write_session;
+
+static void ota_flash_close_session( void )
+{
+    if( s_write_session )
+    {
+        s_write_session = 0;
+        board_flash_lock_fw();     /* relock while still spin-parked (this SR write is itself a flash op) */
+        g_flash_spin_park = 0;     /* then restore the normal wfe-sleep flash park */
+    }
+}
 
 #define OTA1_OFF        0x006000u
 #define OTA2_OFF        0x183000u
@@ -159,8 +195,10 @@ int ota_flash_begin( ota_ctx_t * c )
         c->write_off  = OTA2_OFF;
     }
     c->erased_to = c->write_off;
-    g_flash_spin_park = 1;   /* spin-park KM0 for every flash op until ota_flash_finish */
-    log_info( "[OTA] running slot @0x%06x, writing new image to @0x%06x (KM0 spin-park ON)",
+    g_flash_spin_park = 1;        /* spin-park KM0 for every flash op until ota_flash_finish */
+    board_flash_unlock();         /* the OTA slots are in the write-protected bottom-3MB region */
+    s_write_session = 1;          /* -> ota_flash_close_session() relocks on finish/abort */
+    log_info( "[OTA] running slot @0x%06x, writing new image to @0x%06x (fw-region unlocked, KM0 spin-park ON)",
               (unsigned) c->active_off, (unsigned) c->write_off );
     return 0;
 }
@@ -243,7 +281,10 @@ int ota_flash_feed( ota_ctx_t * c, const uint8_t * d, uint32_t n )
         {
             uint32_t sec_payload_base = ( c->written - SECTOR_SIZE );
             if( flush_pending_sector( c, sec_payload_base, SECTOR_SIZE ) < 0 )
+            {
+                ota_flash_close_session();   /* relock the fw region before bailing */
                 return -1;
+            }
         }
     }
     return 0;
@@ -256,12 +297,14 @@ int ota_flash_finish( ota_ctx_t * c )
     if( !c->have_hdr || c->written != c->image_len )
     {
         log_error( "[OTA] short image: got %u of %u bytes", (unsigned) c->written, (unsigned) c->image_len );
+        ota_flash_close_session();
         return -1;
     }
     if( c->checksum != c->hdr_checksum )
     {
         log_error( "[OTA] checksum mismatch: calc 0x%08x, header 0x%08x",
                    (unsigned) c->checksum, (unsigned) c->hdr_checksum );
+        ota_flash_close_session();
         return -1;
     }
 
@@ -271,7 +314,10 @@ int ota_flash_finish( ota_ctx_t * c )
         uint32_t sec_payload_base = c->written & ~( SECTOR_SIZE - 1u );
         uint32_t valid_len        = c->written & ( SECTOR_SIZE - 1u );
         if( flush_pending_sector( c, sec_payload_base, valid_len ) < 0 )
+        {
+            ota_flash_close_session();
             return -1;
+        }
     }
 
     /* Arm the new slot LAST: write its 8-byte boot signature into the (still-erased) first 8 bytes
@@ -280,6 +326,7 @@ int ota_flash_finish( ota_ctx_t * c )
     if( flash_stream_write( s_flash, c->write_off, 8, c->sig ) < 0 )
     {
         log_error( "[OTA] boot-sig write failed; slot NOT armed" );
+        ota_flash_close_session();
         return -1;
     }
     /* No read-back verify here: RSIP is address-keyed, so flash_stream_read of this (inactive-slot)
@@ -294,9 +341,10 @@ int ota_flash_finish( ota_ctx_t * c )
     if( flash_stream_write( s_flash, c->active_off, 8, empty ) < 0 )
     {
         log_error( "[OTA] clearing old-slot signature failed" );
+        ota_flash_close_session();
         return -1;
     }
-    g_flash_spin_park = 0;   /* OTA writes done -> restore the normal wfe-sleep flash lock */
+    ota_flash_close_session();   /* writes done -> relock the fw region + restore the wfe-sleep park */
     log_info( "[OTA] image complete (checksum OK) + armed slot @0x%06x; clearing old @0x%06x",
               (unsigned) c->write_off, (unsigned) c->active_off );
     return 0;

@@ -176,101 +176,21 @@ bool unlockFirmwareFlash() {
 
 #elif defined AT_UART_BACKEND_BFLB
 
-#include <cstdint>
-#include <cstdio>
-
+// The Bouffalo SR1/SR2 write mechanics moved to the cross-platform flash write-protect
+// (component/bouffalo_sdk/board_flash_port, board_flash_protect). Keep the at:: C++ helper as a thin
+// wrapper so both it and the shared `flash` command drive one implementation.
 extern "C" {
-// We only need spi_flash_cfg_type as opaque pointer here. Forward-declare
-// to avoid pulling in chip-specific headers (BL602/BL616/BL616CL each have
-// their own copy of the full struct definition).
-struct spi_flash_cfg_type;
-
-// LHAL flash APIs, signatures from drivers/lhal/include/bflb_flash.h and
-// drivers/lhal/src/flash/bflb_sflash.h. reg_index 0 → SR1, 1 → SR2 per the
-// flash_cfg->{read,write}_reg_cmd[] table populated by SDK init.
-void bflb_flash_get_cfg(uint8_t **cfg_addr, uint32_t *len);
-int bflb_sflash_read_reg(struct spi_flash_cfg_type *cfg, uint8_t reg_index,
-                         uint8_t *reg_value, uint8_t reg_len);
-int bflb_sflash_write_reg(struct spi_flash_cfg_type *cfg, uint8_t reg_index,
-                          uint8_t *reg_value, uint8_t reg_len);
+#include "board_flash_lock.h"
 }
 
 namespace at {
 
-namespace {
-
-// SR1 / SR2 bit layout matches Ameba — same W25Q / GD25 family on Bouffalo
-// 4 MB SiP NORs. Lock values: SR1=0x14 (TB=0, BP[2:0]=101) + SR2 |= 0x40
-// (CMP=1) ⇒ "top 1 MB unprotected, bottom 3 MB write-locked".
-constexpr uint8_t kSr1Mask    = 0xFC;
-constexpr uint8_t kSr1Locked  = 0x14;
-constexpr uint8_t kSr2CmpBit  = 0x40;
-
-struct spi_flash_cfg_type *getFlashCfg() {
-    uint8_t *cfg = nullptr;
-    uint32_t len = 0;
-    bflb_flash_get_cfg(&cfg, &len);
-    return reinterpret_cast<struct spi_flash_cfg_type *>(cfg);
-}
-
-}  // namespace
-
 bool lockFirmwareFlash() {
-    auto *cfg = getFlashCfg();
-    if (cfg == nullptr) {
-        printf("[flash] firmware lock SKIPPED: getFlashCfg() returned null\r\n");
-        return false;
-    }
-
-    uint8_t sr1 = 0;
-    uint8_t sr2 = 0;
-    bflb_sflash_read_reg(cfg, 0, &sr1, 1);
-    bflb_sflash_read_reg(cfg, 1, &sr2, 1);
-
-    if (((sr1 & kSr1Mask) == kSr1Locked) && ((sr2 & kSr2CmpBit) != 0)) {
-        return true;  // already locked
-    }
-
-    // Write SR1+SR2 atomically via the 0x01 Write-Status command (byte 0 =
-    // new SR1, byte 1 = new SR2). Pattern lifted from
-    // drivers/soc/bl602/std/src/bl602_sflash_ext.c:596. Both target SoCs are
-    // little-endian, so a uint16_t reinterpret matches the {SR1, SR2} byte
-    // order the LHAL expects.
-    uint8_t sr_pair[2] = { kSr1Locked, static_cast<uint8_t>(sr2 | kSr2CmpBit) };
-    bflb_sflash_write_reg(cfg, 0, sr_pair, 2);
-
-    uint8_t verify_sr1 = 0, verify_sr2 = 0;
-    bflb_sflash_read_reg(cfg, 0, &verify_sr1, 1);
-    bflb_sflash_read_reg(cfg, 1, &verify_sr2, 1);
-    if ((verify_sr1 & kSr1Mask) != kSr1Locked || (verify_sr2 & kSr2CmpBit) == 0) {
-        printf("[flash] firmware lock VERIFY FAILED: SR1 want=0x%02x got=0x%02x SR2 want=0x%02x got=0x%02x\r\n",
-               sr_pair[0], verify_sr1, sr_pair[1], verify_sr2);
-        return false;
-    }
-    printf("[flash] firmware locked: SR1=0x%02x SR2=0x%02x\r\n", verify_sr1, verify_sr2);
-    return true;
+    return board_flash_protect(BOARD_FLASH_LOCK_FW, nullptr, nullptr, nullptr, nullptr) != 0;
 }
 
 bool unlockFirmwareFlash() {
-    auto *cfg = getFlashCfg();
-    if (cfg == nullptr) {
-        printf("[flash] firmware unlock SKIPPED: getFlashCfg() returned null\r\n");
-        return false;
-    }
-
-    uint8_t sr2 = 0;
-    bflb_sflash_read_reg(cfg, 1, &sr2, 1);
-    uint8_t sr_pair[2] = { 0x00, static_cast<uint8_t>(sr2 & ~kSr2CmpBit) };
-    bflb_sflash_write_reg(cfg, 0, sr_pair, 2);
-
-    uint8_t verify_sr2 = 0;
-    bflb_sflash_read_reg(cfg, 1, &verify_sr2, 1);
-    if ((verify_sr2 & kSr2CmpBit) != 0) {
-        printf("[flash] firmware unlock VERIFY FAILED: SR2 want=0x%02x got=0x%02x\r\n",
-               sr_pair[1], verify_sr2);
-        return false;
-    }
-    return true;
+    return board_flash_protect(BOARD_FLASH_UNLOCK, nullptr, nullptr, nullptr, nullptr) != 0;
 }
 
 }  // namespace at
