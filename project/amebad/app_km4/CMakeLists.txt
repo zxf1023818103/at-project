@@ -322,7 +322,9 @@ if(AMEBAD_ENABLE_QUIC)
     # members. ngtcp2_crypto_picotls (picotls binding) replaces ngtcp2_crypto (wolfSSL).
     set(_quic_grp ",ngtcp2_crypto_picotls,ngtcp2_static,picotls_core,picotls_mbedtls,mbedcrypto,mbedx509,mbedtls,mbedtls_port,mbedtls_config")
     target_sources(target_img2_km4 PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/quic_test.c")   # newlib syscalls now from the syscalls core
+        "${AT_ROOT}/component/quic_selftest_config/quic_test.c")   # shared QUIC self-test (moved out of app_km4);
+                                                                  # compiled here as a direct source (byte-identical
+                                                                  # to before) to keep the XIP-layout-sensitive image
 
     set_property(SOURCE "${AT_MAIN_SRC}"
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_QUIC)

@@ -395,6 +395,27 @@ if(AT_ENABLE_CARES)
     target_link_libraries(sntp_time PRIVATE cares_port)
 endif()
 
+# QUIC client self-test (component/quic_selftest_config): ngtcp2 + picotls/mbedTLS TLS 1.3 -- the SAME
+# cross-platform stack AmebaD uses under QUIC=ON. make ... QUIC=ON (-> -DAT_ENABLE_QUIC=ON) links
+# quic_selftest + the ngtcp2/picotls archives into the umbrella --start-group (they have circular refs
+# with mbedcrypto), and defines AT_PROJECT_QUIC so main()'s app_network_up_start_services() launches
+# quic_test_start() on network-up. bl602 builds in QUIC_SMOKE mode (tiny handshake+download, 32 KB
+# stack) -- best-effort, since the TLS 1.3 handshake peak (~44 KB) may exceed its ~52 KB contiguous
+# heap. No TF-M is involved (Bouffalo has no TrustZone; HW crypto is mbedtls_port NS-direct).
+if(AT_ENABLE_QUIC)
+    target_link_libraries(bouffalo_sdk INTERFACE
+        quic_selftest
+        ngtcp2_crypto_picotls
+        ngtcp2_static
+        picotls_core
+        picotls_mbedtls
+    )
+    target_compile_definitions(bouffalo_sdk INTERFACE AT_PROJECT_QUIC)
+    if("${BOUFFALO_CHIP}" STREQUAL "bl602")
+        target_compile_definitions(quic_selftest PRIVATE QUIC_SMOKE)
+    endif()
+endif()
+
 # The Mbed TLS crypto self-tests (bench + crt_bundle + pkcs11) are OPT-IN, mirroring AmebaD's
 # BENCH/CRT_BUNDLE/PKCS11=ON images: linking all three pulls RSA/full-ECP/ChaChaPoly + the ~56 KB
 # CA bundle + corePKCS11/PSA, which overflows bl602's xip_memory region by ~100 KB. Default OFF so

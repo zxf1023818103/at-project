@@ -40,6 +40,17 @@ ifeq ($(filter $(CARES),ON OFF),)
 $(error CARES must be 'ON' or 'OFF')
 endif
 
+# QUIC client self-test (ngtcp2 + picotls/mbedTLS TLS 1.3, component/quic_selftest_config), the same
+# cross-platform stack AmebaD uses under QUIC=ON. OFF (default). ON links ngtcp2 + quic_selftest and
+# runs the handshake/perf self-test on network-up. On bl602 it builds in QUIC_SMOKE mode (tiny
+# handshake+download, shrunk stack) -- best-effort, as the TLS 1.3 handshake peak may exceed the heap.
+# No TF-M is involved (Bouffalo has no TrustZone; HW crypto is mbedtls_port NS-direct).
+# Switch requires a clean configure (make distclean or rm build_<chip>): the CMake cache is sticky.
+QUIC ?= OFF
+ifeq ($(filter $(QUIC),ON OFF),)
+$(error QUIC must be 'ON' or 'OFF')
+endif
+
 # Pick the riscv toolchain bundled with the Bouffalo SDK submodule.
 TOOLCHAIN_BIN := $(realpath $(AT_PROJECT_ROOT)/platform/toolchain_gcc_t-head_linux/bin)
 export PATH := $(TOOLCHAIN_BIN):$(PATH)
@@ -58,7 +69,8 @@ $(BUILD_DIR)/CMakeCache.txt: CMakeLists.txt proj.conf
 	    -DCMAKE_TOOLCHAIN_FILE=$(CHIP_TOOLCHAIN) \
 	    -DBOUFFALO_BOARD=$(BOARD) \
 	    -DBOUFFALO_TLS_BACKEND=$(TLS_BACKEND) \
-	    -DAT_ENABLE_CARES=$(CARES)
+	    -DAT_ENABLE_CARES=$(CARES) \
+	    -DAT_ENABLE_QUIC=$(QUIC)
 
 configure: $(BUILD_DIR)/CMakeCache.txt
 

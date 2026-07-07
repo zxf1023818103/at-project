@@ -56,15 +56,39 @@ extern void mbedtls_threading_freertos_init(void);   /* MBEDTLS_THREADING_ALT ca
 /* The libc/POSIX bits picotls pulls (posix_memalign / aligned_alloc / inet_pton) live in the
  * newlib retarget — component/syscall_config/newlib_syscalls.c — with the malloc family. */
 
-/* ---- test target (the WSL host's ngtcp2 example server) ---- */
+/* ---- test target (the WSL host's ngtcp2 example server) ---- ​
+ * Server address / port are -D-overridable so a different chip / LAN can point elsewhere. */
+#ifndef QUIC_SERVER_A0
 #define QUIC_SERVER_A0      192
+#endif
+#ifndef QUIC_SERVER_A1
 #define QUIC_SERVER_A1      168
+#endif
+#ifndef QUIC_SERVER_A2
 #define QUIC_SERVER_A2      4
+#endif
+#ifndef QUIC_SERVER_A3
 #define QUIC_SERVER_A3      250
+#endif
+#ifndef QUIC_SERVER_PORT
 #define QUIC_SERVER_PORT    4567
+#endif
 #define QUIC_ALPN           "perf"
 #define QUIC_HANDSHAKE_TIMEOUT_MS  10000U   /* give up after 10 s */
 
+#ifdef QUIC_SMOKE
+/* Heap-tight targets (e.g. bl602): a minimal handshake + tiny download instead of the multi-MB perf
+ * run, with shrunk flow windows + task stack. Even so, the TLS 1.3 handshake peak (~44 KB) + ngtcp2
+ * conn state may not fit bl602's ~52 KB contiguous heap -- best-effort smoke test (see doc). */
+#define QUIC_PERF_XFER_BYTES   (4u * 1024u)     /* tiny: just exercise a stream past the handshake */
+#define QUIC_PERF_TIMEOUT_MS   20000U
+#define QUIC_FLOW_WINDOW       (16u * 1024u)
+#define QUIC_PERF_SEND_CHUNK   (2u * 1024u)
+#define QUIC_UPLOAD_INFLIGHT_CAP (8u * 1024u)
+#ifndef QUIC_TASK_STACK_WORDS
+#define QUIC_TASK_STACK_WORDS  8192             /* 32 KB (vs 64 KB); the TLS handshake is stack-heavy */
+#endif
+#else
 /* perf transfer sizes per direction. 4 MB ~ a few seconds over WiFi. */
 #define QUIC_PERF_XFER_BYTES   (4u * 1024u * 1024u)
 #define QUIC_PERF_TIMEOUT_MS   60000U       /* whole-transfer cap           */
@@ -78,6 +102,10 @@ extern void mbedtls_threading_freertos_init(void);   /* MBEDTLS_THREADING_ALT ca
 /* Cap upload bytes written-but-unacked so ngtcp2's retransmit buffer (heap) can
  * not grow past what KM4 RAM allows when the LAN congestion window opens up. */
 #define QUIC_UPLOAD_INFLIGHT_CAP (32u * 1024u)
+#ifndef QUIC_TASK_STACK_WORDS
+#define QUIC_TASK_STACK_WORDS  16384        /* 64 KB */
+#endif
+#endif
 
 struct quic_client {
     ngtcp2_crypto_conn_ref conn_ref;
@@ -680,6 +708,15 @@ static void quic_client_task(void *arg)
                    (int)QUIC_PERF_XFER_BYTES);
         rx_ok = (perf_connection(QUIC_PERF_XFER_BYTES, 0, &rx_kbps) == 0);
 
+#ifdef QUIC_SMOKE
+        /* Smoke mode (heap-tight targets): a handshake + tiny download is the whole test; skip the
+         * upload phase (it keeps a second retransmit buffer live, which the small heap cannot spare). */
+        (void)tx_kbps;
+        tx_ok = 1;
+        log_info("[QUIC] ============ handshake smoke test (round %d) ============", round);
+        log_info("[QUIC]   HANDSHAKE + DOWNLOAD: %s", rx_ok ? "OK" : "FAILED");
+        log_info("[QUIC] =================================================");
+#else
         vTaskDelay(pdMS_TO_TICKS(300));
 
         /* Phase 2: UPLOAD (chip TX). */
@@ -701,6 +738,7 @@ static void quic_client_task(void *arg)
             log_error("[QUIC]   UPLOAD   (TX): FAILED");
         }
         log_info("[QUIC] =================================================");
+#endif
 
         vTaskDelay(pdMS_TO_TICKS(8000));   /* pause between rounds */
     }
@@ -711,8 +749,13 @@ void quic_test_start(void)
     static int started = 0;
     if (!started) {
         started = 1;
-        /* Big stack: TLS 1.3 handshake (picotls + mbedTLS ECDHE keygen are stack-heavy)
-         * + ngtcp2 conn state. 16K words = 64 KB. */
-        xTaskCreate(quic_client_task, "quic_cli", 16384, NULL, tskIDLE_PRIORITY + 2, NULL);
+        /* Big stack: TLS 1.3 handshake (picotls + mbedTLS ECDHE keygen are stack-heavy) + ngtcp2 conn
+         * state. Default 16K words (64 KB); QUIC_SMOKE shrinks it to 8K (32 KB). The xTaskCreate result
+         * is intentionally not logged here: on Bouffalo this runs from the GOT_IP handler with the
+         * scheduler SUSPENDED, where a blocking log take asserts. On a heap-tight target (bl602: ~60 KB
+         * fragmented heap) the stack alloc fails -> vApplicationMallocFailedHook logs it (safely) and the
+         * self-test simply does not run, while the rest of the system (e.g. AWS telemetry) continues. */
+        (void)xTaskCreate(quic_client_task, "quic_cli", QUIC_TASK_STACK_WORDS, NULL,
+                          tskIDLE_PRIORITY + 2, NULL);
     }
 }
