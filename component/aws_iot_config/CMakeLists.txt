@@ -64,7 +64,9 @@ if(AT_ENABLE_AWS_OTA)
         AWS_CA_USE_ENV
         AWS_STATIC_TASKS
         AWS_NO_TELEMETRY
-        AWS_AGENT_STACK_WORDS=2048
+        AWS_AGENT_STACK_WORDS=4096   # 16 KB: the mbedTLS handshake's cert-chain verify + crypto peaks
+                                     # ~12 KB; 8 KB overflowed -> HardFault reboot mid-handshake. .bss
+                                     # cost is fine now the OTA buffers are dynamic (~45 KB free heap).
         AWS_NET_BUFFER_SZ=2560       # 2 KB OTA blocks (otaconfigLOG2_FILE_BLOCK_SIZE=11 on bl602)
         AWS_KEY_MAX=1536             # RSA-2048 key DER ~1218 B; trims s_key .bss (grows the TLS heap)
     )

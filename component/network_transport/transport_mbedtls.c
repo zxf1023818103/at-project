@@ -732,6 +732,13 @@ static TlsTransportStatus_t tlsHandshake( NetworkContext_t * pNetworkContext,
                         mbedtlsHighLevelCodeOrDefault( mbedtlsError ),
                         mbedtlsLowLevelCodeOrDefault( mbedtlsError ) ) );
 
+            if( mbedtlsError == MBEDTLS_ERR_X509_CERT_VERIFY_FAILED )
+            {
+                uint32_t vflags = mbedtls_ssl_get_verify_result( &( pTlsTransportParams->sslContext.context ) );
+                LogError( ( "  X509 verify flags = 0x%08x (NOTTRUST=0x8 EXPIRED=0x1 FUTURE=0x200 BADMD=0x20 SKIP=0x8000000)",
+                            ( unsigned ) vflags ) );
+            }
+
             returnStatus = TLS_TRANSPORT_HANDSHAKE_FAILED;
         }
         else
