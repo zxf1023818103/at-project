@@ -54,12 +54,12 @@ IPERF      ?= OFF          # ON -> `iperf` console command over upstream iperf3 
 CARES      ?= OFF          # ON -> resolve DNS via c-ares (select event loop) instead of the FreeRTOS+TCP resolver (AWS/SNTP/OTA)
 WPS        ?= OFF          # ON -> `wps` console command (WPS PBC/PIN connect test; compiles wifi_wps_config.c, links lib_wps.a)
 TFM        ?= OFF          # ON -> build + boot in-tree TF-M SPE (app_km4 becomes the NS side)
-TLS_BACKEND ?= fallback    # AWS TLS-over-TCP backend (default: fallback — links BOTH picotls/TLS1.3 + mbedTLS/TLS1.2, per-connection choice via NetworkCredentials_t.backendMode: AWS MQTT/OTA force picotls, ota_http falls back picotls->mbedTLS). picotls = TLS 1.3 only, ~112 KB smaller flash but no runtime mode / no 1.2 fallback (backendMode ignored). mbedtls = TLS 1.2/1.3. Switch wiring: component/network_transport/transport_tls.h.
+TLS_BACKEND ?= picotls     # AWS TLS-over-TCP backend. DEFAULT picotls (TLS 1.3) on BOTH platforms (aligned with project/bouffalo/Makefile): AWS IoT + S3 are TLS 1.3, picotls = ~112 KB smaller flash + ~24 KB less runtime heap than fallback. `fallback` (co-link picotls/TLS1.3 + mbedTLS/TLS1.2, per-connection NetworkCredentials_t.backendMode: force picotls for AWS MQTT/OTA, picotls->mbedTLS for ota_http to a non-1.3 server) and `mbedtls` (TLS 1.2/1.3) stay selectable. Switch wiring: component/network_transport/transport_tls.h.
 ifeq ($(filter $(TLS_BACKEND),mbedtls picotls fallback),)
 $(error TLS_BACKEND must be 'mbedtls', 'picotls', or 'fallback')
 endif
-# fallback: try picotls (TLS 1.3) first, fall back to mbedTLS (TLS 1.2/1.3) when the server has no
-# TLS 1.3. Links both backends (transport_fallback.c dispatches). e.g. make AWS=ON TLS_BACKEND=fallback
+# fallback (opt-in): try picotls (TLS 1.3) first, fall back to mbedTLS (TLS 1.2/1.3) for a non-1.3
+# server. Links both backends (transport_fallback.c dispatches). e.g. make AWS=ON TLS_BACKEND=fallback
 TLS_HEAP_TRACE ?= OFF      # ON = compile the gated picotls handshake heap trace (transport_picotls.c TLS_HEAP_MARK); logs free heap at connect/handshake/disconnect. Debug/measurement only.
 HWGCM      ?= $(TFM)       # default = TFM: route AES-GCM + ChaCha20-Poly1305 to the RTL8721D IPSEC HW engine (needs TFM=ON's SAU, so on iff TFM is on). Both TLS backends use it: mbedTLS via the classic one-shot mbedtls_gcm; picotls via the encrypt-coalesce shim in transport_picotls.c that reduces its PSA multi-part AEAD to the engine's one-shot path.
 STORAGE    ?= OFF          # ON -> TF-M PSA secure storage (ITS + PS) + NS storage self-test; implies TFM=ON

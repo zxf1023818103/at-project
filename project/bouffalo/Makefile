@@ -32,11 +32,10 @@ BUILD_DIR ?= build_$(CHIP)
 #   fallback = the picotls-first -> mbedTLS-1.2 dispatcher (transport_fallback.c): co-links both backends,
 #              tries picotls (connects on AWS), falls back to mbedTLS 1.2 only for a non-1.3 server.
 # Switch requires a clean configure (make distclean or rm build_<chip>): the CMake cache is sticky.
-ifeq ($(AWSOTA),ON)
+# DEFAULT picotls (TLS 1.3) on BOTH platforms (aligned with project/amebad/Makefile). `fallback`
+# (co-link picotls+mbedTLS, per-connection NetworkCredentials_t.backendMode) and `mbedtls` stay
+# selectable for a non-TLS-1.3 server, but AWS + S3 are TLS 1.3, and bl602's mbedTLS never connects.
 TLS_BACKEND ?= picotls
-else
-TLS_BACKEND ?= mbedtls
-endif
 ifeq ($(filter $(TLS_BACKEND),mbedtls picotls fallback),)
 $(error TLS_BACKEND must be 'mbedtls', 'picotls', or 'fallback')
 endif
