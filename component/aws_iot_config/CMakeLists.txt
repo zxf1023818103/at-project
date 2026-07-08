@@ -57,11 +57,18 @@ if(AT_ENABLE_AWS_OTA)
         aws_iot_demo.c
         ${AWS_OTA_SOURCES}
     )
+    # OTA firmware version-gate build number (ota_app.c appFirmwareVersion .build), from the bl602
+    # Makefile APP_BUILD flag; an OTA target must exceed the running build. Falls back to the
+    # ota_app.c default (2) when not passed.
+    if(NOT DEFINED AWS_APP_BUILD OR AWS_APP_BUILD STREQUAL "")
+        set(AWS_APP_BUILD 2)
+    endif()
     # bl602 heap is tight (~45 KB free after WiFi+DHCP). AWS_STATIC_TASKS puts the agent + OTA task
     # stacks in .bss so a fragmented heap can't fail their contiguous allocation (the observed
     # xTaskCreate failure). AWS_NO_TELEMETRY drops the optional demo publish task (~4 KB). The agent
     # stack is 8 KB (2048 words) - the proven bl602 TLS-handshake peak - vs AmebaD's 20 KB.
     target_compile_definitions(aws_iot PRIVATE
+        APP_VERSION_BUILD=${AWS_APP_BUILD}   # OTA version gate (bl602 Makefile APP_BUILD; > running build)
         OTA_APP_ENABLE_HTTP=0
         AWS_TLS_RX_RESERVE=0
         AWS_TLS_BACKEND_MODE=0

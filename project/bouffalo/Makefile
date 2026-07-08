@@ -87,6 +87,11 @@ ifeq ($(filter $(AWSOTA),ON OFF),)
 $(error AWSOTA must be 'ON' or 'OFF')
 endif
 
+# OTA firmware version-gate build number (appFirmwareVersion .build). The FreeRTOS OTA agent only
+# commits an update whose version EXCEEDS the running image, so bump this above the running build for
+# an OTA target: make CHIP=bl602 BOARD=bl602dk AWSOTA=ON APP_BUILD=3
+APP_BUILD ?= 2
+
 # CRT_BUNDLE: verify the TLS server cert against the embedded compressed Mozilla CA root bundle
 # (component/esp_crt_bundle_config, ~121 roots in ~56 KB .rodata) instead of a single pinned root.
 # This is what makes the live-AWS handshake succeed: AWS over-sends its FULL chain (server -> Amazon
@@ -126,6 +131,7 @@ $(BUILD_DIR)/CMakeCache.txt: CMakeLists.txt proj.conf
 	    -DAT_ENABLE_CARES=$(CARES) \
 	    -DAT_ENABLE_QUIC=$(QUIC) \
 	    -DAT_ENABLE_AWS_OTA=$(AWSOTA) \
+	    -DAWS_APP_BUILD=$(APP_BUILD) \
 	    -DAT_ENABLE_CRT_BUNDLE=$(CRT_BUNDLE) \
 	    -DBOUFFALO_MBEDTLS_HW_GCM=$(HWGCM)
 
