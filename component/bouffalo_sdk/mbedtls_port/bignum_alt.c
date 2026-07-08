@@ -81,15 +81,13 @@ int bl_mpi_exp_mod_wo_lock(mbedtls_mpi *X, const mbedtls_mpi *A, const mbedtls_m
     bool first = true;
     const int sN = reg_size_N;
 
-    // The BL602 HW PKA modexp returns WRONG results for a 2048-bit modulus (256-byte / REG_SIZE_256):
-    // RSA-2048 signature verification (e.g. the AWS IoT server cert chain: mbedtls_pk_verify ->
-    // rsa -> mbedtls_mpi_exp_mod on the PKA) fails MBEDTLS_ERR_RSA_VERIFY_FAILED (-0x4380) even with
-    // a correct key/hash/signature. The PKA path had only ever been exercised by <=256-bit ECC (WPA
-    // uses AES, not bignum modexp), so this stayed hidden. Route 2048-bit AND larger modulo exp to the
-    // software implementation (correct; for a public-exponent VERIFY it's only ~19 multiplications,
-    // and W[1 << MBEDTLS_MPI_WINDOW_SIZE=1] keeps the heap tiny). Smaller RSA/DH keep the HW PKA.
-    // (Was `> REG_SIZE_256` -> HW for exactly 2048-bit; now `>=` so 2048-bit uses software too.)
-    if (reg_size >= SEC_ENG_PKA_REG_SIZE_256) {
+    // RE-TEST (2026-07-08): restore the HW PKA for a 2048-bit modulus (`>`), to re-confirm on the clean
+    // picotls path whether the earlier "HW PKA mis-computes 2048-bit -> RSA_VERIFY_FAILED (-0x4380)"
+    // diagnosis holds, and whether the AWS server-cert RSA-2048 verify can run on HW (which would also
+    // free the software-modexp heap the picotls chain-verify needs). Only > 2048-bit routes to software.
+    // (If the picotls handshake fails again at the server-cert verify, the HW-PKA bug is real -> revert
+    //  this to `>=` so 2048-bit uses mbedtls_mpi_exp_mod_original.)
+    if (reg_size > SEC_ENG_PKA_REG_SIZE_256) {
         return mbedtls_mpi_exp_mod_original(X, A, E, N, _RN);
     }
 
