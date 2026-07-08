@@ -9,6 +9,11 @@
 add_library(aws_ota_config INTERFACE)
 target_include_directories(aws_ota_config INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(aws_ota_config INTERFACE ota_flash_config)
+# Shorten __FILE__ in the OTA agent's rxi logs to the basename (ota_app.c:1065, not the full absolute
+# path). AWS_OTA_SOURCES compile into the CONSUMER target (Bouffalo aws_iot / AmebaD app_km4), not here,
+# so this must be an INTERFACE option that link-propagates -- a directory add_compile_options here would
+# not reach them. Every AWS_OTA_SOURCES file lives under this dir, so the one prefix-map covers them all.
+target_compile_options(aws_ota_config INTERFACE "-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=")
 
 set(AWS_OTA_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/ota_app.c"
