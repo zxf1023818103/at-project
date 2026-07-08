@@ -136,7 +136,7 @@ endif()
 # TLS_FreeRTOS_* symbols renamed (picotls_* / mbedtls_*) so they don't collide; transport_fallback.c
 # calls the renamed sets. The app links network_transport_fallback (which exports the public
 # TLS_FreeRTOS_* + TLS_BACKEND_FALLBACK for transport_tls.h).
-if(AMEBAD_TLS_BACKEND STREQUAL "fallback")
+if(TLS_BACKEND STREQUAL "fallback")
     target_compile_definitions(network_transport_picotls PRIVATE TLS_TRANSPORT_RENAME_PICOTLS)
     target_compile_definitions(network_transport_mbedtls PRIVATE TLS_TRANSPORT_RENAME_MBEDTLS)
 

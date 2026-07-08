@@ -513,9 +513,11 @@ target_link_libraries(bouffalo_sdk INTERFACE
     mbedtls_port
 )
 
-# TLS_BACKEND=picotls (bl602 AWS): picotls_core + picotls_mbedtls ride mbedcrypto/PSA + have circular
-# refs with it, so they belong inside the --start-group above (same as AmebaD's _aws_grp).
-if("${BOUFFALO_CHIP}" STREQUAL "bl602" AND BOUFFALO_TLS_BACKEND STREQUAL "picotls")
+# TLS_BACKEND=picotls / fallback: picotls_core + picotls_mbedtls ride mbedcrypto/PSA + have circular
+# refs with it, so they belong inside the --start-group above (same as AmebaD's _aws_grp). fallback
+# co-links picotls too, so it needs them in the group as well. Chip-agnostic: the circular-ref rule is
+# about picotls<->mbedcrypto, not the specific chip (picotls_core exists only when TLS_BACKEND builds it).
+if(TLS_BACKEND STREQUAL "picotls" OR TLS_BACKEND STREQUAL "fallback")
     target_link_libraries(bouffalo_sdk INTERFACE picotls_core picotls_mbedtls)
 endif()
 

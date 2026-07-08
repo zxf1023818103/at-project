@@ -22,20 +22,23 @@ BOARD     ?= $(CHIP)dk
 BUILD_DIR ?= build_$(CHIP)
 # AWS TLS-over-TCP backend for bl602 (component/aws_iot_config picks the transport):
 #   picotls  = TLS 1.3 only (picotls_core + picotls_mbedtls). DEFAULT for AWSOTA=ON: bl602's mbedTLS
-#              TLS 1.2 handshake to AWS IoT hangs at state=12 -- the HW-crypto _ALT path (Sec_Eng PKA
-#              ECP + HACC SHA-256) mis-computes the client CertVerify/Finished, so AWS silently drops
-#              after the client Finished. picotls drives the crypto through the PSA/software path and
-#              connects (verified end-to-end: MQTT + OTA jobs). Caps the parsed server chain to
-#              leaf+intermediate so the RSA-2048 verify modexp fits bl602's ~50 KB heap.
-#   mbedtls  = mbedTLS 1.2/1.3, IN 6144 -- the heap-tight lean default for the non-AWS telemetry client.
+#              TLS 1.2 client handshake to AWS IoT stalls at state=12 (client Finished not accepted, AWS
+#              goes silent) -- a mbedTLS-TLS-1.2-path issue, NOT a HW-crypto miscompute: picotls drives
+#              the SAME Sec_Eng HW crypto (secp256r1 PKA + HACC AES + HW SHA, incl. the 2048-bit RSA
+#              verify) and connects. Verified end-to-end (MQTT + OTA). Caps the parsed server chain to
+#              leaf+intermediate so the RSA-2048 verify fits bl602's ~50 KB heap.
+#   mbedtls  = mbedTLS 1.2/1.3, IN 6144 -- the lean default for the non-AWS telemetry client. Does NOT
+#              connect to AWS IoT on bl602 (state=12).
+#   fallback = the picotls-first -> mbedTLS-1.2 dispatcher (transport_fallback.c): co-links both backends,
+#              tries picotls (connects on AWS), falls back to mbedTLS 1.2 only for a non-1.3 server.
 # Switch requires a clean configure (make distclean or rm build_<chip>): the CMake cache is sticky.
 ifeq ($(AWSOTA),ON)
 TLS_BACKEND ?= picotls
 else
 TLS_BACKEND ?= mbedtls
 endif
-ifeq ($(filter $(TLS_BACKEND),mbedtls picotls),)
-$(error TLS_BACKEND must be 'mbedtls' or 'picotls')
+ifeq ($(filter $(TLS_BACKEND),mbedtls picotls fallback),)
+$(error TLS_BACKEND must be 'mbedtls', 'picotls', or 'fallback')
 endif
 
 # HW AES-GCM (BL602 Sec_Eng: chunked HW AES-CTR + software GHASH, component/bouffalo_sdk/mbedtls_port/
@@ -120,7 +123,7 @@ $(BUILD_DIR)/CMakeCache.txt: CMakeLists.txt proj.conf
 	$(CMAKE) -S . -B $(BUILD_DIR) -G "$(GENERATOR)" \
 	    -DCMAKE_TOOLCHAIN_FILE=$(CHIP_TOOLCHAIN) \
 	    -DBOUFFALO_BOARD=$(BOARD) \
-	    -DBOUFFALO_TLS_BACKEND=$(TLS_BACKEND) \
+	    -DTLS_BACKEND=$(TLS_BACKEND) \
 	    -DAT_ENABLE_CARES=$(CARES) \
 	    -DAT_ENABLE_QUIC=$(QUIC) \
 	    -DAT_ENABLE_AWS_OTA=$(AWSOTA) \

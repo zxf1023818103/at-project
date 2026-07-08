@@ -35,11 +35,15 @@ add_library(aws_secret_store_file STATIC EXCLUDE_FROM_ALL
 target_link_libraries(aws_secret_store_file PUBLIC aws_provision_core)
 
 # --- bl602 AWS client ------------------------------------------------------------------------------
-# The TLS backend is switchable via BOUFFALO_TLS_BACKEND (project/bouffalo/Makefile TLS_BACKEND):
-# mbedtls (default, IN 6144 -- fits bl602's heap) or picotls (TLS 1.3; larger buffers, may not fit).
-# Both export the same TLS_FreeRTOS_* API; transport_tls.h resolves to the linked backend's header.
-if(BOUFFALO_TLS_BACKEND STREQUAL "picotls")
+# The TLS backend is switchable via TLS_BACKEND (project/bouffalo/Makefile TLS_BACKEND):
+# picotls (TLS 1.3, the AWSOTA default -- connects to AWS IoT), mbedtls (TLS 1.2/1.3 -- state=12 on AWS),
+# or fallback (network_transport_fallback: co-links both, picotls-first). All export the same
+# TLS_FreeRTOS_* API; transport_tls.h resolves to the linked backend's header (fallback -> both backends'
+# symbols renamed, see component/network_transport/CMakeLists.txt).
+if(TLS_BACKEND STREQUAL "picotls")
     set(_aws_tls network_transport_picotls)
+elseif(TLS_BACKEND STREQUAL "fallback")
+    set(_aws_tls network_transport_fallback)
 else()
     set(_aws_tls network_transport_mbedtls)
 endif()
