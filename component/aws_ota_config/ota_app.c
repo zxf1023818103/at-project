@@ -214,7 +214,7 @@ static OtaHttpStatus_t prvOtaHttpDeinit( void );
  * from 8192 to cut ~3 KB of steady heap held by this (2nd) picotls connection while the AWS MQTT TLS
  * is live - the binding constraint is that concurrent peak. (ptls_buffer grows 2x on demand and never
  * shrinks, so if S3 ever coalesces a record beyond 5 KB this just costs one realloc, not correctness;
- * verified against the AMEBAD_TLS_HEAP_TRACE handshake trace.) Larger blocks were MEASURED to OOM the
+ * verified against the AT_PROJECT_TLS_HEAP_TRACE handshake trace.) Larger blocks were MEASURED to OOM the
  * S3 handshake: 8 KB blocks @9216 (~69 KB idle) and 16 KB @16640 (~44.5 KB idle). This connection is
  * forced to picotls (TLS 1.3) - see creds.backendMode below. */
 #define OTA_HTTP_RXRESERVE      5120u

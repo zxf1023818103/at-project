@@ -66,15 +66,15 @@
 
 #include <sys/stat.h>   /* stat / S_ISDIR -- folder vs single-file root CA path */
 
-#ifdef AMEBAD_ENABLE_CRT_BUNDLE
+#ifdef AT_PROJECT_CRT_BUNDLE
     #include "esp_crt_bundle.h"
 #endif
 
-/* Optional heap tracing of the TLS handshake (compile with -DAMEBAD_TLS_HEAP_TRACE). Logs free heap
+/* Optional heap tracing of the TLS handshake (compile with -DAT_PROJECT_TLS_HEAP_TRACE). Logs free heap
  * (and min-ever-free, meaningful only when CONFIG_MM_ENABLE_MIN_FREE_TRACKING=1) at the connect /
  * handshake / disconnect milestones, so the transient handshake PEAK (the Certificate flight) reads
  * off as the low point of the `free` column. No-op by default. */
-#if defined( AMEBAD_TLS_HEAP_TRACE )
+#if defined( AT_PROJECT_TLS_HEAP_TRACE )
     #define TLS_HEAP_MARK( tag )                                                  \
     LogInfo( ( "[HEAPTRACE] %-24s free=%u minever=%u", ( tag ),                    \
                ( unsigned ) xPortGetFreeHeapSize(),                               \
@@ -429,7 +429,7 @@ static int picotls_verify_cert( ptls_verify_certificate_t * _self,
     }
 
     const char * cn = ( ( server_name != NULL ) && ( server_name[ 0 ] != '\0' ) ) ? server_name : NULL;
-#ifdef AMEBAD_ENABLE_CRT_BUNDLE
+#ifdef AT_PROJECT_CRT_BUNDLE
     /* Verify against the embedded Mozilla bundle, with the file/folder roots (self->trustCa, the
      * `ca/` store) as extra trust anchors for self-signed / niche CAs the bundle lacks. */
     ret = esp_crt_bundle_verify_chain( &s_serverChain, &self->trustCa, cn, &flags );
@@ -514,7 +514,7 @@ static int picotls_init_verify( picotls_verify_t * self,
         }
     }
 
-#ifndef AMEBAD_ENABLE_CRT_BUNDLE
+#ifndef AT_PROJECT_CRT_BUNDLE
     if( self->trustCa.raw.p == NULL )
     {
         LogError( ( "no trusted CA roots (path '%s') and no embedded bundle in this build",
@@ -977,7 +977,7 @@ TlsTransportStatus_t TLS_FreeRTOS_Connect( NetworkContext_t * pNetworkContext,
                     ( void * ) pNetworkContext, ( const void * ) pHostName, ( const void * ) pNetworkCredentials ) );
         return TLS_TRANSPORT_INVALID_PARAMETER;
     }
-#ifndef AMEBAD_ENABLE_CRT_BUNDLE
+#ifndef AT_PROJECT_CRT_BUNDLE
     if( pNetworkCredentials->pRootCaPath == NULL )
     {
         /* Without the embedded bundle, the `ca/` folder is the only trust source. */

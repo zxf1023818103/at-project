@@ -1036,7 +1036,7 @@ static void wifi_bringup_thread( void *param )
     FreeRTOS_IPInit_Multi();
     amebad_freertos_tcp_set_ready();
 
-#ifdef AMEBAD_VFS_SELFTEST
+#ifdef AT_PROJECT_VFS_SELFTEST
     /* POSIX-fd VFS self-test (syscalls retarget): runs here so the socket part has
      * the FreeRTOS+TCP IP task up (the LFS file part works anytime). */
     {
@@ -1081,7 +1081,7 @@ void app_console_register_platform(void)
 #ifdef AMEBAD_SBOOT
     { extern void sboot_cli_register(void); sboot_cli_register(); } /* secure-boot Ed25519 self-test */
 #endif
-#ifdef AMEBAD_ENABLE_CRT_BUNDLE
+#ifdef AT_PROJECT_CRT_BUNDLE
     { extern void crt_bundle_cli_register(void); crt_bundle_cli_register(); } /* compressed CA root bundle */
 #endif
 #ifdef AMEBAD_ENABLE_WPS
@@ -1420,7 +1420,7 @@ static void on_tcpip_init_done(void *arg) {
 #endif // defined BL602 || defined BL702
 }
 
-#if defined(CONFIG_NIMBLE_HOST)
+#if defined(AT_PROJECT_NIMBLE)
 // Apache NimBLE host bring-up — shared nimble_start() (component/nimble_config/
 // nimble_app.c). Runs from a task because it brings the on-chip controller up (which
 // creates its own task) and starts the NimBLE host task — both need the scheduler running.
@@ -1430,7 +1430,7 @@ static void bflb_nimble_boot_task(void *arg) {
     nimble_start();
     vTaskDelete(NULL);
 }
-#endif // CONFIG_NIMBLE_HOST
+#endif // AT_PROJECT_NIMBLE
 
 #if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
 // Runs AFTER vTaskStartScheduler() — lwIP's tcpip_init() used to defer on_tcpip_init_done
@@ -1534,7 +1534,7 @@ void app_console_register_platform(void)
     // mbedTLS TLS transport for https, which - like aws_iot - is only linked on bl602 (heap).
     { extern void ota_http_register(void); ota_http_register(); }
 #endif
-#ifndef BOUFFALO_AWS_OTA
+#ifndef AT_PROJECT_AWS_IOT
     zip_cli_register();                 // zip/unzip (minizip over the VFS). Dropped in the bl602 AWSOTA
                                         // image: gc-sections then strips minizip's ~4 KB of .bss, which
                                         // (living below __HeapBase) grows the heap for the AWS TLS handshake.
@@ -1570,7 +1570,7 @@ void app_network_up_start_services(void)
     // after `aws endpoint/ca/cert/key ...`; the connect loop self-heals until SNTP supplies real UTC
     // (needed for the mbedTLS server-cert validity check). AWSOTA=ON runs the shared agent+telemetry+OTA
     // orchestration (aws_iot_demo.c); default runs the lean telemetry-only client (aws_telemetry.c).
-#ifdef BOUFFALO_AWS_OTA
+#ifdef AT_PROJECT_AWS_IOT
     { extern void aws_iot_demo_start(void); aws_iot_demo_start(); }
 #else
     { extern void aws_telemetry_start(void); aws_telemetry_start(); }
@@ -1646,9 +1646,9 @@ int main(void) {
     sntp_sync_start();
 #endif
 
-#if defined(CONFIG_NIMBLE_HOST)
+#if defined(AT_PROJECT_NIMBLE)
     xTaskCreate(bflb_nimble_boot_task, (char *)"nimble_boot", 1024, NULL, 3, NULL);
-#endif // CONFIG_NIMBLE_HOST
+#endif // AT_PROJECT_NIMBLE
 
     vTaskStartScheduler();
     while (1) {}

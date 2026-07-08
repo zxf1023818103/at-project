@@ -114,7 +114,7 @@ option(AMEBAD_ENABLE_ROM_KAT "Build the ROM mbedTLS 2.4.0 / HW-crypto boot self-
 # lfs_config + littlefs link-group members (incl. LFS_THREADSAFE); FreeRTOS_CLI.h needs the
 # explicit include, same as the AWS block below. time_cli.c's sntp_sync_once() is a weak
 # stub unless sntp_time.c (make SNTP=ON) provides the strong def.
-if(NOT AMEBAD_ENABLE_QUIC)
+if(NOT AT_ENABLE_QUIC)
     # fs/env/time_cli moved to the shared component/monitor_config (monitor_cmds, in _diag_grp
     # below); wifi_cli (wifi forget + resolve/ip6) stays AmebaD-local. All still registered from
     # main() after monitor_start(). FS_CLI_HASH now gated in monitor_config via AT_FS_CLI_HASH.
@@ -136,7 +136,7 @@ endif()
 # below to avoid CMake sinking the EXCLUDE_FROM_ALL libs past -lc. zip.h/unzip.h/ioapi.h come
 # from minizip's PUBLIC include via the group.
 set(_mz_grp "")
-if(NOT AMEBAD_ENABLE_QUIC AND NOT AMEBAD_ENABLE_AWS_IOT)
+if(NOT AT_ENABLE_QUIC AND NOT AMEBAD_ENABLE_AWS_IOT)
     # zip_cli.c moved to component/monitor_config (target zip_cmd, which links minizip + zlibstatic).
     # All three are leaf/EXCLUDE_FROM_ALL libs needing libc/libgcc, so they ride the cross_refs group.
     set(_mz_grp ",zip_cmd,minizip,zlibstatic")
@@ -191,7 +191,7 @@ option(AMEBAD_ENABLE_AWS_IOT "Build the AWS IoT Core MQTT/TLS demo (coreMQTT + m
 if(AMEBAD_ENABLE_AWS_IOT OR AMEBAD_ENABLE_MINIMAL)
     foreach(_net_tgt freertos_plus_tcp amebad_wlan_glue)
         if(TARGET ${_net_tgt})
-            target_compile_definitions(${_net_tgt} PRIVATE AMEBAD_NET_LOW_MEM)
+            target_compile_definitions(${_net_tgt} PRIVATE AT_NET_LOW_MEM)
         endif()
     endforeach()
 endif()
@@ -201,7 +201,7 @@ endif()
 # the upstream mbedcrypto every console image now links for fs_cli's md5sum/sha*sum. So ROMKAT is
 # its own image: ROM mbedTLS, no upstream, no hash commands (fs_cli's FS_CLI_HASH is off). main.c
 # calls rom_mbedtls_kat() under AMEBAD_ROM_KAT.
-if(AMEBAD_ENABLE_ROM_KAT AND (AMEBAD_ENABLE_QUIC OR AMEBAD_ENABLE_AWS_IOT OR AMEBAD_ENABLE_PKCS11
+if(AMEBAD_ENABLE_ROM_KAT AND (AT_ENABLE_QUIC OR AMEBAD_ENABLE_AWS_IOT OR AMEBAD_ENABLE_PKCS11
    OR AMEBAD_ENABLE_CRYPTOBENCH OR AMEBAD_ENABLE_NIMBLE))
     message(FATAL_ERROR "ROMKAT=ON (ROM mbedTLS self-tests) cannot combine with an upstream-mbedTLS image (AWS/QUIC/PKCS11/BENCH/NIMBLE)")
 endif()
@@ -234,7 +234,7 @@ option(AMEBAD_ENABLE_HCI    "Build the BLE controller HCI test image (bring-up +
 option(AMEBAD_ENABLE_NIMBLE "Build the NimBLE host image (LE/GATT/Mesh/coex on amebad_hci)" OFF)
 # mcumgr SMP-over-BLE DFU (img_mgmt -> ota_flash + os_mgmt echo/reset). Implies NIMBLE (forced ON
 # by the Makefile). Adds the mcumgr core + the smp_bt transport + the img/os platform impls.
-option(AMEBAD_ENABLE_MCUMGR "Build mcumgr SMP-over-BLE DFU (implies NIMBLE)" OFF)
+option(AT_ENABLE_MCUMGR "Build mcumgr SMP-over-BLE DFU (implies NIMBLE)" OFF)
 
 # The console (FreeRTOS-Plus-CLI over the LOGUART) is now the DEFAULT, built by
 # component/amebad/monitor (amebad_monitor + amebad_monitor_common, in _diag_grp below) and
@@ -288,7 +288,7 @@ endif()
 # (`mcumgr_port`) and tinycbor to the link group (real archive names; the _config umbrellas don't
 # expand inside LINK_GROUP), link mcumgr_config separately for header propagation, and pull in
 # ota_flash.c (the slot writer; normally AWS-only) as the DFU flash sink.
-if(AMEBAD_ENABLE_MCUMGR)
+if(AT_ENABLE_MCUMGR)
     set(_hci_grp "${_hci_grp},mcumgr,mcumgr_port,tinycbor")
     # Header propagation only (the archives ride the LINK_GROUP above); linking the mcumgr_config
     # umbrella here would form a dependency cycle with the group. mcumgr's interface includes carry
@@ -316,7 +316,7 @@ endif()
 set(_diag_grp ",monitor,monitor_port,monitor_cmds,freertos_cli")
 
 set(_quic_grp "")
-if(AMEBAD_ENABLE_QUIC)
+if(AT_ENABLE_QUIC)
     set(_diag_grp "")
     # The hand-tuned flat --start-group needs real archive names (CMake won't expand the
     # ngtcp2_config / picotls_config INTERFACE aggregates inside a LINK_GROUP), so list the
@@ -406,10 +406,10 @@ if(AMEBAD_ENABLE_AWS_IOT)
     # Mozilla root bundle (esp_crt_bundle, ~121 roots) instead of the single pinned root in
     # NetworkCredentials_t.pRootCa. esp_crt_bundle references mbedcrypto/mbedx509 (also in the
     # group), so it joins the cross_refs group; linking esp_crt_bundle_config gives crt_bundle_cli.c
-    # + the app TUs the esp_crt_bundle.h include path. The AMEBAD_ENABLE_CRT_BUNDLE macro gates the
+    # + the app TUs the esp_crt_bundle.h include path. The AT_PROJECT_CRT_BUNDLE macro gates the
     # creds.useCrtBundle assignments in aws_iot_demo.c / ota_http.c / ota_app.c and the transport
     # hooks (the transport libs get the macro from component/network_transport).
-    if(AMEBAD_ENABLE_CRT_BUNDLE STREQUAL "ON")
+    if(AT_ENABLE_CRT_BUNDLE STREQUAL "ON")
         # crt_bundle_cli.c + esp_crt_bundle moved to the shared component/esp_crt_bundle_config. The
         # `crt_bundle` command now rides the cross_refs group as the crt_bundle_cli archive (alongside
         # esp_crt_bundle/mbedx509/mbedcrypto); crt_bundle_cli sees network_transport at configure time
@@ -418,7 +418,7 @@ if(AMEBAD_ENABLE_AWS_IOT)
         # include path on aws_iot_demo.c / ota_http.c (creds.useCrtBundle).
         set(_aws_grp "${_aws_grp},crt_bundle_cli,esp_crt_bundle")
         target_link_libraries(target_img2_km4 PRIVATE esp_crt_bundle_config)
-        target_compile_definitions(target_img2_km4 PRIVATE AMEBAD_ENABLE_CRT_BUNDLE)
+        target_compile_definitions(target_img2_km4 PRIVATE AT_PROJECT_CRT_BUNDLE)
     endif()
     target_sources(target_img2_km4 PRIVATE
         "${AT_ROOT}/component/aws_iot_config/aws_iot_demo.c"     # shared AWS agent+telemetry+OTA orchestration (compiled per-app; AmebaD defaults)
@@ -530,7 +530,7 @@ target_link_libraries(target_img2_km4 PRIVATE app_startup)
 # reaches the network only through the UdpTransportInterface_t callbacks — so it links as an ordinary
 # lib (no --start-group). No TLS / TF-M needed (auth-less SNTP). main.c's network-up hook starts the
 # async client (sntp_sync_start). Excluded only from QUIC (no console + XIP-layout-sensitive).
-if(NOT AMEBAD_ENABLE_QUIC)
+if(NOT AT_ENABLE_QUIC)
     # sntp_time.c moved to the shared component/sntp_time_config (target sntp_time; it links
     # coreSNTP + backoffAlgorithm + rxi_log transitively). time_selftest.c + rtc_time.c stay
     # AmebaD-local — rtc_time.c is the AmebaD port of the shared RTC seam (rtc_time.h, target
@@ -545,14 +545,14 @@ if(NOT AMEBAD_ENABLE_QUIC)
 endif()
 
 # POSIX-fd VFS self-test (vfs_selftest, gated by the option in component/amebad/CMakeLists.txt).
-# main.c calls it; the impl is in the shared lfs_config's lfs_selftest.c (#ifdef AMEBAD_VFS_SELFTEST).
+# main.c calls it; the impl is in the shared lfs_config's lfs_selftest.c (#ifdef AT_PROJECT_VFS_SELFTEST).
 # app_km4 is the consumer that owns the option, so per littlefs_config's design it enables the impl
 # there + attaches the AmebaD specifics vfs_selftest needs (FreeRTOS+TCP sockets, syscall_config's
 # syscalls.h) — kept out of the shared lfs_config / the mid-tree lfs_port library.
-if(AMEBAD_VFS_SELFTEST)
+if(AT_VFS_SELFTEST)
     set_property(SOURCE "${AT_MAIN_SRC}"
-                 APPEND PROPERTY COMPILE_DEFINITIONS AMEBAD_VFS_SELFTEST)
-    target_compile_definitions(lfs_config PRIVATE AMEBAD_VFS_SELFTEST)
+                 APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_VFS_SELFTEST)
+    target_compile_definitions(lfs_config PRIVATE AT_PROJECT_VFS_SELFTEST)
     target_link_libraries(lfs_config PRIVATE amebad_freertos_tcp)
     target_include_directories(lfs_config PRIVATE "${AT_ROOT}/component/syscall_config")
 endif()
@@ -618,7 +618,7 @@ endif()
 # x509/tls/threading/port. Joins the cross_refs group (real archive name; the _config
 # umbrella INTERFACE wouldn't expand inside LINK_GROUP).
 set(_hash_grp "")
-if(NOT AMEBAD_ENABLE_QUIC AND NOT AMEBAD_ENABLE_ROM_KAT
+if(NOT AT_ENABLE_QUIC AND NOT AMEBAD_ENABLE_ROM_KAT
    AND NOT AMEBAD_ENABLE_PKCS11 AND NOT AMEBAD_ENABLE_CRYPTOBENCH
    AND NOT AMEBAD_ENABLE_AWS_IOT AND NOT AMEBAD_ENABLE_NIMBLE)
     set(_hash_grp ",mbedcrypto")

@@ -112,21 +112,21 @@ target_compile_definitions(network_transport_picotls PUBLIC TLS_BACKEND_PICOTLS)
 
 # Optional picotls handshake heap tracing (Makefile TLS_HEAP_TRACE=ON). Logs free heap at the
 # connect / handshake / disconnect milestones via the gated TLS_HEAP_MARK in transport_picotls.c.
-if(AMEBAD_TLS_HEAP_TRACE STREQUAL "ON")
-    target_compile_definitions(network_transport_picotls PRIVATE AMEBAD_TLS_HEAP_TRACE)
+if(AT_TLS_HEAP_TRACE STREQUAL "ON")
+    target_compile_definitions(network_transport_picotls PRIVATE AT_PROJECT_TLS_HEAP_TRACE)
 endif()
 
 # --- compressed CA root bundle (CRT_BUNDLE=ON) ----------------------------------------------
-# When enabled (threaded from the Makefile as AMEBAD_ENABLE_CRT_BUNDLE), both TLS transports
+# When enabled (threaded from the Makefile as AT_PROJECT_CRT_BUNDLE), both TLS transports
 # verify the server cert against the embedded Mozilla root bundle (esp_crt_bundle) instead of the
 # single pinned root in NetworkCredentials_t.pRootCa. The transport sources gate this on the
-# AMEBAD_ENABLE_CRT_BUNDLE macro and call into esp_crt_bundle.h (linked PUBLIC for the headers;
+# AT_PROJECT_CRT_BUNDLE macro and call into esp_crt_bundle.h (linked PUBLIC for the headers;
 # the actual archive rides app_km4's _aws_grp link group). PUBLIC def so the consuming app TUs
 # (aws_iot_demo.c / ota_*.c) that set creds.useCrtBundle see the same macro.
-if(AMEBAD_ENABLE_CRT_BUNDLE STREQUAL "ON")
+if(AT_ENABLE_CRT_BUNDLE STREQUAL "ON")
     foreach(_tls network_transport_mbedtls network_transport_picotls)
         target_link_libraries(${_tls} PUBLIC esp_crt_bundle_config)
-        target_compile_definitions(${_tls} PUBLIC AMEBAD_ENABLE_CRT_BUNDLE)
+        target_compile_definitions(${_tls} PUBLIC AT_PROJECT_CRT_BUNDLE)
     endforeach()
 endif()
 

@@ -34,7 +34,7 @@ endif()
 
 # QUIC self-test option (ngtcp2 + picotls/mbedTLS TLS 1.3 — wolfSSL was retired). AmebaD app_km4
 # reads it; ngtcp2_config builds its crypto only when ON. Declared before the block that consumes it.
-option(AMEBAD_ENABLE_QUIC "Build the ngtcp2 + picotls/mbedTLS QUIC client self-test" OFF)
+option(AT_ENABLE_QUIC "Build the ngtcp2 + picotls/mbedTLS QUIC client self-test" OFF)
 
 # =====================================================================
 # AmebaD-coupled cross-platform config components. Gated to NON-Bouffalo: Bouffalo brings its own
@@ -44,7 +44,7 @@ option(AMEBAD_ENABLE_QUIC "Build the ngtcp2 + picotls/mbedTLS QUIC client self-t
 # =====================================================================
 if(NOT BOUFFALO_CHIP)
 add_subdirectory(freertos-plus-tcp_config)  # FreeRTOS-Plus-TCP V4.0.0 core stack + FreeRTOSIPConfig.h
-add_subdirectory(ngtcp2_config)             # ngtcp2 QUIC + the picotls crypto binding (built only when AMEBAD_ENABLE_QUIC)
+add_subdirectory(ngtcp2_config)             # ngtcp2 QUIC + the picotls crypto binding (built only when AT_ENABLE_QUIC)
 add_subdirectory(coremqtt_config)           # coreMQTT v5.0.2 static lib + core_mqtt_config.h
 add_subdirectory(coremqtt-agent_config)     # coreMQTT-Agent v2.0.0 (thread-safe wrapper) — links coremqtt_config
 add_subdirectory(backoffalgorithm_config)   # backoffAlgorithm v1.4.2 (reconnect backoff-with-jitter)

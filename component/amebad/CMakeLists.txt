@@ -86,7 +86,7 @@ option(AMEBAD_TFM_STORAGE "Enable TF-M PSA Internal Trusted Storage + Protected 
 # POSIX-fd VFS self-test (syscalls/newlib_syscalls.c): fopen/open + socket-fd over LittleFS +
 # FreeRTOS+TCP. OFF by default (the VFS is otherwise gc-stripped when no consumer references it).
 # Consumed by lfs_port (the vfs_selftest fn) + app_km4 (the call) below.
-option(AMEBAD_VFS_SELFTEST "Build + run the POSIX-fd VFS self-test (fopen/open/socket over LFS+sockets)" OFF)
+option(AT_VFS_SELFTEST "Build + run the POSIX-fd VFS self-test (fopen/open/socket over LFS+sockets)" OFF)
 
 # Ed25519 secure-boot self-test (make SBOOT=ON). build_image_all.py signs image2 in the boot-ROM's
 # SBOOT format; sboot_cli.c verifies the running signed image with the boot ROM's ed25519 verify.
@@ -272,7 +272,7 @@ add_subdirectory(wpa_supplicant)     # KM4-gated: supplicant cores (lib_wps.a + 
 add_subdirectory(wifi)               # KM4-gated: host WiFi API + bring-up (amebad_wifi, EXCLUDE)
 # The cross-platform config dirs (freertos-plus-tcp_config / ngtcp2_config / coremqtt_config /
 # picotls_config / mbedtls_config / ...) are added by the parent component/CMakeLists.txt; the in-tree
-# consumers below (app_km4, the ngtcp2 QUIC self-test gated by AMEBAD_ENABLE_QUIC, ...) just link the
+# consumers below (app_km4, the ngtcp2 QUIC self-test gated by AT_ENABLE_QUIC, ...) just link the
 # resulting targets.
 add_subdirectory(hci)                # KM4-gated: BLE controller bring-up + HCI transport + bridge (no btgap.a)
 # NimBLE: the config + header surface (nimble_config) is added by the parent

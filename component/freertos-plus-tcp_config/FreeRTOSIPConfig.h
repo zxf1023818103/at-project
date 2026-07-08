@@ -22,13 +22,13 @@
 
 /* TCP buffers. Two profiles:
  *  - Default (iperf/QUIC throughput images): big window to keep the pipe full at ~1-2 ms RTT.
- *  - AMEBAD_NET_LOW_MEM (AWS/MINIMAL connect-only images, set per-target in app_km4/CMakeLists):
+ *  - AT_NET_LOW_MEM (AWS/MINIMAL connect-only images, set per-target in app_km4/CMakeLists):
  *    the MQTT client is low-rate, so shrink the per-socket RX/TX buffers + window hard to give the
  *    tight NS heap back ~50 KB. 6*1460 still comfortably streams the AWS server cert handshake. */
 #define ipconfigUSE_TCP_WIN                      1
 /* Two TCP-buffer tiers: a shared low-mem tier for the heap-tight MQTT/telemetry images, and the big
  * throughput tier for iperf/QUIC/BL616.
- *  - low-mem (AMEBAD_NET_LOW_MEM = AmebaD AWS/MINIMAL, and BL602/BL702 which are tighter still):
+ *  - low-mem (AT_NET_LOW_MEM = AmebaD AWS/MINIMAL, and BL602/BL702 which are tighter still):
  *    RX 4*1460 / TX 2*1460. Sized by BL602's hard limit — 6*1460 was tried on bl602 and *breaks* the
  *    AWS path: the TLS handshake still succeeds, but the 17.5 KB per-socket buffers leave too little
  *    TLSF heap for FreeRTOS+TCP (BufferAllocation_2, heap-on-demand) to allocate the network buffer
@@ -49,7 +49,7 @@
     #define ipconfigTCP_WIN_SEG_COUNT           16
     #define ipconfigTCP_RX_BUFFER_LENGTH        ( 4 * 1460 )    /* ~5.7 KB (holds AWS's ~5.6 KB flight) */
     #define ipconfigTCP_TX_BUFFER_LENGTH        ( 1 * 1460 )    /* ~1.5 KB */
-#elif defined( AMEBAD_NET_LOW_MEM )
+#elif defined( AT_NET_LOW_MEM )
     #define ipconfigTCP_WIN_SEG_COUNT           16
     #define ipconfigTCP_RX_BUFFER_LENGTH        ( 4 * 1460 )    /* ~5.7 KB (holds AWS's ~5.6 KB
                                                                  * server-cert flight; a bigger buffer
@@ -87,7 +87,7 @@
 
 /* Network buffer descriptors (BufferAllocation_2 = heap, each ~MTU+pad ~1.6 KB). 40 for TCP
  * throughput; 14 is plenty for the low-rate MQTT client and saves ~42 KB of NS heap. */
-#if defined( AMEBAD_NET_LOW_MEM ) || defined( BL602 ) || defined( BL702 )
+#if defined( AT_NET_LOW_MEM ) || defined( BL602 ) || defined( BL702 )
     #define ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS  24   /* was 14: too tight for the TLS handshake's
                                                           * bursty bidirectional flight (server ~6KB in +
                                                           * client flight out + ACKs + concurrent WiFi RX)

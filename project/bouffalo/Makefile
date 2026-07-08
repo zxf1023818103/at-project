@@ -95,7 +95,7 @@ endif
 # to chain (mbedTLS follows the sent chain to the untrusted Starfield top -> X509 NOT_TRUSTED). The
 # bundle's verify callback matches each chain cert against the ~121 embedded roots by subject+public
 # key, so the over-sent copy of a root we hold is accepted. Same component + macro AmebaD uses
-# (AMEBAD_ENABLE_CRT_BUNDLE). Only meaningful for the AWS TLS path (AWSOTA=ON); default ON there.
+# (AT_ENABLE_CRT_BUNDLE). Only meaningful for the AWS TLS path (AWSOTA=ON); default ON there.
 # Switch requires a clean configure (make distclean or rm build_<chip>): the CMake cache is sticky.
 ifeq ($(AWSOTA),ON)
 CRT_BUNDLE ?= ON
@@ -127,7 +127,7 @@ $(BUILD_DIR)/CMakeCache.txt: CMakeLists.txt proj.conf
 	    -DAT_ENABLE_CARES=$(CARES) \
 	    -DAT_ENABLE_QUIC=$(QUIC) \
 	    -DAT_ENABLE_AWS_OTA=$(AWSOTA) \
-	    -DAMEBAD_ENABLE_CRT_BUNDLE=$(CRT_BUNDLE) \
+	    -DAT_ENABLE_CRT_BUNDLE=$(CRT_BUNDLE) \
 	    -DBOUFFALO_MBEDTLS_HW_GCM=$(HWGCM)
 
 configure: $(BUILD_DIR)/CMakeCache.txt

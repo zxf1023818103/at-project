@@ -70,7 +70,7 @@ target_link_libraries(mcumgr_config INTERFACE mcumgr)
 # platform-HAL code: pure NimBLE host + mcumgr core). KM4 + MCUMGR-gated. Include-only deps (NOT link):
 # mcumgr_port rides the image's cross_refs LINK_GROUP alongside mcumgr / nimble / rxi_log archives, so
 # linking the umbrellas here would cycle; the group resolves the symbols at the final link.
-if("${AMEBAD_CHIP}" STREQUAL "amebad-km4" AND AMEBAD_ENABLE_MCUMGR)
+if("${AMEBAD_CHIP}" STREQUAL "amebad-km4" AND AT_ENABLE_MCUMGR)
     add_library(mcumgr_port STATIC EXCLUDE_FROM_ALL "${CMAKE_CURRENT_SOURCE_DIR}/smp_bt.c")
     target_compile_options(mcumgr_port PRIVATE "-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=")
     target_include_directories(mcumgr_port PRIVATE

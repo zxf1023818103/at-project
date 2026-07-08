@@ -107,7 +107,7 @@ void lfs_selftest(void)
     printf("[LFS] ==== self-test done ====\n\r");
 }
 
-#ifdef AMEBAD_VFS_SELFTEST
+#ifdef AT_PROJECT_VFS_SELFTEST
 /*
  * POSIX-fd self-test for the syscall VFS (component/syscall_config): standard C
  * stdio + open/read/write/close routed to LittleFS, and a FreeRTOS socket adapted
@@ -189,4 +189,4 @@ void vfs_selftest(void)
 
     printf("[VFS] ==== self-test done ====\n\r");
 }
-#endif /* AMEBAD_VFS_SELFTEST */
+#endif /* AT_PROJECT_VFS_SELFTEST */

@@ -5,7 +5,7 @@
 #define MAX_SKB_BUF_SIZE     1658	// should >= the size in wlan driver
 /* skb pool depth — the driver's TX+RX share these fixed pools: MAX_SKB_BUF_NUM data buffers
  * (skb_data_pool) + MAX_LOCAL_SKB_NUM skb structs (skb_pool). 24 for the throughput images
- * (iperf/QUIC); the AWS/MINIMAL connect-only images (AMEBAD_NET_LOW_MEM) are low-rate, so 10 is ample.
+ * (iperf/QUIC); the AWS/MINIMAL connect-only images (AT_NET_LOW_MEM) are low-rate, so 10 is ample.
  *
  * CRITICAL (found via OpenOCD live read 2026-06-18): the prebuilt lib_wlan.a WEAK-defines all of
  * nr_xmitframe/nr_xmitbuff/max_local_skb_num/max_skb_buf_num + skb_pool/skb_data_pool with its stock
@@ -19,7 +19,7 @@
  * (This restores the intended pool depth; it does NOT fix the ~4 s sustained-upload wedge — that is a
  * lib_wlan.a/firmware-level hang reproduced identically on the stock Realtek SDK image, independent of
  * the IP stack and of pool depth/rate. See the iperf3 component memo.) */
-#if defined( AMEBAD_NET_LOW_MEM )
+#if defined( AT_NET_LOW_MEM )
 #define MAX_SKB_BUF_NUM      10
 #else
 #define MAX_SKB_BUF_NUM      24   /* deeper TX/RX pipeline for the throughput images (iperf/QUIC) */

@@ -92,7 +92,7 @@
 
 #include <sys/stat.h>   /* stat / S_ISDIR -- folder vs single-file root CA path */
 
-#ifdef AMEBAD_ENABLE_CRT_BUNDLE
+#ifdef AT_PROJECT_CRT_BUNDLE
     #include "esp_crt_bundle.h"
 #endif
 
@@ -483,7 +483,7 @@ static int32_t setCredentials( SSLContext_t * pSslContext,
 
     /* Load the file/folder trust anchors (the `ca/` store) into pSslContext->rootCa. */
     setRootCaPath( pSslContext, pNetworkCredentials->pRootCaPath );
-#ifdef AMEBAD_ENABLE_CRT_BUNDLE
+#ifdef AT_PROJECT_CRT_BUNDLE
     /* Verify against the embedded Mozilla CA bundle, with the file roots as extra trust anchors
      * (so a server chaining to a self-signed / niche CA dropped in the folder is also accepted). */
     mbedtlsError = esp_crt_bundle_attach( &( pSslContext->config ), &( pSslContext->rootCa ) );
@@ -851,7 +851,7 @@ TlsTransportStatus_t TLS_FreeRTOS_Connect( NetworkContext_t * pNetworkContext,
                     pNetworkCredentials ) );
         returnStatus = TLS_TRANSPORT_INVALID_PARAMETER;
     }
-#ifndef AMEBAD_ENABLE_CRT_BUNDLE
+#ifndef AT_PROJECT_CRT_BUNDLE
     else if( pNetworkCredentials->pRootCaPath == NULL )
     {
         /* Without the embedded bundle, the `ca/` folder is the only trust source. */

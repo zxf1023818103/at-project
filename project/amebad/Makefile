@@ -120,10 +120,12 @@ SBOOT      ?= ON           # DEFAULT-ON: Ed25519-sign image2 (boot-ROM secure-bo
 EFUSE_DEBUG ?= OFF         # ON -> DEBUG eFuse provisioning aids (NEVER ship): `efuse_burn` console cmd,
                            #       boot-dump of all eFuse keys + MACs, and Boot_Log_En (verbose bootloader
                            #       log). Default OFF; the signing (SBOOT) is independent and stays on.
-RSIP       ?= ON           # DEFAULT-ON for the RSIP-FUSED bench board: EncTool-encrypt km0/km4 boot +
-                           #       image2 + IMG3 with AMEBAD_RSIP_KEY/IV every build, so the image is
-                           #       bootable (an unencrypted image on a fused board reads as garbage).
-                           #       RSIP=OFF for a plain image (only boots on a board WITHOUT RSIP fused).
+RSIP       ?= OFF          # DEFAULT-OFF: plain image for a board WITHOUT RSIP fused. This bench board's
+                           #       eFuse is blank (verified 2026-07-08: the plain image boots + connects to
+                           #       AWS; an RSIP-encrypted image reads as garbage and hangs silently at boot).
+                           #       RSIP=ON EncTool-encrypts km0/km4 boot + image2 + IMG3 with AMEBAD_RSIP_KEY/
+                           #       IV every build so the image is bootable on an RSIP-FUSED board (an
+                           #       unencrypted image on a fused board reads as garbage).
 RSIP_KEY   ?= f7954f24be5a0e1756e852edb1ff2d24   # THIS board's key: the build key string is the REVERSE
                            #       byte order of eFuse 0x190 (=242dffb1…95f7, AN0405). It IS the flash
                            #       encryption key (in-repo like doc/test_device_keys.csv); override per board.
@@ -140,14 +142,14 @@ TC0 := $(REPO)/cmake/amebad-km0.cmake
 TC4 := $(REPO)/cmake/amebad-km4.cmake
 _COMMON := -G $(GEN) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) -DAMEBAD_EFUSE_DEBUG=$(EFUSE_DEBUG) \
            -DAMEBAD_RSIP_ENABLE=$(RSIP) -DAMEBAD_RSIP_KEY=$(RSIP_KEY) -DAMEBAD_RSIP_IV=$(RSIP_IV)
-_KM4 := -DAMEBAD_ENABLE_NIMBLE=$(NIMBLE) -DAMEBAD_ENABLE_MCUMGR=$(MCUMGR) -DAMEBAD_ENABLE_HCI=$(HCI) -DAMEBAD_ENABLE_QUIC=$(QUIC) \
+_KM4 := -DAMEBAD_ENABLE_NIMBLE=$(NIMBLE) -DAT_ENABLE_MCUMGR=$(MCUMGR) -DAMEBAD_ENABLE_HCI=$(HCI) -DAT_ENABLE_QUIC=$(QUIC) \
         -DAMEBAD_ENABLE_PKCS11=$(PKCS11) -DAMEBAD_ENABLE_CRYPTOBENCH=$(BENCH) -DAMEBAD_ENABLE_MINIMAL=$(MINIMAL) \
         -DAMEBAD_ENABLE_ROM_KAT=$(ROMKAT) -DAMEBAD_ENABLE_IPERF=$(IPERF) -DAMEBAD_ENABLE_AWS_IOT=$(AWS) -DAMEBAD_ENABLE_CARES=$(CARES) \
-        -DAMEBAD_ENABLE_CRT_BUNDLE=$(CRT_BUNDLE) \
+        -DAT_ENABLE_CRT_BUNDLE=$(CRT_BUNDLE) \
         -DAMEBAD_FW_VERSION=$(FW_VERSION) -DAMEBAD_APP_BUILD=$(APP_BUILD) -DTLS_BACKEND=$(TLS_BACKEND) \
-        -DAMEBAD_TLS_HEAP_TRACE=$(TLS_HEAP_TRACE) \
+        -DAT_TLS_HEAP_TRACE=$(TLS_HEAP_TRACE) \
         -DAMEBAD_MBEDTLS_HW_GCM=$(HWGCM) -DAMEBAD_TFM_BOOT=$(TFM) -DAMEBAD_TFM_STORAGE=$(STORAGE) \
-        -DAMEBAD_VFS_SELFTEST=$(VFSTEST) -DAMEBAD_CPP_SELFTEST=$(CPPTEST) -DAMEBAD_SBOOT=$(SBOOT) \
+        -DAT_VFS_SELFTEST=$(VFSTEST) -DAMEBAD_CPP_SELFTEST=$(CPPTEST) -DAMEBAD_SBOOT=$(SBOOT) \
         -DAMEBAD_ENABLE_WPS=$(WPS)
 
 bootloader_km0:

@@ -10,7 +10,7 @@
  * are no-ops that succeed, and `image list` (impl_read) is unsupported. Driven over BLE by the
  * smp_bt transport (component/amebad/mcumgr_port). os reset -> deferred sys_reset.
  *
- * Built only for AMEBAD_ENABLE_MCUMGR (implies NIMBLE). See doc / the project_amebad_ota memories.
+ * Built only for AT_ENABLE_MCUMGR (implies NIMBLE). See doc / the project_amebad_ota memories.
  */
 #include <string.h>
 #include <stdint.h>

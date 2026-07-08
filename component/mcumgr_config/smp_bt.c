@@ -10,7 +10,7 @@
  * (8-byte mgmt header + nh_len payload) has arrived, hand it to mcumgr (mcumgr_smp_process).
  * Outbound: mcumgr's response is fragmented to the ATT MTU and sent as notifications.
  *
- * Built only for AMEBAD_ENABLE_MCUMGR. Registered from nimble_app.c (amebad_nimble_start), in the
+ * Built only for AT_ENABLE_MCUMGR. Registered from nimble_app.c (amebad_nimble_start), in the
  * GATT service-registration phase, before the host starts.
  */
 #include <string.h>

@@ -17,7 +17,7 @@
 # upstream dirs). Config/headers come from the shared component/nimble_config
 # (its syscfg.h + the upstream include surface — replicated below, since we do NOT
 # link the nimble_config lib: that lib compiles amebad's nimble_app.c which won't
-# build here). SM crypto rides upstream mbedTLS. Built only when CONFIG_NIMBLE_HOST.
+# build here). SM crypto rides upstream mbedTLS. Built only when AT_ENABLE_NIMBLE.
 
 set(_nb "${AT_ROOT}/component/nimble_config/nimble")
 if(NOT EXISTS "${_nb}/nimble/host/src/ble_hs.c")

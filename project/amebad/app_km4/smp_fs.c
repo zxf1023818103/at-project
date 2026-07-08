@@ -8,7 +8,7 @@
  * Each impl call is self-contained (open -> seek -> rw -> close): mcumgr drives the transfer chunk by
  * chunk with an explicit offset, so no file handle is held across calls.
  *
- * Built only for AMEBAD_ENABLE_MCUMGR. Registered from smp_img_ota_init().
+ * Built only for AT_ENABLE_MCUMGR. Registered from smp_img_ota_init().
  */
 #include <fcntl.h>
 #include <unistd.h>
