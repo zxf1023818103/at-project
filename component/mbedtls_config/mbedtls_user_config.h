@@ -56,7 +56,11 @@
  * Caveat: the mbedTLS-1.2 fallback path (AmebaD ota_http / TLS_BACKEND=mbedtls) now caps a received
  * Certificate record at 6144 B — fine for AWS/S3, whose records are proven <6 KB. */
 #define MBEDTLS_SSL_IN_CONTENT_LEN       6144
-#define MBEDTLS_SSL_OUT_CONTENT_LEN      2048
+/* 1024 (was 2048): the client's largest outgoing record is its Certificate (EC cert ~660 B) during
+ * the handshake; MQTT control publishes (OTA get-stream / job status) are all < 1 KB. Halving OUT
+ * frees ~1 KB of TLS heap on the very heap-tight bl602 AWS build (server-cert RSA-2048 verify runs a
+ * software modexp there). AmebaD/bl616 have headroom; this is lossless for their small client records. */
+#define MBEDTLS_SSL_OUT_CONTENT_LEN      1024
 
 /* ---- ECP RAM: AWS suite is ECDHE_RSA (P-256). Shrink the mul window + drop the fixed-point
  * base-point precompute — one-shot handshake ECDHE then uses less RAM (a little slower). ---- */

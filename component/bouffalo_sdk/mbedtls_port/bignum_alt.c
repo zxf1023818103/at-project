@@ -81,13 +81,16 @@ int bl_mpi_exp_mod_wo_lock(mbedtls_mpi *X, const mbedtls_mpi *A, const mbedtls_m
     bool first = true;
     const int sN = reg_size_N;
 
-    // TODO more precise check
-    if (reg_size > SEC_ENG_PKA_REG_SIZE_256) {
-#ifdef BL_MPI_LARGE_NUM_SOFTWARE_MPI
+    // The BL602 HW PKA modexp returns WRONG results for a 2048-bit modulus (256-byte / REG_SIZE_256):
+    // RSA-2048 signature verification (e.g. the AWS IoT server cert chain: mbedtls_pk_verify ->
+    // rsa -> mbedtls_mpi_exp_mod on the PKA) fails MBEDTLS_ERR_RSA_VERIFY_FAILED (-0x4380) even with
+    // a correct key/hash/signature. The PKA path had only ever been exercised by <=256-bit ECC (WPA
+    // uses AES, not bignum modexp), so this stayed hidden. Route 2048-bit AND larger modulo exp to the
+    // software implementation (correct; for a public-exponent VERIFY it's only ~19 multiplications,
+    // and W[1 << MBEDTLS_MPI_WINDOW_SIZE=1] keeps the heap tiny). Smaller RSA/DH keep the HW PKA.
+    // (Was `> REG_SIZE_256` -> HW for exactly 2048-bit; now `>=` so 2048-bit uses software too.)
+    if (reg_size >= SEC_ENG_PKA_REG_SIZE_256) {
         return mbedtls_mpi_exp_mod_original(X, A, E, N, _RN);
-#else
-        return MBEDTLS_ERR_MPI_NOT_ACCEPTABLE;
-#endif
     }
 
     if (mbedtls_mpi_cmp_int(N, 0) <= 0 || (N->MBEDTLS_PRIVATE(p)[0] & 1) == 0)

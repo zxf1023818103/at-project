@@ -24,8 +24,17 @@ target_compile_definitions(mbedtls_cfg INTERFACE
     MBEDTLS_AES_ALT
     MBEDTLS_ECP_ALT)
 target_include_directories(mbedtls_cfg SYSTEM INTERFACE
-    "${CMAKE_CURRENT_SOURCE_DIR}"                  # timing_alt.h / aes_alt.h / sha*_alt.h / ecp_alt.h
+    "${CMAKE_CURRENT_SOURCE_DIR}"                  # timing_alt.h / aes_alt.h / sha*_alt.h / ecp_alt.h / gcm_alt.h
     "${AT_ROOT}/component/mbedtls_config")          # shared mbedtls_user_config.h + threading_alt.h
+
+# Optional HW AES-GCM (BOUFFALO_MBEDTLS_HW_GCM, from the Makefile HWGCM flag). When on, MBEDTLS_GCM_ALT
+# swaps the software mbedtls_gcm module for gcm_alt.c (BL602 Sec_Eng HW AES-CTR, chunked, + software
+# GHASH -- the RAM-frugal path that fits bl602's tight heap; the whole-record HW GMAC needs DMA scratch
+# that OOMs the picotls handshake). Upstream gcm.c is `#if !defined(MBEDTLS_GCM_ALT)`-guarded so it goes
+# inert (no exclusion needed), and the picotls transport's one-shot AEAD coalesce shim auto-activates.
+if(BOUFFALO_MBEDTLS_HW_GCM)
+    target_compile_definitions(mbedtls_cfg INTERFACE MBEDTLS_GCM_ALT)
+endif()
 
 # Runtime glue lib (`mbedtls_port`). The HACC/PKA alt impls are compiled unconditionally (each is
 # #if-guarded by its own MBEDTLS_*_ALT internally). bignum is the odd one out: upstream
@@ -45,7 +54,8 @@ add_library(mbedtls_port STATIC
     ecp_curves_alt.c
     bignum.c
     bignum_alt.c
-    bignum_ext.c)
+    bignum_ext.c
+    gcm_alt.c)   # HW AES-GCM (self-guarded by MBEDTLS_GCM_ALT; inert unless BOUFFALO_MBEDTLS_HW_GCM)
 # Own dir (*_alt.h) + PUBLIC-borrow mbedcrypto's INTERFACE includes (mbedtls/*) and PRIVATE-borrow
 # its SOURCE_DIR for the upstream-private headers our forks reach into (common.h, ecp_invasive.h,
 # bignum_core.h). SOURCE_DIR (a fixed string) keeps the edge one-way — the parent feeds THIS dir

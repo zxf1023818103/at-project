@@ -38,7 +38,18 @@
  *    6/6 never CONNACKs. AmebaD AWS/MINIMAL share it — a low-rate MQTT client; its ota_http HTTPS OTA
  *    download from S3 still works, just with a smaller window (slower).
  *  - default (iperf/QUIC/BL616 throughput): the big 24*1460 window. */
-#if defined( AMEBAD_NET_LOW_MEM ) || defined( BL602 ) || defined( BL702 )
+#if defined( BL602 ) || defined( BL702 )
+    /* BL602/BL702 must do the RSA-2048 server-cert verify in SOFTWARE (the HW PKA mis-computes a
+     * 2048-bit modexp), whose ~7 KB of transient heap has to coexist with the cert flight. RX stays
+     * 4*1460 -- 3*1460 was tried and STALLS the multi-segment AWS cert flight (handshake times out
+     * "No data"/WANT_READ before reaching cert verify): mbedTLS reassembles the ~5.6 KB flight in its
+     * own 6 KB IN buffer, but the socket RX window must still hold enough in flight to make progress.
+     * TX 1*1460 IS safe (the client sends only small handshake records + MQTT control) and frees ~1.5
+     * KB. The rest of the modexp's heap comes from deferring the MQTT buffer + trimming .bss. */
+    #define ipconfigTCP_WIN_SEG_COUNT           16
+    #define ipconfigTCP_RX_BUFFER_LENGTH        ( 4 * 1460 )    /* ~5.7 KB (holds AWS's ~5.6 KB flight) */
+    #define ipconfigTCP_TX_BUFFER_LENGTH        ( 1 * 1460 )    /* ~1.5 KB */
+#elif defined( AMEBAD_NET_LOW_MEM )
     #define ipconfigTCP_WIN_SEG_COUNT           16
     #define ipconfigTCP_RX_BUFFER_LENGTH        ( 4 * 1460 )    /* ~5.7 KB (holds AWS's ~5.6 KB
                                                                  * server-cert flight; a bigger buffer

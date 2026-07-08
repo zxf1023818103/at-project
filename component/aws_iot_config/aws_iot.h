@@ -16,9 +16,15 @@ extern "C" {
 #define AWS_KEY_PATH    "aws_key.der"     /* client private key DER (LittleFS file backend) */
 #define AWS_CA_PATH     "aws_ca.der"      /* server-trust Amazon Root CA 1 DER (LittleFS) */
 #ifndef AWS_KEY_MAX
-#define AWS_KEY_MAX     2560              /* max DER blob (cert/CA/key); AmebaD -D overrides to 1536 (heap) */
+#define AWS_KEY_MAX     2560              /* max private-key DER; AmebaD -D overrides to 1536, bl602 to 512 (heap) */
 #endif
-#define AWS_CERT_MAX    AWS_KEY_MAX
+#ifndef AWS_CERT_MAX
+#define AWS_CERT_MAX    AWS_KEY_MAX       /* max cert/CA DER for the provision decode buffer (aws_provision.c
+                                          * s_der). MUST be >= the largest of {cert, CA, key}: an EC device cert
+                                          * is ~651 B and Amazon Root CA 1 ~837 B, both bigger than a 138 B EC
+                                          * key -- so where AWS_KEY_MAX is trimmed for the key buffer (bl602=512),
+                                          * AWS_CERT_MAX must be -D'd larger or `aws cert`/`aws ca` fail -1. */
+#endif
 #define AWS_ENDPOINT_MAX 128             /* max ATS endpoint hostname */
 
 /* Provisioning (aws_provision.c): the console passes the credential's bare base64 body, decoded to

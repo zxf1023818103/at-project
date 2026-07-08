@@ -92,7 +92,7 @@ extern const OtaPalInterface_t * ota_pal_get_interface( void );
 #define APP_VERSION_MINOR    9
 #endif
 #ifndef APP_VERSION_BUILD
-#define APP_VERSION_BUILD    1
+#define APP_VERSION_BUILD    2
 #endif
 const AppVersion32_t appFirmwareVersion =
 {

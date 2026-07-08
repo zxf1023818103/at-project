@@ -38,6 +38,8 @@ add_library(esp_crt_bundle STATIC EXCLUDE_FROM_ALL
 target_include_directories(esp_crt_bundle PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include")
 target_link_libraries(esp_crt_bundle PUBLIC mbedtls_config)
 target_compile_options(esp_crt_bundle PRIVATE -w)
+# Uncomment for a per-cert verify trace (depth/subject/issuer/chk_sig heap) when debugging a chain:
+# target_compile_definitions(esp_crt_bundle PRIVATE ESP_CRT_BUNDLE_DEBUG)
 
 # Umbrella INTERFACE (伞形): consumers link `esp_crt_bundle_config`.
 add_library(esp_crt_bundle_config INTERFACE)

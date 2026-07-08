@@ -13,6 +13,7 @@
 #include "ares.h"
 
 #include "FreeRTOS.h"
+#include "task.h"       /* xTaskGetTickCount for the resolution-cache TTL */
 #include "semphr.h"
 #include "FreeRTOS_IP.h"
 #include "FreeRTOS_Sockets.h"
@@ -189,6 +190,64 @@ void cares_resolver_set_servers( void )
     log_info( "[cares] servers (global_v6=%d)=%s", have_v6, s_servers_csv );
 }
 
+/* Last-good resolution cache: c-ares builds a fresh channel + connected-UDP socket per resolve and,
+ * on a congested 2.4 GHz link, a burst of failed reconnect resolves eventually wedges it (every query
+ * then returns ARES_ECONNREFUSED / status=11 and the device is stuck "DNS resolution failed" until a
+ * reboot). When a fresh resolve fails but we resolved this host before, fall back to that last IP -- the
+ * AWS IoT endpoint's A records are stable + interchangeable, so the TLS reconnect can still proceed. A
+ * later successful c-ares resolve (once it recovers) refreshes the entry, so a stale IP self-heals. */
+#define CARES_CACHE_N     3
+#define CARES_CACHE_TTL_MS 30000   /* within this, reuse the cached IP + skip c-ares entirely */
+static struct {
+    char                     host[ 80 ];
+    struct freertos_sockaddr addr;
+    TickType_t               ts;      /* xTaskGetTickCount at store */
+    int                      valid;
+} s_ipcache[ CARES_CACHE_N ];
+
+static void cares_cache_store( const char * host, const struct freertos_sockaddr * addr )
+{
+    int i, slot = -1;
+    for( i = 0; i < CARES_CACHE_N; i++ )
+    {
+        if( s_ipcache[ i ].valid && ( strcmp( s_ipcache[ i ].host, host ) == 0 ) ) { slot = i; break; }
+        if( ( slot < 0 ) && !s_ipcache[ i ].valid ) { slot = i; }
+    }
+    if( slot < 0 ) { slot = 0; }   /* full: evict slot 0 */
+    ( void ) strncpy( s_ipcache[ slot ].host, host, sizeof( s_ipcache[ slot ].host ) - 1 );
+    s_ipcache[ slot ].host[ sizeof( s_ipcache[ slot ].host ) - 1 ] = '\0';
+    s_ipcache[ slot ].addr  = *addr;
+    s_ipcache[ slot ].ts    = xTaskGetTickCount();
+    s_ipcache[ slot ].valid = 1;
+}
+
+/* fresh_only=1: return the entry only if younger than the TTL (used to SKIP c-ares on the fast path).
+ * fresh_only=0: return any valid entry regardless of age (the c-ares-failed fallback). */
+static int cares_cache_lookup( const char * host, int family, struct freertos_sockaddr * out, int fresh_only )
+{
+    int i;
+    for( i = 0; i < CARES_CACHE_N; i++ )
+    {
+        if( s_ipcache[ i ].valid && ( strcmp( s_ipcache[ i ].host, host ) == 0 ) )
+        {
+            int f = s_ipcache[ i ].addr.sin_family;
+            if( fresh_only &&
+                ( ( xTaskGetTickCount() - s_ipcache[ i ].ts ) >= pdMS_TO_TICKS( CARES_CACHE_TTL_MS ) ) )
+            {
+                return -1;   /* stale: force a fresh c-ares resolve */
+            }
+            if( ( family == AF_UNSPEC ) ||
+                ( ( family == AF_INET ) && ( f == FREERTOS_AF_INET ) ) ||
+                ( ( family == AF_INET6 ) && ( f == FREERTOS_AF_INET6 ) ) )
+            {
+                *out = s_ipcache[ i ].addr;
+                return 0;
+            }
+        }
+    }
+    return -1;
+}
+
 int cares_resolve( const char * host, int family, struct freertos_sockaddr * out )
 {
     struct ares_options        opts;
@@ -206,6 +265,18 @@ int cares_resolve( const char * host, int family, struct freertos_sockaddr * out
     if( s_lock != NULL )
     {
         ( void ) xSemaphoreTake( s_lock, portMAX_DELAY );
+    }
+
+    /* Fast path: a FRESH cached IP for this host (< TTL) -> skip the c-ares channel/socket churn.
+     * Only the AWS endpoint + NTP host are resolved (both stable), so a 30 s TTL cuts c-ares from
+     * once-per-reconnect to ~once-per-30 s. c-ares' per-resolve channel teardown was slowly leaking
+     * the heap (~350 B/resolve), dragging the pre-handshake heap down until the handshake's 2nd
+     * RSA-2048 modexp (the ServerKeyExchange verify) hit OOM; this keeps the heap flat. */
+    if( cares_cache_lookup( host, family, out, 1 ) == 0 )
+    {
+        if( s_lock != NULL ) { ( void ) xSemaphoreGive( s_lock ); }
+        log_info( "[cares] resolve %s fam=%d -> cached (fresh, skipped c-ares)", host, family );
+        return 0;
     }
 
     /* Apply a pending DNS-server refresh here, in the resolving task's context (safe to log / iterate
@@ -280,8 +351,25 @@ int cares_resolve( const char * host, int family, struct freertos_sockaddr * out
     }
 
     rc = ctx.ok ? 0 : -1;
-    log_info( "[cares] resolve %s fam=%d status=%d -> %s", host, family, ctx.status,
-              ( rc == 0 ) ? "ok" : "fail" );
+    if( rc == 0 )
+    {
+        cares_cache_store( host, out );   /* remember the good IP for a future c-ares wedge */
+        log_info( "[cares] resolve %s fam=%d status=%d -> ok", host, family, ctx.status );
+    }
+    else if( cares_cache_lookup( host, family, out, 0 ) == 0 )
+    {
+        rc = 0;   /* c-ares failed (wedge/congestion) -> reuse the last IP that worked for this host */
+        cares_cache_store( host, out );   /* refresh the TTL so the fast path takes over next time and
+                                           * SKIPS c-ares entirely: once it wedges, its per-resolve
+                                           * channel churn (the ~350 B/resolve heap leak) stops for good,
+                                           * keeping the pre-handshake heap flat so the device can retry
+                                           * indefinitely until an RF-clean window lets the flight land. */
+        log_info( "[cares] resolve %s fam=%d status=%d -> FAIL, cached IP (TTL refreshed)", host, family, ctx.status );
+    }
+    else
+    {
+        log_info( "[cares] resolve %s fam=%d status=%d -> fail (no cache)", host, family, ctx.status );
+    }
 
     /* Tears down sockets + buffers + htables; also fires any still-pending query callback
      * synchronously with ARES_EDESTRUCTION (ctx is still in scope here, so that is safe). */

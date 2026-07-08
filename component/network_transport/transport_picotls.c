@@ -407,7 +407,19 @@ static int picotls_verify_cert( ptls_verify_certificate_t * _self,
     mbedtls_x509_crt_init( &s_serverChain );
     s_serverChainInUse = 1;
 
-    for( i = 0; i < num_certs; i++ )
+    /* AWS IoT over-sends its COMPLETE chain (leaf, Amazon RSA 2048 MXX, Amazon Root CA 1, Starfield
+     * Services Root G2). On bl602's ~50 KB heap the TLS 1.3 handshake peak already leaves only ~2 KB
+     * by the time the server cert is verified, so parsing all four certs (~2.7 KB parsed each) OOMs
+     * the RSA-2048 verify modexp -> MPI_ALLOC_FAILED, surfaced as esp_crt_bundle "PK verify 0x4290".
+     * We only need the leaf + its issuing intermediate: the trust anchor (Amazon Root CA 1) is
+     * supplied by the embedded bundle / the pinned CA, and the server-sent roots are never trusted on
+     * their own word anyway. Cap the parsed chain so the verify's heap peak stays within budget.
+     * (leaf + one intermediate covers AWS IoT; raise PICOTLS_VERIFY_MAX_CHAIN for deeper chains.) */
+    #ifndef PICOTLS_VERIFY_MAX_CHAIN
+    #define PICOTLS_VERIFY_MAX_CHAIN    2U
+    #endif
+    size_t nparse = ( num_certs > PICOTLS_VERIFY_MAX_CHAIN ) ? ( size_t ) PICOTLS_VERIFY_MAX_CHAIN : num_certs;
+    for( i = 0; i < nparse; i++ )
     {
         if( mbedtls_x509_crt_parse_der( &s_serverChain, certs[ i ].base, certs[ i ].len ) != 0 )
         {

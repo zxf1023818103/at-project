@@ -64,14 +64,27 @@ if(AT_ENABLE_AWS_OTA)
         AWS_CA_USE_ENV
         AWS_STATIC_TASKS
         AWS_NO_TELEMETRY
-        AWS_AGENT_STACK_WORDS=4096   # 16 KB: the mbedTLS handshake's cert-chain verify + crypto peaks
-                                     # ~12 KB; 8 KB overflowed -> HardFault reboot mid-handshake. .bss
-                                     # cost is fine now the OTA buffers are dynamic (~45 KB free heap).
-        AWS_NET_BUFFER_SZ=2560       # 2 KB OTA blocks (otaconfigLOG2_FILE_BLOCK_SIZE=11 on bl602)
-        AWS_KEY_MAX=1536             # RSA-2048 key DER ~1218 B; trims s_key .bss (grows the TLS heap)
+        AWS_AGENT_STACK_WORDS=3584   # 14 KB: the cert-chain verify + software RSA-2048 modexp peaks
+                                     # ~12 KB (8 KB overflowed -> HardFault). Trimmed from 16 KB to give
+                                     # 2 KB of that .bss back to the heap for the modexp (which needs a
+                                     # comfortable margin or it corrupts near-OOM). configCHECK=2 catches
+                                     # an overflow cleanly if 14 KB proves too tight.
+        AWS_NET_BUFFER_SZ=1536       # holds one incoming 1 KB OTA-block CBOR PUBLISH + MQTT overhead
+                                     # (bl602 uses 1 KB blocks, otaconfigLOG2_FILE_BLOCK_SIZE=10)
+        AWS_NET_BUFFER_DYNAMIC       # malloc the 2.5 KB MQTT buffer AFTER the TLS handshake (not .bss)
+                                     # so the heap-tight server-cert RSA-2048 verify (software modexp,
+                                     # since the BL602 HW PKA mis-computes a 2048-bit modulus) has room.
+        AWS_KEY_MAX=512             # EC P-256 key DER is ~138 B (we use an EC client cert, not RSA, so
+                                     # the CertVerify sign is cheap ECDSA); 512 trims s_key .bss vs the
+                                     # old 1536 -> more TLS heap. (An RSA-2048 key ~1218 B would NOT fit.)
     )
-    # Same key-buffer trim on the shared provisioning lib (aws_provision.c s_der / aws_load_key).
-    target_compile_definitions(aws_provision_core PRIVATE AWS_KEY_MAX=1536)
+    # Same key-buffer trim on the shared provisioning lib (aws_provision.c aws_load_key s_key path).
+    # AWS_CERT_MAX sizes the cert/CA/key base64-decode scratch (s_der): it must hold the LARGEST
+    # credential (Amazon Root CA 1 ~837 B, EC cert ~651 B), so it CANNOT share the trimmed 512 key
+    # buffer -- with 512, `aws cert`/`aws ca` fail -1 (BUFFER_TOO_SMALL), leaving a stale cert that
+    # mismatches a freshly-provisioned key -> TLS CertificateVerify rejected -> AWS silently drops
+    # after the client Finished -> the handshake hangs at state=12. 1024 holds cert+CA+key.
+    target_compile_definitions(aws_provision_core PRIVATE AWS_KEY_MAX=512 AWS_CERT_MAX=1024)
     target_include_directories(aws_iot PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(aws_iot PUBLIC
         aws_provision_core

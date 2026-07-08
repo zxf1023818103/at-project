@@ -38,7 +38,14 @@
 /* bl602/bl616 (AWSOTA=ON, MQTT data plane) use 2 KB blocks, not 4 KB: the ~26 KB free heap can't
  * hold the 4 KB block's decode/net/event .bss AND leave a contiguous ~6 KB block for the mbedTLS TLS
  * IN buffer (mbedtls_ssl_setup OOM'd at handshake). 2 KB blocks free ~6 KB of .bss. AmebaD keeps 4 KB. */
-#if defined(BL602) || defined(BL616) || defined(BL616CL)
+#if defined(BL602) || defined(BL702)
+/* bl602: 1 KB blocks. Post-MQTT-connect free heap is only ~7 KB (the connected mbedTLS session's IN
+ * buffer + the 5.7 KB socket RX buffer persist from the handshake), which must still fit the 6 KB OTA
+ * agent task stack + its decode/event data buffers + the closeFile crypto working set. 1 KB blocks
+ * (vs 2 KB) halve those buffers (decode 1 KB, event ~2.5 KB, MQTT net 1.5 KB) -> ~3 KB more heap, at
+ * the cost of 2x the block count (slower download, fine for a demo). */
+#define otaconfigLOG2_FILE_BLOCK_SIZE      ( 10UL )
+#elif defined(BL616) || defined(BL616CL)
 #define otaconfigLOG2_FILE_BLOCK_SIZE      ( 11UL )
 #else
 #define otaconfigLOG2_FILE_BLOCK_SIZE      ( 12UL )
@@ -57,7 +64,16 @@
  * OTA_EventProcessingTask stack (in words) + priority. The agent's heaviest stack user is
  * the closeFile path (mbedTLS x509 parse + ECDSA verify), so size generously. Priority sits
  * just under the telemetry/agent tasks. */
+#if defined(BL602) || defined(BL702)
+/* bl602: post-MQTT-connect free heap is only ~7 KB (the connected mbedTLS session's 6 KB IN buffer +
+ * the 5.7 KB socket RX buffer both persist from the handshake, plus the OTA data buffers + s_net_buffer
+ * consume the rest), so the 10 KB (2560-word) agent stack can't be created. The closeFile crypto
+ * (x509 parse + ECDSA-P256 verify) runs on the HW ECP engine (small stack, no software modexp), so a
+ * 6 KB stack suffices; configCHECK_FOR_STACK_OVERFLOW=2 catches it cleanly if it ever proves too tight. */
+#define otaconfigSTACK_SIZE                ( 1536U )
+#else
 #define otaconfigSTACK_SIZE                ( 2560U )
+#endif
 #define otaconfigAGENT_PRIORITY            ( tskIDLE_PRIORITY + 2 )
 
 /* ---- self-test ----

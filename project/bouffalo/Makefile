@@ -21,13 +21,36 @@ endif
 BOARD     ?= $(CHIP)dk
 BUILD_DIR ?= build_$(CHIP)
 # AWS TLS-over-TCP backend for bl602 (component/aws_iot_config picks the transport):
-#   mbedtls (default) = mbedTLS 1.2/1.3, IN 6144 -- the heap-tight default that fits bl602.
-#   picotls           = TLS 1.3 only (picotls_core + picotls_mbedtls). Larger buffers; may not fit
-#                       bl602's heap. `fallback` is not wired for bouffalo yet.
+#   picotls  = TLS 1.3 only (picotls_core + picotls_mbedtls). DEFAULT for AWSOTA=ON: bl602's mbedTLS
+#              TLS 1.2 handshake to AWS IoT hangs at state=12 -- the HW-crypto _ALT path (Sec_Eng PKA
+#              ECP + HACC SHA-256) mis-computes the client CertVerify/Finished, so AWS silently drops
+#              after the client Finished. picotls drives the crypto through the PSA/software path and
+#              connects (verified end-to-end: MQTT + OTA jobs). Caps the parsed server chain to
+#              leaf+intermediate so the RSA-2048 verify modexp fits bl602's ~50 KB heap.
+#   mbedtls  = mbedTLS 1.2/1.3, IN 6144 -- the heap-tight lean default for the non-AWS telemetry client.
 # Switch requires a clean configure (make distclean or rm build_<chip>): the CMake cache is sticky.
+ifeq ($(AWSOTA),ON)
+TLS_BACKEND ?= picotls
+else
 TLS_BACKEND ?= mbedtls
+endif
 ifeq ($(filter $(TLS_BACKEND),mbedtls picotls),)
 $(error TLS_BACKEND must be 'mbedtls' or 'picotls')
+endif
+
+# HW AES-GCM (BL602 Sec_Eng: chunked HW AES-CTR + software GHASH, component/bouffalo_sdk/mbedtls_port/
+# gcm_alt.c). ON defines MBEDTLS_GCM_ALT so the picotls AEAD's AES bulk runs on the Sec_Eng engine in
+# batched CTR passes instead of per-16-byte software-mbedtls_gcm calls (throughput, esp. OTA download).
+# GHASH stays software (cheap) because the whole-record HW-GMAC DMA scratch would OOM bl602's tight
+# picotls handshake heap. Default ON for the AWSOTA picotls path; OFF keeps the pure software GCM.
+# Switch requires a clean configure (make distclean or rm build_<chip>): the CMake cache is sticky.
+ifeq ($(AWSOTA),ON)
+HWGCM ?= ON
+else
+HWGCM ?= OFF
+endif
+ifeq ($(filter $(HWGCM),ON OFF),)
+$(error HWGCM must be 'ON' or 'OFF')
 endif
 
 # c-ares async DNS resolver (component/c-ares_config), same cross-platform component AmebaD uses under
@@ -62,6 +85,24 @@ ifeq ($(filter $(AWSOTA),ON OFF),)
 $(error AWSOTA must be 'ON' or 'OFF')
 endif
 
+# CRT_BUNDLE: verify the TLS server cert against the embedded compressed Mozilla CA root bundle
+# (component/esp_crt_bundle_config, ~121 roots in ~56 KB .rodata) instead of a single pinned root.
+# This is what makes the live-AWS handshake succeed: AWS over-sends its FULL chain (server -> Amazon
+# RSA 2048 M04 -> Amazon Root CA 1 [cross-signed] -> Starfield G2), so a single-root trust store fails
+# to chain (mbedTLS follows the sent chain to the untrusted Starfield top -> X509 NOT_TRUSTED). The
+# bundle's verify callback matches each chain cert against the ~121 embedded roots by subject+public
+# key, so the over-sent copy of a root we hold is accepted. Same component + macro AmebaD uses
+# (AMEBAD_ENABLE_CRT_BUNDLE). Only meaningful for the AWS TLS path (AWSOTA=ON); default ON there.
+# Switch requires a clean configure (make distclean or rm build_<chip>): the CMake cache is sticky.
+ifeq ($(AWSOTA),ON)
+CRT_BUNDLE ?= ON
+else
+CRT_BUNDLE ?= OFF
+endif
+ifeq ($(filter $(CRT_BUNDLE),ON OFF),)
+$(error CRT_BUNDLE must be 'ON' or 'OFF')
+endif
+
 # Pick the riscv toolchain bundled with the Bouffalo SDK submodule.
 TOOLCHAIN_BIN := $(realpath $(AT_PROJECT_ROOT)/platform/toolchain_gcc_t-head_linux/bin)
 export PATH := $(TOOLCHAIN_BIN):$(PATH)
@@ -82,7 +123,9 @@ $(BUILD_DIR)/CMakeCache.txt: CMakeLists.txt proj.conf
 	    -DBOUFFALO_TLS_BACKEND=$(TLS_BACKEND) \
 	    -DAT_ENABLE_CARES=$(CARES) \
 	    -DAT_ENABLE_QUIC=$(QUIC) \
-	    -DAT_ENABLE_AWS_OTA=$(AWSOTA)
+	    -DAT_ENABLE_AWS_OTA=$(AWSOTA) \
+	    -DAMEBAD_ENABLE_CRT_BUNDLE=$(CRT_BUNDLE) \
+	    -DBOUFFALO_MBEDTLS_HW_GCM=$(HWGCM)
 
 configure: $(BUILD_DIR)/CMakeCache.txt
 

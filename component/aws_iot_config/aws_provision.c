@@ -25,8 +25,11 @@
 #include "aws_secret_store.h"
 
 /* Single .bss scratch, reused for cert / CA / key (the base64 DER never overlaps across sub-verbs).
+ * Sized by AWS_CERT_MAX (the LARGEST credential: CA ~837 B / cert ~651 B > a 138 B EC key), NOT
+ * AWS_KEY_MAX -- the bl602 build trims AWS_KEY_MAX to 512 for the runtime key buffer, which is too
+ * small to base64-decode the cert/CA here (mbedtls_base64_decode returns BUFFER_TOO_SMALL -> -1).
  * .bss (not heap) is mandatory for the ITS key backend's NS-SRAM marshaling. */
-static unsigned char s_der[AWS_KEY_MAX];
+static unsigned char s_der[AWS_CERT_MAX];
 
 /* base64 body -> DER -> plain LittleFS file at `path`, then publish `path` as env `env_name`. */
 static int prv_b64_to_file(const char *b64, size_t len, const char *path, const char *env_name)

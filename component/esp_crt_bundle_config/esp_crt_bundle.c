@@ -74,13 +74,19 @@ typedef const uint8_t *cert_t;
 
 static bundle_t s_crt_bundle;
 
+/* Byte-wise LE reads: the cert records are packed at arbitrary (odd) offsets, so a
+ * `*(const uint16_t *)ptr` fast path traps "Load address misaligned" on cores without HW
+ * unaligned access (BL602's RISC-V E907). Byte-wise is alignment- AND endian-safe on every
+ * platform sharing this component (marginally slower, but this is a handshake-time path). */
 static uint16_t get16_le(const uint8_t *ptr)
 {
-#if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
-    return *((const uint16_t *)ptr);
-#else
-    return (((uint16_t)ptr[1]) << 8) | ptr[0];
-#endif
+    return (uint16_t)((uint16_t)ptr[0] | ((uint16_t)ptr[1] << 8));
+}
+
+static uint32_t get32_le(const uint8_t *ptr)
+{
+    return (uint32_t)ptr[0] | ((uint32_t)ptr[1] << 8) |
+           ((uint32_t)ptr[2] << 16) | ((uint32_t)ptr[3] << 24);
 }
 
 static uint16_t esp_crt_get_name_len(const cert_t cert)
@@ -110,7 +116,7 @@ static uint16_t esp_crt_get_len(const cert_t cert)
 
 static uint32_t esp_crt_get_cert_offset(const bundle_t bundle, const uint32_t index)
 {
-    return ((const uint32_t *)bundle)[index];
+    return get32_le(bundle + (size_t)index * sizeof(uint32_t));
 }
 
 static uint32_t esp_crt_get_certcount(const bundle_t bundle)
@@ -152,8 +158,29 @@ static int esp_crt_check_signature(const mbedtls_x509_crt *child, const uint8_t 
         goto cleanup;
     }
 
-    if ((ret = mbedtls_pk_verify(&pubkey, child->sig_md, hash, mbedtls_md_get_size(md_info),
-                                 child->sig.p, child->sig.len)) != 0) {
+#ifdef ESP_CRT_BUNDLE_DEBUG
+    {
+        extern size_t xPortGetFreeHeapSize(void);
+        ESP_LOGI(TAG, "  chk_sig: pk_type=%d bitlen=%u pubkeylen=%u tbs.len=%u sig.len=%u sig_pk=%d hashsz=%u free_heap=%u",
+                 (int)mbedtls_pk_get_type(&pubkey), (unsigned)mbedtls_pk_get_bitlen(&pubkey),
+                 (unsigned)pub_key_len, (unsigned)child->tbs.len, (unsigned)child->sig.len,
+                 (int)child->sig_pk, (unsigned)mbedtls_md_get_size(md_info), (unsigned)xPortGetFreeHeapSize());
+    }
+#endif
+
+    ret = mbedtls_pk_verify(&pubkey, child->sig_md, hash, mbedtls_md_get_size(md_info),
+                            child->sig.p, child->sig.len);
+    if (ret != 0) {
+#ifdef ESP_CRT_BUNDLE_DEBUG
+        ESP_LOGI(TAG, "  pk_verify ret=-0x%x; retry verify_ext(sig_pk=%d, opts=%p)",
+                 -ret, (int)child->sig_pk, (void *)child->sig_opts);
+#endif
+        /* Mirror mbedTLS's own x509_crt_check_signature(): use the sig algorithm's PK type + opts.
+         * mbedtls_pk_verify() forces the KEY's type (RSA) which mishandles RSASSA-PSS-signed certs. */
+        ret = mbedtls_pk_verify_ext(child->sig_pk, child->sig_opts, &pubkey, child->sig_md,
+                                    hash, mbedtls_md_get_size(md_info), child->sig.p, child->sig.len);
+    }
+    if (ret != 0) {
         ESP_LOGE(TAG, "PK verify failed with error 0x%x", -ret);
         goto cleanup;
     }
@@ -176,12 +203,20 @@ static cert_t esp_crt_find_cert(const unsigned char *const issuer, const size_t 
     cert_t cert = NULL;
     size_t cert_name_len = 0;
 
-    /* Binary search on the bundle's subject names (sorted ascending). */
+    /* Binary search on the bundle's subject names (sorted ascending). The names are variable-length
+     * DER, so a prefix match (memcmp over MIN(len)) is NOT a full match: when the common prefix is
+     * equal, the shorter name sorts first. Returning on the raw memcmp==0 (as upstream does) can hand
+     * back a WRONG cert when one name is a prefix of another (e.g. it returned the wrong Amazon root,
+     * so the issuer-signature check failed RSA_VERIFY on a mismatched key). Break the prefix tie by
+     * length so the search converges on the exact-length match. */
     while (start <= end) {
         cert = esp_crt_get_cert(s_crt_bundle, middle);
         cert_name_len = esp_crt_get_name_len(cert);
 
         int cmp_res = memcmp(issuer, esp_crt_get_name(cert), MIN(issuer_len, cert_name_len));
+        if (cmp_res == 0 && issuer_len != cert_name_len) {
+            cmp_res = (issuer_len < cert_name_len) ? -1 : 1;
+        }
 
         if (cmp_res == 0) {
             return cert;
@@ -220,7 +255,26 @@ int esp_crt_verify_callback(void *buf, mbedtls_x509_crt *const crt, const int de
 
     ESP_LOGD(TAG, "%u certificates in bundle", (unsigned)esp_crt_get_certcount(s_crt_bundle));
 
+#ifdef ESP_CRT_BUNDLE_DEBUG
+    {
+        char sbuf[80], ibuf[80];
+        mbedtls_x509_dn_gets(sbuf, sizeof(sbuf), &child->subject);
+        mbedtls_x509_dn_gets(ibuf, sizeof(ibuf), &child->issuer);
+        ESP_LOGI(TAG, "vrfy depth=%d flags=0x%x sig_md=%d subj=[%s] iss=[%s]",
+                 depth, (unsigned)*flags, (int)child->sig_md, sbuf, ibuf);
+    }
+#endif
+
     cert_t cert = esp_crt_find_cert(child->issuer_raw.p, child->issuer_raw.len);
+#ifdef ESP_CRT_BUNDLE_DEBUG
+    if (cert != NULL) {
+        ESP_LOGI(TAG, "  issuer found in bundle: name_len=%u key_len=%u (issuer_raw.len=%u)",
+                 (unsigned)esp_crt_get_name_len(cert), (unsigned)esp_crt_get_key_len(cert),
+                 (unsigned)child->issuer_raw.len);
+    } else {
+        ESP_LOGI(TAG, "  issuer NOT in bundle (issuer_raw.len=%u)", (unsigned)child->issuer_raw.len);
+    }
+#endif
 
     if (cert != NULL) {
         const int ret = esp_crt_check_signature(child, esp_crt_get_key(cert), esp_crt_get_key_len(cert));
@@ -263,12 +317,12 @@ static bool esp_crt_check_bundle(const uint8_t *const x509_bundle, const size_t 
         return false;
     }
 
-    const uint32_t *offsets = (const uint32_t *)x509_bundle;
+    const uint32_t off0 = get32_le(x509_bundle);
 
-    if (offsets[0] == 0 || (offsets[0] % sizeof(uint32_t)) != 0) {
+    if (off0 == 0 || (off0 % sizeof(uint32_t)) != 0) {
         return false;
     }
-    if (offsets[0] >= bundle_size) {
+    if (off0 >= bundle_size) {
         return false;
     }
 
@@ -280,11 +334,12 @@ static bool esp_crt_check_bundle(const uint8_t *const x509_bundle, const size_t 
     }
 
     for (uint32_t i = 0; i < num_certs - 1; ++i) {
-        const uint32_t off = offsets[i];
+        const uint32_t off = get32_le(x509_bundle + (size_t)i * sizeof(uint32_t));
         cert_t cert = x509_bundle + off;
         const uint32_t expected_next_offset = off + esp_crt_get_len(cert);
 
-        if (offsets[i + 1] != expected_next_offset || expected_next_offset >= bundle_size) {
+        if (get32_le(x509_bundle + (size_t)(i + 1) * sizeof(uint32_t)) != expected_next_offset ||
+            expected_next_offset >= bundle_size) {
             return false;
         }
     }

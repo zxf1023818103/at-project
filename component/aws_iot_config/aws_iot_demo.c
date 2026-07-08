@@ -43,8 +43,12 @@
 #include "subscription_manager.h"
 #include "ota_app.h"
 
+#if defined(MBEDTLS_GCM_ALT)
+#include "mbedtls/gcm.h"    /* HW AES-GCM (gcm_alt.c) boot self-test, below */
+#endif
+
 #ifndef AT_FW_VERSION
-#define AT_FW_VERSION "dev"
+#define AT_FW_VERSION "0.9.2-ota"
 #endif
 
 extern void mbedtls_threading_freertos_init(void);
@@ -114,7 +118,16 @@ static const char * prvCaPath( void )
 #endif
 }
 
+#ifdef AWS_NET_BUFFER_DYNAMIC
+/* bl602: malloc'd lazily AFTER the TLS handshake (see aws_iot_demo_start) so its 4.7 KB isn't held
+ * in .bss (which permanently shrinks the TLSF heap) during the heap-tight server-cert-chain verify.
+ * The BL602 HW PKA can't correctly modexp a 2048-bit modulus, so RSA-2048 signature verification
+ * falls back to the software mbedtls_mpi_exp_mod (~5 KB heap); the AWS cert flight otherwise leaves
+ * only ~4.7 KB free at that point. Freeing this buffer from .bss gives the modexp room. */
+static uint8_t *s_net_buffer = NULL;
+#else
 static uint8_t s_net_buffer[AWS_NET_BUFFER_SZ];
+#endif
 static uint8_t s_ack_props_buffer[AWS_ACK_PROPS_BUF_SZ];
 
 /* The shared MQTT-Agent context + its message-queue backend (command pointers). */
@@ -215,10 +228,23 @@ static int prvAgentConnect(bool *pSessionPresent)
         return -1;   /* aws_connect_tls logged the failure + tore down the socket */
     }
 
+#ifdef AWS_NET_BUFFER_DYNAMIC
+    /* Now that the (heap-tight) TLS handshake is done, claim the MQTT data-plane buffer. Malloc'd
+     * once and reused across reconnects. Keeping it out of .bss above gave the handshake its heap. */
+    if (s_net_buffer == NULL) {
+        s_net_buffer = (uint8_t *)pvPortMalloc(AWS_NET_BUFFER_SZ);
+        if (s_net_buffer == NULL) {
+            log_error("[AWS] MQTT net buffer alloc FAIL (%u B)", (unsigned)AWS_NET_BUFFER_SZ);
+            TLS_FreeRTOS_Disconnect(&s_net);
+            return -1;
+        }
+    }
+#endif
+
     /* (Re)initialise the agent over this transport: MQTTAgent_Init does MQTT_Init +
      * MQTT_InitStatefulQoS internally, using the records embedded in s_agent. */
     {
-        MQTTFixedBuffer_t fixedBuffer = { s_net_buffer, sizeof(s_net_buffer) };
+        MQTTFixedBuffer_t fixedBuffer = { s_net_buffer, AWS_NET_BUFFER_SZ };
         MQTTAgentMessageInterface_t messageInterface;
 
         messageInterface.pMsgCtx        = &s_agentMsgCtx;
@@ -249,6 +275,81 @@ static int prvAgentConnect(bool *pSessionPresent)
     return 0;
 }
 
+#if defined(MBEDTLS_GCM_ALT)
+/* Boot self-test for the BL602 HW AES-GCM (gcm_alt.c: HW AES-CTR + software GHASH). Runs once before
+ * the first TLS handshake so a HW-crypto miscompute (wrong tag / bad multi-block CTR auto-increment)
+ * shows up as a clear [HWGCM] FAIL instead of an opaque AEAD/handshake failure. Two checks:
+ *   1. NIST GCM Test Case 4 known-answer (AES-128, 60 B PT, 20 B AAD) -- exact ciphertext + tag.
+ *   2. A 1024 B encrypt->auth_decrypt round-trip -- exercises the multi-block/multi-chunk CTR path. */
+static const uint8_t k_gcm_key[16] = { 0xfe,0xff,0xe9,0x92,0x86,0x65,0x73,0x1c,0x6d,0x6a,0x8f,0x94,0x67,0x30,0x83,0x08 };
+static const uint8_t k_gcm_iv[12]  = { 0xca,0xfe,0xba,0xbe,0xfa,0xce,0xdb,0xad,0xde,0xca,0xf8,0x88 };
+static const uint8_t k_gcm_aad[20] = { 0xfe,0xed,0xfa,0xce,0xde,0xad,0xbe,0xef,0xfe,0xed,0xfa,0xce,0xde,0xad,0xbe,0xef,0xab,0xad,0xda,0xd2 };
+static const uint8_t k_gcm_pt[60]  = {
+    0xd9,0x31,0x32,0x25,0xf8,0x84,0x06,0xe5,0xa5,0x59,0x09,0xc5,0xaf,0xf5,0x26,0x9a,
+    0x86,0xa7,0xa9,0x53,0x15,0x34,0xf7,0xda,0x2e,0x4c,0x30,0x3d,0x8a,0x31,0x8a,0x72,
+    0x1c,0x3c,0x0c,0x95,0x95,0x68,0x09,0x53,0x2f,0xcf,0x0e,0x24,0x49,0xa6,0xb5,0x25,
+    0xb1,0x6a,0xed,0xf5,0xaa,0x0d,0xe6,0x57,0xba,0x63,0x7b,0x39 };
+static const uint8_t k_gcm_ct[60]  = {
+    0x42,0x83,0x1e,0xc2,0x21,0x77,0x74,0x24,0x4b,0x72,0x21,0xb7,0x84,0xd0,0xd4,0x9c,
+    0xe3,0xaa,0x21,0x2f,0x2c,0x02,0xa4,0xe0,0x35,0xc1,0x7e,0x23,0x29,0xac,0xa1,0x2e,
+    0x21,0xd5,0x14,0xb2,0x54,0x66,0x93,0x1c,0x7d,0x8f,0x6a,0x5a,0xac,0x84,0xaa,0x05,
+    0x1b,0xa3,0x0b,0x39,0x6a,0x0a,0xac,0x97,0x3d,0x58,0xe0,0x91 };
+static const uint8_t k_gcm_tag[16] = { 0x5b,0xc9,0x4f,0xbc,0x32,0x21,0xa5,0xdb,0x94,0xfa,0xe9,0x5a,0xe7,0x12,0x1a,0x47 };
+
+#define HWGCM_KAT_BIG 1024u    /* > the 512 B CTR chunk -> exercises multi-chunk + multi-block CTR */
+
+static void bl602_hwgcm_selftest(void)
+{
+    uint8_t out[60], tag[16];
+    mbedtls_gcm_context gcm;
+    int tc4_enc = 0, tc4_dec = 0, big_rt = -1, i;
+    uint8_t *pt = NULL, *ct = NULL, *dec = NULL;
+
+    /* 1. NIST TC4 known-answer (encrypt: exact CT + tag; decrypt: recover PT + accept tag). */
+    mbedtls_gcm_init(&gcm);
+    if (mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, k_gcm_key, 128) == 0 &&
+        mbedtls_gcm_crypt_and_tag(&gcm, MBEDTLS_GCM_ENCRYPT, 60, k_gcm_iv, 12,
+                                  k_gcm_aad, 20, k_gcm_pt, out, 16, tag) == 0 &&
+        memcmp(out, k_gcm_ct, 60) == 0 && memcmp(tag, k_gcm_tag, 16) == 0) {
+        tc4_enc = 1;
+    }
+    if (mbedtls_gcm_auth_decrypt(&gcm, 60, k_gcm_iv, 12, k_gcm_aad, 20,
+                                 k_gcm_tag, 16, k_gcm_ct, out) == 0 &&
+        memcmp(out, k_gcm_pt, 60) == 0) {
+        tc4_dec = 1;
+    }
+    mbedtls_gcm_free(&gcm);
+
+    /* 2. 1024 B round-trip -- multi-block CTR (auto-increment) + multi-chunk (>512 B) path. Buffers
+     *    are heap (transient, freed here) so nothing permanent is taken from the tight handshake heap. */
+    pt  = pvPortMalloc(HWGCM_KAT_BIG);
+    ct  = pvPortMalloc(HWGCM_KAT_BIG);
+    dec = pvPortMalloc(HWGCM_KAT_BIG);
+    if (pt != NULL && ct != NULL && dec != NULL) {
+        big_rt = 0;
+        for (i = 0; i < (int)HWGCM_KAT_BIG; i++) { pt[i] = (uint8_t)(i * 7 + 3); }
+        mbedtls_gcm_init(&gcm);
+        if (mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, k_gcm_key, 128) == 0 &&
+            mbedtls_gcm_crypt_and_tag(&gcm, MBEDTLS_GCM_ENCRYPT, HWGCM_KAT_BIG, k_gcm_iv, 12,
+                                      k_gcm_aad, 20, pt, ct, 16, tag) == 0 &&
+            mbedtls_gcm_auth_decrypt(&gcm, HWGCM_KAT_BIG, k_gcm_iv, 12, k_gcm_aad, 20,
+                                     tag, 16, ct, dec) == 0 &&     /* separate output (as picotls) */
+            memcmp(dec, pt, HWGCM_KAT_BIG) == 0) {
+            big_rt = 1;
+        }
+        mbedtls_gcm_free(&gcm);
+    }
+    if (pt  != NULL) { vPortFree(pt); }
+    if (ct  != NULL) { vPortFree(ct); }
+    if (dec != NULL) { vPortFree(dec); }
+
+    log_warn("[HWGCM] self-test: TC4-enc=%s TC4-dec=%s 1024B-roundtrip=%s -> %s",
+             tc4_enc ? "PASS" : "FAIL", tc4_dec ? "PASS" : "FAIL",
+             (big_rt < 0) ? "SKIP(oom)" : (big_rt ? "PASS" : "FAIL"),
+             (tc4_enc && tc4_dec && big_rt != 0) ? "HW AES-GCM OK" : "HW AES-GCM BROKEN");
+}
+#endif /* MBEDTLS_GCM_ALT */
+
 /* ------------------------------------------------------- the agent task ----- */
 static void aws_agent_task(void *param)
 {
@@ -256,6 +357,10 @@ static void aws_agent_task(void *param)
 
     s_net.pParams = &s_tlsParams;
     mbedtls_threading_freertos_init();
+
+#if defined(MBEDTLS_GCM_ALT)
+    bl602_hwgcm_selftest();     /* validate the HW AES-GCM before the first TLS handshake uses it */
+#endif
 
     if (aws_get_mac(s_mac, sizeof(s_mac)) != 0) {
         log_error("[AWS] efuse BLE MAC read FAIL - task exiting");

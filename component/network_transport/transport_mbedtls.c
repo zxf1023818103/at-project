@@ -42,6 +42,11 @@
 
 #include "logging_stack.h"
 
+/* Read the private mbedtls_ssl_context.state (the handshake state machine) in the failure log to
+ * pinpoint WHERE an intermittent handshake error lands (2=ServerHello, 3=Certificate, 4=SKE, 7-9=
+ * client cert/keyexch/certverify). Must precede the mbedTLS headers so MBEDTLS_PRIVATE(state)=state. */
+#define MBEDTLS_ALLOW_PRIVATE_ACCESS
+
 /* Standard includes. */
 #include <string.h>
 
@@ -728,9 +733,13 @@ static TlsTransportStatus_t tlsHandshake( NetworkContext_t * pNetworkContext,
 
         if( mbedtlsError != 0 )
         {
-            LogError( ( "Failed to perform TLS handshake: mbedTLSError= %s : %s.",
+            extern size_t xPortGetFreeHeapSize( void );
+            LogError( ( "Failed to perform TLS handshake: mbedTLSError= %s : %s (raw=-0x%04X state=%d free_heap=%u).",
                         mbedtlsHighLevelCodeOrDefault( mbedtlsError ),
-                        mbedtlsLowLevelCodeOrDefault( mbedtlsError ) ) );
+                        mbedtlsLowLevelCodeOrDefault( mbedtlsError ),
+                        ( unsigned ) -mbedtlsError,
+                        pTlsTransportParams->sslContext.context.MBEDTLS_PRIVATE( state ),
+                        ( unsigned ) xPortGetFreeHeapSize() ) );
 
             if( mbedtlsError == MBEDTLS_ERR_X509_CERT_VERIFY_FAILED )
             {
