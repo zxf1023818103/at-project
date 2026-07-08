@@ -276,9 +276,10 @@ static int prvAgentConnect(bool *pSessionPresent)
 }
 
 #if defined(MBEDTLS_GCM_ALT)
-/* Boot self-test for the BL602 HW AES-GCM (gcm_alt.c: HW AES-CTR + software GHASH). Runs once before
- * the first TLS handshake so a HW-crypto miscompute (wrong tag / bad multi-block CTR auto-increment)
- * shows up as a clear [HWGCM] FAIL instead of an opaque AEAD/handshake failure. Two checks:
+/* Boot self-test for the HW AES-GCM backend (MBEDTLS_GCM_ALT): bl602 = gcm_alt.c HW AES-CTR + software
+ * GHASH; AmebaD = the RTL8721D IPSEC ROM engine (component/amebad/mbedtls_port/gcm_alt.c). Runs once
+ * before the first TLS handshake so a HW-crypto miscompute (wrong tag / bad multi-block CTR) shows up
+ * as a clear [HWGCM] FAIL instead of an opaque AEAD/handshake failure. Two checks:
  *   1. NIST GCM Test Case 4 known-answer (AES-128, 60 B PT, 20 B AAD) -- exact ciphertext + tag.
  *   2. A 1024 B encrypt->auth_decrypt round-trip -- exercises the multi-block/multi-chunk CTR path. */
 static const uint8_t k_gcm_key[16] = { 0xfe,0xff,0xe9,0x92,0x86,0x65,0x73,0x1c,0x6d,0x6a,0x8f,0x94,0x67,0x30,0x83,0x08 };
@@ -301,20 +302,30 @@ static const uint8_t k_gcm_tag[16] = { 0x5b,0xc9,0x4f,0xbc,0x32,0x21,0xa5,0xdb,0
 static void bl602_hwgcm_selftest(void)
 {
     uint8_t out[60], tag[16];
+    /* Stage the operands the HW engine reads into SRAM: the AmebaD RTL8721D IPSEC GCM engine DMAs its
+     * inputs and CANNOT read XIP flash, but the vectors are `static const` (.rodata -> flash). Without
+     * this the engine reads garbage and TC4 spuriously FAILs while the block-aligned self-consistent
+     * roundtrip still passes -- the exact symptom seen on AmebaD. (bl602's gcm_alt stages into its own
+     * NOCACHE scratch, so these copies are a no-op there.) Expected CT/tag/PT stay in flash: they are
+     * CPU memcmp'd, not DMA'd. */
+    uint8_t iv_s[12], aad_s[20], pt_s[60], ct_s[60];
     mbedtls_gcm_context gcm;
     int tc4_enc = 0, tc4_dec = 0, big_rt = -1, i;
     uint8_t *pt = NULL, *ct = NULL, *dec = NULL;
 
+    memcpy(iv_s, k_gcm_iv, 12);  memcpy(aad_s, k_gcm_aad, 20);
+    memcpy(pt_s, k_gcm_pt, 60);  memcpy(ct_s, k_gcm_ct, 60);
+
     /* 1. NIST TC4 known-answer (encrypt: exact CT + tag; decrypt: recover PT + accept tag). */
     mbedtls_gcm_init(&gcm);
     if (mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, k_gcm_key, 128) == 0 &&
-        mbedtls_gcm_crypt_and_tag(&gcm, MBEDTLS_GCM_ENCRYPT, 60, k_gcm_iv, 12,
-                                  k_gcm_aad, 20, k_gcm_pt, out, 16, tag) == 0 &&
+        mbedtls_gcm_crypt_and_tag(&gcm, MBEDTLS_GCM_ENCRYPT, 60, iv_s, 12,
+                                  aad_s, 20, pt_s, out, 16, tag) == 0 &&
         memcmp(out, k_gcm_ct, 60) == 0 && memcmp(tag, k_gcm_tag, 16) == 0) {
         tc4_enc = 1;
     }
-    if (mbedtls_gcm_auth_decrypt(&gcm, 60, k_gcm_iv, 12, k_gcm_aad, 20,
-                                 k_gcm_tag, 16, k_gcm_ct, out) == 0 &&
+    if (mbedtls_gcm_auth_decrypt(&gcm, 60, iv_s, 12, aad_s, 20,
+                                 k_gcm_tag, 16, ct_s, out) == 0 &&
         memcmp(out, k_gcm_pt, 60) == 0) {
         tc4_dec = 1;
     }
@@ -330,9 +341,9 @@ static void bl602_hwgcm_selftest(void)
         for (i = 0; i < (int)HWGCM_KAT_BIG; i++) { pt[i] = (uint8_t)(i * 7 + 3); }
         mbedtls_gcm_init(&gcm);
         if (mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, k_gcm_key, 128) == 0 &&
-            mbedtls_gcm_crypt_and_tag(&gcm, MBEDTLS_GCM_ENCRYPT, HWGCM_KAT_BIG, k_gcm_iv, 12,
-                                      k_gcm_aad, 20, pt, ct, 16, tag) == 0 &&
-            mbedtls_gcm_auth_decrypt(&gcm, HWGCM_KAT_BIG, k_gcm_iv, 12, k_gcm_aad, 20,
+            mbedtls_gcm_crypt_and_tag(&gcm, MBEDTLS_GCM_ENCRYPT, HWGCM_KAT_BIG, iv_s, 12,
+                                      aad_s, 20, pt, ct, 16, tag) == 0 &&
+            mbedtls_gcm_auth_decrypt(&gcm, HWGCM_KAT_BIG, iv_s, 12, aad_s, 20,
                                      tag, 16, ct, dec) == 0 &&     /* separate output (as picotls) */
             memcmp(dec, pt, HWGCM_KAT_BIG) == 0) {
             big_rt = 1;
