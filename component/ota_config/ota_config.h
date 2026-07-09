@@ -48,7 +48,11 @@
 #elif defined(BL616) || defined(BL616CL)
 #define otaconfigLOG2_FILE_BLOCK_SIZE      ( 11UL )
 #else
-#define otaconfigLOG2_FILE_BLOCK_SIZE      ( 12UL )
+/* AmebaD: 1 KB over the MQTT data plane, matching bl602. 4 KB (the old HTTPS-era value) is inside AWS's
+ * documented 256 B..128 KB GetStream range, but AWS's MQTT file-delivery served ZERO data/cbor blocks
+ * for a 4 KB get/cbor request from this account's stream (request accepted, no data, no
+ * BlockSizeOutOfBounds error) while bl602's 1 KB requests download fine (2052 blocks served). */
+#define otaconfigLOG2_FILE_BLOCK_SIZE      ( 10UL )
 #endif
 
 /* Number of blocks requested per data-plane request. Keep small: the AmebaD PAL streams
