@@ -1208,6 +1208,7 @@ int main(void)
 #include "wifi_service.h"   /* shared WiFi provisioning + reconnect policy */
 #include "wifi_port.h"      /* the platform HAL it drives (implemented below) */
 #include "app_startup.h"    /* shared startup helpers (app_env_time_init / app_console_start / app_on_network_up) */
+#include "FreeRTOS_IP.h"    /* vApplicationIPNetworkEventHook / eNetworkUp / FreeRTOS_GetAddressConfiguration */
 #endif
 
 extern "C" {
@@ -1361,13 +1362,8 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
         }
         case CODE_WIFI_ON_GOT_IP: {
             printf("[APP] [EVT] %s, CODE_WIFI_ON_GOT_IP\n", __func__);
-#if defined BL602 || defined BL702
-            // GOT_IP fires only on BL602/BL702 (bl602_netif.c), after DHCP. Notify the wifi service,
-            // then run the shared network-up services via app_on_network_up() (DNS re-point for c-ares
-            // + coreSNTP + AWS telemetry). SNTP/telemetry are idempotent, so repeated GOT_IP is safe.
-            wifi_service_on_event(WIFI_SVC_EV_GOTIP);
-            app_on_network_up();
-#endif
+            // Network-up services now start from the FreeRTOS+TCP eNetworkUp hook
+            // (vApplicationIPNetworkEventHook above), unified with AmebaD -- not from this SDK event.
             break;
         }
         case CODE_WIFI_ON_DISCONNECT: {
@@ -1401,6 +1397,40 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
 }
 
 #if defined BL602 || defined BL702
+/* Network-up trigger, unified with AmebaD: the FreeRTOS+TCP IP task fires eNetworkUp when DHCP
+ * completes (bl602_tcp_bringup -> at_netif_bringup -> FreeRTOS_IPInit_Multi). This is now the single
+ * network-up cue on both platforms -- it replaces the SDK's CODE_WIFI_ON_GOT_IP -> app_on_network_up().
+ * The IPv6 link-local endpoint + the DHCP give-up fallback both fire this with a 0.0.0.0 lease, and the
+ * IPv6 global (SLAAC) endpoint re-fires it once up, so guard on a non-zero lease and dedup per up/down. */
+void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
+{
+    static int s_up = 0;
+
+    if( eNetworkEvent == eNetworkUp )
+    {
+        uint32_t ulIP = 0, ulMask = 0, ulGW = 0, ulDNS = 0;
+        FreeRTOS_GetAddressConfiguration( &ulIP, &ulMask, &ulGW, &ulDNS );
+        if( ( ulIP == 0U ) || ( s_up != 0 ) )
+        {
+            return;   /* link-local IPv6 / DHCP give-up (0.0.0.0), or a duplicate up for this lease */
+        }
+        s_up = 1;
+        printf( "[APP] ==== network UP ====  DHCP IP %d.%d.%d.%d\n",
+                (int)( ulIP & 0xff ), (int)( ( ulIP >> 8 ) & 0xff ),
+                (int)( ( ulIP >> 16 ) & 0xff ), (int)( ( ulIP >> 24 ) & 0xff ) );
+        wifi_service_on_event( WIFI_SVC_EV_GOTIP );
+        app_on_network_up();   /* SNTP + AWS/telemetry; the services are once-guarded internally */
+    }
+    else   /* eNetworkDown: reset the dedup so a genuine reconnect is honoured */
+    {
+        if( s_up != 0 )
+        {
+            s_up = 0;
+            printf( "[APP] ==== network DOWN ====\n" );
+        }
+    }
+}
+
 extern void wifi_task_create(void);
 #endif
 
@@ -1612,11 +1642,12 @@ int main(void) {
     { extern int rtc_time_seed(void); rtc_time_seed(); }
 
 #if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
-    // lwIP has been removed on Bouffalo — the network stack is switching to
-    // FreeRTOS-Plus-TCP. Defer the old lwIP tcpip_init callback (BL602/BL702:
-    // wifi_task_create()) to a post-scheduler task — it must not run in main()
-    // because it uses FreeRTOS timers (see bflb_net_bootstrap_task above).
-    // TODO(freertos-plus-tcp): FreeRTOS_IPInit_Multi() + the NetworkInterface bring-up.
+    // lwIP has been removed on Bouffalo — the stack is FreeRTOS-Plus-TCP. Defer the old lwIP
+    // tcpip_init callback (BL602/BL702: wifi_task_create()) to a post-scheduler task — it must not
+    // run in main() because it uses FreeRTOS timers (see bflb_net_bootstrap_task above).
+    // FreeRTOS_IPInit_Multi() + the NetworkInterface bring-up run from bl602_tcp_bringup()
+    // (bouffalo_sdk .../wifi_mgmr_ext.c) once WiFi associates; network-up is then signalled by the
+    // FreeRTOS+TCP eNetworkUp hook (vApplicationIPNetworkEventHook above), same trigger as AmebaD.
     xTaskCreate(bflb_net_bootstrap_task, (char *)"net_boot", 512, NULL,
                 tskIDLE_PRIORITY + 1, NULL);
 #else
