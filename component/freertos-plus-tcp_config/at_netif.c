@@ -5,6 +5,7 @@
  */
 #include "at_netif.h"
 #include "FreeRTOS_IP_Private.h"      /* IPStackEvent_t / xSendEventStructToIPTask */
+#include "FreeRTOS_Routing.h"         /* FreeRTOS_FillEndPoint_IPv6 (at_netif_ipv6_init) */
 #include <string.h>                   /* memset / strlen */
 #include <strings.h>                  /* strcasecmp / strncasecmp (mDNS name match) */
 
@@ -117,6 +118,57 @@ void at_netif_rx_submit( NetworkBufferDescriptor_t * pxBuf, size_t len )
     }
 }
 
+/* ===== IPv6: add a link-local + a SLAAC-global endpoint (shared by all platforms;
+ * called from at_netif_bringup for Bouffalo and from AmebaD's own bring-up). Must run
+ * before FreeRTOS_IPInit_Multi so the endpoints exist when the IP task starts. ======= */
+void at_netif_ipv6_init( void )
+{
+    static NetworkEndPoint_t xEndPoint6_LinkLocal;
+    static NetworkEndPoint_t xEndPoint6_Global;
+    static BaseType_t        xDone = pdFALSE;
+    NetworkInterface_t     * pxIf = at_netif_get();
+    NetworkEndPoint_t      * pxIPv4;
+    IPv6_Address_t           xLinkLocal, xLLPrefix, xGlobal, xGlobalPrefix, xGateway;
+    const uint8_t          * mac;
+
+    if( ( xDone != pdFALSE ) || ( pxIf == NULL ) )
+    {
+        return;
+    }
+    pxIPv4 = FreeRTOS_FirstEndPoint( pxIf );   /* the IPv4 endpoint carries our MAC */
+    if( pxIPv4 == NULL )
+    {
+        return;
+    }
+    mac = pxIPv4->xMACAddress.ucBytes;
+
+    ( void ) memset( xLinkLocal.ucBytes, 0, ipSIZE_OF_IPv6_ADDRESS );
+    xLinkLocal.ucBytes[ 0 ]  = 0xfeU;
+    xLinkLocal.ucBytes[ 1 ]  = 0x80U;
+    xLinkLocal.ucBytes[ 8 ]  = ( uint8_t ) ( mac[ 0 ] ^ 0x02U );   /* EUI-64 */
+    xLinkLocal.ucBytes[ 9 ]  = mac[ 1 ];
+    xLinkLocal.ucBytes[ 10 ] = mac[ 2 ];
+    xLinkLocal.ucBytes[ 11 ] = 0xffU;
+    xLinkLocal.ucBytes[ 12 ] = 0xfeU;
+    xLinkLocal.ucBytes[ 13 ] = mac[ 3 ];
+    xLinkLocal.ucBytes[ 14 ] = mac[ 4 ];
+    xLinkLocal.ucBytes[ 15 ] = mac[ 5 ];
+    ( void ) memset( xLLPrefix.ucBytes, 0, ipSIZE_OF_IPv6_ADDRESS );
+    xLLPrefix.ucBytes[ 0 ] = 0xfeU;
+    xLLPrefix.ucBytes[ 1 ] = 0x80U;
+    FreeRTOS_FillEndPoint_IPv6( pxIf, &xEndPoint6_LinkLocal, &xLinkLocal, &xLLPrefix,
+                                10U, NULL, NULL, mac );
+
+    ( void ) memset( xGlobal.ucBytes, 0, ipSIZE_OF_IPv6_ADDRESS );
+    ( void ) memset( xGlobalPrefix.ucBytes, 0, ipSIZE_OF_IPv6_ADDRESS );
+    ( void ) memset( xGateway.ucBytes, 0, ipSIZE_OF_IPv6_ADDRESS );
+    FreeRTOS_FillEndPoint_IPv6( pxIf, &xEndPoint6_Global, &xGlobal, &xGlobalPrefix,
+                                64U, &xGateway, NULL, mac );
+    xEndPoint6_Global.bits.bWantRA = pdTRUE_UNSIGNED;   /* SLAAC via Router Advertisement */
+
+    xDone = pdTRUE;
+}
+
 /* ===== One-shot bring-up (internal storage; for platforms that don't keep
  * their own interface pointer) ============================================== */
 void at_netif_bringup( void )
@@ -142,6 +194,7 @@ void at_netif_bringup( void )
     FreeRTOS_FillEndPoint( &xInterface, &xEndPoint, ucZero, ucZero, ucZero, ucZero, ucMAC );
     xEndPoint.bits.bWantDHCP = pdTRUE_UNSIGNED;
 
+    at_netif_ipv6_init();   /* link-local + SLAAC-global IPv6 endpoints (must precede IPInit) */
     FreeRTOS_IPInit_Multi();
     at_netif_set_ready();
 }

@@ -181,54 +181,13 @@ unsigned char * amebad_tcp_get_addr( int idx, int kind )
 
 #if ( ipconfigUSE_IPv6 != 0 )
 
-/* Register the fe80::(EUI-64) link-local + a bWantRA global endpoint (SLAAC) on our
- * interface. Idempotent. The MAC comes from the already-filled IPv4 endpoint. */
+/* AmebaD name kept for its two callers (main.cpp bring-up + the lwIP-API wifi_on hook
+ * below); the endpoint-filling impl is now shared in at_netif_ipv6_init()
+ * (component/freertos-plus-tcp_config/at_netif.c) so bl602 and AmebaD run identical code. */
 void amebad_ipv6_init( void )
 {
-    static NetworkEndPoint_t xEndPoint6_LinkLocal;
-    static NetworkEndPoint_t xEndPoint6_Global;
-    static BaseType_t        xDone = pdFALSE;
-    NetworkInterface_t     * pxIf = at_netif_get();
-    NetworkEndPoint_t      * pxIPv4;
-    IPv6_Address_t           xLinkLocal, xLLPrefix, xGlobal, xGlobalPrefix, xGateway;
-    const uint8_t          * mac;
-
-    if( ( xDone != pdFALSE ) || ( pxIf == NULL ) )
-    {
-        return;
-    }
-    pxIPv4 = FreeRTOS_FirstEndPoint( pxIf );
-    if( pxIPv4 == NULL )
-    {
-        return;
-    }
-    mac = pxIPv4->xMACAddress.ucBytes;
-
-    ( void ) memset( xLinkLocal.ucBytes, 0, ipSIZE_OF_IPv6_ADDRESS );
-    xLinkLocal.ucBytes[ 0 ]  = 0xfeU;
-    xLinkLocal.ucBytes[ 1 ]  = 0x80U;
-    xLinkLocal.ucBytes[ 8 ]  = ( uint8_t ) ( mac[ 0 ] ^ 0x02U );
-    xLinkLocal.ucBytes[ 9 ]  = mac[ 1 ];
-    xLinkLocal.ucBytes[ 10 ] = mac[ 2 ];
-    xLinkLocal.ucBytes[ 11 ] = 0xffU;
-    xLinkLocal.ucBytes[ 12 ] = 0xfeU;
-    xLinkLocal.ucBytes[ 13 ] = mac[ 3 ];
-    xLinkLocal.ucBytes[ 14 ] = mac[ 4 ];
-    xLinkLocal.ucBytes[ 15 ] = mac[ 5 ];
-    ( void ) memset( xLLPrefix.ucBytes, 0, ipSIZE_OF_IPv6_ADDRESS );
-    xLLPrefix.ucBytes[ 0 ] = 0xfeU;
-    xLLPrefix.ucBytes[ 1 ] = 0x80U;
-    FreeRTOS_FillEndPoint_IPv6( pxIf, &xEndPoint6_LinkLocal, &xLinkLocal, &xLLPrefix,
-                                10U, NULL, NULL, mac );
-
-    ( void ) memset( xGlobal.ucBytes, 0, ipSIZE_OF_IPv6_ADDRESS );
-    ( void ) memset( xGlobalPrefix.ucBytes, 0, ipSIZE_OF_IPv6_ADDRESS );
-    ( void ) memset( xGateway.ucBytes, 0, ipSIZE_OF_IPv6_ADDRESS );
-    FreeRTOS_FillEndPoint_IPv6( pxIf, &xEndPoint6_Global, &xGlobal, &xGlobalPrefix,
-                                64U, &xGateway, NULL, mac );
-    xEndPoint6_Global.bits.bWantRA = pdTRUE_UNSIGNED;   /* SLAAC */
-
-    xDone = pdTRUE;
+    extern void at_netif_ipv6_init( void );
+    at_netif_ipv6_init();
 }
 
 /* SDK lwIP-API name: wifi_conf.c calls this from wifi_on (before the interface exists,
