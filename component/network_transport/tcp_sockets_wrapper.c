@@ -90,9 +90,11 @@ extern void vLoggingPrintf( const char * pcFormatString,
  *
  * @return Non-zero value on error, 0 on success.
  */
-/* True when this device has a routable (global, non-link-local) IPv6 address -- i.e. an IPv6
- * connection has a chance of succeeding. Used to skip the IPv6 attempt on IPv4-only links so it
- * does not block ~20 s timing out before the IPv4 fallback. */
+/* True when this device holds a global-unicast IPv6 address (2000::/3) -- the only kind that can reach
+ * a public server like AWS over IPv6. Used to skip the AAAA attempt otherwise, so the connect does not
+ * block ~20 s timing out before the IPv4 fallback. NOTE: a link-local (fe80::/10) OR a unique-local
+ * (fc00::/7) address does NOT qualify -- a common home router hands out an fd00:: ULA SLAAC prefix with
+ * no real IPv6 internet route, and a ULA source cannot reach a public IPv6 destination. */
 static BaseType_t prvHasGlobalIPv6( void )
 {
     #if ( ipconfigUSE_IPv6 != 0 )
@@ -106,13 +108,12 @@ static BaseType_t prvHasGlobalIPv6( void )
             {
                 continue;
             }
-            if( ( a[ 0 ] == 0xfeU ) && ( ( a[ 1 ] & 0xc0U ) == 0x80U ) )
+            /* Global unicast = 2000::/3 (first byte 0b001x_xxxx = 0x20..0x3F). This excludes the
+             * unspecified (::), link-local (fe80::/10), unique-local (fc00::/7) and multicast (ff00::/8)
+             * ranges, so a ULA-only or link-local-only link correctly reports "no global IPv6". */
+            if( ( a[ 0 ] & 0xe0U ) == 0x20U )
             {
-                continue;   /* link-local fe80::/10 -- not routable off-link */
-            }
-            if( ( a[ 0 ] | a[ 1 ] ) != 0U )
-            {
-                return pdTRUE;   /* non-zero, non-link-local = a global address */
+                return pdTRUE;
             }
         }
     #endif /* ipconfigUSE_IPv6 */

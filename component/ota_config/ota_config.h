@@ -55,10 +55,25 @@
 #define otaconfigLOG2_FILE_BLOCK_SIZE      ( 10UL )
 #endif
 
-/* Number of blocks requested per data-plane request. Keep small: the AmebaD PAL streams
- * blocks sequentially to ota_flash_feed (a sequential consumer), and a modest in-flight
- * window keeps the data plane ordered + the RAM use bounded. */
+/* Number of blocks requested per data-plane request. Keep small: the PAL streams blocks to
+ * ota_flash_feed (a sequential consumer), and a modest in-flight window keeps the RAM use bounded. */
 #define otaconfigMAX_NUM_BLOCKS_REQUEST    ( 1U )
+
+/* PAL out-of-order tolerance (ota_pal.c). ota_flash_feed()/ota_flash_bl602 are sequential consumers and
+ * the signature SHA-256 is hashed in arrival order, so a block arriving ahead of the expected offset
+ * would otherwise fail the image (IngestResultWriteBlockFailed). That happens when a WiFi SKB starvation
+ * trips an MQTT keepalive timeout -> reconnect -> the resume delivers a block out of order. The PAL
+ * buffers up to this many *future* blocks (malloc'd only during an OTA, N * OTA_FILE_BLOCK_SIZE) and
+ * drains them in order into the sequential consumer + the hash -- so out-of-order is reordered, not
+ * fatal, WITHOUT read-back hashing (which would break RSIP-encrypted images, whose signature is over the
+ * downloaded ciphertext, not the OTF-decrypted read-back). 0 = strict sequential.
+ *   Bouffalo: 0 -- tight OTA heap (~7 KB free on bl602 mid-download), in-order MQTT download proven.
+ *   AmebaD:   8 -- ~120 KB OTA heap; 8 KB window covers the observed 1-2 block reconnect reorder. */
+#if defined(BL602) || defined(BL702) || defined(BL616) || defined(BL616CL)
+#define OTA_PAL_REORDER_BLOCKS             ( 0U )
+#else
+#define OTA_PAL_REORDER_BLOCKS             ( 8U )
+#endif
 
 /* ---- thing name ----
  * The Thing name = BLE MAC string (e.g. "AABBCCDDEEFF" / "AA:BB:CC:DD:EE:FF"), well under 64. */

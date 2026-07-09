@@ -10,11 +10,14 @@
  * (length + checksum verify, arms the new slot) and then verifies the AWS code-sign
  * signature over the downloaded bytes with mbedTLS.
  *
- * Block ordering: ota_flash_feed() is a *sequential* stream consumer. With
- * otaconfigMAX_NUM_BLOCKS_REQUEST small and AWS streaming the data plane in order,
- * blocks arrive sequentially; writeBlock() asserts offset == bytes-already-consumed
- * and rejects an out-of-order block rather than corrupting the slot. (This is a known
- * simplification - see the file-level note + the parent's design summary.)
+ * Block ordering: ota_flash_feed() is a *sequential* stream consumer and the signature SHA-256 is
+ * hashed in arrival order, so writeBlock() must present blocks in order. Blocks normally arrive in
+ * order (otaconfigMAX_NUM_BLOCKS_REQUEST is small), but a reconnect (WiFi SKB starvation -> MQTT
+ * keepalive timeout -> resume) can deliver one ahead of the expected offset. writeBlock() tolerates
+ * that with a small reorder window (OTA_PAL_REORDER_BLOCKS, ota_config.h): a future block is buffered
+ * and drained in order once the gap fills; a duplicate/already-consumed block is ack'd and dropped.
+ * This keeps the streaming hash intact (no read-back hashing, which would break RSIP-encrypted images
+ * whose signature is over the downloaded ciphertext). Window=0 (Bouffalo) = strict sequential.
  *
  * Signature verify (simplification to scrutinise on HW): the SHA-256 is computed
  * INCREMENTALLY over every byte fed to ota_flash_feed() - i.e. over the full
@@ -59,6 +62,17 @@ static mbedtls_sha256_context s_sha;
 static uint32_t           s_consumed;     /* bytes fed to ota_flash_feed so far (== expected next offset) */
 static int                s_active;       /* a file is currently open */
 
+#if ( OTA_PAL_REORDER_BLOCKS > 0U )
+/* Out-of-order tolerance (OTA_PAL_REORDER_BLOCKS in ota_config.h): the sequential consumer
+ * (ota_flash_feed) + the streaming signature SHA-256 both require in-order bytes, so a block that
+ * arrives ahead of s_consumed (reconnect-induced reorder) is stashed here and drained in order once the
+ * gap fills -- reordered, not fatal, and WITHOUT read-back hashing (which would break RSIP-encrypted
+ * images whose signature is over the downloaded ciphertext). */
+typedef struct { uint32_t offset; uint32_t len; uint8_t valid; } reorder_slot_t;
+static reorder_slot_t     s_reorder[ OTA_PAL_REORDER_BLOCKS ];
+static uint8_t *          s_reorder_pool;   /* OTA_PAL_REORDER_BLOCKS * OTA_FILE_BLOCK_SIZE, malloc'd per OTA */
+#endif
+
 /* Reset all PAL state. */
 static void prvPalReset( void )
 {
@@ -66,6 +80,27 @@ static void prvPalReset( void )
     mbedtls_sha256_free( &s_sha );
     s_consumed = 0;
     s_active = 0;
+#if ( OTA_PAL_REORDER_BLOCKS > 0U )
+    memset( s_reorder, 0, sizeof( s_reorder ) );
+    if( s_reorder_pool != NULL )
+    {
+        vPortFree( s_reorder_pool );
+        s_reorder_pool = NULL;
+    }
+#endif
+}
+
+/* Feed one block to the sequential slot writer + the rolling signature hash, advancing s_consumed.
+ * The caller guarantees offset == s_consumed (in order). */
+static int prvFeedInOrder( const uint8_t * pData, uint32_t blockSize )
+{
+    if( ota_flash_feed( &s_slot, pData, blockSize ) != 0 )
+    {
+        return -1;
+    }
+    ( void ) mbedtls_sha256_update( &s_sha, pData, blockSize );
+    s_consumed += blockSize;
+    return 0;
 }
 
 /* ----------------------------------------------------------------- create ---- */
@@ -121,6 +156,17 @@ static OtaPalStatus_t prvCreateFileForRx( OtaFileContext_t * const pFileContext 
     s_consumed = 0;
     s_active = 1;
 
+#if ( OTA_PAL_REORDER_BLOCKS > 0U )
+    /* Reorder window buffer (freed in prvPalReset on close/abort). Not fatal if it fails to allocate:
+     * s_reorder_pool stays NULL and prvWriteBlock falls back to strict-sequential (rejects reorder). */
+    s_reorder_pool = pvPortMalloc( ( size_t ) OTA_PAL_REORDER_BLOCKS * OTA_FILE_BLOCK_SIZE );
+    if( s_reorder_pool == NULL )
+    {
+        OTA_PAL_LOG( "createFile: reorder pool alloc FAIL (%u B) - strict sequential",
+                     ( unsigned ) ( OTA_PAL_REORDER_BLOCKS * OTA_FILE_BLOCK_SIZE ) );
+    }
+#endif
+
     /* The agent checks pFile for non-NULL before calling writeBlock/closeFile;
      * use a non-NULL sentinel (we keep all real state in file scope). */
     pFileContext->pFile = ( uint8_t * ) &s_slot;
@@ -132,6 +178,98 @@ static OtaPalStatus_t prvCreateFileForRx( OtaFileContext_t * const pFileContext 
 }
 
 /* ------------------------------------------------------------- write block --- */
+/* Ingest one block at its offset: feed in order (+ drain buffered followers), buffer a future block, or
+ * drop a duplicate. Returns blockSize on success (incl. buffered), -1 on error. Split out of
+ * prvWriteBlock so the reorder self-test hook can drive it out of order. */
+static int16_t prvIngestOne( uint32_t offset,
+                             uint8_t * const pData,
+                             uint32_t blockSize )
+{
+    /* Already consumed (a duplicate / re-sent block after a reconnect): ack without re-writing. */
+    if( offset < s_consumed )
+    {
+        return ( int16_t ) blockSize;
+    }
+
+    /* The expected next block: feed it in order, then drain any buffered followers. */
+    if( offset == s_consumed )
+    {
+        if( prvFeedInOrder( pData, blockSize ) != 0 )
+        {
+            OTA_PAL_LOG( "writeBlock: feed FAIL at offset=%u", ( unsigned ) offset );
+            return -1;
+        }
+#if ( OTA_PAL_REORDER_BLOCKS > 0U )
+        if( s_reorder_pool != NULL )
+        {
+            int drained = 1;
+            while( drained )
+            {
+                uint32_t i;
+                drained = 0;
+                for( i = 0; i < OTA_PAL_REORDER_BLOCKS; i++ )
+                {
+                    if( s_reorder[ i ].valid && ( s_reorder[ i ].offset == s_consumed ) )
+                    {
+                        if( prvFeedInOrder( s_reorder_pool + ( size_t ) i * OTA_FILE_BLOCK_SIZE,
+                                            s_reorder[ i ].len ) != 0 )
+                        {
+                            OTA_PAL_LOG( "writeBlock: drained feed FAIL at offset=%u",
+                                         ( unsigned ) s_reorder[ i ].offset );
+                            return -1;
+                        }
+                        s_reorder[ i ].valid = 0;
+                        drained = 1;
+                    }
+                }
+            }
+        }
+#endif
+        return ( int16_t ) blockSize;
+    }
+
+    /* offset > s_consumed: a future (out-of-order) block. */
+#if ( OTA_PAL_REORDER_BLOCKS > 0U )
+    if( ( s_reorder_pool != NULL ) && ( blockSize <= OTA_FILE_BLOCK_SIZE ) )
+    {
+        uint32_t i;
+
+        for( i = 0; i < OTA_PAL_REORDER_BLOCKS; i++ )   /* already buffered (dup future block)? */
+        {
+            if( s_reorder[ i ].valid && ( s_reorder[ i ].offset == offset ) )
+            {
+                return ( int16_t ) blockSize;
+            }
+        }
+        for( i = 0; i < OTA_PAL_REORDER_BLOCKS; i++ )   /* stash in a free slot */
+        {
+            if( !s_reorder[ i ].valid )
+            {
+                memcpy( s_reorder_pool + ( size_t ) i * OTA_FILE_BLOCK_SIZE, pData, blockSize );
+                s_reorder[ i ].offset = offset;
+                s_reorder[ i ].len    = blockSize;
+                s_reorder[ i ].valid  = 1;
+                OTA_PAL_LOG( "writeBlock: buffered out-of-order offset=%u (expected=%u)",
+                             ( unsigned ) offset, ( unsigned ) s_consumed );
+                return ( int16_t ) blockSize;
+            }
+        }
+        OTA_PAL_LOG( "writeBlock: reorder window full (%u blocks) at offset=%u expected=%u",
+                     ( unsigned ) OTA_PAL_REORDER_BLOCKS, ( unsigned ) offset, ( unsigned ) s_consumed );
+        return -1;
+    }
+#endif
+    OTA_PAL_LOG( "writeBlock: OUT-OF-ORDER offset=%u expected=%u (sequential PAL)",
+                 ( unsigned ) offset, ( unsigned ) s_consumed );
+    return -1;
+}
+
+/* One-shot reorder self-test: set to a block index (>0) to HOLD that block until the following one
+ * arrives, so the follower hits the reorder buffer+drain path -- a deterministic HW check that the
+ * out-of-order handling + the in-order signature hash are correct. 0 = disabled; MUST stay 0 in
+ * committed code (it is a debug scaffold, and holding a block would break a real download otherwise). */
+#define OTA_PAL_REORDER_TEST    0
+
 static int16_t prvWriteBlock( OtaFileContext_t * const pFileContext,
                               uint32_t offset,
                               uint8_t * const pData,
@@ -145,27 +283,40 @@ static int16_t prvWriteBlock( OtaFileContext_t * const pFileContext,
         return -1;
     }
 
-    /* ota_flash_feed is a sequential consumer: only accept the next-in-order block. */
-    if( offset != s_consumed )
+#if ( OTA_PAL_REORDER_TEST > 0 )
     {
-        OTA_PAL_LOG( "writeBlock: OUT-OF-ORDER offset=%u expected=%u (sequential PAL)",
-                     ( unsigned ) offset, ( unsigned ) s_consumed );
-        return -1;
+        static uint8_t  s_test_state;                       /* 0=armed, 1=holding, 2=done */
+        static uint8_t  s_test_hold[ OTA_FILE_BLOCK_SIZE ];
+        static uint32_t s_test_hold_off;
+        static uint32_t s_test_hold_len;
+
+        if( ( s_test_state == 0U ) &&
+            ( offset == ( uint32_t ) OTA_PAL_REORDER_TEST * OTA_FILE_BLOCK_SIZE ) )
+        {
+            ( void ) memcpy( s_test_hold, pData, blockSize );
+            s_test_hold_off = offset;
+            s_test_hold_len = blockSize;
+            s_test_state = 1U;
+            OTA_PAL_LOG( "TEST: holding block offset=%u to force reorder on the next block",
+                         ( unsigned ) offset );
+            return ( int16_t ) blockSize;   /* ack so the agent requests the following block */
+        }
+        if( s_test_state == 1U )
+        {
+            int16_t r;
+            s_test_state = 2U;
+            r = prvIngestOne( offset, pData, blockSize );   /* out of order -> reorder buffers it */
+            if( ( r >= 0 ) &&
+                ( prvIngestOne( s_test_hold_off, s_test_hold, s_test_hold_len ) < 0 ) )
+            {
+                r = -1;                                     /* release the held one -> drains the buffered */
+            }
+            return r;
+        }
     }
+#endif
 
-    if( ota_flash_feed( &s_slot, pData, blockSize ) != 0 )
-    {
-        OTA_PAL_LOG( "writeBlock: ota_flash_feed FAIL at offset=%u", ( unsigned ) offset );
-        return -1;
-    }
-
-    /* Hash the raw downloaded bytes (full OTA_All.bin incl. 32B header). */
-    ( void ) mbedtls_sha256_update( &s_sha, pData, blockSize );
-
-    s_consumed += blockSize;
-
-    /* The agent expects the number of bytes written on success. */
-    return ( int16_t ) blockSize;
+    return prvIngestOne( offset, pData, blockSize );
 }
 
 /* ------------------------------------------------ signature verify (close) --- */
