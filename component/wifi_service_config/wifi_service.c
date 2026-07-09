@@ -10,6 +10,8 @@
 #include "task.h"
 #include "event_groups.h"
 
+#include "backoff_algorithm.h"   /* exponential-backoff-with-jitter for the reconnect retries */
+
 #include <stdio.h>
 #include <stdlib.h>   /* getenv / setenv / unsetenv / atoi */
 #include <string.h>
@@ -19,8 +21,26 @@ extern int env_save( const char * name );
 
 #define WSVC_EVT_DISCONNECT   ( 1u << 0 )   /* set by wifi_service_on_event on a link drop */
 
-#define WSVC_BACKOFF_MIN_MS   1000u
-#define WSVC_BACKOFF_MAX_MS   8000u
+/* Reconnect retry policy: exponential backoff (BackoffAlgorithm, the same library the AWS agent uses)
+ * with full jitter, 1 s base doubling to an 8 s cap, retrying forever until the AP is back. */
+#define WSVC_BACKOFF_BASE_MS   1000u
+#define WSVC_BACKOFF_MAX_MS    8000u
+
+/* Small self-contained PRNG for the backoff jitter (xorshift, seeded from the tick on first use) so the
+ * global rand() state is left untouched and two devices don't retry in lock-step. */
+static uint32_t wsvc_rand( void )
+{
+    static uint32_t s;
+
+    if( s == 0u )
+    {
+        s = ( uint32_t ) xTaskGetTickCount() | 1u;
+    }
+    s ^= s << 13;
+    s ^= s >> 17;
+    s ^= s << 5;
+    return s;
+}
 
 static EventGroupHandle_t s_evt;
 static TaskHandle_t       s_task;
@@ -72,13 +92,16 @@ static int wsvc_connect_once( const char * ssid, const char * pass )
 
 static void wsvc_task( void * arg )
 {
-    unsigned backoff = WSVC_BACKOFF_MIN_MS;
-    int      warned = 0;
+    BackoffAlgorithmContext_t reconnectParams;
+    uint16_t                  nextBackoffMs = 0u;
+    int                       warned = 0;
 
     ( void ) arg;
 
     ( void ) wifi_port_enable();
     wifi_port_autoreconnect_disable();   /* wifi_service is the single reconnect authority */
+    BackoffAlgorithm_InitializeParams( &reconnectParams, WSVC_BACKOFF_BASE_MS, WSVC_BACKOFF_MAX_MS,
+                                       BACKOFF_ALGORITHM_RETRY_FOREVER );
 
     for( ; ; )
     {
@@ -89,7 +112,8 @@ static void wsvc_task( void * arg )
         {
             /* Parked after a `wifi forget`; woken by wifi_reconnect_enable(). */
             ( void ) ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
-            backoff = WSVC_BACKOFF_MIN_MS;
+            BackoffAlgorithm_InitializeParams( &reconnectParams, WSVC_BACKOFF_BASE_MS,
+                                               WSVC_BACKOFF_MAX_MS, BACKOFF_ALGORITHM_RETRY_FOREVER );
             continue;
         }
 
@@ -115,16 +139,18 @@ static void wsvc_task( void * arg )
 
         if( wsvc_connect_once( ssid, pass ) == 0 )
         {
-            backoff = WSVC_BACKOFF_MIN_MS;
-            /* Connected: block until the link drops (or a forget sets the bit). */
+            /* Connected: reset the backoff and block until the link drops (or a forget sets the bit). */
+            BackoffAlgorithm_InitializeParams( &reconnectParams, WSVC_BACKOFF_BASE_MS,
+                                               WSVC_BACKOFF_MAX_MS, BACKOFF_ALGORITHM_RETRY_FOREVER );
             ( void ) xEventGroupWaitBits( s_evt, WSVC_EVT_DISCONNECT, pdTRUE, pdFALSE, portMAX_DELAY );
             printf( "[WSVC] link down -> re-associating\r\n" );
         }
         else
         {
-            /* Connect failed: backoff-with-cap before retrying. */
-            vTaskDelay( pdMS_TO_TICKS( backoff ) );
-            backoff = ( backoff >= WSVC_BACKOFF_MAX_MS ) ? WSVC_BACKOFF_MAX_MS : ( backoff * 2u );
+            /* Connect failed: exponential-backoff-with-jitter before retrying. RETRY_FOREVER never
+             * exhausts, so the return status is ignored (nextBackoffMs is always set). */
+            ( void ) BackoffAlgorithm_GetNextBackoff( &reconnectParams, wsvc_rand(), &nextBackoffMs );
+            vTaskDelay( pdMS_TO_TICKS( nextBackoffMs ) );
         }
     }
 }

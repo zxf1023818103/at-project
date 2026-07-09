@@ -27,7 +27,6 @@ extern "C" {
 #include "FreeRTOS_DHCP.h"        /* eGetDHCPState / eNotUsingLeasedAddress */
 #include "NetworkBufferManagement.h"  /* pxGetNetworkBufferWithDescriptor: MLDv2 report TX */
 #include "FreeRTOS_ND.h"              /* vRAProcess: restart SLAAC after the MLD join */
-#include "backoff_algorithm.h"    /* WiFi reconnect backoff-with-jitter */
 #include "at_log.h"               /* rxi log.c: log_info / log_error */
 #include "log_lock.h"             /* log_lock_init */
 #include "wifi_service.h"         /* shared WiFi provisioning + reconnect policy */
@@ -63,10 +62,6 @@ extern void iperf_udp_client_start(void);
 extern void iperf_udp_server_start(void);
 
 #define WLAN_STA_IDX  0
-
-/* WiFi reconnect backoff: 1 s base, 8 s cap, RETRY_FOREVER (keep re-associating until the AP is back). */
-#define WIFI_RECONNECT_BACKOFF_BASE_MS  ( 1000U )
-#define WIFI_RECONNECT_BACKOFF_MAX_MS   ( 8000U )
 
 static NetworkInterface_t xInterface;
 /* NB: OpenOCD's FreeRTOS awareness needs the `uxTopUsedPriority` symbol - the kernel already exports

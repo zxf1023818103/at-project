@@ -16,3 +16,5 @@ target_include_directories(wifi_service PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 # env (getenv/setenv/env_save) comes from syscall_config at the final image link (the same newlib
 # retarget both platforms use), so no link dep is needed for it here.
 target_link_libraries(wifi_service PUBLIC FreeRTOS freertos_cli)
+# backoff_algorithm.h for the reconnect retry backoff-with-jitter (header-only use in wifi_service.c).
+target_link_libraries(wifi_service PRIVATE backoffalgorithm_config)

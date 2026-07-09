@@ -668,12 +668,20 @@ if(AMEBAD_ENABLE_CARES)
     # Shared `resolve` command (component/net_cli_config): c-ares path when stamped + cares_port for the header.
     target_compile_definitions(net_cli PRIVATE AT_PROJECT_CARES)
     target_link_libraries(net_cli PRIVATE cares_port)
+    # ota_app.c / ota_http.c compile INTO target_img2_km4 (INTERFACE-lib sources) + main.cpp is a direct
+    # source, so a per-source define reaches them -- but the SOURCE paths must match the compiled
+    # locations (component/, like the target_sources above), NOT the stale ${CMAKE_CURRENT_SOURCE_DIR}/
+    # (app_km4/) path, or the define is a silent no-op and the call sites keep the FreeRTOS+TCP resolver.
     set_property(SOURCE
-                 "${CMAKE_CURRENT_SOURCE_DIR}/sntp_time.c"
-                 "${CMAKE_CURRENT_SOURCE_DIR}/ota_app.c"
-                 "${CMAKE_CURRENT_SOURCE_DIR}/ota_http.c"
+                 "${AT_ROOT}/component/aws_ota_config/ota_app.c"
+                 "${AT_ROOT}/component/ota_http_config/ota_http.c"
                  "${AT_MAIN_SRC}"
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_CARES)
+    # sntp_time.c compiles into its OWN static lib (target `sntp_time`), so a set_property(SOURCE) here
+    # can't reach it (SOURCE properties are directory-scoped) -- stamp the target instead, like
+    # network_transport_sockets above, and give it cares_resolve.h.
+    target_compile_definitions(sntp_time PRIVATE AT_PROJECT_CARES)
+    target_link_libraries(sntp_time PRIVATE cares_port)
 endif()
 
 # Archives wrapped in --start-group (cross_refs) for circular vendor refs.
