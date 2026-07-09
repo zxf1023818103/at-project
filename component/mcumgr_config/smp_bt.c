@@ -71,6 +71,14 @@ smp_tx(void *arg, const uint8_t *data, size_t len)
     return 0;
 }
 
+/* Drop any partial packet in the reassembly buffer. Called on BLE connect/disconnect (weak seam
+ * in nimble_app.c) so a new connection never inherits stale bytes from a dropped/aborted upload -
+ * otherwise the next packet is misaligned and fails CBOR parse (img_mgmt returns EINVAL). */
+void smp_bt_reset_rx(void)
+{
+    s_rx_len = 0;
+}
+
 static int
 smp_chr_access(uint16_t conn, uint16_t attr, struct ble_gatt_access_ctxt *ctxt, void *arg)
 {

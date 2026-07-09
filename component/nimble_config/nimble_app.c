@@ -100,6 +100,11 @@ static const struct ble_gatt_svc_def gatt_svcs[] = {
     { 0 }
 };
 
+/* mcumgr's smp_bt provides the strong version (clears its reassembly buffer); weak no-op when
+ * mcumgr isn't linked into the image. Reset on connect/disconnect so a fresh SMP connection never
+ * inherits a partial packet from a dropped/aborted upload. */
+__attribute__((weak)) void smp_bt_reset_rx(void) { }
+
 static int
 nimble_gap_event(struct ble_gap_event *event, void *arg)
 {
@@ -109,6 +114,7 @@ nimble_gap_event(struct ble_gap_event *event, void *arg)
         printf("[NimBLE] connect %s (handle %d)\n\r",
                    event->connect.status == 0 ? "OK" : "FAIL", event->connect.conn_handle);
         if (event->connect.status == 0) {
+            smp_bt_reset_rx();                  /* fresh connection -> clean SMP reassembly buffer */
             nimble_platform_coex_set_conn(1);   /* BLE link up -> hint WiFi coex */
         } else {
             nimble_advertise();   /* failed — keep advertising */
@@ -117,6 +123,7 @@ nimble_gap_event(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_DISCONNECT:
         printf("[NimBLE] disconnect (reason 0x%x) - re-advertising\n\r",
                    event->disconnect.reason);
+        smp_bt_reset_rx();                       /* drop any partial packet from this connection */
         nimble_platform_coex_set_conn(0);       /* BLE idle -> hint WiFi coex */
         nimble_advertise();
         return 0;
