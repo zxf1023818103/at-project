@@ -85,18 +85,15 @@ if(AT_ENABLE_AWS_OTA)
         AWS_NET_BUFFER_DYNAMIC       # malloc the 2.5 KB MQTT buffer AFTER the TLS handshake (not .bss)
                                      # so the heap-tight server-cert RSA-2048 verify (software modexp,
                                      # since the BL602 HW PKA mis-computes a 2048-bit modulus) has room.
-        AWS_KEY_MAX=1536            # client-key DER staging buffer sized to hold EITHER an EC P-256 key
-                                     # (~138 B, cheap ECDSA CertVerify) OR an RSA-2048 key (~1218 B, heavy
-                                     # sign): the shared aws code + mbedtls_pk_sign handle both key types
-                                     # on both platforms. ~1 KB more .bss than the EC-only 512 (bl602 heap).
+        AWS_KEY_MAX=1536            # client-key DER buffer (aws_iot_demo.c s_key): 1536 holds an EC P-256 key
+                                     # (~138 B) OR an RSA-2048 key (~1192 B), so bl602 supports both. The +1 KB
+                                     # .bss vs the EC-only 512 is affordable on a clean ~49 KB handshake heap
+                                     # (the earlier build-3 OOM at 32 KB was a degraded post-OTA/churn state).
     )
-    # Same key buffer on the shared provisioning lib (aws_provision.c aws_load_key s_key path).
-    # AWS_CERT_MAX sizes the cert/CA base64-decode scratch (s_der), a SEPARATE buffer from AWS_KEY_MAX:
-    # it must hold the LARGEST credential (Amazon Root CA 1 ~837 B, cert ~651-1200 B). If it is too
-    # small, `aws cert`/`aws ca` fail -1 (BUFFER_TOO_SMALL), leaving a stale cert that mismatches a
-    # freshly-provisioned key -> TLS CertificateVerify rejected -> AWS silently drops after the client
-    # Finished -> the handshake hangs at state=12. 1024 holds cert+CA.
-    target_compile_definitions(aws_provision_core PRIVATE AWS_KEY_MAX=1536 AWS_CERT_MAX=1024)
+    # AWS_CERT_MAX sizes the base64-decode scratch (s_der in aws_provision.c), reused for cert/CA/key.
+    # 1536 holds the largest credential DER: an RSA-2048 key ~1192 B (> RSA cert ~861 B / CA ~837 B / EC
+    # key ~138 B). Needed to base64-decode an RSA client key during `aws key`; kept equal to AWS_KEY_MAX.
+    target_compile_definitions(aws_provision_core PRIVATE AWS_KEY_MAX=1536 AWS_CERT_MAX=1536)
     target_include_directories(aws_iot PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(aws_iot PUBLIC
         aws_provision_core
