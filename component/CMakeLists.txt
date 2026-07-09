@@ -209,6 +209,18 @@ if(BOUFFALO_CHIP)
     add_subdirectory(corepkcs11_config)
     add_subdirectory(pkcs11_selftest_config)
 
+    # mcumgr SMP-over-BLE DFU (MCUMGR=ON, implies NIMBLE). The shared apache/mynewt-mcumgr core
+    # (mgmt/smp + img/os/fs groups over the tinycbor v7 shim) + tinycbor. These live in the
+    # NOT-BOUFFALO block above (AmebaD default), so add them here for bl602 when the feature is on.
+    # tinycbor_config may already be present (AWSOTA block above); guard it. The bl602 SMP transport
+    # (smp_bt.c) + img/os/fs platform impls are compiled by bouffalo_sdk/mcumgr_port (below).
+    if(AT_ENABLE_MCUMGR)
+        if(NOT TARGET tinycbor_config)
+            add_subdirectory(tinycbor_config)   # TinyCBOR (SMP payload encode/decode)
+        endif()
+        add_subdirectory(mcumgr_config)          # mcumgr core (mgmt/smp + img/os/fs) — mcumgr_port block self-gates to amebad
+    endif()
+
     # Third-party submodules are added by the root CMakeLists.txt before we
     # get here, so zlibstatic / cjson / littlefs are already real targets that
     # bouffalo_sdk's umbrella can pull into its INTERFACE link list.

@@ -110,6 +110,26 @@ ifeq ($(filter $(CRT_BUNDLE),ON OFF),)
 $(error CRT_BUNDLE must be 'ON' or 'OFF')
 endif
 
+# Apache NimBLE host on the on-chip BLE controller (component/bouffalo_sdk/nimble_port). OFF (default,
+# same as AmebaD's AMEBAD_ENABLE_NIMBLE): the base image is WiFi + console + sntp. ON builds a BLE image
+# (advertises `bflb-nimble`, GAP/GATT sample service). proj.conf honors this -D (else defaults OFF).
+#
+# mcumgr SMP-over-BLE DFU (img_mgmt -> ota_flash slot writer + os/fs groups): rides the NimBLE host +
+# smp_bt transport, so MCUMGR=ON forces NIMBLE=ON (NIMBLE is ?= so := overrides it), exactly as
+# project/amebad/Makefile does. Standalone feasibility (no AWSOTA needed).
+# Switch requires a clean configure (make distclean or rm build_<chip>): the CMake cache is sticky.
+ifeq ($(MCUMGR),ON)
+override NIMBLE := ON
+endif
+NIMBLE ?= OFF
+ifeq ($(filter $(NIMBLE),ON OFF),)
+$(error NIMBLE must be 'ON' or 'OFF')
+endif
+MCUMGR ?= OFF
+ifeq ($(filter $(MCUMGR),ON OFF),)
+$(error MCUMGR must be 'ON' or 'OFF')
+endif
+
 # Pick the riscv toolchain bundled with the Bouffalo SDK submodule.
 TOOLCHAIN_BIN := $(realpath $(AT_PROJECT_ROOT)/platform/toolchain_gcc_t-head_linux/bin)
 export PATH := $(TOOLCHAIN_BIN):$(PATH)
@@ -133,6 +153,8 @@ $(BUILD_DIR)/CMakeCache.txt: CMakeLists.txt proj.conf
 	    -DAT_ENABLE_AWS_OTA=$(AWSOTA) \
 	    -DAWS_APP_BUILD=$(APP_BUILD) \
 	    -DAT_ENABLE_CRT_BUNDLE=$(CRT_BUNDLE) \
+	    -DAT_ENABLE_NIMBLE=$(NIMBLE) \
+	    -DAT_ENABLE_MCUMGR=$(MCUMGR) \
 	    -DBOUFFALO_MBEDTLS_HW_GCM=$(HWGCM)
 
 configure: $(BUILD_DIR)/CMakeCache.txt

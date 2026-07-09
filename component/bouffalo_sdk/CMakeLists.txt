@@ -247,6 +247,17 @@ if(CONFIG_BLUETOOTH)
     endif()
 endif()
 
+# mcumgr SMP-over-BLE DFU (MCUMGR=ON, implies NIMBLE — forced ON by the Makefile). The bl602 SMP port
+# (smp_bt.c transport + smp_img_ota.c/smp_fs.c impls + a bl602 sys_reset shim). The shared nimble_app.c
+# (compiled into the `nimble` lib) registers the SMP GATT service + img/os/fs groups under
+# AT_PROJECT_MCUMGR (smp_bt_register + smp_img_ota_init), the SAME call site AmebaD uses — so stamp
+# that macro onto the nimble lib. mcumgr_port is defined only under AT_ENABLE_MCUMGR (which implies
+# CONFIG_BLUETOOTH + AT_ENABLE_NIMBLE, so the `nimble` target it references exists).
+if(AT_ENABLE_MCUMGR)
+    add_subdirectory(mcumgr_port)
+    target_compile_definitions(nimble PRIVATE AT_PROJECT_MCUMGR)
+endif()
+
 add_library(bouffalo_sdk INTERFACE)
 target_link_libraries(bouffalo_sdk INTERFACE
     bflb_autoconf
@@ -484,6 +495,15 @@ endif()
 # NimBLE host (pulls its mbedcrypto/mbedtls_config deps + the controller transitively).
 if(TARGET nimble)
     target_link_libraries(bouffalo_sdk INTERFACE nimble)
+endif()
+# mcumgr SMP core + tinycbor + the bl602 SMP port. All inside the umbrella --start-group below
+# (cross-refs: mcumgr <-> tinycbor cbor calls, mcumgr_port -> mcumgr/nimble/ota_flash_port). Real
+# archive names — the *_config umbrellas wouldn't expand inside a link group. AT_PROJECT_MCUMGR onto
+# the app (main.cpp) so its boot log prints the mcumgr firmware tag (verifiable across a BLE DFU).
+if(AT_ENABLE_MCUMGR)
+    target_link_libraries(bouffalo_sdk INTERFACE mcumgr tinycbor mcumgr_port)
+    target_compile_definitions(bouffalo_sdk INTERFACE
+        AT_PROJECT_MCUMGR "AMEBAD_MCUMGR_FW_VERSION=\"bl602-mcumgr\"")
 endif()
 
 # Cross-platform third-party libs from component/thirdparty/ (built by its
