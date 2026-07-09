@@ -471,7 +471,18 @@ if(AMEBAD_ENABLE_AWS_IOT)
     target_link_libraries(target_img2_km4 PRIVATE aws_provision_core)
     target_include_directories(target_img2_km4 PRIVATE "${AT_ROOT}/component/aws_iot_config")
     target_compile_definitions(aws_provision_core PRIVATE AWS_KEY_MAX=1536)
-    target_compile_definitions(target_img2_km4 PRIVATE AWS_KEY_MAX=1536)
+    # Lean AWS shape, aligned with bl602 (component/aws_iot_config): MQTT/CBOR OTA data plane (no 2nd
+    # HTTPS-S3 TLS), static task stacks in .bss, no separate telemetry task, dynamic MQTT net buffer.
+    # AWS_KEY_MAX stays 1536 (AmebaD provisions an RSA-2048 client key). AWS_AGENT_STACK_WORDS 3584 =
+    # bl602's cert-verify peak; AmebaD's HW-PKA server verify needs no more (configCHECK catches overflow).
+    target_compile_definitions(target_img2_km4 PRIVATE
+        AWS_KEY_MAX=1536
+        OTA_APP_ENABLE_HTTP=0
+        AWS_STATIC_TASKS
+        AWS_NO_TELEMETRY
+        AWS_NET_BUFFER_DYNAMIC
+        AWS_NET_BUFFER_SZ=1536
+        AWS_AGENT_STACK_WORDS=3584)
     if(AMEBAD_TFM_STORAGE)
         target_sources(target_img2_km4 PRIVATE "${AT_ROOT}/component/aws_iot_config/aws_secret_store_its.c")
     else()

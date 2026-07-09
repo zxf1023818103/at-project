@@ -51,7 +51,7 @@ BENCH      ?= OFF          # ON -> upstream Mbed TLS v3.6.4 crypto microbenchmar
 MINIMAL    ?= OFF          # ON -> strip diagnostics (iperf / KAT / HW-crypto bench); WiFi-connect only (pairs with TFM=ON)
 ROMKAT     ?= OFF          # ON -> ROM mbedTLS 2.4.0 / HW-crypto self-tests (no upstream mbedTLS; drops fs_cli md5sum/sha*sum)
 IPERF      ?= OFF          # ON -> `iperf` console command over upstream iperf3 + BSD-sockets shim (syscall_config)
-CARES      ?= OFF          # ON -> resolve DNS via c-ares (select event loop) instead of the FreeRTOS+TCP resolver (AWS/SNTP/OTA)
+CARES      ?= ON           # DEFAULT-ON on BOTH platforms (aligned with project/bouffalo/Makefile): resolve DNS via c-ares (select event loop) instead of the FreeRTOS+TCP resolver (AWS/SNTP/OTA)
 WPS        ?= OFF          # ON -> `wps` console command (WPS PBC/PIN connect test; compiles wifi_wps_config.c, links lib_wps.a)
 TFM        ?= OFF          # ON -> build + boot in-tree TF-M SPE (app_km4 becomes the NS side)
 TLS_BACKEND ?= picotls     # AWS TLS-over-TCP backend. DEFAULT picotls (TLS 1.3) on BOTH platforms (aligned with project/bouffalo/Makefile): AWS IoT + S3 are TLS 1.3, picotls = ~112 KB smaller flash + ~24 KB less runtime heap than fallback. `fallback` (co-link picotls/TLS1.3 + mbedTLS/TLS1.2, per-connection NetworkCredentials_t.backendMode: force picotls for AWS MQTT/OTA, picotls->mbedTLS for ota_http to a non-1.3 server) and `mbedtls` (TLS 1.2/1.3) stay selectable. Switch wiring: component/network_transport/transport_tls.h.
