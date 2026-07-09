@@ -278,3 +278,16 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
         printf( "[TCP] network down\r\n" );
     }
 }
+
+/* Drive the platform's got-IP op (e.g. bl602 wifi_mgmr_api_ip_got) from an app-provided STRONG
+ * vApplicationIPNetworkEventHook that replaces the weak one above but still owns the driver signal.
+ * bl602's wifi_mgmr holds a "wifiConnected_ipObtaining" state it only leaves on this cue; FreeRTOS+TCP
+ * runs DHCP, so without it the driver hits its ip-obtaining timeout, self-disconnects, and the link
+ * churns. Safe no-op if no ops / no on_got_ip are registered (e.g. a platform that doesn't need it). */
+void at_netif_signal_got_ip( uint32_t ulIP )
+{
+    if( ( s_ops != NULL ) && ( s_ops->on_got_ip != NULL ) )
+    {
+        s_ops->on_got_ip( ulIP );
+    }
+}

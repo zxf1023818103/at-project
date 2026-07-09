@@ -37,8 +37,9 @@ target_link_libraries(at PRIVATE bouffalo_sdk)
 # over coreHTTP + llhttp + the shared TLS transport, streaming into the BL602 OTA slot writer
 # (bouffalo_sdk/ota_flash_port). main() registers it from app_console_register_platform(). bl602 only:
 # its https path needs the mbedTLS TLS transport (TLS_FreeRTOS_*), which - like aws_iot - is only
-# linked on bl602 (bl616/cl leave it undefined). ota_flash_port itself (no TLS) rides all chips unused.
-if(BOUFFALO_CHIP STREQUAL "bl602")
+# linked with the AWS stack (AT_ENABLE_AWS). AWS=OFF (e.g. a pure MCUMGR image) drops ota_http with it;
+# main.cpp gates ota_http_register() on the matching AT_PROJECT_AWS. ota_flash_port (no TLS) rides on.
+if(BOUFFALO_CHIP STREQUAL "bl602" AND AT_ENABLE_AWS)
     target_sources(at PRIVATE ${OTA_HTTP_SOURCES})
     set_source_files_properties("${AT_ROOT}/component/ota_http_config/urlparse.c" PROPERTIES COMPILE_OPTIONS "-w")
     target_link_libraries(at PRIVATE ota_http_config corehttp_config)

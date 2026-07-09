@@ -396,8 +396,13 @@ target_link_libraries(bouffalo_sdk INTERFACE net_cli)
 # in the --start-group with the mbedtls archives below). bl602 only: aws_get_mac() + the aws_cli
 # registration in src/main.cpp are under `#if defined BL602`; bl616/cl would leave aws_get_mac
 # undefined. main() calls aws_cli_register(); the `aws` command provisions + starts telemetry.
-if("${BOUFFALO_CHIP}" STREQUAL "bl602")
+# AWS=ON (make AWS=ON, or implied by AWSOTA=ON): link the AWS IoT stack. OFF (default) links NONE of it
+# -> a leaner image (no aws_iot / coreMQTT / TLS transport / ota_http), e.g. a pure NIMBLE/MCUMGR BLE-DFU
+# image. AT_PROJECT_AWS gates the `aws` CLI + telemetry auto-start (and, mirroring AmebaD, the `ota_http`
+# command, which rides the same TLS transport) in src/main.cpp.
+if("${BOUFFALO_CHIP}" STREQUAL "bl602" AND AT_ENABLE_AWS)
     target_link_libraries(bouffalo_sdk INTERFACE aws_iot)
+    target_compile_definitions(bouffalo_sdk INTERFACE AT_PROJECT_AWS)
     # AWS credential provisioning pastes a ~1.6 KB base64 body as ONE `aws cert/key/ca <b64>` CLI
     # argument. The shared monitor's line buffer defaults to 512 on RISC-V (monitor.c) — too small,
     # so the paste would be silently truncated. Bump it to 2560 (same as AmebaD KM4). Costs ~2 KB

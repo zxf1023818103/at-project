@@ -1418,6 +1418,11 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
         printf( "[APP] ==== network UP ====  DHCP IP %d.%d.%d.%d\n",
                 (int)( ulIP & 0xff ), (int)( ( ulIP >> 8 ) & 0xff ),
                 (int)( ( ulIP >> 16 ) & 0xff ), (int)( ( ulIP >> 24 ) & 0xff ) );
+        /* Advance the WiFi driver out of "ipObtaining" (bl602 wifi_mgmr_api_ip_got via the netif ops).
+         * FreeRTOS+TCP owns DHCP, so the driver never sees its own got-IP cue; the weak at_netif hook
+         * this strong one replaced used to do it, and without it the driver self-disconnects (~ip-
+         * obtaining timeout) and the link churns every ~30 s. */
+        { extern void at_netif_signal_got_ip( uint32_t ); at_netif_signal_got_ip( ulIP ); }
         wifi_service_on_event( WIFI_SVC_EV_GOTIP );
         app_on_network_up();   /* SNTP + AWS/telemetry; the services are once-guarded internally */
     }
@@ -1554,9 +1559,9 @@ void app_console_register_platform(void)
 {
     bouffalo_monitor_cmds_register();   // reboot
     flash_cli_register();               // shared `flash` lock/unlock/status (component/flash_cli_config)
-#if defined BL602
+#if defined(BL602) && defined(AT_PROJECT_AWS)
     // Shared `ota_http <url>` (bflb_flash + pt_table + inline-xz slot writer). bl602 only: it needs the
-    // mbedTLS TLS transport for https, which - like aws_iot - is only linked on bl602 (heap).
+    // mbedTLS TLS transport for https, which - like aws_iot - is only linked with the AWS stack (AWS=ON).
     { extern void ota_http_register(void); ota_http_register(); }
 #endif
 #ifndef AT_PROJECT_AWS_IOT
@@ -1574,7 +1579,9 @@ void app_console_register_platform(void)
     // The shared wifi_service `wifi` (forget/drop) + minimal AWS IoT telemetry (`aws`): only BL602/BL702
     // supply the wifi_port_* HAL / fit the telemetry heap. Same libraries + credential model as AmebaD.
     { extern void wifi_cli_register(void); wifi_cli_register(); }
+#ifdef AT_PROJECT_AWS
     { extern void aws_cli_register(void); aws_cli_register(); }
+#endif
 #endif
 #ifdef AT_CRYPTO_SELFTESTS
     // Opt-in diagnostic image (make CRYPTO_SELFTESTS=ON): the Mbed TLS crypto self-tests. Default OFF
@@ -1590,7 +1597,7 @@ void app_network_up_start_services(void)
     // coreSNTP UTC time sync (idempotent). BL602/BL702 reach here from GOT_IP; the other Bouffalo chips
     // start SNTP from main() instead (they don't post GOT_IP).
     sntp_sync_start();
-#if defined BL602 || defined BL702
+#if (defined BL602 || defined BL702) && defined(AT_PROJECT_AWS)
     // Auto-start AWS once DHCP is up (bl602). Idempotent + a no-op until provisioned, so it Just Works
     // after `aws endpoint/ca/cert/key ...`; the connect loop self-heals until SNTP supplies real UTC
     // (needed for the mbedTLS server-cert validity check). AWSOTA=ON runs the shared agent+telemetry+OTA

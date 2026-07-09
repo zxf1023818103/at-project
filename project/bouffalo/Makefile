@@ -87,6 +87,20 @@ ifeq ($(filter $(AWSOTA),ON OFF),)
 $(error AWSOTA must be 'ON' or 'OFF')
 endif
 
+# Lean AWS IoT telemetry client (component/aws_iot_config: aws_telemetry.c) + the `aws` provisioning
+# CLI + the shared mbedTLS/picotls TLS transport + the `ota_http <url>` command (which rides that same
+# transport). OFF (default) links NONE of that stack -> a leaner image with no AWS/TLS-OTA footprint
+# (e.g. a pure NIMBLE/MCUMGR BLE-DFU image). ON links the telemetry client + ota_http. AWSOTA=ON implies
+# AWS=ON (the coreMQTT-Agent OTA variant builds on the same TLS transport). Switching requires a clean
+# configure (rm build_<chip> or delete CMakeCache.txt): the CMake cache is sticky.
+AWS ?= OFF
+ifeq ($(AWSOTA),ON)
+override AWS := ON
+endif
+ifeq ($(filter $(AWS),ON OFF),)
+$(error AWS must be 'ON' or 'OFF')
+endif
+
 # OTA firmware version-gate build number (appFirmwareVersion .build). The FreeRTOS OTA agent only
 # commits an update whose version EXCEEDS the running image, so bump this above the running build for
 # an OTA target: make CHIP=bl602 BOARD=bl602dk AWSOTA=ON APP_BUILD=3
@@ -150,6 +164,7 @@ $(BUILD_DIR)/CMakeCache.txt: CMakeLists.txt proj.conf
 	    -DTLS_BACKEND=$(TLS_BACKEND) \
 	    -DAT_ENABLE_CARES=$(CARES) \
 	    -DAT_ENABLE_QUIC=$(QUIC) \
+	    -DAT_ENABLE_AWS=$(AWS) \
 	    -DAT_ENABLE_AWS_OTA=$(AWSOTA) \
 	    -DAWS_APP_BUILD=$(APP_BUILD) \
 	    -DAT_ENABLE_CRT_BUNDLE=$(CRT_BUNDLE) \
