@@ -135,6 +135,26 @@ Expect `amebad_app.cpp:… [KM4] at-project image2` → `[LFS] mount OK` → WiF
 Pass `-NoBootLog` to skip the capture. (Verified 2026-07-11: a COM14 reset + COM5 read reproduces
 the boot burst cleanly — the mechanism the `[post]` step uses.)
 
+## Config injection — pre-provision via [[lfs-image-preconfig]]
+
+Bake WiFi creds / TZ / NTP / AWS cert+CA / custom files into the LittleFS region so the board
+boots already provisioned (no post-flash console `setenv`). `Image_All.bin` is a 4 MB merge of
+firmware @0 + `lfs.bin` @`0x300000`; generate a pre-configured `lfs.bin` and `dd` it into the
+image at `seek=768` (768 × 4 KB = 0x300000) before flashing:
+```bash
+.claude/skills/lfs-image-preconfig/gen_lfs.sh --out /tmp/lfs_pre.bin \
+    --wifi-ssid ZengOTA --wifi-password 123456789 --tz CST-8 --ntp-server pool.ntp.org \
+    --endpoint a1xxx-ats.iot.ap-southeast-1.amazonaws.com \
+    --aws-cert build/aws/cert.pem --ca build/aws/AmazonRootCA1.pem
+dd if=/tmp/lfs_pre.bin of=build/amebad/Image_All.bin bs=4096 seek=768 conv=notrunc status=none
+# then flash Image_All.bin as usual (Run section) and read C:\Users\Public\amebad_bootlog.txt
+```
+Pass the same config flags straight through to `gen_lfs.sh`. The image is 960 KB (0x300000–
+0x3F0000); it does NOT touch the TF-M ITS/PS region at 0x3F0000, so it is safe on TF-M images —
+but **the AWS private key on a TF-M image lives in ITS and can't be pre-seeded this way**: bake
+cert/CA/endpoint/env via lfs, then push only the key over the console (the `-Key` flow below, or
+`aws key <b64>`). On a `TFM=OFF` image `--aws-key` pre-seeds the file-backed key too.
+
 ## Provision AWS IoT credentials (AWS=ON image)
 
 The `make AWS=ON` image ships **no embedded identity** — it idle-retries until provisioned, so

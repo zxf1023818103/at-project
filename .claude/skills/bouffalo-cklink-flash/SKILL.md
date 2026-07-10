@@ -74,7 +74,30 @@ Expect `[WSVC] ... found/cached -> connect` → `network UP DHCP IP …` (or `[W
 **★ whole-flash (`--single`) WIPES the LittleFS/KV partition** (@0x300000) → cached WiFi
 creds are gone; the board boots to `[WSVC] no WIFI_SSID/PASSWORD provisioned - staying
 offline`. Re-provision over COM19: `setenv WIFI_SSID <ssid>` / `setenv WIFI_PASSWORD <pw>`
-then reset (writes to the KV in LittleFS).
+then reset (writes to the KV in LittleFS) — OR bake it in up-front (next).
+
+### ★ Config injection — pre-provision via [[lfs-image-preconfig]]
+Instead of a wipe-then-`setenv`, bake WiFi creds / TZ / NTP / AWS cert+CA / custom files INTO
+the whole-flash so the board comes up already provisioned. Generate the LittleFS image with
+`gen_lfs.sh` (pass the same flags straight through), `dd` it into the whole-flash at `0x300000`
+(seek=768×4 KB), then flash `-Mode whole`:
+```
+make CHIP=bl602 BOARD=bl602dk               # builds at_bl602_whole_flash_data.bin (iap boot2)
+.claude/skills/lfs-image-preconfig/gen_lfs.sh --out /tmp/lfs_pre.bin \
+    --wifi-ssid ZengOTA --wifi-password 123456789 --tz CST-8 \
+    --ntp-server pool.ntp.org --endpoint a1xxx-ats.iot.ap-southeast-1.amazonaws.com \
+    --aws-cert build/aws/cert.pem --ca build/aws/AmazonRootCA1.pem
+cp project/bouffalo/build_bl602/at_bl602_whole_flash_data.bin /tmp/whole_pre.bin
+dd if=/tmp/lfs_pre.bin of=/tmp/whole_pre.bin bs=4096 seek=768 conv=notrunc status=none
+cp /tmp/whole_pre.bin /mnt/d/MCU_Tools/bflb-cklink/fw_bl602/at_bl602_whole_flash_data.bin
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\Public\bl602_uart_flash.ps1 -Mode whole
+powershell.exe -NoProfile -Command "Get-Content C:\Users\Public\bl602_bootlog.txt"   # -> already connected
+```
+Verified 2026-07-11: boots straight to `[WSVC] ZengOTA found -> connect` → `network UP` with the
+baked-in creds + `env` showing the pre-seeded vars. (bl602 has no TF-M, so an `--aws-key` also
+pre-seeds; on an amebad TF-M image the key still needs a post-flash `aws key` — see the sub-skill.)
+Alternative without a rebuild/embed: flash just the region — `--single --firmware lfs_pre.bin
+--addr 0x300000` (the bl602 tool takes `--addr`); leaves the firmware untouched.
 
 ### ★ LFS-preserving firmware update — UART `--pt --firmware` (NO `--single`)
 To update ONLY the firmware and **keep the provisioned LittleFS/KV** (WiFi creds, etc.), use
