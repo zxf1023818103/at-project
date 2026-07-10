@@ -69,9 +69,21 @@ The image lands at raw flash `0x300000`. Two ways, both used by the flash skills
 `[[bouffalo-cklink-flash]]` (bl602) and `[[amebad-imagetool-flash]]` both take the same config
 flags and forward them here, then embed the result — see their "config injection" sections.
 
-## Verified (2026-07-11, bl602 HW)
+## Verified (2026-07-11, HW)
 
-`gen_lfs.sh --wifi-ssid ZengOTA --wifi-password … --tz CST-8 --env PRESEED_MARK=…` → embed into
-whole_flash → `-Mode whole` flash → the board booted straight to `[WSVC] ZengOTA found -> connect`
-→ `network UP 192.168.4.234`, and `env` listed `PRESEED_MARK`/`TZ`/`WIFI_SSID`/`WIFI_PASSWORD` —
-all from the baked-in image (the whole-flash had wiped any prior LFS first).
+**Env pre-seed (bl602):** `gen_lfs.sh --wifi-ssid ZengOTA --wifi-password … --tz CST-8 --env
+PRESEED_MARK=…` → embed into whole_flash → `-Mode whole` → board booted straight to `[WSVC] ZengOTA
+found -> connect` → `network UP`, and `env` listed every baked-in var (the whole-flash wiped any
+prior LFS first).
+
+**AWS pre-seed (endpoint + EC client cert/key + Amazon Root CA, all in lfs.bin):**
+- **bl602** `make AWS=ON` (lean telemetry client, picotls): booted → WiFi → `[AWS] TLS connect …:8883`
+  → picotls handshake PASS (server cert verified vs the pre-seeded CA; client cert `a81710cf6427`) →
+  `[AWS] connected to AWS IoT Core` → **`[AWS] published seq=0 to bl602/a81710cf6427/telemetry`**. ✅
+- **amebad `make AWS=ON TFM=OFF`** (cert+key in LFS, aligned with bl602 — TF-M ITS is bypassed):
+  `[AWS] provisioned: endpoint=… certPath=aws_cert.der key=121B` → TLS handshake PASS → **`[AWS] MQTT
+  connected to AWS IoT Core as '2442e3458d85'`** using the LFS-stored EC cert/key. The AWS connection
+  (telemetry's transport) is up; the `aws_iot_demo` telemetry publish (`[AWS] TX bw20/…`) is gated
+  behind `ota_app_is_active()` and stays paused while the OTA agent churns a job doc — an amebad
+  OTA-agent / stale-job matter, NOT a pre-config issue (bl602's lean client has no such gate). The
+  file-backed key path is what `TFM=OFF` selects (`aws_secret_store_file.c`).
