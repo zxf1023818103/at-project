@@ -1,15 +1,80 @@
 ---
 name: bouffalo-cklink-flash
-description: Flash Bouffalo (BL602/BL616/BL616CL) firmware over CKLink from WSL, then reset + read the console log + optionally start a GDB server. Drives the patched bflb-iot-tool (auto-download, no BOOT button) via PowerShell/cmd.exe, handles the "flash succeeds but reset always fails" trap (use AT+RST to reboot), the two-UART/two-baud console split (AT COM@115200 vs log COM@2M), and the C-Sky DebugServer + gdb-over-WSL caveats.
+description: Flash Bouffalo (BL602/BL616/BL616CL) firmware from WSL, then reset + read the console log (COM19 @2M) + optionally start a GDB server. Two paths: (A) ★UART ISP flash of the whole image via COM18 with a synced COM19-RTS reset on "Please Press Reset Key!" — the RELIABLE path when CKLink halt fails; (B) CKLink via the patched bflb-iot-tool. Handles the CKLink "LOAD HELP BIN FAIL" halt-window / two-probe collision trap, the "flash succeeds but reset always fails" trap, the two-UART/two-baud split (AT COM18@115200 vs log COM19@2M), and the C-Sky DebugServer + gdb-over-WSL caveats.
 argument-hint: bl602|bl616|bl616cl [--whole] [--at-port COM18] [--log-port COM19] [--debug]
 allowed-tools: [Bash, Read, Edit]
 ---
 
 # Bouffalo CKLink flash + reset + log + debug (from WSL)
 
-End-to-end HW flow for a Bouffalo dev board (verified on BL602 / bl602dk): flash over
-CKLink, reboot with `AT+RST`, capture the console boot log, and (optionally) bring up a
-GDB server. All tools are Windows-side; drive them from WSL via `cmd.exe`/`powershell.exe`.
+End-to-end HW flow for a Bouffalo dev board (verified on BL602 / bl602dk): flash, reboot,
+capture the console boot log (COM19 @2M), and (optionally) bring up a GDB server. All tools
+are Windows-side; drive them from WSL via `cmd.exe`/`powershell.exe`.
+
+> **Which path?** On this bench CKLink (§CKLink below) intermittently dies at **`LOAD HELP
+> BIN FAIL` / `Target is not open`** — the running app remuxes IO3=JTAG so the probe reads
+> flash id but can't halt the CPU to load the eflash helper, and two VID_42BF probes collide
+> on the RISC-V DM (software-disable is *blocked on this Windows edition*, so even unplugging
+> leaves stale ghost entries). **When CKLink fails, use the UART ISP path below — it is the
+> proven reliable method (verified 2026-07-11: `Verify success` SHA-match end to end).**
+
+## ★ RELIABLE PATH — UART ISP flash of the whole image (COM18) + synced COM19 RTS reset
+
+Flashes the complete 4 MB image over the boot-ROM UART ISP on **COM18**; a plain **COM19 RTS
+reset** at the tool's prompt drops the chip into the ISP window (no BOOT button, no JTAG). This
+sidesteps the CKLink halt/collision problem entirely.
+
+**Wiring on this bench:** COM18 = UART0 (AT @115200 **and** the ISP-download UART); COM19 =
+console/log @2000000 **and** its FTDI **RTS is wired to the module reset**. Logs are on COM19.
+
+**Step 1 — build the whole image with the IAP boot2.** The whole-flash assembler
+(`component/bouffalo_sdk/bflb_image_tool/bflb_elf_to_bin.py`) copies `board_configs/bl602dk/boot2_*.bin`
+(glob — keep exactly ONE boot2 there). The UART-ISP whole-flash needs the **IAP** boot2, so
+replace the release boot2 with `boot2_iap_release_5.8.1.bin`:
+```
+bcfg=component/bouffalo_sdk/bflb_image_tool/board_configs/bl602dk
+git rm -q "$bcfg/boot2_bl602_release_v8.1.3.bin"
+cp "/mnt/d/MCU_Tools/下载需要的其它分区文件/boot2_iap_release_5.8.1.bin" "$bcfg/boot2_iap_release_5.8.1.bin"
+git add "$bcfg/boot2_iap_release_5.8.1.bin"
+# force re-assemble (the whole_flash custom cmd DEPENDS on the elf, not boot2):
+rm -f project/bouffalo/build_bl602/boot2_*.bin project/bouffalo/build_bl602/*whole_flash*.bin project/bouffalo/build_bl602/flash_prog_cfg.ini
+cd project/bouffalo && make CHIP=bl602 BOARD=bl602dk    # embeds boot2_iap_release_5.8.1.bin (41512 B)
+```
+
+**Step 2 — stage + flash.** Copy the whole image to the Windows staging dir, then run the
+**separate** UART tool (`bl602_flash_download_tool`, NOT the cklink wrapper). It prints
+`Please Press Reset Key!` and blocks; a script watches for it and pulses COM19 RTS:
+```
+cp project/bouffalo/build_bl602/at_bl602_whole_flash_data.bin /mnt/d/MCU_Tools/bflb-cklink/fw_bl602/
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\Public\bl602_uart_flash.ps1
+```
+The bare tool invocation the script runs:
+```
+cd D:\MCU_Tools\bl602_flash_download_tool
+.\bflb_iot_tool.exe --interface uart --port COM18 --single \
+  --firmware D:\MCU_Tools\bflb-cklink\fw_bl602\at_bl602_whole_flash_data.bin \
+  --chipname bl602 --baudrate 921600
+```
+The synced reset = COM19 RTS **pull-down then pull-up** = `.RtsEnable=$true; sleep 200ms;
+.RtsEnable=$false` (DTR stays false). Success = `Sha caled by host == caled by dev` →
+`Verify success` → `Program Finished` → `[All Success]`.
+
+**Step 3 — boot the new firmware:** one more COM19 RTS reset (same pull-down/up), then read
+COM19 @2M for the boot log.
+
+**Script** `C:\Users\Public\bl602_uart_flash.ps1` (Start-Process the tool with
+`-RedirectStandardOutput`, poll the file for `Press Reset`, pulse COM19 RTS, then poll for
+`Program Finished`/`Fail`; **do NOT kill the proc early** — the helper "Load NNN/404840"
+progress is the eflash loader, the firmware program+verify runs after it, ~17 s total).
+
+**★ whole-flash WIPES the LittleFS/KV partition** (@0x300000) → cached WiFi creds are gone;
+the board boots to `[WSVC] no WIFI_SSID/PASSWORD provisioned - staying offline`. Re-provision
+over COM19: `setenv WIFI_SSID <ssid>` / `setenv WIFI_PASSWORD <pw>` then reset. (The CKLink
+*component* flash below preserves LittleFS; the UART whole-flash does not.)
+
+---
+
+## CKLink path (patched bflb-iot-tool) — use only if UART ISP is unavailable
 
 ## Local tool locations (this machine)
 - CKLink flasher: `D:\MCU_Tools\bflb-cklink\bflb-cklink.cmd` (patched 32-bit bflb-iot-tool
