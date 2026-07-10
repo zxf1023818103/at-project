@@ -1,13 +1,15 @@
 /*
- * component/app_startup_config - shared startup helpers for both platform main()s.
+ * app_startup.h - the shared startup contract between src/main.cpp and the AmebaD port.
  *
- * src/main.cpp holds two platform main()s (AmebaD KM4, Bouffalo BL602/BL616/...). They shared three
- * near-identical startup blocks: LittleFS+env+TZ init, console + CLI registration, and the network-up
- * service start. Those blocks live here once; each main() calls the helpers and supplies the
- * platform-specific parts through the weak seams below. The seams default to no-ops here and are
- * strong-overridden per platform in src/main.cpp (app_network_dns_reinit is strong-overridden by
- * component/c-ares_config when CARES=ON). The symbols the helpers call (vfs_lfs_mount / *_cli_register /
- * monitor_start) resolve at the final image link, same forward-extern style src/main.cpp already uses.
+ * The shared startup skeleton (app_startup_run + the helpers below) and the Bouffalo / Ameba-newer
+ * platform bodies live in src/main.cpp; the AmebaD KM4 body lives in its own TU,
+ * component/amebad/app_port/amebad_app.cpp (kept separate: it is large and XIP-layout-sensitive).
+ * Both TUs include this header for the hook contract. The startup path shared three near-identical
+ * blocks -- LittleFS+env+TZ init, console + CLI registration, and the network-up service start; those
+ * live once in src/main.cpp. The weak seams below default to no-ops (in src/main.cpp) and are
+ * strong-overridden per platform (AmebaD in amebad_app.cpp; Bouffalo in src/main.cpp itself;
+ * app_network_dns_reinit by component/c-ares_config when CARES=ON). The symbols the helpers call
+ * (vfs_lfs_mount / *_cli_register / monitor_start) resolve at the final image link.
  */
 #ifndef APP_STARTUP_H
 #define APP_STARTUP_H

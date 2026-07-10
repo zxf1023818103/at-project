@@ -536,12 +536,11 @@ target_link_libraries(target_img2_km4 PRIVATE wifi_service)
 # app_console_register_platform() calls net_cli_register(). AmebaD-specific `iwpriv` stays in wifi_cli.c.
 target_link_libraries(target_img2_km4 PRIVATE net_cli)
 
-# Shared startup helpers (component/app_startup_config): app_env_time_init / app_console_start /
-# app_on_network_up, called from main() + the network-up hook. Linked unconditionally (even the QUIC
-# image, which drops the console libs, still calls app_on_network_up from its hook). Placed BEFORE the
-# --start-group below so its console-TU references into monitor/monitor_cmds/freertos_cli (which live in
-# _diag_grp inside the group) resolve; the network TU (app_startup_net.c) is self-contained.
-target_link_libraries(target_img2_km4 PRIVATE app_startup)
+# The shared startup skeleton (app_startup_run + the app_platform_* weak hooks) now lives directly in
+# src/main.cpp; its contract header app_startup.h is in src/, so the AmebaD port TU
+# (component/amebad/app_port/amebad_app.cpp, which strong-overrides those hooks) needs src/ on its
+# include path to find it.
+target_include_directories(target_img2_km4 PRIVATE "${AT_ROOT}/src")
 
 # coreSNTP UTC time-sync is DEFAULT-ON in every non-QUIC image: plain SNTPv4 over UDP/FreeRTOS-Plus-
 # TCP feeding newlib's wall clock (time_base.c via amebad_set_unix_time). coreSNTP is a leaf — it
