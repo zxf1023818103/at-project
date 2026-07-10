@@ -50,6 +50,9 @@ endif()
 set(_tfm_bindir "${CMAKE_CURRENT_BINARY_DIR}/tfm_spe")
 set(_tfm_export "${CMAKE_CURRENT_BINARY_DIR}/tfm_spe_export")
 set(_tfm_s_bin  "${_tfm_bindir}/bin/tfm_s.bin")
+# Explicit ExternalProject stamp dir (so the reconfigure-on-config-change wipe below can drop the
+# configure stamp deterministically, not guess ExternalProject's default <prefix>/src/*-stamp path).
+set(_tfm_stamp  "${CMAKE_CURRENT_BINARY_DIR}/tfm_spe-stamp")
 
 set(_tfm_build_type "${CMAKE_BUILD_TYPE}")
 if(NOT _tfm_build_type)
@@ -85,6 +88,35 @@ if(AMEBAD_TFM_STORAGE)
     list(APPEND _tfm_args "-DAMEBAD_TFM_STORAGE=ON")
 endif()
 
+# ---- reconfigure guard: wipe the SPE sub-build when its config changed --------
+# tfm_spe is an ExternalProject with a custom CONFIGURE_COMMAND, so it runs configure ONCE (stamp-
+# gated) and NEVER re-runs it on a parent cache-var change. Worse, platform/rtl8721d/config.cmake
+# fans AMEBAD_TFM_STORAGE out into a cascade of `set(... CACHE ...)` vars (PLATFORM_DEFAULT_NV_COUNTERS,
+# PS_ENCRYPTION, TFM_PARTITION_CRYPTO, ...) — and `set(CACHE)` is "set only if unset", so even a forced
+# re-configure on a dirty cache can't flip them. The only reliable switch is a CLEAN tfm_spe tree.
+# So: compare the storage flag baked into the existing CMakeCache.txt against the one we want now
+# (STORAGE is the sole knob that drives config.cmake's branch); on a mismatch, drop the SPE build tree
+# + its stamps so ExternalProject re-runs configure from scratch. Fixes `make AWS=ON` <-> `QUIC=ON`
+# leaving a stale SPE (which used to surface as a spurious platform_nv_counters_ids.h / wrong-config
+# build until a manual `rm -rf build/app_km4/app_km4_secure`). This runs at every app_km4 reconfigure
+# (the Makefile re-invokes cmake with -DAMEBAD_TFM_STORAGE each build), so it self-heals.
+set(_want_storage 0)
+if(AMEBAD_TFM_STORAGE)
+    set(_want_storage 1)
+endif()
+if(EXISTS "${_tfm_bindir}/CMakeCache.txt")
+    set(_have_storage 0)
+    file(STRINGS "${_tfm_bindir}/CMakeCache.txt" _s REGEX "^AMEBAD_TFM_STORAGE:.*=ON")
+    if(_s)
+        set(_have_storage 1)
+    endif()
+    if(NOT (_have_storage EQUAL _want_storage))
+        message(STATUS "app_km4_secure: AMEBAD_TFM_STORAGE changed (was ${_have_storage}, want ${_want_storage}) "
+                       "-> wiping stale TF-M SPE sub-build for a clean reconfigure")
+        file(REMOVE_RECURSE "${_tfm_bindir}" "${_tfm_stamp}" "${_tfm_export}")
+    endif()
+endif()
+
 # Skip TF-M's CC3XX mbedcrypto patch (0005): it targets mbedtls-3.6.2 and does NOT apply to
 # our shared 3.6.4, and the RTL8721D has no CryptoCell (CRYPTO_HW_ACCELERATOR=OFF -> vanilla
 # software PSA driver wrappers), so it is unneeded. Renaming it out of the *.patch glob that
@@ -114,6 +146,7 @@ set(_env "${CMAKE_COMMAND}" -E env "PATH=${_tc_bin}:$ENV{PATH}")
 ExternalProject_Add(tfm_spe
     SOURCE_DIR  "${_tfm_src}"
     BINARY_DIR  "${_tfm_bindir}"
+    STAMP_DIR   "${_tfm_stamp}"
     CONFIGURE_COMMAND
         ${_env} "${CMAKE_COMMAND}" -G "Unix Makefiles"
                 -S "${_tfm_src}" -B "${_tfm_bindir}" ${_tfm_args}
