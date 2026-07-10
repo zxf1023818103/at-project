@@ -6,7 +6,11 @@
 # Started once via sntp_sync_start() from each platform's boot / network-up.
 #
 # The AmebaD HW-RTC mirror (rtc_time_store) and the newlib date self-test (time_selftest_run)
-# are WEAK hooks — AmebaD app_km4 provides the strong defs; bl602 links no-ops.
+# are WEAK hooks — sntp_time.c calls them only if a strong def is present, else no-op.
+# time_selftest.c lives in THIS dir (a shared, platform-neutral newlib date/time demo: newlib +
+# rxi at_log.h only, no SDK deps). It is NOT compiled into the sntp_time archive on purpose: a weak
+# ref won't pull a strong def out of an archive, so a consumer that wants the demo compiles it as a
+# DIRECT source of its executable (AmebaD app_km4 does; any platform can add the same target_sources).
 # rxi log lines print __FILE__: map this dir's prefix away so they show basenames, not full paths.
 add_compile_options("-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=")
 

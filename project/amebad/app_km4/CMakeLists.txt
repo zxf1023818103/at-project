@@ -6,11 +6,12 @@ cmake_minimum_required(VERSION 3.20)
 project(app_km4 C CXX ASM)
 get_filename_component(AT_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 set(AT_ROOT "${AT_ROOT}" CACHE INTERNAL "at-project repo root")
-# The AmebaD KM4 app entry is now the SHARED cross-platform main (src/main.cpp): its AmebaD
-# branch (CONFIG_PLATFORM_8721D) is the former app_km4/main.c. Compile ONLY this file (not the
-# whole src/ AT framework) — the AmebaD branch never references at::AtTask etc. The feature-macro
-# set_property(SOURCE ...) lines below target it via ${AT_MAIN_SRC}.
-set(AT_MAIN_SRC "${AT_ROOT}/src/main.cpp")
+# The AmebaD KM4 image compiles the SHARED, platform-neutral entry (src/main.cpp) + its AmebaD PORT
+# COMPONENT (component/amebad/app_port/amebad_app.cpp, the former app_km4/main.c body). Both are named
+# in AT_MAIN_SRC so (a) add_executable builds both and (b) every feature-macro set_property(SOURCE
+# ${AT_MAIN_SRC} ...) below lands on BOTH — main() reads AT_PROJECT_QUIC, the port reads all the rest.
+# We compile just these two from src+port (not the whole src/ AT framework — the port never uses at::AtTask).
+set(AT_MAIN_SRC "${AT_ROOT}/src/main.cpp" "${AT_ROOT}/component/amebad/app_port/amebad_app.cpp")
 # ROMKAT links the ROM mbedTLS 2.4.0 (ABI-incompatible with upstream mbedcrypto), so fs_cli's
 # md5/sha*sum are compiled out. Tell monitor_config before it is added (AMEBAD_ENABLE_ROM_KAT is
 # a -D cache var, so it is already set here even though the option() default is declared later).
@@ -21,6 +22,7 @@ add_subdirectory(${AT_ROOT}/component ${CMAKE_BINARY_DIR}/component)
 # __FILE__ basename for this app's logs (moved from the deleted root CMakeLists).
 add_compile_options("-fmacro-prefix-map=${CMAKE_CURRENT_LIST_DIR}/=")
 add_compile_options("-fmacro-prefix-map=${AT_ROOT}/src/=")   # the shared main is now src/main.cpp -> basename in [KM4] logs
+add_compile_options("-fmacro-prefix-map=${AT_ROOT}/component/amebad/app_port/=")   # amebad_app.cpp -> basename in [KM4] logs
 
 # AmebaD KM4 HP application image (image2, non-secure) — produces
 # target_img2_km4.axf. **Bootstrap / WIP**: the full KM4 image2 links the
@@ -55,7 +57,7 @@ add_library(amebad_proj_config INTERFACE)
 target_include_directories(amebad_proj_config SYSTEM INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
 
 foreach(_p
-        "${AT_MAIN_SRC}"
+        ${AT_MAIN_SRC}
         "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_img2_is.ld"
         "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_layout_is.ld"
         "${CMAKE_CURRENT_SOURCE_DIR}/rlx8721d_rom_symbol_acut.ld")
@@ -90,7 +92,7 @@ add_custom_command(
 add_custom_target(amebad_km4_img2_ld DEPENDS "${_combined_ld}")
 
 add_executable(target_img2_km4
-    "${AT_MAIN_SRC}"
+    ${AT_MAIN_SRC}
     "${CMAKE_CURRENT_SOURCE_DIR}/cm_backtrace_stub.c"   # weak no-op (CmBacktrace lib not in this checkout)
     "${CMAKE_CURRENT_SOURCE_DIR}/minimal_stubs.c"       # weak CRYPTO_Init / rtw_if_wifi_thread (no TLS/WiFi)
     "${CMAKE_CURRENT_SOURCE_DIR}/wifi_scan_compat.c"    # weak wifi_mode + connect/EAP/promisc stubs
@@ -148,7 +150,7 @@ if(NOT AT_ENABLE_QUIC AND NOT AMEBAD_ENABLE_AWS_IOT)
     # minizip.
     target_link_options(target_img2_km4 PRIVATE
         "-Wl,--wrap=malloc" "-Wl,--wrap=free" "-Wl,--wrap=calloc" "-Wl,--wrap=realloc")
-    set_property(SOURCE "${AT_MAIN_SRC}"
+    set_property(SOURCE ${AT_MAIN_SRC}
                  APPEND PROPERTY COMPILE_DEFINITIONS AMEBAD_ENABLE_MINIZIP)
 endif()
 
@@ -171,7 +173,7 @@ option(AMEBAD_ENABLE_CRYPTOBENCH "Build the upstream Mbed TLS v3.6.4 microbenchm
 # ping + eFuse-HUK probe stay (they ARE the "TF-M is alive" proof).
 option(AMEBAD_ENABLE_MINIMAL "Strip diagnostics: WiFi-connect-only image (pairs with TFM)" OFF)
 if(AMEBAD_ENABLE_MINIMAL)
-    set_property(SOURCE "${AT_MAIN_SRC}"
+    set_property(SOURCE ${AT_MAIN_SRC}
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_MINIMAL)
 endif()
 # AWS IoT Core MQTT/TLS demo (make AWS=ON): replaces the iperf diagnostics with an MQTT
@@ -211,7 +213,7 @@ if(AMEBAD_ENABLE_ROM_KAT)
         "${AT_ROOT}/component/amebad/mbedtls_rom/rom_mbedtls.c"  # ROM mbedTLS ram-map glue (use_hw_crypto_func=0)
         "${CMAKE_CURRENT_SOURCE_DIR}/rom_hwcrypto_test.c"   # HW-vs-SW compare of rom_ssl_ram_map.h hw_crypto_* (IPSEC engine)
     )
-    set_property(SOURCE "${AT_MAIN_SRC}"
+    set_property(SOURCE ${AT_MAIN_SRC}
                  APPEND PROPERTY COMPILE_DEFINITIONS AMEBAD_ROM_KAT)
 endif()
 # WIP: the image2 link still needs the app/WiFi/mbedTLS/lwIP/log/os_dep
@@ -276,10 +278,10 @@ if(AMEBAD_ENABLE_NIMBLE)
     # group. All of mbedtls_config's in-group deps are listed so no member resolves group-external
     # (LINK_GROUP needs real archive names — the umbrella INTERFACE wouldn't expand inside it).
     set(_hci_grp ",amebad_hci,nimble,nimble_config,mbedcrypto,mbedx509,mbedtls,mbedtls_port,mbedtls_config")
-    set_property(SOURCE "${AT_MAIN_SRC}"
+    set_property(SOURCE ${AT_MAIN_SRC}
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_NIMBLE)
 elseif(AMEBAD_ENABLE_HCI)
-    set_property(SOURCE "${AT_MAIN_SRC}"
+    set_property(SOURCE ${AT_MAIN_SRC}
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_HCI)
 endif()
 
@@ -299,7 +301,7 @@ if(AT_ENABLE_MCUMGR)
         "${CMAKE_CURRENT_SOURCE_DIR}/smp_img_ota.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/smp_fs.c")     # fs_mgmt impl over the LittleFS POSIX VFS
     target_link_libraries(target_img2_km4 PRIVATE ota_flash_config)   # ota_flash.h for smp_img_ota.c + ota_flash.c
-    set_property(SOURCE "${AT_MAIN_SRC}"
+    set_property(SOURCE ${AT_MAIN_SRC}
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_MCUMGR
                  "AMEBAD_MCUMGR_FW_VERSION=\"${AMEBAD_FW_VERSION}\"")
     if(NOT AMEBAD_ENABLE_AWS_IOT)
@@ -327,7 +329,7 @@ if(AT_ENABLE_QUIC)
                                                                   # compiled here as a direct source (byte-identical
                                                                   # to before) to keep the XIP-layout-sensitive image
 
-    set_property(SOURCE "${AT_MAIN_SRC}"
+    set_property(SOURCE ${AT_MAIN_SRC}
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_QUIC)
 endif()
 
@@ -343,7 +345,7 @@ if(AMEBAD_ENABLE_PKCS11)
     # /mbedx509. main() auto-runs pkcs11_selftest_run() under AT_PROJECT_PKCS11 (the `pkcs11` console
     # command in the shared lib is unused here — this image auto-runs it instead).
     set(_pk11_grp ",pkcs11_selftest,corepkcs11,mbedcrypto,mbedx509,mbedtls,mbedtls_port,mbedtls_config")
-    set_property(SOURCE "${AT_MAIN_SRC}"
+    set_property(SOURCE ${AT_MAIN_SRC}
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_PKCS11)
 endif()
 
@@ -358,7 +360,7 @@ endif()
 set(_bench_grp "")
 if(AMEBAD_ENABLE_CRYPTOBENCH)
     set(_bench_grp ",mbedtls_bench,mbedcrypto,mbedx509,mbedtls,mbedtls_port,mbedtls_config")
-    set_property(SOURCE "${AT_MAIN_SRC}"
+    set_property(SOURCE ${AT_MAIN_SRC}
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_CRYPTOBENCH)
 endif()
 
@@ -489,7 +491,7 @@ if(AMEBAD_ENABLE_AWS_IOT)
         target_sources(target_img2_km4 PRIVATE "${AT_ROOT}/component/aws_iot_config/aws_secret_store_file.c")
     endif()
     # (--wrap=setenv + the LittleFS mount + env_init are now global, in the NOT-QUIC block above.)
-    set_property(SOURCE "${AT_MAIN_SRC}"
+    set_property(SOURCE ${AT_MAIN_SRC}
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_AWS_IOT)
     # OTA test/version stamp: the firmware version string printed at task start + published in
     # telemetry (aws_iot_demo.c). Override per build: `make AWS=ON FW_VERSION=ota-B` (threaded to
@@ -515,7 +517,7 @@ if(AMEBAD_ENABLE_AWS_IOT)
     # key is in TF-M ITS (see aws_provision.c). main.c mounts LittleFS directly in the AWS arm
     # (verified not to hang in this image's layout), so AT_PROJECT_MINIMAL here only strips the
     # heavy diagnostics — lfs_selftest is skipped (the LFS mount is done by the AWS block instead).
-    set_property(SOURCE "${AT_MAIN_SRC}"
+    set_property(SOURCE ${AT_MAIN_SRC}
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_MINIMAL)
     set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/tfm_psa_selftest.c"
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_MINIMAL)
@@ -548,15 +550,18 @@ target_link_libraries(target_img2_km4 PRIVATE app_startup)
 # async client (sntp_sync_start). Excluded only from QUIC (no console + XIP-layout-sensitive).
 if(NOT AT_ENABLE_QUIC)
     # sntp_time.c moved to the shared component/sntp_time_config (target sntp_time; it links
-    # coreSNTP + backoffAlgorithm + rxi_log transitively). time_selftest.c + rtc_time.c stay
-    # AmebaD-local — rtc_time.c is the AmebaD port of the shared RTC seam (rtc_time.h, target
-    # rtc_time), providing the strong rtc_time_store / rtc_time_seed (bl602 has its own port);
-    # time_selftest.c is the strong time_selftest_run weak-hook sntp_time calls.
+    # coreSNTP + backoffAlgorithm + rxi_log transitively). time_selftest.c ALSO moved there (now a
+    # shared, platform-neutral newlib date/time demo any platform can opt into) but is compiled as a
+    # DIRECT source of the executable, not pulled from the sntp_time archive: sntp_time.c references
+    # time_selftest_run via a WEAK decl, and a weak undefined ref does NOT pull a strong def out of a
+    # static archive (it just binds to NULL) — so the strong def must be a direct .o in the final link.
+    # rtc_time.c stays AmebaD-local — it is the AmebaD port of the shared RTC seam (rtc_time.h, target
+    # rtc_time), providing the strong rtc_time_store / rtc_time_seed (bl602 has its own port).
     # flash_cli: the shared `flash` lock/unlock/status command + board_flash_* helpers (boot lock +
     # status print + the OTA path's unlock/relock). The board_flash_protect primitive is in monitor_port.
     target_link_libraries(target_img2_km4 PRIVATE sntp_time rtc_time flash_cli)
     target_sources(target_img2_km4 PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/time_selftest.c"
+        "${AT_ROOT}/component/sntp_time_config/time_selftest.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/rtc_time.c")   # mirror SNTP UTC into the HW RTC + seed at boot (rtc_api in amebad_mbed)
 endif()
 
@@ -566,7 +571,7 @@ endif()
 # there + attaches the AmebaD specifics vfs_selftest needs (FreeRTOS+TCP sockets, syscall_config's
 # syscalls.h) — kept out of the shared lfs_config / the mid-tree lfs_port library.
 if(AT_VFS_SELFTEST)
-    set_property(SOURCE "${AT_MAIN_SRC}"
+    set_property(SOURCE ${AT_MAIN_SRC}
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_VFS_SELFTEST)
     target_compile_definitions(lfs_config PRIVATE AT_PROJECT_VFS_SELFTEST)
     target_link_libraries(lfs_config PRIVATE amebad_freertos_tcp)
@@ -577,7 +582,7 @@ endif()
 # amebad_console_init_lpuart() + cpp_selftest() under the same define; cpp_selftest.cpp (CXX,
 # XIP-tail-pinned via liblfs_config.a) is added onto the shared lfs_config here.
 if(AMEBAD_CPP_SELFTEST)
-    set_property(SOURCE "${AT_MAIN_SRC}"
+    set_property(SOURCE ${AT_MAIN_SRC}
                  APPEND PROPERTY COMPILE_DEFINITIONS AMEBAD_CPP_SELFTEST)
     target_compile_definitions(lfs_config PRIVATE AMEBAD_CPP_SELFTEST)
     target_sources(lfs_config PRIVATE "${AT_ROOT}/component/littlefs_config/cpp_selftest.cpp")
@@ -651,7 +656,7 @@ if(AMEBAD_ENABLE_IPERF)
     # The four probes moved to the shared component/iperf_config (target iperf); main.c still
     # auto-runs iperf_server_start() from the network-up hook (AT_PROJECT_IPERF).
     target_link_libraries(target_img2_km4 PRIVATE iperf)
-    set_property(SOURCE "${AT_MAIN_SRC}"
+    set_property(SOURCE ${AT_MAIN_SRC}
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_IPERF)
 endif()
 
@@ -661,7 +666,14 @@ endif()
 # each call site (the FreeRTOS+TCP path stays as the CARES=OFF fallback). main.c (re)inits the
 # channel + DNS servers on each network-up.
 option(AMEBAD_ENABLE_CARES "Resolve DNS via c-ares (select event loop) instead of FreeRTOS+TCP" OFF)
+set(_cares_grp "")
 if(AMEBAD_ENABLE_CARES)
+    # Join the cross_refs group (real archive names) so the c-ares archives sit BEFORE -lc in the
+    # link: ares_rand.c (ares_init_rand_engine) references libc's setvbuf, and c_ares was previously
+    # linked (via the target_link_libraries below) AFTER -lc -> single-pass ld left setvbuf undefined
+    # and the default CARES=ON image failed to link. Placing c_ares/cares_port in the group (libc
+    # follows the group) resolves it, same fix as littlefs/_hash_grp above.
+    set(_cares_grp ",c_ares,cares_port")
     target_link_libraries(target_img2_km4 PRIVATE cares_port)
     target_compile_definitions(network_transport_sockets PRIVATE AT_PROJECT_CARES)
     target_link_libraries(network_transport_sockets PRIVATE cares_port)   # for cares_resolve.h
@@ -675,7 +687,7 @@ if(AMEBAD_ENABLE_CARES)
     set_property(SOURCE
                  "${AT_ROOT}/component/aws_ota_config/ota_app.c"
                  "${AT_ROOT}/component/ota_http_config/ota_http.c"
-                 "${AT_MAIN_SRC}"
+                 ${AT_MAIN_SRC}
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_CARES)
     # sntp_time.c compiles into its OWN static lib (target `sntp_time`), so a set_property(SOURCE) here
     # can't reach it (SOURCE properties are directory-scoped) -- stamp the target instead, like
@@ -698,7 +710,7 @@ target_link_libraries(target_img2_km4 PRIVATE
     # EXCLUDE_FROM_ALL lib CMake would otherwise sink it past -lc/-lgcc and leave
     # those undefined. amebad_mbed (flash_api) is lfs_port's backend. (The upstream
     # mbedcrypto/mbedx509 + picotls/ngtcp2 crypto join per-feature via the _grp vars.)
-    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,freertos_plus_tcp,freertos_plus_tcp_port,amebad_wlan,amebad_wps,lfs_port,amebad_mbed,lfs_config,littlefs,rxi_log${_diag_grp}${_hci_grp}${_quic_grp}${_pk11_grp}${_bench_grp}${_aws_grp}${_mz_grp}${_hash_grp}>"
+    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,freertos_plus_tcp,freertos_plus_tcp_port,amebad_wlan,amebad_wps,lfs_port,amebad_mbed,lfs_config,littlefs,rxi_log${_diag_grp}${_hci_grp}${_quic_grp}${_pk11_grp}${_bench_grp}${_aws_grp}${_mz_grp}${_hash_grp}${_cares_grp}>"
     m
     stdc++
     c
@@ -717,6 +729,12 @@ target_link_options(target_img2_km4 PRIVATE
     # A strong --defsym also stops newlib's memcpy from being pulled (image shrinks). Matches the
     # KM0 romalias (memcpy=_memcpy).
     "-Wl,--defsym=memcpy=_memcpy"
+    # Force-pull rtw_sae.o (the WPA3/SAE state machine) out of lib_wlan.a. The driver core only
+    # references rtw_sae_* weakly, so without this the archive object stays out of the image and a
+    # WPA3 join sends auth alg=3 with an EMPTY SAE commit (AP never responds). -u makes the symbol an
+    # undefined the linker must satisfy -> pulls rtw_sae.o, which in turn pulls the SAE crypto backend
+    # rtw_crypto_ecc_* (amebad_wlan_glue/rtw_opt_crypto_ssl.o) inside the cross_refs --start-group.
+    "-Wl,-u,rtw_sae_prepare_commit"
 )
 
 # Secure-world (TF-M): when AMEBAD_TFM_BOOT is on, app_km4 IS TF-M's Non-Secure
@@ -784,7 +802,7 @@ if(AMEBAD_TFM_BOOT)
             "${_tfm_src}/interface/src/tfm_ps_api.c")   # Protected Storage NS client
         target_compile_definitions(target_img2_km4 PRIVATE
             AMEBAD_TFM_STORAGE=1 AMEBAD_TFM_STORAGE_PS=1)
-        set_property(SOURCE "${AT_MAIN_SRC}"
+        set_property(SOURCE ${AT_MAIN_SRC}
                      APPEND PROPERTY COMPILE_DEFINITIONS AMEBAD_TFM_STORAGE)
         # --wrap every NS PSA-storage WRITE so tfm_storage_lock.c brackets it with the NS
         # flash/crypto device mutexes (waits out any in-progress NS SPIC op before the SPE

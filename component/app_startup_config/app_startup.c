@@ -48,3 +48,29 @@ void app_console_start(void)
 /* Weak no-op default (strong-overridden per platform in src/main.cpp). Lives in this (console) TU so
  * it is only pulled into images that link the console. */
 __attribute__((weak)) void app_console_register_platform(void) { }
+
+/* ---- shared example entry ------------------------------------------------------------------------
+ * The canonical pre-scheduler startup skeleton both platform main()s reduce to. app_startup_run lives
+ * in THIS (console) TU because it calls app_console_start(); the console-less AmebaD QUIC image drives
+ * the same hooks from its own tiny main() instead of calling this (see src/main.cpp). vTaskStartScheduler
+ * comes from FreeRTOS (linked). The platform lifecycle hooks default to no-ops here and are strong-defined
+ * per platform (Bouffalo defines all four; AmebaD defines boot_init + wifi_bringup, using these no-ops for
+ * rtc_seed + pre_scheduler_services). */
+extern void vTaskStartScheduler(void);
+
+void app_startup_run(void)
+{
+    app_platform_boot_init();               /* chip + logger + banner + early SDK init (+ TF-M / flash-lock) */
+    app_env_time_init();                    /* LittleFS mount + persisted env + default TZ (shared) */
+    app_platform_rtc_seed();                /* seed wall clock from HW RTC (needs env loaded above) */
+    app_console_start();                    /* shared console + app_console_register_platform (feature CLIs) */
+    app_platform_wifi_bringup();            /* platform WiFi bring-up kickoff (AmebaD task / Bouffalo net_boot) */
+    app_platform_pre_scheduler_services();  /* pre-scheduler service tasks (SNTP-non-GOTIP / NimBLE) */
+    vTaskStartScheduler();
+    for (;;) { }
+}
+
+__attribute__((weak)) void app_platform_boot_init(void) { }
+__attribute__((weak)) void app_platform_rtc_seed(void) { }
+__attribute__((weak)) void app_platform_wifi_bringup(void) { }
+__attribute__((weak)) void app_platform_pre_scheduler_services(void) { }

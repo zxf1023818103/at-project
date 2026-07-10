@@ -31,6 +31,12 @@ target_include_directories(at PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/include
 )
 
+# The Bouffalo / Ameba-newer platform PORT COMPONENT: compiled as its own translation unit into the
+# `at` image (gets `at`'s feature defs + SDK include dirs). Holds the WiFi event handlers, wifi_port_*
+# HAL, network-up hook, and the app_platform_* / app_console_register_platform / app_network_up_start_services
+# overrides that the neutral src/main.cpp used to carry.
+target_sources(at PRIVATE ${AT_ROOT}/component/at_app_port/at_app_port.cpp)
+
 target_link_libraries(at PRIVATE bouffalo_sdk)
 
 # Shared `ota_http <url>` command (component/ota_http_config): compiled into the app (per-image macros),

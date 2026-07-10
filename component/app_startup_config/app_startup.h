@@ -42,6 +42,36 @@ void app_network_up_start_services(void);
  * a strong override (cares_resolver_init + cares_resolver_set_servers) when linked (CARES=ON). */
 void app_network_dns_reinit(void);
 
+/* ---- shared example entry: the whole pre-scheduler startup skeleton --------------------------------
+ * Both platform main()s reduce to app_startup_run(). It runs the platform lifecycle hooks below (weak
+ * no-ops here; strong-defined per platform from its side) in the canonical order, then starts the
+ * scheduler. All platform-specific bring-up lives behind these hooks, so src/main.cpp carries feature
+ * gates (AT_PROJECT_*) only and no platform macros (CONFIG_PLATFORM_* / BL*). */
+void app_startup_run(void);
+
+/* Console-less variant for the layout-sensitive QUIC self-test image: boot_init + default TZ + WiFi
+ * bring-up + scheduler, skipping LittleFS/env/console (that image drops the console libs). Lives in the
+ * network TU so it links without dragging the console in. The QUIC handshake self-test starts from the
+ * network-up hook. */
+void app_startup_run_headless(void);
+
+/* Bring the chip + logger to life: board/clock init, log_lock_init, boot banner, early SDK init
+ * (rfparam / flash init on Bouffalo; TF-M NS init + PSA selftests on AmebaD; the platform's
+ * pre-scheduler flash write-lock where it does one). Runs first, before any shared step. */
+void app_platform_boot_init(void);
+
+/* Seed the wall clock from the retained hardware RTC, after app_env_time_init() loaded the RTC_REF env.
+ * Bouffalo: rtc_time_seed(); AmebaD: weak no-op (it seeds inside its WiFi bring-up task). */
+void app_platform_rtc_seed(void);
+
+/* Kick off the platform WiFi bring-up: AmebaD spawns its blocking wifi_bringup task; Bouffalo spawns
+ * the net-bootstrap task (its event-driven driver does the rest). Runs pre-scheduler. */
+void app_platform_wifi_bringup(void);
+
+/* Start any pre-scheduler service tasks not gated on network-up: Bouffalo starts SNTP on the chips that
+ * don't post GOT_IP + the NimBLE boot task; AmebaD: weak no-op (its services start on network-up). */
+void app_platform_pre_scheduler_services(void);
+
 #ifdef __cplusplus
 }
 #endif
