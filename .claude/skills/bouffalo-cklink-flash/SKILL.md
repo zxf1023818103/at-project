@@ -67,10 +67,29 @@ COM19 @2M for the boot log.
 `Program Finished`/`Fail`; **do NOT kill the proc early** — the helper "Load NNN/404840"
 progress is the eflash loader, the firmware program+verify runs after it, ~17 s total).
 
-**★ whole-flash WIPES the LittleFS/KV partition** (@0x300000) → cached WiFi creds are gone;
-the board boots to `[WSVC] no WIFI_SSID/PASSWORD provisioned - staying offline`. Re-provision
-over COM19: `setenv WIFI_SSID <ssid>` / `setenv WIFI_PASSWORD <pw>` then reset. (The CKLink
-*component* flash below preserves LittleFS; the UART whole-flash does not.)
+**★ whole-flash (`--single`) WIPES the LittleFS/KV partition** (@0x300000) → cached WiFi
+creds are gone; the board boots to `[WSVC] no WIFI_SSID/PASSWORD provisioned - staying
+offline`. Re-provision over COM19: `setenv WIFI_SSID <ssid>` / `setenv WIFI_PASSWORD <pw>`
+then reset (writes to the KV in LittleFS).
+
+### ★ LFS-preserving firmware update — UART `--pt --firmware` (NO `--single`)
+To update ONLY the firmware and **keep the provisioned LittleFS/KV** (WiFi creds, etc.),
+flash the partition table + app image at their offsets instead of the whole 4 MB chip — drop
+`--single` and the whole-flash bin, pass `--pt <toml> --firmware at_bl602.bin`:
+```
+cp project/bouffalo/build_bl602/at_bl602.bin /mnt/d/MCU_Tools/bflb-cklink/fw_bl602/
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\Public\bl602_uart_flash_pt_fw.ps1
+```
+Bare tool invocation (same COM18 ISP + COM19-RTS-on-prompt flow, script `bl602_uart_flash_pt_fw.ps1`):
+```
+.\bflb_iot_tool.exe --interface uart --port COM18 --pt <partition_cfg_4M.toml> \
+  --firmware D:\MCU_Tools\bflb-cklink\fw_bl602\at_bl602.bin --chipname bl602 --baudrate 921600
+```
+It writes boot2/pt/firmware at 0/0xe000/0x10000 only (verify SHA is over the 688 KB firmware,
+not 4 MB) → the LittleFS region is untouched. **Verified 2026-07-11**: `setenv WIFI_SSID
+ZengOTA` + `WIFI_PASSWORD` → connects (`DHCP IP 192.168.4.234`); after a `--pt --firmware`
+reflash + reset the board boots straight to `[WSVC] ZengOTA cached ch=11 -> direct connect
+(no scan)` → `network UP` — creds survived. (`--single` in the same spot would have wiped them.)
 
 ---
 
