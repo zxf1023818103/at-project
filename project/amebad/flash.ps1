@@ -27,6 +27,13 @@ param(
     [switch]$NoUnlock,
     [int]   $ConsoleBaud = 1500000,
 
+    # Post-flash: after the reset the script records the boot log to $BootLog (read it to analyze the
+    # boot instead of re-capturing the one-shot burst). $LogSecs = how long to listen (breaks early on
+    # network-up). -NoBootLog skips it.
+    [string]$BootLog = 'C:\Users\Public\amebad_bootlog.txt',
+    [int]   $LogSecs = 15,
+    [switch]$NoBootLog,
+
     # AWS IoT provisioning (AWS=ON image): after the post-flash reset, drive the sibling
     # aws_provision.ps1 over the console ($FlashPort) to provision credentials by their storage:
     #   -Endpoint <ats-host>  -> env var "endpoint" (plain LittleFS KV/endpoint)
@@ -91,12 +98,15 @@ function Test-DownloadMode {
     $sp.DtrEnable = $false
     $sp.Open()
     try {
+        # Break the MOMENT 0x15 arrives (the download-mode ready byte) -> flash starts immediately,
+        # no waiting out the full 2 s / 16-byte budget.
         $deadline = (Get-Date).AddSeconds(2)
         $bytes = New-Object 'System.Collections.Generic.List[byte]'
-        while ((Get-Date) -lt $deadline -and $bytes.Count -lt 16) {
+        $got15 = $false
+        while ((Get-Date) -lt $deadline) {
             try {
                 $b = $sp.ReadByte()
-                if ($b -ge 0) { $bytes.Add([byte]$b) }
+                if ($b -ge 0) { $bytes.Add([byte]$b); if ($b -eq 0x15) { $got15 = $true; break } }
             } catch [TimeoutException] { }
         }
         if ($bytes.Count -eq 0) {
@@ -104,8 +114,8 @@ function Test-DownloadMode {
             return $false
         }
         $hex = ($bytes | ForEach-Object { '{0:X2}' -f $_ }) -join ' '
-        Write-Host "[chk] got: $hex"
-        return ($bytes -contains 0x15)
+        Write-Host "[chk] got: $hex  (0x15=$got15)"
+        return $got15
     }
     finally {
         $sp.Close()
@@ -195,28 +205,27 @@ if (-not $SkipModeCheck) {
     }
 }
 
-# sniff 之后 COM25 关闭会拨动 RTS/DTR -> 芯片可能复位掉出 download mode；这里再进一次保险
-Enter-DownloadMode -Port $BootPort
-
+# 0x15 confirmed -> launch the ImageTool IMMEDIATELY (no redundant re-enter, saves time). Safety
+# net: if the first attempt fails/incomplete (e.g. the sniff's COM close knocked the chip out of
+# download mode on some boards), re-enter download mode ONCE and retry.
+$eraseArg = if ($Erase) { 'true' } else { 'false' }
+if ($Erase) { Write-Host "[flash] CHIP ERASE enabled (-e true): wipes whole flash incl. ITS/PS" }
+function Invoke-ImageTool {
+    Push-Location $ToolDir
+    try {
+        $out = & .\Ameba_1-N_MP_ImageTool.exe -c $Chip -i $Image -b $Baudrate -e $eraseArg -g false -v true -s true -d $FlashPort 2>&1
+        return @{ rc = $LASTEXITCODE; out = $out }
+    } finally { Pop-Location }
+}
 Write-Host "[flash] launching ImageTool ..."
-Push-Location $ToolDir
-try {
-    $eraseArg = if ($Erase) { 'true' } else { 'false' }
-    if ($Erase) { Write-Host "[flash] CHIP ERASE enabled (-e true): wipes whole flash incl. ITS/PS" }
-    $toolOut = & .\Ameba_1-N_MP_ImageTool.exe `
-        -c $Chip `
-        -i $Image `
-        -b $Baudrate `
-        -e $eraseArg `
-        -g false `
-        -v true `
-        -s true `
-        -d $FlashPort 2>&1
-    $rc = $LASTEXITCODE
+$res = Invoke-ImageTool
+if ($res.rc -ne 0 -or ($res.out -match 'FAIL') -or -not ($res.out -match 'PASS|Download Complete')) {
+    Write-Warning "[flash] first attempt failed/incomplete -> re-enter download mode + retry once"
+    Enter-DownloadMode -Port $BootPort
+    $res = Invoke-ImageTool
 }
-finally {
-    Pop-Location
-}
+$toolOut = $res.out
+$rc      = $res.rc
 $toolOut | ForEach-Object { Write-Host "  $_" }
 if ($rc -ne 0) { throw "ImageTool exited with code $rc" }
 if ($toolOut -match 'FAIL') { throw "ImageTool reported FAIL" }
@@ -224,17 +233,39 @@ if (-not ($toolOut -match 'PASS|Download Complete')) {
     Write-Warning "ImageTool output missing PASS marker"
 }
 
-# 烧完后用 COM10 复位芯片，让 app 跑起来
+# 烧完后用 $BootPort 复位芯片让 app 跑起来，并把启动日志录到 $BootLog 供直接读取分析。
+# 先开好 console ($FlashPort @ $ConsoleBaud，RTS/DTR 保持 false 不扰动 CHIP_EN)，再拨 $BootPort 复位，
+# 这样能抓到复位后的整段启动 burst。
 Write-Host "[post] reset chip via $BootPort ..."
+$clog = $null
+if (-not $NoBootLog) {
+    try {
+        $clog = New-Object System.IO.Ports.SerialPort $FlashPort, $ConsoleBaud, ([System.IO.Ports.Parity]::None), 8, ([System.IO.Ports.StopBits]::One)
+        $clog.ReadTimeout = 300; $clog.RtsEnable = $false; $clog.DtrEnable = $false
+        $clog.Open()
+    } catch { Write-Host "[post] console open failed ($($_.Exception.Message)) - skipping boot log"; $clog = $null }
+}
 $sp = New-Object System.IO.Ports.SerialPort $BootPort, 115200, ([System.IO.Ports.Parity]::None), 8, ([System.IO.Ports.StopBits]::One)
 $sp.Open()
 try {
     $sp.RtsEnable = $true   # CHIP_EN low
     Start-Sleep -Milliseconds 100
     $sp.RtsEnable = $false  # release -> chip boots normally (LOG_TX not held low)
+    if ($clog) {
+        Write-Host "[post] capturing boot log ($FlashPort @ $ConsoleBaud, up to ${LogSecs}s) -> $BootLog ..."
+        $sw = [System.Diagnostics.Stopwatch]::StartNew(); $buf = ''
+        while ($sw.Elapsed.TotalSeconds -lt $LogSecs) {
+            try { $buf += $clog.ReadExisting() } catch {}
+            Start-Sleep -Milliseconds 60
+            if ($buf -match 'network UP|GOT_IP|IPOK|====\s*network') { Start-Sleep -Seconds 2; break }
+        }
+        $buf | Out-File $BootLog -Encoding ASCII
+        Write-Host "[post] boot log saved: $BootLog"
+    }
 }
 finally {
     $sp.Close(); $sp.Dispose()
+    if ($clog) { $clog.Close(); $clog.Dispose() }
 }
 
 Write-Host "[done] flash success"

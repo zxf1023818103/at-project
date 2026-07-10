@@ -13,8 +13,9 @@ Drives `platform/ameba-rtos/tools/ameba/MP_ImageTool_1_N/Ameba_1-N_MP_ImageTool.
 > (NOT `Ubuntu-24.04`). The flashable image is now `build/amebad/Image_All.bin` (the CMake/Ninja
 > build output; the old `project/amebad/out/Image_All.bin` no longer exists — pass `-Image`).
 > The COM ports change with USB enumeration: **2026-06-07 bench = COM14 (FTDI, boot-strap) +
-> COM3 (CH340, data)**; the old COM10/COM25 are gone. Identify which USB-UART is which by friendly
-> name (pre-flight #3) — guessing wrong toggles CHIP_EN on the wrong line.
+> COM3 (CH340, data); 2026-07-11 bench = COM14 (boot) + COM5 (console/data @1.5M)**; the old
+> COM10/COM25 are gone. Identify which USB-UART is which by friendly name (pre-flight #3) —
+> guessing wrong toggles CHIP_EN on the wrong line.
 
 ## Pre-flight
 
@@ -112,11 +113,27 @@ See [[reference-wsl-powershell-serial]] for general WSL ↔ PowerShell serial co
 - **0x15 not detected after bootstrap**: bootstrap pin didn't latch — usually weak USB-Serial DTR pull-down (see doc's COM23 note). Try a different USB-UART adapter on COM10. Per doc, COM23 specifically can't enter download mode on this bench — that's why we use COM10.
 - **Tool says SUCCESS but board boots old firmware**: AmebaD's flash write protection. Different problem — see [[reference-amebad-flash-layout]] and the SR2 unlock note in [[ameba-openocd-flash]]. This skill only covers the UART download path.
 
-## After flash
+## Speed: flash starts the instant 0x15 arrives
 
-The script's `[post]` step pulses CHIP_EN low/high on COM10 to reset the chip out of download mode into the new firmware. No manual reset needed.
+`Test-DownloadMode` **breaks the moment the first `0x15` (download-ready byte) is read** instead
+of waiting out the full 2 s / 16-byte budget, and the ImageTool launches **immediately** after
+(no redundant re-enter). Safety net: if the first ImageTool attempt fails/incomplete (e.g. the
+sniff's COM close knocked the chip out of download mode on some boards), the script re-enters
+download mode ONCE and retries. Net effect: the flash begins as soon as the chip is ready.
 
-To watch the app come up on the LOG UART, sniff COM25 at 115200 (or whatever console baud the app uses).
+## After flash — auto reset + boot-log capture (read the file, don't re-sniff)
+
+The `[post]` step pulses CHIP_EN low/high on `$BootPort` to reset the chip into the new
+firmware, **and records the boot log** to `$BootLog` (default `C:\Users\Public\amebad_bootlog.txt`;
+console = `$FlashPort @ $ConsoleBaud`, opened with RTS/DTR=false so it doesn't glitch CHIP_EN;
+listens up to `-LogSecs` s, breaking early on `network UP`/`GOT_IP`). **Read that file to analyze
+the boot instead of re-capturing the one-shot burst:**
+```
+powershell.exe -NoProfile -Command "Get-Content C:\Users\Public\amebad_bootlog.txt"
+```
+Expect `amebad_app.cpp:… [KM4] at-project image2` → `[LFS] mount OK` → WiFi → `==== network UP ====`.
+Pass `-NoBootLog` to skip the capture. (Verified 2026-07-11: a COM14 reset + COM5 read reproduces
+the boot burst cleanly — the mechanism the `[post]` step uses.)
 
 ## Provision AWS IoT credentials (AWS=ON image)
 

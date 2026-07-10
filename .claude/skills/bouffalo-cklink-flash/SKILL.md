@@ -41,31 +41,35 @@ rm -f project/bouffalo/build_bl602/boot2_*.bin project/bouffalo/build_bl602/*who
 cd project/bouffalo && make CHIP=bl602 BOARD=bl602dk    # embeds boot2_iap_release_5.8.1.bin (41512 B)
 ```
 
-**Step 2 — stage + flash.** Copy the whole image to the Windows staging dir, then run the
-**separate** UART tool (`bl602_flash_download_tool`, NOT the cklink wrapper). It prints
-`Please Press Reset Key!` and blocks; a script watches for it and pulses COM19 RTS:
+**Step 2 — stage + flash** with the one consolidated script `C:\Users\Public\bl602_uart_flash.ps1`
+(also copied in this skill dir). It runs the **separate** UART tool (`bl602_flash_download_tool`,
+NOT the cklink wrapper), and on the tool's `Please Press Reset Key!` it pulses COM19 RTS
+**immediately** (no fixed wait) to drop the chip into ISP. Two modes:
 ```
+# whole image (wipes LittleFS):
 cp project/bouffalo/build_bl602/at_bl602_whole_flash_data.bin /mnt/d/MCU_Tools/bflb-cklink/fw_bl602/
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\Public\bl602_uart_flash.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\Public\bl602_uart_flash.ps1 -Mode whole
 ```
-The bare tool invocation the script runs:
+The bare tool invocation it runs (`-Mode whole`):
 ```
-cd D:\MCU_Tools\bl602_flash_download_tool
 .\bflb_iot_tool.exe --interface uart --port COM18 --single \
-  --firmware D:\MCU_Tools\bflb-cklink\fw_bl602\at_bl602_whole_flash_data.bin \
-  --chipname bl602 --baudrate 921600
+  --firmware D:\MCU_Tools\bflb-cklink\fw_bl602\at_bl602_whole_flash_data.bin --chipname bl602 --baudrate 921600
 ```
-The synced reset = COM19 RTS **pull-down then pull-up** = `.RtsEnable=$true; sleep 200ms;
-.RtsEnable=$false` (DTR stays false). Success = `Sha caled by host == caled by dev` →
-`Verify success` → `Program Finished` → `[All Success]`.
+Synced reset = COM19 RTS **pull-down then pull-up** (`.RtsEnable=$true; sleep 200ms; =$false`;
+DTR stays false), fired the instant `Please Press Reset` appears. Success = `Sha host == dev`
+→ `Verify success` → `Program Finished` → `[All Success]`. The script does **not** kill the
+proc early — the "Load NNN/404840" progress is the eflash loader; program+verify runs after
+it (~17 s total).
 
-**Step 3 — boot the new firmware:** one more COM19 RTS reset (same pull-down/up), then read
-COM19 @2M for the boot log.
-
-**Script** `C:\Users\Public\bl602_uart_flash.ps1` (Start-Process the tool with
-`-RedirectStandardOutput`, poll the file for `Press Reset`, pulse COM19 RTS, then poll for
-`Program Finished`/`Fail`; **do NOT kill the proc early** — the helper "Load NNN/404840"
-progress is the eflash loader, the firmware program+verify runs after it, ~17 s total).
+**Step 3 — auto boot + log (unified).** On `[All Success]` the script **resets the module
+again and records the boot log** to `C:\Users\Public\bl602_bootlog.txt` (COM19 @2M, until
+`network UP`/`GOT_IP` or 20 s). **Read that file to analyze the boot — no separate capture
+needed:**
+```
+powershell.exe -NoProfile -Command "Get-Content C:\Users\Public\bl602_bootlog.txt"
+```
+Expect `[WSVC] ... found/cached -> connect` → `network UP DHCP IP …` (or `[WSVC] no WIFI_SSID
+… staying offline` if unprovisioned).
 
 **★ whole-flash (`--single`) WIPES the LittleFS/KV partition** (@0x300000) → cached WiFi
 creds are gone; the board boots to `[WSVC] no WIFI_SSID/PASSWORD provisioned - staying
@@ -73,23 +77,26 @@ offline`. Re-provision over COM19: `setenv WIFI_SSID <ssid>` / `setenv WIFI_PASS
 then reset (writes to the KV in LittleFS).
 
 ### ★ LFS-preserving firmware update — UART `--pt --firmware` (NO `--single`)
-To update ONLY the firmware and **keep the provisioned LittleFS/KV** (WiFi creds, etc.),
-flash the partition table + app image at their offsets instead of the whole 4 MB chip — drop
-`--single` and the whole-flash bin, pass `--pt <toml> --firmware at_bl602.bin`:
+To update ONLY the firmware and **keep the provisioned LittleFS/KV** (WiFi creds, etc.), use
+the SAME script with `-Mode ptfw` — it flashes partition + app at their offsets instead of the
+whole 4 MB chip (drops `--single`, passes `--pt <toml> --firmware at_bl602.bin`):
 ```
 cp project/bouffalo/build_bl602/at_bl602.bin /mnt/d/MCU_Tools/bflb-cklink/fw_bl602/
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\Public\bl602_uart_flash_pt_fw.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\Public\bl602_uart_flash.ps1 -Mode ptfw
+# then read the auto-captured boot log:
+powershell.exe -NoProfile -Command "Get-Content C:\Users\Public\bl602_bootlog.txt"
 ```
-Bare tool invocation (same COM18 ISP + COM19-RTS-on-prompt flow, script `bl602_uart_flash_pt_fw.ps1`):
+Bare tool invocation (`-Mode ptfw`, same COM18 ISP + immediate COM19-RTS-on-prompt + auto boot-log):
 ```
 .\bflb_iot_tool.exe --interface uart --port COM18 --pt <partition_cfg_4M.toml> \
   --firmware D:\MCU_Tools\bflb-cklink\fw_bl602\at_bl602.bin --chipname bl602 --baudrate 921600
 ```
 It writes boot2/pt/firmware at 0/0xe000/0x10000 only (verify SHA is over the 688 KB firmware,
 not 4 MB) → the LittleFS region is untouched. **Verified 2026-07-11**: `setenv WIFI_SSID
-ZengOTA` + `WIFI_PASSWORD` → connects (`DHCP IP 192.168.4.234`); after a `--pt --firmware`
-reflash + reset the board boots straight to `[WSVC] ZengOTA cached ch=11 -> direct connect
-(no scan)` → `network UP` — creds survived. (`--single` in the same spot would have wiped them.)
+ZengOTA` + `WIFI_PASSWORD` → connects (`DHCP IP 192.168.4.234`); after a `-Mode ptfw` reflash
+the board boots straight to `[WSVC] ZengOTA cached ch=11 -> direct connect (no scan)` →
+`network UP` (bl602_bootlog.txt) — creds survived. A compiled-in `[PTFW-TEST]` marker also
+confirmed the *new* image actually booted (not the old one). (`-Mode whole` would wipe LFS.)
 
 ---
 
