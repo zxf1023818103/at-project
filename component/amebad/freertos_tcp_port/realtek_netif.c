@@ -55,40 +55,23 @@ static BaseType_t prvRunning( void ) { return ( rltk_wlan_running( WLAN_STA_IDX 
 extern unsigned int Rand( void );
 static BaseType_t prvGetRandom( uint32_t * out ) { *out = ( uint32_t ) Rand(); return pdTRUE; }
 
+/* MAC for the default hostname: efuse BT/BLE MAC via TF-M (AWS/STORAGE images); efuse_logical_read
+ * is weak so non-TF-M images fall back to the interface (WiFi) MAC. */
+static void prvHostMac( uint8_t mac[ 6 ] )
+{
+    extern int efuse_logical_read( uint16_t addr, uint16_t size, uint8_t * pbuf ) __attribute__( ( weak ) );
+    if( ( efuse_logical_read != NULL ) && ( efuse_logical_read( 0x190U, 6U, mac ) == 0 ) )   /* 0x190 = BT/BLE MAC */
+    {
+        return;
+    }
+    NetworkEndPoint_t * px = FreeRTOS_FirstEndPoint( NULL );
+    if( px != NULL ) { ( void ) memcpy( mac, px->xMACAddress.ucBytes, 6 ); }
+}
+
 /* Hostname for mDNS/DHCP: HOSTNAME env (KV-backed) wins; else "amebad_<BLE-MAC last 3>". */
 static const char * prvHostname( void )
 {
-    static char dflt[ 24 ] = { 0 };
-    static char host[ 32 ];
-    const char * env;
-
-    if( dflt[ 0 ] == '\0' )
-    {
-        uint8_t mac[ 6 ] = { 0 };
-        /* efuse_logical_read via TF-M (AWS/STORAGE images); weak so non-TF-M images fall back
-         * to the interface (WiFi) MAC. */
-        extern int efuse_logical_read( uint16_t addr, uint16_t size, uint8_t * pbuf ) __attribute__( ( weak ) );
-        int got = 0;
-        if( efuse_logical_read != NULL )
-        {
-            got = ( efuse_logical_read( 0x190U, 6U, mac ) == 0 );   /* 0x190 = BT/BLE MAC */
-        }
-        if( got == 0 )
-        {
-            NetworkEndPoint_t * px = FreeRTOS_FirstEndPoint( NULL );
-            if( px != NULL ) { ( void ) memcpy( mac, px->xMACAddress.ucBytes, 6 ); }
-        }
-        ( void ) snprintf( dflt, sizeof( dflt ), "amebad_%02x%02x%02x", mac[ 3 ], mac[ 4 ], mac[ 5 ] );
-    }
-
-    env = getenv( "HOSTNAME" );
-    if( ( env != NULL ) && ( env[ 0 ] != '\0' ) )
-    {
-        ( void ) strncpy( host, env, sizeof( host ) - 1U );
-        host[ sizeof( host ) - 1U ] = '\0';
-        return host;
-    }
-    return dflt;
+    return at_netif_hostname( "amebad", prvHostMac );   /* HOSTNAME override else amebad_<mac> */
 }
 
 /* mac_get / on_got_ip are NULL: app_km4/main.c owns the bring-up (its own interface

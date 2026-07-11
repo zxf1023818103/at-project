@@ -47,6 +47,10 @@ typedef struct
 /* Register the platform ops (call once, before at_netif_bringup). */
 void at_netif_set_ops( const at_netif_ops_t * ops );
 
+/* Shared fallback hostname for a platform's ops.hostname: HOSTNAME env override if set, else
+ * "<platform_name>_<mac[3..5]>". mac_get fills mac[6], called at most once (builds the default). */
+const char * at_netif_hostname( const char * platform_name, void ( * mac_get )( uint8_t mac[ 6 ] ) );
+
 /* Fill + register the STA interface descriptor (shared prv* over the ops). Stores it
  * for RX tagging; returns the interface. idx = WLAN VIF index (0 = STA). */
 NetworkInterface_t * at_netif_fill_descriptor( BaseType_t xEMACIndex, NetworkInterface_t * pxInterface );

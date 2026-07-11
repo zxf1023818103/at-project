@@ -12,6 +12,8 @@
 #endif
 #include <string.h>                   /* memset / strlen */
 #include <strings.h>                  /* strcasecmp / strncasecmp (mDNS name match) */
+#include <stdlib.h>                   /* getenv (HOSTNAME override) */
+#include <stdio.h>                    /* snprintf (default hostname) */
 
 extern int printf( const char *, ... );
 
@@ -234,6 +236,38 @@ uint32_t ulApplicationGetNextSequenceNumber( uint32_t ulSourceAddress, uint16_t 
         ( void ) s_ops->get_random( &v );
     }
     return v;
+}
+
+/* Shared fallback-hostname resolver (every platform's prvHostname wraps this). Returns the
+ * HOSTNAME env override if set (pre-seeded via lfs.bin KV/HOSTNAME or `env set HOSTNAME ...`),
+ * else "<platform_name>_<mac[3]><mac[4]><mac[5]>" formatted once into a static buffer. mac_get
+ * fills mac[6] and is invoked at most once (only to build the default), so a platform may use an
+ * expensive source (e.g. AmebaD efuse-over-TF-M) without paying it on every mDNS query. */
+const char * at_netif_hostname( const char * platform_name, void ( * mac_get )( uint8_t mac[ 6 ] ) )
+{
+    static char dflt[ 32 ] = { 0 };
+    static char host[ 32 ];
+    const char * env;
+
+    if( dflt[ 0 ] == '\0' )
+    {
+        uint8_t mac[ 6 ] = { 0 };
+        if( mac_get != NULL )
+        {
+            mac_get( mac );
+        }
+        ( void ) snprintf( dflt, sizeof( dflt ), "%s_%02x%02x%02x",
+                           platform_name, mac[ 3 ], mac[ 4 ], mac[ 5 ] );
+    }
+
+    env = getenv( "HOSTNAME" );
+    if( ( env != NULL ) && ( env[ 0 ] != '\0' ) )
+    {
+        ( void ) strncpy( host, env, sizeof( host ) - 1U );
+        host[ sizeof( host ) - 1U ] = '\0';
+        return host;
+    }
+    return dflt;
 }
 
 const char * pcApplicationHostnameHook( void )

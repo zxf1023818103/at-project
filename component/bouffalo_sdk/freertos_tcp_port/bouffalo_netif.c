@@ -152,16 +152,14 @@ static BaseType_t prvGetRandom( uint32_t * out )
     return ( bflb_trng_readlen( ( uint8_t * ) out, sizeof( *out ) ) == 0 ) ? pdTRUE : pdFALSE;
 }
 
+static void prvHostMac( uint8_t mac[ 6 ] )
+{
+    ( void ) platform_get_mac( WL80211_VIF_STA, mac );
+}
+
 static const char * prvHostname( void )
 {
-    static char host[ 24 ] = { 0 };
-    if( host[ 0 ] == '\0' )
-    {
-        uint8_t mac[ 6 ] = { 0 };
-        ( void ) platform_get_mac( WL80211_VIF_STA, mac );
-        ( void ) snprintf( host, sizeof( host ), "bl616_%02x%02x%02x", mac[ 3 ], mac[ 4 ], mac[ 5 ] );
-    }
-    return host;
+    return at_netif_hostname( "bl616", prvHostMac );   /* HOSTNAME override else bl616_<mac> */
 }
 
 static const at_netif_ops_t bouffalo_ops =
