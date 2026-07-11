@@ -58,9 +58,17 @@ static BaseType_t prvGetRandom( uint32_t * out )
     return ( bflb_trng_readlen( ( uint8_t * ) out, sizeof( *out ) ) == 0 ) ? pdTRUE : pdFALSE;
 }
 
+/* BT MAC (== the BLE BD_ADDR basis, matching amebad's efuse 0x190): mfg_media_read_macaddr_with_lock
+ * is the raw efuse/mfg MAC the Bouffalo BT controller loads as its public address (WiFi + BT share
+ * this one efuse field). It lives in the std lib (always linked, no BLE image needed); on a
+ * blank-MAC board it returns non-zero and we fall back to the WiFi STA MAC. */
 static void prvHostMac( uint8_t mac[ 6 ] )
 {
-    ( void ) wifi_mgmr_sta_mac_get( mac );
+    extern int mfg_media_read_macaddr_with_lock( uint8_t m[ 6 ], uint8_t reload );
+    if( mfg_media_read_macaddr_with_lock( mac, 1 ) != 0 )
+    {
+        ( void ) wifi_mgmr_sta_mac_get( mac );
+    }
 }
 
 static const char * prvHostname( void )
