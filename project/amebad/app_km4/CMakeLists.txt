@@ -481,10 +481,16 @@ if(AMEBAD_ENABLE_AWS_IOT)
         AWS_KEY_MAX=1536
         OTA_APP_ENABLE_HTTP=0
         AWS_STATIC_TASKS
-        AWS_NO_TELEMETRY
         AWS_NET_BUFFER_DYNAMIC
         AWS_NET_BUFFER_SZ=1536
         AWS_AGENT_STACK_WORDS=3584)
+    # Telemetry publish task (bw20/<mac>/telemetry): dropped on the lean TF-M OTA build to save heap
+    # (there the OTA job status is the liveness signal). On TFM=OFF there is spare heap (no TF-M NS
+    # interface / secure storage) and cert+key live in LFS -- aligned with bl602's telemetry client --
+    # so keep the task so the device actually publishes telemetry.
+    if(AMEBAD_TFM_BOOT)
+        target_compile_definitions(target_img2_km4 PRIVATE AWS_NO_TELEMETRY)
+    endif()
     if(AMEBAD_TFM_STORAGE)
         target_sources(target_img2_km4 PRIVATE "${AT_ROOT}/component/aws_iot_config/aws_secret_store_its.c")
     else()

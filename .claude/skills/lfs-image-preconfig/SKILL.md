@@ -81,9 +81,10 @@ prior LFS first).
   → picotls handshake PASS (server cert verified vs the pre-seeded CA; client cert `a81710cf6427`) →
   `[AWS] connected to AWS IoT Core` → **`[AWS] published seq=0 to bl602/a81710cf6427/telemetry`**. ✅
 - **amebad `make AWS=ON TFM=OFF`** (cert+key in LFS, aligned with bl602 — TF-M ITS is bypassed):
-  `[AWS] provisioned: endpoint=… certPath=aws_cert.der key=121B` → TLS handshake PASS → **`[AWS] MQTT
-  connected to AWS IoT Core as '2442e3458d85'`** using the LFS-stored EC cert/key. The AWS connection
-  (telemetry's transport) is up; the `aws_iot_demo` telemetry publish (`[AWS] TX bw20/…`) is gated
-  behind `ota_app_is_active()` and stays paused while the OTA agent churns a job doc — an amebad
-  OTA-agent / stale-job matter, NOT a pre-config issue (bl602's lean client has no such gate). The
-  file-backed key path is what `TFM=OFF` selects (`aws_secret_store_file.c`).
+  `[AWS] provisioned: endpoint=… certPath=aws_cert.der key=121B` → TLS handshake PASS → `[AWS] MQTT
+  connected to AWS IoT Core as '2442e3458d85'` using the LFS-stored EC cert/key → **`[AWS] TX
+  bw20/2442e3458d85/telemetry {"thing":…,"seq":0,…}`**, sustained (seq 0,1,2,…). The
+  file-backed key path is what `TFM=OFF` selects (`aws_secret_store_file.c`). NOTE: amebad's AWS
+  build previously compiled OUT the telemetry task (`AWS_NO_TELEMETRY`, heap-saving for the TF-M OTA
+  build); that define is now gated to `AMEBAD_TFM_BOOT` only, so `TFM=OFF` keeps the task and actually
+  publishes. (It was never a hang or a stale OTA job — the task simply wasn't built.)
