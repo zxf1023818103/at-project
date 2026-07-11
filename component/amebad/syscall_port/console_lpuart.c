@@ -12,7 +12,7 @@
  *   stderr       (fd 2)    -> LOGUART (the log console)  -> std::cerr / DiagPrintf
  *
  * Line control: UART_Init's LCR encoding for UART3 does NOT match the mbed
- * serial_api/serial_format encoding that the proven AT-UART path (src/UartAmebaGlue.c)
+ * serial_api/serial_format encoding that the proven (since-deleted) AT-UART path
  * and the BW16 combo HAL use on this exact pin pair. We therefore write LCR by hand,
  * byte-identically to serial_format(8, ParityNone, 1):
  *     LCR = WordLen | (StopBit<<2) | (ParityEn<<3) | (ParityType<<4) | (Stick<<5)
@@ -69,7 +69,7 @@ static const at_console_backend_t LPUART_BACKEND = {
 
 /* Replicate the mbed serial pin_function(): set the pad's UART function AND clear
  * its power-down bit. The raw ROM Pinmux_Config alone left PB1/PB2 powered down on
- * the LP pads, so UART3 TX never reached the pin. (See src/UartAmebaGlue -> SDK
+ * the LP pads, so UART3 TX never reached the pin. (See the old AT-UART glue -> SDK
  * serial_api -> pin_function.) */
 static void pad_uart_func(u8 pin)
 {

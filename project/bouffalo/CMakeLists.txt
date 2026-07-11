@@ -4,15 +4,6 @@ cmake_minimum_required(VERSION 3.20)
 # enable_language(ASM) in a subdir scope leaves CMAKE_ASM_COMPILE_OBJECT unset for them.
 project(at C CXX ASM)
 
-# CMP0118 NEW (CMake 3.20+) makes the GENERATED source-file property
-# visible across directory boundaries. Required because src/CMakeLists.txt
-# (pulled in via add_subdirectory below) registers a custom command for
-# the ragel-generated AtCommandParser.rl.cpp; without this policy,
-# bflb_add_executable(at ${AT_USER_SOURCES}) in this directory wouldn't
-# know that the .cpp is a build product and would error
-# "Cannot find source file".
-cmake_policy(SET CMP0118 NEW)
-
 include(proj.conf)
 
 # The repo-root CMakeLists was deleted (each image is its own project now), so this entry adds the

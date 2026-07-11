@@ -4,7 +4,7 @@
  * dual-core hand-off: this core owns the console for the whole run. RX polls at_console_getc
  * (bflb_uart_getchar is non-blocking) with a short vTaskDelay when idle; output is via the
  * engine's at_console_write_raw. The console runs on uart0 (the log/console port); the AT
- * command protocol keeps uart1 (src/AtTask.cpp) — separate peripherals, no RX contention.
+ * command protocol used to keep uart1 (the deleted C++ AT framework) — separate peripherals, no RX contention.
  */
 #include <stdint.h>
 #include <stdio.h>

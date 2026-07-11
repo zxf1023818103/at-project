@@ -9,38 +9,17 @@
 #     SDK invokes `cmake -S <at-project-root>` to produce user_link.list.
 #     In that flow we emit `at_user` STATIC + the user_link.list file
 #     the SDK Make build then reads at link time.
-#
-# The ragel-generated parser lives in <bindir>/AtCommandParser.rl.cpp
-# (regenerated per build dir; src/.gitignore drops stale local copies).
+
 
 set(AT_USER_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
-find_program(RAGEL_EXECUTABLE ragel REQUIRED)
-set(_at_ragel_out ${CMAKE_CURRENT_BINARY_DIR}/AtCommandParser.rl.cpp)
-add_custom_command(
-    OUTPUT  ${_at_ragel_out}
-    COMMAND ${RAGEL_EXECUTABLE} -G2 -o ${_at_ragel_out} ${AT_USER_SRC_DIR}/AtCommandParser.rl
-    DEPENDS ${AT_USER_SRC_DIR}/AtCommandParser.rl
-    COMMENT "ragel -G2 AtCommandParser.rl -> ${_at_ragel_out}"
-    VERBATIM
-)
-
-# add_custom_command's rule is only emitted by CMake when a target in
-# the SAME directory references its OUTPUT — even with CMP0118 NEW (which
-# only fixes the GENERATED property scope, not the rule-emission scope).
-# In the add_subdirectory(src) path the consuming target lives in the
-# parent project, so without this same-dir handle ninja never learns the
-# ragel command. The target itself is just a marker; nobody depends on it.
-add_custom_target(at_user_ragel DEPENDS ${_at_ragel_out})
-
+# (The ragel-generated AT-command parser + the whole C++ task/UART/BT framework were deleted --
+# dead since the console moved to FreeRTOS-Plus-CLI and BLE to NimBLE. ragel is no longer a
+# build prerequisite.)
 file(GLOB AT_USER_SOURCES CONFIGURE_DEPENDS
     "${AT_USER_SRC_DIR}/*.c"
     "${AT_USER_SRC_DIR}/*.cpp"
     LIST_DIRECTORIES false)
-# Drop any stale src/AtCommandParser.rl.cpp picked up by the glob — we want the
-# build-dir copy to be the only one.
-list(FILTER AT_USER_SOURCES EXCLUDE REGEX "/AtCommandParser\\.rl\\.cpp$")
-list(APPEND AT_USER_SOURCES ${_at_ragel_out})
 
 # Always propagate to whatever scope called us.
 set(AT_USER_SOURCES ${AT_USER_SOURCES} PARENT_SCOPE)
