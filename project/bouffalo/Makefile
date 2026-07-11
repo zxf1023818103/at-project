@@ -148,6 +148,14 @@ ifeq ($(filter $(MCUMGR),ON OFF),)
 $(error MCUMGR must be 'ON' or 'OFF')
 endif
 
+# Mbed TLS crypto self-test CLIs (bench + crt_bundle + pkcs11), opt-in: all three together overflow
+# bl602's xip_memory (~100 KB over), so they're a diagnostic image. Threaded to AT_CRYPTO_SELFTESTS
+# (component/bouffalo_sdk); amebad exposes the equivalents as PKCS11/BENCH.
+CRYPTO_SELFTESTS ?= OFF
+ifeq ($(filter $(CRYPTO_SELFTESTS),ON OFF),)
+$(error CRYPTO_SELFTESTS must be 'ON' or 'OFF')
+endif
+
 # Pick the riscv toolchain bundled with the Bouffalo SDK submodule.
 TOOLCHAIN_BIN := $(realpath $(AT_PROJECT_ROOT)/platform/toolchain_gcc_t-head_linux/bin)
 export PATH := $(TOOLCHAIN_BIN):$(PATH)
@@ -175,6 +183,7 @@ $(BUILD_DIR)/CMakeCache.txt: CMakeLists.txt proj.conf
 	    -DAT_ENABLE_CRT_BUNDLE=$(CRT_BUNDLE) \
 	    -DAT_ENABLE_NIMBLE=$(NIMBLE) \
 	    -DAT_ENABLE_MCUMGR=$(MCUMGR) \
+	    -DAT_CRYPTO_SELFTESTS=$(CRYPTO_SELFTESTS) \
 	    -DBOUFFALO_MBEDTLS_HW_GCM=$(HWGCM)
 
 configure: $(BUILD_DIR)/CMakeCache.txt

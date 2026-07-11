@@ -123,12 +123,14 @@ ifneq ($(TFM),ON)
 $(error HWGCM=ON requires TFM=ON (NS-direct HW crypto needs TF-M's SAU; a non-TF-M image hangs))
 endif
 endif
-# CRT_BUNDLE only matters for the TLS path, which exists only in the AWS image. Always ON there
+# CRT_BUNDLE only matters for the TLS path, which exists only in the AWS image. Default ON there
 # (the embedded bundle is the primary trust source + the ca/ folder fallback); OFF everywhere else.
+# ?= so it is user-overridable (e.g. make AWS=ON CRT_BUNDLE=OFF to pin a single provisioned CA),
+# matching the bouffalo Makefile.
 ifeq ($(AWS),ON)
-CRT_BUNDLE := ON
+CRT_BUNDLE ?= ON
 else
-CRT_BUNDLE := OFF
+CRT_BUNDLE ?= OFF
 endif
 VFSTEST    ?= OFF          # ON -> POSIX-fd VFS self-test (fopen/open/socket over LFS+sockets)
 CPPTEST    ?= OFF          # ON -> C++ std::filesystem/iostream self-test (cout/cin over LPUART, stderr LOGUART)
