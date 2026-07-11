@@ -120,7 +120,7 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
         case CODE_WIFI_ON_INIT_DONE: {
             printf("[APP] [EVT] %s, CODE_WIFI_ON_INIT_DONE\n", __func__);
             // Regulatory domain: the persisted WIFI_COUNTRY (set by the user or by
-            // wifi_autodetect_country's majority vote) wins; "CN" is only the first-boot default.
+            // dot11d_autodetect_country's majority vote) wins; "CN" is only the first-boot default.
             const char *cc = getenv("WIFI_COUNTRY");
             if (!dot11d_cc_valid(cc)) cc = NULL;   // garbage/empty persisted value -> default (dot11d_cc_valid: component/80211d_config)
 #if defined BL602 || defined BL702

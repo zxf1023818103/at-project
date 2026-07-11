@@ -421,7 +421,7 @@ static void _rx_handle_beacon(struct scanu_result_ind *ind, struct ieee80211_mgm
     }
 
     /* at-project: 802.11d Country IE (id 7) -> first 2 chars, for the country auto-detect
-     * majority vote (wifi_autodetect_country). 0/0 when the AP doesn't advertise one. */
+     * majority vote (component/80211d_config dot11d_autodetect_country). 0/0 when the AP doesn't advertise one. */
     #define MAC_ELTID_COUNTRY 7
     elmt_addr = mac_ie_find(var_part_addr, var_part_len, MAC_ELTID_COUNTRY);
     if (elmt_addr != 0 && co_read8p(elmt_addr + MAC_INFOELT_LEN_OFT) >= 2)
