@@ -66,6 +66,7 @@ add_subdirectory(freertos_tcp_port)
 # `littlefs` target from component/thirdparty/ find a backend; tiny
 # when nothing links it.
 add_subdirectory(lfs_port)   # lfs_port (mirrors component/amebad/lfs_port)
+add_subdirectory(80211d_port)   # bl602-only (self-gated): 802.11d country auto-detect port
 
 # mbedtls port surface — mbedtls_port carries the runtime glue + HACC/PKA-backed alt impls AND
 # (via its mbedtls_cfg INTERFACE) the whole Bouffalo mbedTLS config: MBEDTLS_USER_CONFIG_FILE
@@ -357,6 +358,13 @@ target_link_libraries(bouffalo_sdk INTERFACE sntp_time)
 # Retained wall clock over the bflb_rtc HBN counter + KV (component/bouffalo_sdk/rtc_time_port): the
 # strong rtc_time_store / rtc_time_seed that sntp_time.c + main() call, mirroring AmebaD's rtc_time.c.
 target_link_libraries(bouffalo_sdk INTERFACE rtc_time_port)
+# 802.11d country auto-detect: the shared config layer (gate/tally/persist) always links (the boot
+# default uses dot11d_cc_valid on every chip); the scan/apply port exists on bl602 only for now.
+target_link_libraries(bouffalo_sdk INTERFACE 80211d)
+if(TARGET 80211d_port)
+    target_link_libraries(bouffalo_sdk INTERFACE 80211d_port)
+endif()
+
 # Flash write-protect: the shared `flash` command + helpers (flash_cli) + the bl602 board_flash_protect
 # primitive (board_flash_port). main() calls board_flash_lock_fw() + board_flash_log_status() at boot;
 # app_console_register_platform() calls flash_cli_register().

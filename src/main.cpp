@@ -12,6 +12,7 @@
 //   AT_SDK_OWNS_MAIN  - the Realtek SDK provides main() (Ameba-newer); this file exports app_pre_example
 // ===================================================================================
 #include "app_startup.h"   // the shared hook contract (app_startup_run / app_env_time_init / hooks)
+#include "dot11d.h"        // 802.11d country auto-detect (component/80211d_config; ports per platform)
 
 #include <stdio.h>    /* printf */
 #include <stdlib.h>   /* getenv / setenv (default TZ) */
@@ -121,7 +122,7 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
             // Regulatory domain: the persisted WIFI_COUNTRY (set by the user or by
             // wifi_autodetect_country's majority vote) wins; "CN" is only the first-boot default.
             const char *cc = getenv("WIFI_COUNTRY");
-            if (!wifi_cc_valid(cc)) cc = NULL;   // garbage/empty persisted value -> default
+            if (!dot11d_cc_valid(cc)) cc = NULL;   // garbage/empty persisted value -> default (dot11d_cc_valid: component/80211d_config)
 #if defined BL602 || defined BL702
             wifi_conf_t conf = { .country_code = "CN" };
             if (cc != NULL) { conf.country_code[0] = cc[0]; conf.country_code[1] = cc[1]; conf.country_code[2] = '\0'; }
@@ -325,37 +326,6 @@ void wifi_port_autoreconnect_disable(void) {
     // Kill wifi4's native timer-based reconnect so wifi_service is the single reconnect authority.
     wifi_mgmr_sta_autoconnect_disable();
 }
-// Country-code auto-detect: majority 802.11d Country IE over one broadcast scan -- the bl602
-// counterpart of AmebaD's wifi_autodetect_country, over the SAME shared wifi_cc_tally
-// (component/wifi_service_config). The per-AP Country IE reaches the scan items via the at-project
-// wifi4 patch (bl_rx.c IE-7 extract -> wifi_mgmr scan_item.country -> ap_item.country). Runs once,
-// before the first associate, only when WIFI_COUNTRY is unset; the vote persists to WIFI_COUNTRY
-// (KV/LFS via --wrap=setenv) and applies via wifi_mgmr_set_country_code (no driver reboot -- unlike
-// AmebaD's channel-plan reboot).
-static void bl602_cc_scan_cb(wifi_mgmr_ap_item_t *env, uint32_t *param1, wifi_mgmr_ap_item_t *item) {
-    (void)env;
-    wifi_cc_tally_add((wifi_cc_tally_t *)param1, (char)item->country[0], (char)item->country[1]);
-}
-static void wifi_autodetect_country(void) {
-    wifi_cc_tally_t t;
-    char ccs[3];
-    if (wifi_cc_valid(getenv("WIFI_COUNTRY")))
-        return;   // regulatory domain already provisioned - leave it alone (garbage value != provisioned)
-    memset(&t, 0, sizeof(t));
-    // Broadcast scan (all channels), synchronous via the same task-notify the directed scan uses.
-    s_bl602_scan_waiter = xTaskGetCurrentTaskHandle();
-    wifi_mgmr_scan_adv(NULL, bl602_scan_done_cb, NULL, 0, NULL, NULL, 0, 0);
-    ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(4000));
-    wifi_mgmr_scan_ap_all(NULL, (uint32_t *)&t, bl602_cc_scan_cb);
-    if (wifi_cc_tally_best(&t, ccs) == NULL) {
-        printf("[WIFI] country auto-detect: %d APs scanned, none advertised a Country IE - keeping default plan\n", t.aps);
-        return;
-    }
-    printf("[WIFI] country auto-detect: %d APs, majority %s -> set + save\n", t.aps, ccs);
-    setenv("WIFI_COUNTRY", ccs, 1);
-    wifi_mgmr_set_country_code(ccs);
-}
-
 int wifi_port_scan(const char *ssid, uint8_t *chan, int *sec) {
     wifi_mgmr_ap_item_t ap;
     s_bl602_scan_waiter = xTaskGetCurrentTaskHandle();
@@ -368,7 +338,7 @@ int wifi_port_scan(const char *ssid, uint8_t *chan, int *sec) {
 }
 int wifi_port_connect(const char *ssid, const char *pass, uint8_t chan, int sec) {
     (void)sec;   // wifi4 picks the security from the beacon; nothing to pass through
-    wifi_autodetect_country();   // once, when WIFI_COUNTRY is unset (same placement as AmebaD: before associating)
+    dot11d_autodetect_country();   // component/80211d_config: once, when WIFI_COUNTRY is unset (before associating)
     s_bl602_conn_ok = 0;
     s_bl602_conn_waiter = xTaskGetCurrentTaskHandle();
     // A non-zero chan makes the wifi4 connect probe just that one channel for the BSSID.
@@ -713,71 +683,6 @@ static const char *wifi_sec_to_str( rtw_security_t sec )
     }
 }
 
-/* Extended-country scan mode (lib_wlan.a): when enabled the driver appends each AP's 2-byte beacon
- * 802.11d Country IE into the scan-result records, at offset 14 (right before the SSID). */
-extern void rltk_wlan_enable_scan_with_extended_countryinfo( int enable );
-
-/* Per-AP Country IE walk over the extended-country scan records; the tally/vote itself is the
- * SHARED wifi_cc_tally (component/wifi_service_config -- bl602's wifi_autodetect_country uses the
- * same one). Record layout: [0]=len [1..6]=bssid [7..10]=rssi [11]=sec [12]=wps [13]=channel
- * [14..15]=country [16..]=ssid. */
-static int country_scan_handler( char *buf, int buflen, char *ssid, void *user_data )
-{
-    wifi_cc_tally_t *t = (wifi_cc_tally_t *) user_data;
-    int plen = 0;
-    ( void ) ssid;
-
-    while( plen < buflen )
-    {
-        int len = (unsigned char) buf[ plen ];
-        if( len == 0 ) break;
-        wifi_cc_tally_add( t, buf[ plen + 14 ], buf[ plen + 15 ] );
-        plen += len;
-    }
-    return 0;
-}
-
-/* Country-plan auto-detect: when neither WIFI_COUNTRY nor WIFI_CHANPLAN is provisioned, scan the
- * surrounding APs in extended-country mode, take the MAJORITY 802.11d Country IE, save it to
- * WIFI_COUNTRY, and apply the matching channel plan immediately. wifi_set_channel_plan_by_country_code()
- * triggers a driver reboot; on the reboot WIFI_COUNTRY is set, so wifi_set_country_code() applies the
- * same plan during wifi_on and this detection is skipped. Uses the working async
- * wifi_scan_networks_with_ssid (its result buffer holds every AP heard) - NOT the SDK's sync
- * wifi_scan / wifi_scan_networks_with_extended_countryinfo() / dump_surrounding_country_codes(), whose
- * scan-done never returns in this driver-only image. Call after wifi_on, before associating. */
-static void wifi_autodetect_country( void )
-{
-    wifi_cc_tally_t t;
-    const char *ssid;
-    char        ccs[ 3 ];
-
-    if( wifi_cc_valid( getenv( "WIFI_COUNTRY" ) ) || ( getenv( "WIFI_CHANPLAN" ) != NULL ) )
-        return;   /* regulatory domain already provisioned - leave it alone (garbage value != provisioned) */
-
-    memset( &t, 0, sizeof( t ) );
-    ssid = getenv( "WIFI_SSID" );   /* may be NULL -> broadcast probe; still hears every AP's Country IE */
-
-    /* The scan buffer carries every AP heard regardless of the probed SSID, so one scan tallies all
-     * surrounding Country IEs. */
-    rltk_wlan_enable_scan_with_extended_countryinfo( 1 );
-    wifi_scan_networks_with_ssid( country_scan_handler, &t, 1000,
-                                  (char *) ssid, ssid ? (int) strlen( ssid ) : 0 );
-    rltk_wlan_enable_scan_with_extended_countryinfo( 0 );
-
-    if( wifi_cc_tally_best( &t, ccs ) == NULL )
-    {
-        log_info( "[KM4] country auto-detect: %d APs scanned, none advertised a Country IE - keeping default plan",
-                    t.aps );
-        return;
-    }
-    log_info( "[KM4] country auto-detect: %d APs, majority %s -> set channel plan + save (reboots)",
-                t.aps, ccs );
-    setenv( "WIFI_COUNTRY", ccs, 1 );
-    wifi_set_channel_plan_by_country_code( (unsigned char *) ccs );   /* applies now; triggers a driver reboot */
-}
-
-
-
 /* Called by the IP task when the interface comes up (DHCP done) or goes down.
  * ipconfigIPv4_BACKWARD_COMPATIBLE=1 -> single-arg hook. */
 /* The network-up/down body + all IPv6 logging/MLDv2 now live in component/freertos-plus-tcp_config/
@@ -880,69 +785,6 @@ static unsigned char prvHexByte( const char * p )
     return v;
 }
 
-/*
- * TEST PROBE: country code from surrounding hotspots' beacons.
- *
- * The get_beacon_frame example CANNOT do this: OnBeacon (lib_wlan.a) copies only
- * the 32-byte MAC header + timestamp into BEACON_INFO_T by value and never the
- * IEs, so the beacon Country IE (Element ID 7) is not delivered. The driver's
- * purpose-built path is an "extended country info" scan: with it enabled the
- * driver parses each AP's beacon Country IE and appends the 2-byte country code
- * into every scan-buffer record (at offset 14, right before the SSID). This
- * probe runs that scan and prints the RAW per-AP country field - unlike
- * wifi_get_country_code(), which hides "no AP advertised one" behind a "US"
- * default when fewer than 3 APs agree.
- *
- * Scan-buffer record (extended-country layout):
- *   [0]=len [1..6]=mac [7..10]=rssi [11]=sec [12]=wps_id [13]=channel
- *   [14..15]=country code  [16..]=ssid (len-16 bytes)
- */
-static void dump_surrounding_country_codes( void )
-{
-    enum { HDR = 1 + 6 + 4 + 1 + 1 + 1, CC = 2 };   /* country code at offset 14 */
-    scan_buf_arg sb;
-    int plen = 0, aps = 0, with_cc = 0;
-
-    sb.buf_len = 25 * 50;                            /* 25 B/record * up to 50 APs */
-    sb.buf = (char *) pvPortMalloc( sb.buf_len );
-    if( !sb.buf ) { log_error( "[CC] malloc %d failed", sb.buf_len ); return; }
-    memset( sb.buf, 0, sb.buf_len );
-
-    rltk_wlan_enable_scan_with_extended_countryinfo( 1 );
-    if( wifi_scan( RTW_SCAN_TYPE_ACTIVE, RTW_BSS_TYPE_ANY, &sb ) < 0 )
-    {
-        log_error( "[CC] scan FAILED" );
-        rltk_wlan_enable_scan_with_extended_countryinfo( 0 );
-        vPortFree( sb.buf );
-        return;
-    }
-    rltk_wlan_enable_scan_with_extended_countryinfo( 0 );
-
-    log_info( "[CC] ==== surrounding-AP country codes (beacon Country IE) ====" );
-    while( plen < sb.buf_len )
-    {
-        int len = ( unsigned char ) sb.buf[ plen ];
-        unsigned char *r = ( unsigned char * )( sb.buf + plen );
-        char c0, c1; int ch, ssid_len, i;
-        if( len == 0 ) break;
-        ch       = r[ 1 + 6 + 4 + 1 + 1 ];          /* channel @ +13 */
-        c0       = sb.buf[ plen + HDR ];            /* country[0] @ +14 */
-        c1       = sb.buf[ plen + HDR + 1 ];        /* country[1] @ +15 */
-        ssid_len = len - HDR - CC;
-        aps++;
-        if( c0 && c1 ) with_cc++;
-        log_info( "[CC] %02x:%02x:%02x:%02x:%02x:%02x ch=%d cc=%c%c ssid=",
-                    r[1], r[2], r[3], r[4], r[5], r[6], ch,
-                    ( c0 >= 0x20 && c0 < 0x7f ) ? c0 : '-',
-                    ( c1 >= 0x20 && c1 < 0x7f ) ? c1 : '-' );
-        for( i = 0; i < ssid_len; i++ ) log_info( "%c", sb.buf[ plen + HDR + CC + i ] );
-        log_info( "" );
-        plen += len;
-    }
-    log_info( "[CC] ==== %d APs scanned, %d advertised a country code ====",
-                aps, with_cc );
-    vPortFree( sb.buf );
-}
 
 /* Result of the directed SSID scan (filled by scan_print_handler). */
 typedef struct {
@@ -1278,14 +1120,14 @@ static void wifi_bringup_thread( void *param )
     {
         extern void nimble_start( void );
         nimble_start();
-        /* fall through -> dump_surrounding_country_codes + wifi_connect + iperf */
+        /* fall through -> country auto-detect + wifi_connect */
     }
 #endif
 
     /* If no regulatory domain was provisioned, scan the surrounding APs, take the majority beacon
      * Country IE, save it to WIFI_COUNTRY, and set the matching channel plan now (reboots, then
      * reconnects with it). Runs before associating so the reboot precedes the connection. */
-    wifi_autodetect_country();
+    dot11d_autodetect_country();   /* component/80211d_config (port: component/amebad/80211d_port) */
 
     /* Bring up FreeRTOS+TCP BEFORE associating: the driver starts delivering RX
      * (beacons/probes) during association, and the RX bridge needs the buffer
