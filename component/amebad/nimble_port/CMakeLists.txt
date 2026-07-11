@@ -107,3 +107,11 @@ target_link_libraries(nimble PUBLIC
 # Vendored upstream — silence its warnings (the AmebaD flag stack is -Wall -Wextra
 # -Werror). -w (last on the command line) overrides the global -Werror.
 target_compile_options(nimble PRIVATE -w)
+
+# NDEBUG (Mynewt's release mode) for the vendored upstream: hci_h4_sm_rx treats an
+# ACL/EVT pool OOM as assert-fatal (`assert(rc >= 0)`) even though its own tail comment +
+# consumed-bytes return implement a graceful path. Under a sustained notification flood
+# (bletp RX side) the pool WILL momentarily exhaust (host task at idle+1 vs HCI RX at
+# idle+4), so the assert aborted the image. With NDEBUG the OOM propagates as a short
+# read that transport_amebad.c's RX loop retries with backpressure.
+target_compile_definitions(nimble PRIVATE NDEBUG)

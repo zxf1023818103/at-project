@@ -45,15 +45,36 @@ static void
 nimble_amebad_rx_task(void *arg)
 {
     uint8_t  buf[64];
-    uint16_t n;
+    uint16_t n, off;
+    int      consumed;
     (void)arg;
 
     for (;;) {
         n = hci_uart_recv(buf, sizeof(buf));
-        if (n) {
-            hci_h4_sm_rx(&h4sm, buf, n);
-        } else {
+        if (n == 0) {
             vTaskDelay(1);   /* nothing pending — yield */
+            continue;
+        }
+        /* Feed the H4 state machine honoring its consumed-bytes return: on ACL/EVT
+         * buffer-pool exhaustion it consumes only part of the input (or none, -1).
+         * Dropping the unconsumed tail would DESYNC the H4 byte stream (the next byte
+         * gets parsed as a packet type -> garbage state machine), which is exactly what
+         * a sustained notification flood (bletp RX side) triggered. Re-feed the tail
+         * after a 1-tick delay: this task runs above the "ble" host task (idle+4 vs
+         * idle+1), so the delay is also the backpressure that lets the host drain and
+         * free buffers. Needs NDEBUG on this lib: upstream hci_h4_sm_rx has an
+         * assert(rc >= 0) on the OOM path that would abort before we could retry. */
+        off = 0;
+        while (off < n) {
+            consumed = hci_h4_sm_rx(&h4sm, buf + off, (uint16_t)(n - off));
+            if (consumed < 0) {
+                vTaskDelay(1);
+                continue;
+            }
+            off += (uint16_t)consumed;
+            if (off < n) {
+                vTaskDelay(1);
+            }
         }
     }
 }
@@ -72,12 +93,10 @@ static TaskHandle_t s_rx_task_h;
 void
 nimble_amebad_transport_start_rx(void)
 {
-    /* 4096 words: ble_transport_to_hs_acl() runs the whole controller->host RX chain
-     * (H4 reassembly -> L2CAP -> ATT -> GATT -> the app's notify callback) INLINE in this
-     * task, so a sustained notification flood (the bletp throughput RX side) needs deep
-     * stack; 768 then 2048 both overflowed into the MSP region (SAU "Security Fault",
-     * MSP==PSP, in hci_h4_sm_rx). */
-    xTaskCreate(nimble_amebad_rx_task, "nimble_hci_rx", 4096, NULL,
+    /* 2048 words: headroom for the H4 reassembly + enqueue path. (The bletp RX-flood
+     * crash originally blamed on this stack was really the upstream OOM assert in
+     * hci_h4_sm_rx -- see the NDEBUG note in CMakeLists.txt + the retry loop above.) */
+    xTaskCreate(nimble_amebad_rx_task, "nimble_hci_rx", 2048, NULL,
                 tskIDLE_PRIORITY + 4, &s_rx_task_h);
 }
 

@@ -11,12 +11,13 @@
  * Data always flows peripheral -> central (notifications). Swapping which board runs
  * `bletp central` measures the other direction / GAP-role pairing with the SAME code.
  *
- * Status: bl602-central / amebad-peripheral is verified end-to-end (~0.39 Mbps goodput on
- * 1M PHY + DLE, coex-limited by WiFi). The reverse (amebad-central, i.e. amebad on the RX
- * side of the flood) currently faults inside AmebaD's HCI RX transport (hci_h4_sm_rx) under
- * the sustained notification rate — a transport robustness bug (bigger RX task stack + ACL
- * pools did not resolve it); needs dedicated debugging. Run WiFi-dropped (`wifi drop`) for a
- * clean BLE measurement — the shared radio otherwise starves the scan/connection.
+ * Status (both directions HW-verified, same firmware): amebad->bl602 ~0.39 Mbps goodput;
+ * bl602->amebad ~0.06 Mbps (asymmetry = AmebaD's controller->host HCI-UART RX path +
+ * OOM backpressure; see transport_amebad.c). The amebad RX-side crash under the flood was
+ * the upstream hci_h4_sm_rx OOM assert + a desyncing RX loop — fixed in transport_amebad.c
+ * (consumed-bytes retry loop) + NDEBUG on the amebad nimble lib. Run WiFi-dropped
+ * (`wifi drop`) for a clean BLE measurement — the shared radio otherwise starves the
+ * scan/connection (1M PHY; the 2M switch destabilised the coex-contended link).
  *
  * Wiring into the shared nimble_app.c:
  *   - nimble_start()      -> ble_tp_gatt_register()      (register the throughput GATT service)
