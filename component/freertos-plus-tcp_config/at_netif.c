@@ -256,8 +256,95 @@ BaseType_t xApplicationDNSQueryHook( const char * pcName )
     return pdFAIL;
 }
 
-/* Weak: bl602/bl616 use this default (print IP + ops->on_got_ip). AmebaD overrides it
- * with a strong definition in app_km4/main.c (IPv6 SLAAC + MLDv2 + network-DOWN timing). */
+/* ===== Shared network-up/down body ========================================
+ * Both platforms' STRONG vApplicationIPNetworkEventHook do only their platform-specific dedup +
+ * driver signalling, then call these. Prints the DHCP config uniformly ("[NET]" tag) so bl602 and
+ * AmebaD emit identical network-up lines, and fans out to app_on_network_up(). */
+extern int      snprintf( char *, size_t, const char *, ... );
+extern char   * getenv( const char * );
+extern uint32_t ulDHCPNtpServerAddress;      /* DHCP option 42, captured by the FreeRTOS_DHCP.c patch */
+extern void     app_on_network_up( void );   /* app_startup seam: SNTP + AWS/telemetry (once-guarded) */
+
+static void at_fmt_ipv4( uint32_t ip, char * b, size_t n )
+{
+    ( void ) snprintf( b, n, "%u.%u.%u.%u",
+                       ( unsigned ) ( ip & 0xffU ), ( unsigned ) ( ( ip >> 8 ) & 0xffU ),
+                       ( unsigned ) ( ( ip >> 16 ) & 0xffU ), ( unsigned ) ( ( ip >> 24 ) & 0xffU ) );
+}
+
+/* IPv6 address logger: weak no-op here; a platform strong-overrides it to print the link-local /
+ * global SLAAC addresses (AmebaD today). Change 4 moves the real impl into this file for both. */
+__attribute__( ( weak ) ) void at_netif_log_ipv6( const char * tag ) { ( void ) tag; }
+
+/* The IPv4 endpoint (first non-IPv6 endpoint with a lease) for the DNS-server config. */
+static NetworkEndPoint_t * at_netif_ipv4_endpoint( void )
+{
+    NetworkEndPoint_t * px;
+    for( px = FreeRTOS_FirstEndPoint( NULL ); px != NULL; px = FreeRTOS_NextEndPoint( NULL, px ) )
+    {
+#if ( ipconfigUSE_IPv6 != 0 )
+        if( px->bits.bIPv6 != 0U ) { continue; }
+#endif
+        if( px->ipv4_settings.ulIPAddress != 0U ) { return px; }
+    }
+    return NULL;
+}
+
+void at_netif_on_network_up( void )
+{
+    uint32_t ulIP = 0, ulMask = 0, ulGW = 0, ulDNS = 0;
+    NetworkEndPoint_t * ep;
+    char b[ 16 ];
+
+    FreeRTOS_GetAddressConfiguration( &ulIP, &ulMask, &ulGW, &ulDNS );
+    printf( "[NET] ==== network UP ====\r\n" );
+    at_netif_log_ipv6( "network UP" );
+
+    at_fmt_ipv4( ulIP,   b, sizeof( b ) ); printf( "[NET] DHCP IP   %s\r\n", b );
+    at_fmt_ipv4( ulMask, b, sizeof( b ) ); printf( "[NET] netmask   %s\r\n", b );
+    at_fmt_ipv4( ulGW,   b, sizeof( b ) ); printf( "[NET] gateway   %s\r\n", b );
+
+    ep = at_netif_ipv4_endpoint();
+    if( ep != NULL )
+    {
+        unsigned     i;
+        const char * d1 = getenv( "DNS_SERVER" );
+        const char * d2 = getenv( "DNS_SERVER2" );
+        for( i = 0; i < ( unsigned ) ipconfigENDPOINT_DNS_ADDRESS_COUNT; i++ )
+        {
+            uint32_t d = ep->ipv4_settings.ulDNSServerAddresses[ i ];
+            if( d != 0U ) { at_fmt_ipv4( d, b, sizeof( b ) ); printf( "[NET] DHCP DNS[%u] %s\r\n", i, b ); }
+        }
+        /* Optional static IPv4 DNS override (env). An IPv6 literal yields inet_addr()==0 -> skip, so a
+         * c-ares IPv6 DNS_SERVER (CARES=ON) doesn't wipe the DHCP-learned IPv4 resolver. */
+        {
+            uint32_t a1 = ( ( d1 != NULL ) && ( d1[ 0 ] != '\0' ) ) ? FreeRTOS_inet_addr( d1 ) : 0U;
+            if( a1 != 0U )
+            {
+                ep->ipv4_settings.ulDNSServerAddresses[ 0 ] = a1;
+                if( ( d2 != NULL ) && ( d2[ 0 ] != '\0' ) )
+                {
+                    uint32_t a2 = FreeRTOS_inet_addr( d2 );
+                    if( a2 != 0U ) { ep->ipv4_settings.ulDNSServerAddresses[ 1 ] = a2; }
+                }
+                printf( "[NET] DNS override -> %s / %s\r\n", d1, ( d2 != NULL ) ? d2 : "-" );
+            }
+        }
+    }
+    if( ulDHCPNtpServerAddress != 0U ) { at_fmt_ipv4( ulDHCPNtpServerAddress, b, sizeof( b ) ); printf( "[NET] DHCP NTP    %s\r\n", b ); }
+    else                               { printf( "[NET] DHCP NTP    (none - DHCP option 42 not received)\r\n" ); }
+
+    app_on_network_up();
+}
+
+void at_netif_on_network_down( void )
+{
+    printf( "[NET] ==== network DOWN ====\r\n" );
+    ulDHCPNtpServerAddress = 0U;   /* re-derive from the next network's DHCP */
+}
+
+/* Weak: bl616 etc. that don't strong-override. bl602 + AmebaD provide their own strong hook
+ * (platform dedup) that also calls at_netif_on_network_up/down. */
 __attribute__( ( weak ) )
 void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
 {

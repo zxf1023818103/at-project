@@ -66,4 +66,13 @@ BaseType_t at_netif_is_ready( void );
 NetworkInterface_t * at_netif_get( void );   /* the registered interface (NULL before bringup) */
 void       at_netif_kick( void );            /* re-kick DHCP (FreeRTOS_NetworkDown) */
 
+/* Shared network-up/down body. Each platform's strong vApplicationIPNetworkEventHook does its own
+ * dedup + driver signalling, then calls these: they print the DHCP config uniformly ("[NET]") +
+ * apply the DNS_SERVER/DNS_SERVER2 env override, and _up() fans out to app_on_network_up(). */
+void at_netif_on_network_up( void );
+void at_netif_on_network_down( void );
+/* IPv6 address logger seam: weak no-op default (at_netif.c); AmebaD strong-overrides it to print the
+ * SLAAC link-local/global addresses. at_netif_on_network_up() calls it as "network UP". */
+void at_netif_log_ipv6( const char * tag );
+
 #endif /* AT_NETIF_H */

@@ -235,6 +235,9 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
  * network-up cue on both platforms -- it replaces the SDK's CODE_WIFI_ON_GOT_IP -> app_on_network_up().
  * The IPv6 link-local endpoint + the DHCP give-up fallback both fire this with a 0.0.0.0 lease, and the
  * IPv6 global (SLAAC) endpoint re-fires it once up, so guard on a non-zero lease and dedup per up/down. */
+extern void at_netif_signal_got_ip( uint32_t );   /* drive bl602 wifi_mgmr out of ipObtaining */
+extern void at_netif_on_network_up( void );        /* shared network-up body (component/freertos-plus-tcp_config) */
+extern void at_netif_on_network_down( void );
 void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
 {
     static int s_up = 0;
@@ -248,23 +251,19 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
             return;   /* link-local IPv6 / DHCP give-up (0.0.0.0), or a duplicate up for this lease */
         }
         s_up = 1;
-        printf( "[APP] ==== network UP ====  DHCP IP %d.%d.%d.%d\n",
-                (int)( ulIP & 0xff ), (int)( ( ulIP >> 8 ) & 0xff ),
-                (int)( ( ulIP >> 16 ) & 0xff ), (int)( ( ulIP >> 24 ) & 0xff ) );
         /* Advance the WiFi driver out of "ipObtaining" (bl602 wifi_mgmr_api_ip_got via the netif ops).
-         * FreeRTOS+TCP owns DHCP, so the driver never sees its own got-IP cue; the weak at_netif hook
-         * this strong one replaced used to do it, and without it the driver self-disconnects (~ip-
-         * obtaining timeout) and the link churns every ~30 s. */
-        { extern void at_netif_signal_got_ip( uint32_t ); at_netif_signal_got_ip( ulIP ); }
+         * FreeRTOS+TCP owns DHCP, so the driver never sees its own got-IP cue; without it the driver
+         * self-disconnects (~ip-obtaining timeout) and the link churns every ~30 s. */
+        at_netif_signal_got_ip( ulIP );
         wifi_service_on_event( WIFI_SVC_EV_GOTIP );
-        app_on_network_up();   /* SNTP + AWS/telemetry; the services are once-guarded internally */
+        at_netif_on_network_up();   /* shared: [NET] DHCP IP/mask/GW/DNS/NTP + app_on_network_up */
     }
     else   /* eNetworkDown: reset the dedup so a genuine reconnect is honoured */
     {
         if( s_up != 0 )
         {
             s_up = 0;
-            printf( "[APP] ==== network DOWN ====\n" );
+            at_netif_on_network_down();
         }
     }
 }

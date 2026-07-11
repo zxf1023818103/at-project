@@ -480,6 +480,15 @@ static void ipv6_mld_task( void * pvArg )
 
 /* Called by the IP task when the interface comes up (DHCP done) or goes down.
  * ipconfigIPv4_BACKWARD_COMPATIBLE=1 -> single-arg hook. */
+/* Shared network-up/down body lives in component/freertos-plus-tcp_config/at_netif.c; this hook keeps
+ * only the AmebaD-specific dedup. at_netif_log_ipv6 is the strong override of at_netif.c's weak seam
+ * (change 4 will move log_ipv6's impl into at_netif; for now it forwards to our log_ipv6). */
+extern "C" void at_netif_on_network_up( void );
+extern "C" void at_netif_on_network_down( void );
+#if ( ipconfigUSE_IPv6 != 0 )
+extern "C" void at_netif_log_ipv6( const char * tag ) { log_ipv6( tag ); }
+#endif
+
 void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
 {
     /* Print "network DOWN" once per down->up cycle: the WiFi DISCONNECT event drops the IP stack (real
@@ -532,88 +541,27 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
         }
         s_downLogged = 0;
         s_everUp = 1;
-        /* Real lease -> link is connected. The reliable "connected" cue (FOURWAY_HANDSHAKE_DONE is flaky
-         * on the driver's autoreconnect); clears the monitor's wait without a redundant takeover. */
+        /* Reliable "connected" cue (FOURWAY_HANDSHAKE_DONE is flaky on the driver's autoreconnect);
+         * clears the monitor's wait without a redundant takeover. */
         wifi_link_set( 1 );
-        /* IPs are in network byte order; byte 0 = first octet. */
-        log_info( "[KM4] ==== network UP ====" );
-#if ( ipconfigUSE_IPv6 != 0 )
-        log_ipv6( "network UP" );   /* link-local now; the global SLAAC address logs separately when it arrives */
-#endif
-        log_info( "[KM4] DHCP IP   %d.%d.%d.%d",
-                    (int)( ulIP & 0xff ), (int)( ( ulIP >> 8 ) & 0xff ),
-                    (int)( ( ulIP >> 16 ) & 0xff ), (int)( ( ulIP >> 24 ) & 0xff ) );
-        log_info( "[KM4] netmask   %d.%d.%d.%d",
-                    (int)( ulMask & 0xff ), (int)( ( ulMask >> 8 ) & 0xff ),
-                    (int)( ( ulMask >> 16 ) & 0xff ), (int)( ( ulMask >> 24 ) & 0xff ) );
-        log_info( "[KM4] gateway   %d.%d.%d.%d",
-                    (int)( ulGW & 0xff ), (int)( ( ulGW >> 8 ) & 0xff ),
-                    (int)( ( ulGW >> 16 ) & 0xff ), (int)( ( ulGW >> 24 ) & 0xff ) );
-        /* DHCP-provided DNS server list (endpoint settings) + NTP server (DHCP option 42, captured by
-         * the FreeRTOS_DHCP.c at-project patch into ulDHCPNtpServerAddress). */
-        {
-            char     b[ 16 ];
-            unsigned i;
-            for( i = 0; i < ipconfigENDPOINT_DNS_ADDRESS_COUNT; i++ )
-            {
-                uint32_t d = xEndPoint.ipv4_settings.ulDNSServerAddresses[ i ];
-                if( d != 0U )
-                {
-                    fmt_ipv4( d, b, sizeof( b ) );
-                    log_info( "[KM4] DHCP DNS[%d] %s", (int) i, b );
-                }
-            }
-            /* Optional static DNS override (env DNS_SERVER / DNS_SERVER2). An iPad Personal Hotspot's
-             * DNS forwarder does not return AAAA records; pointing at a public resolver that does
-             * (e.g. Alibaba 223.5.5.5 / 223.6.6.6) makes IPv6 (AAAA) resolution work. */
-            {
-                const char * d1 = getenv( "DNS_SERVER" );
-                const char * d2 = getenv( "DNS_SERVER2" );
-                uint32_t     a1 = ( ( d1 != NULL ) && ( d1[ 0 ] != '\0' ) ) ? FreeRTOS_inet_addr( d1 ) : 0U;
-                /* Only an IPv4 literal overrides the IPv4 DNS array. An IPv6 DNS_SERVER (for c-ares
-                 * under CARES=ON) yields inet_addr()==0 -- do NOT write that, or it wipes the
-                 * DHCP-learned IPv4 DNS and leaves the box with no usable resolver on an IPv4-only link. */
-                if( a1 != 0U )
-                {
-                    xEndPoint.ipv4_settings.ulDNSServerAddresses[ 0 ] = a1;
-                    if( ( d2 != NULL ) && ( d2[ 0 ] != '\0' ) )
-                    {
-                        uint32_t a2 = FreeRTOS_inet_addr( d2 );
-                        if( a2 != 0U )
-                        {
-                            xEndPoint.ipv4_settings.ulDNSServerAddresses[ 1 ] = a2;
-                        }
-                    }
-                    log_info( "[KM4] DNS override -> %s / %s", d1, ( d2 != NULL ) ? d2 : "-" );
-                }
-            }
-            /* c-ares DNS re-point (CARES=ON) now runs from the shared app_on_network_up() below,
-             * via app_network_dns_reinit() (strong-overridden in component/c-ares_config). */
-            if( ulDHCPNtpServerAddress != 0U )
-            {
-                fmt_ipv4( ulDHCPNtpServerAddress, b, sizeof( b ) );
-                log_info( "[KM4] DHCP NTP    %s", b );
-            }
-            else
-            {
-                log_info( "[KM4] DHCP NTP    (none - DHCP option 42 not received)" );
-            }
-        }
-        /* Network services on link-up (SNTP + AWS / QUIC / iperf) via the shared seam;
-         * app_network_up_start_services() is strong-overridden for AmebaD just above main(). */
-        app_on_network_up();
+        /* Shared body: "[NET] ==== network UP ====", IPv6 (via at_netif_log_ipv6 -> our log_ipv6),
+         * DHCP IP/mask/GW, the DHCP DNS list + DNS_SERVER/DNS_SERVER2 override, DHCP NTP, then
+         * app_on_network_up() (SNTP + AWS/telemetry). Identical to bl602 now. */
+        at_netif_on_network_up();
     }
     else
     {
         if( s_everUp && !s_downLogged )
         {
             s_downLogged = 1;
-            log_info( "[KM4] ==== network DOWN ====" );
+            at_netif_on_network_down();   /* "[NET] ==== network DOWN ====" + forget the DHCP NTP */
         }
-        /* Forget the DHCP-learned NTP server (option 42): the next association re-derives it from
-         * that network's DHCP. Without this, a stale value from a previous network would shadow the
-         * SNTP ntp.aliyun.com fallback when the new network advertises no NTP. */
-        ulDHCPNtpServerAddress = 0U;
+        else
+        {
+            /* Boot DHCP re-kick (before a real up): still forget any stale NTP so the next network
+             * re-derives it from that network's DHCP. */
+            ulDHCPNtpServerAddress = 0U;
+        }
     }
 }
 
