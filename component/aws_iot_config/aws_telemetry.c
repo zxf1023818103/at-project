@@ -20,9 +20,9 @@
 
 #include "aws_iot.h"
 #include "aws_connect.h"          /* shared TLS+MQTT connect handshake */
+#include "aws_telemetry_common.h" /* shared topic (bw20/) + JSON schema, same as aws_iot_demo.c */
 
-/* --- config --------------------------------------------------------------- */
-#define AWS_MQTT_PORT          8883U
+/* --- config (AWS_MQTT_PORT comes from aws_iot_config.h via aws_telemetry_common.h) ---------- */
 #define AWS_NET_BUFFER_SZ      2048U            /* telemetry PUBLISH is small; 2 KB fixed buffer */
 #define AWS_KEEPALIVE_S        60U
 #define AWS_CONNECT_TMO_MS     20000U
@@ -47,7 +47,7 @@ static MQTTContext_t       s_mqtt;
 static uint8_t             s_netBuf[ AWS_NET_BUFFER_SZ ];
 static char                s_endpoint[ 128 ];
 static char                s_mac[ 13 ];         /* "aabbccddeeff" */
-static char                s_topic[ 48 ];       /* bl602/<mac>/telemetry */
+static char                s_topic[ 48 ];       /* bw20/<mac>/telemetry (AWS_TOPIC_TELEMETRY_FMT) */
 static uint8_t             s_key[ AWS_KEY_MAX ];
 static size_t              s_keyLen;
 static NetworkCredentials_t s_creds;
@@ -127,14 +127,11 @@ fail:
 
 static int prvPublishTelemetry(uint32_t seq)
 {
-    char              payload[ 96 ];
+    char              payload[ 160 ];
     MQTTPublishInfo_t pub;
     int               n;
 
-    n = snprintf(payload, sizeof(payload),
-                 "{\"device\":\"%s\",\"seq\":%u,\"uptime_s\":%u,\"free_heap\":%u}",
-                 s_mac, (unsigned) seq, (unsigned) (xTaskGetTickCount() / configTICK_RATE_HZ),
-                 (unsigned) xPortGetFreeHeapSize());
+    n = aws_build_telemetry_json(payload, sizeof(payload), s_mac, (unsigned) seq);
     if (n <= 0) return -1;
 
     memset(&pub, 0, sizeof(pub));
@@ -145,7 +142,9 @@ static int prvPublishTelemetry(uint32_t seq)
     pub.payloadLength = (size_t) n;
 
     /* coreMQTT v5.0.2: (ctx, pub, packetId, propertyBuilder). QoS0 needs no packet ID; no MQTT-5 props. */
-    return (MQTT_Publish(&s_mqtt, &pub, 0, NULL) == MQTTSuccess) ? 0 : -1;
+    if (MQTT_Publish(&s_mqtt, &pub, 0, NULL) != MQTTSuccess) return -1;
+    printf("[AWS] TX %s %s\r\n", s_topic, payload);   /* same line as aws_iot_demo.c */
+    return 0;
 }
 
 static void prvTelemetryTask(void *arg)
@@ -161,7 +160,7 @@ static void prvTelemetryTask(void *arg)
 
     /* Thing name / client ID / topic = the WiFi MAC (aws_get_mac is the platform hook). */
     if (aws_get_mac(s_mac, sizeof(s_mac)) != 0) strcpy(s_mac, "bl602unknown");
-    snprintf(s_topic, sizeof(s_topic), "bl602/%s/telemetry", s_mac);
+    snprintf(s_topic, sizeof(s_topic), AWS_TOPIC_TELEMETRY_FMT, s_mac);   /* bw20/<mac>/telemetry */
 
     for (;;) {
         if (prvConnect() != 0) {
@@ -171,7 +170,6 @@ static void prvTelemetryTask(void *arg)
         /* Connected: publish telemetry every period, driving the MQTT keepalive between publishes. */
         for (;;) {
             if (prvPublishTelemetry(seq) == 0) {
-                printf("[AWS] published seq=%u to %s\r\n", (unsigned) seq, s_topic);
                 seq++;
             } else {
                 printf("[AWS] publish failed -> reconnect\r\n");

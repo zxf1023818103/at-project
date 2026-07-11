@@ -37,6 +37,7 @@
 #include "aws_iot_config.h"
 #include "aws_iot.h"        /* shared AWS component: aws_load_key / aws_get_mac / AWS_*_MAX */
 #include "aws_connect.h"    /* shared TLS+MQTT connect handshake (aws_connect_tls) */
+#include "aws_telemetry_common.h" /* shared topic (bw20/) + JSON schema, same as aws_telemetry.c */
 
 #include "freertos_agent_message.h"
 #include "freertos_command_pool.h"
@@ -47,9 +48,7 @@
 #include "mbedtls/gcm.h"    /* HW AES-GCM (gcm_alt.c) boot self-test, below */
 #endif
 
-#ifndef AT_FW_VERSION
-#define AT_FW_VERSION "0.9.2-ota"
-#endif
+/* AT_FW_VERSION fallback now lives in aws_telemetry_common.h (shared telemetry schema). */
 
 extern void mbedtls_threading_freertos_init(void);
 
@@ -532,11 +531,7 @@ static void aws_telemetry_task(void *param)
             MQTTPublishInfo_t pub;
             MQTTAgentPublishArgs_t pubArgs;
             MQTTAgentCommandInfo_t commandInfo = { 0 };
-            int n = snprintf(payload, sizeof(payload),
-                             "{\"thing\":\"%s\",\"fw\":\"%s\",\"seq\":%u,\"uptime_ms\":%u,\"heap\":%u}",
-                             s_mac, AT_FW_VERSION, (unsigned)seq,
-                             (unsigned)prvGetTimeMs(),
-                             (unsigned)xPortGetFreeHeapSize());
+            int n = aws_build_telemetry_json(payload, sizeof(payload), s_mac, (unsigned)seq);
 
             memset(&pub, 0, sizeof(pub));
             pub.qos = MQTTQoS0;
