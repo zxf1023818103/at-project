@@ -256,6 +256,9 @@ add_subdirectory(usrcfg)             # chip-gated: usrcfg_common (+ _lp on KM0 /
 # (freertos_port removed: its only lib was the heap_5 glue; heap registration is now the shared
 #  ram_heap_init() in component/freertos-kernel_config/ram_heap.c)
 add_subdirectory(monitor_port)       # chip-gated: AmebaD port for the shared console engine (component/monitor_config)
+add_subdirectory(board_flash_port)   # KM4-gated: board_flash_protect/read_status (flash write-protect impl)
+add_subdirectory(rtc_time_port)      # KM4-gated: rtc_time_store/seed over the Realtek RTC (shared rtc_time seam)
+add_subdirectory(ota_flash_port)     # KM4-gated: the OTA slot writer (shared ota_flash.h contract)
 add_subdirectory(osdep)              # KM4-gated internally (osdep/os abstraction)
 add_subdirectory(mbed)               # KM4-gated: flattened mbed HAL (amebad_mbed: flash_api.c + headers), consumed by wifi
 add_subdirectory(mbedtls_rom)        # KM4-gated: headers to call ROM mbedTLS 2.4.0 as SW (no build)

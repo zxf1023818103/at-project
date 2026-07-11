@@ -8,7 +8,6 @@
  */
 
 #include "ameba_soc.h"
-#include "board_flash_lock.h"   /* board_flash_prot_t + the board_flash_* interface this file implements */
 
 #if defined  (__GNUC__)
 #pragma GCC diagnostic push

@@ -322,7 +322,7 @@ if(AT_ENABLE_MCUMGR)
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_MCUMGR
                  "AMEBAD_MCUMGR_FW_VERSION=\"${AMEBAD_FW_VERSION}\"")
     if(NOT AMEBAD_ENABLE_AWS_IOT)
-        target_sources(target_img2_km4 PRIVATE "${AT_ROOT}/component/amebad/ota_flash_port/ota_flash_amebad.c")
+        target_link_libraries(target_img2_km4 PRIVATE ota_flash_port)
     endif()
 endif()
 
@@ -456,7 +456,6 @@ if(AMEBAD_ENABLE_AWS_IOT)
     target_sources(target_img2_km4 PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/aws_platform.c"             # aws_get_mac (efuse) + `aws blemac/secchk` + TF-M pstest/xiptest
         "${OTA_HTTP_SOURCES}"                                    # shared `ota_http <url>` + urlparse (component/ota_http_config)
-        "${AT_ROOT}/component/amebad/ota_flash_port/ota_flash_amebad.c"                 # the AmebaD OTA slot writer (impl of ota_flash.h)
         "${AT_ROOT}/component/amebad/mbed/efuse_api.c")   # efuse_logical_read (BLE MAC @ 0x190); not built into amebad_mbed
     if(AMEBAD_ENABLE_AWS_OTA)
         # Full agent image (AWSOTA=ON): shared agent+telemetry+OTA orchestration + the AWS IoT OTA
@@ -480,7 +479,7 @@ if(AMEBAD_ENABLE_AWS_IOT)
         PROPERTIES COMPILE_OPTIONS "-w")                          # vendored 3rd-party: silence its warnings
     # Shared ota_http command (component/ota_http_config): urlparse.h + coreHTTP/llhttp/transport_tls/
     # ota_flash.h include+link deps. coreHTTP (request builder + bundled llhttp parser) for ota_http.c.
-    target_link_libraries(target_img2_km4 PRIVATE ota_http_config corehttp_config)
+    target_link_libraries(target_img2_km4 PRIVATE ota_http_config corehttp_config ota_flash_port)
     target_include_directories(target_img2_km4 PRIVATE
         "${AT_ROOT}/component/corehttp_config"
         "${AT_ROOT}/component/corehttp_config/corehttp/source/include"
@@ -614,17 +613,16 @@ if(NOT AT_ENABLE_QUIC)
     # DIRECT source of the executable, not pulled from the sntp_time archive: sntp_time.c references
     # time_selftest_run via a WEAK decl, and a weak undefined ref does NOT pull a strong def out of a
     # static archive (it just binds to NULL) — so the strong def must be a direct .o in the final link.
-    # rtc_time_amebad.c — the AmebaD port of the shared RTC seam (rtc_time.h, target rtc_time),
-    # providing the strong rtc_time_store / rtc_time_seed. Lives in component/amebad/rtc_time_port
-    # (mirroring bouffalo's rtc_time_port) but compiled as a DIRECT source, same weak-ref-vs-archive
-    # reasoning as time_selftest.c above.
-    # flash_cli: the shared `flash` lock/unlock/status command + board_flash_* helpers (boot lock +
-    # status print + the OTA path's unlock/relock). The board_flash_protect primitive is in
-    # component/amebad/board_flash_port (compiled by the monitor_port lib).
-    target_link_libraries(target_img2_km4 PRIVATE sntp_time rtc_time flash_cli)
+    # rtc_time_port / board_flash_port: proper STATIC port libs mirroring bouffalo's (archive pull
+    # is safe: main.cpp's AmebaD body strong-refs rtc_time_seed, flash_cli strong-refs
+    # board_flash_protect/read_status — each pulls its whole member, incl. the weak-called
+    # rtc_time_store).
+    # flash_cli: the shared `flash` lock/unlock/status command + board_flash_* helpers.
+    target_link_libraries(target_img2_km4 PRIVATE sntp_time rtc_time flash_cli
+        rtc_time_port      # rtc_time_store/seed over the Realtek RTC (archive; main.cpp's strong rtc_time_seed ref pulls it)
+        board_flash_port)  # board_flash_protect/read_status (flash_cli's strong refs pull it)
     target_sources(target_img2_km4 PRIVATE
-        "${AT_ROOT}/component/sntp_time_config/time_selftest.c"
-        "${AT_ROOT}/component/amebad/rtc_time_port/rtc_time_amebad.c")   # mirror SNTP UTC into the HW RTC + seed at boot (rtc_api in amebad_mbed)
+        "${AT_ROOT}/component/sntp_time_config/time_selftest.c")
 endif()
 
 # POSIX-fd VFS self-test (vfs_selftest, gated by the option in component/amebad/CMakeLists.txt).

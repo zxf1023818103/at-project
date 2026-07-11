@@ -44,14 +44,7 @@ set(_monitor_warnings
 if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
     add_library(monitor_port STATIC monitor_cli.c monitor_plat_lp.c)
 elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
-    # board_flash_amebad.c (component/amebad/board_flash_port, mirroring bouffalo's
-    # board_flash_port) implements board_flash_protect / board_flash_read_status -- the AmebaD
-    # half of the cross-platform flash write-protect. Compiled into this lib (the same archive
-    # monitor_rom.c lived in when it hosted those functions -> unchanged link semantics).
-    add_library(monitor_port STATIC monitor_cli.c monitor_plat_hp.c monitor_rom.c
-        "${CMAKE_CURRENT_SOURCE_DIR}/../board_flash_port/board_flash_amebad.c")
+    add_library(monitor_port STATIC monitor_cli.c monitor_plat_hp.c monitor_rom.c)
 endif()
 target_link_libraries(monitor_port PUBLIC monitor FreeRTOS)
-# board_flash_lock.h for board_flash_amebad.c (component/flash_cli_config).
-target_include_directories(monitor_port PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../flash_cli_config")
 target_compile_options(monitor_port PRIVATE ${_monitor_warnings})
