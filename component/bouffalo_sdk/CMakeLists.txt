@@ -366,8 +366,12 @@ target_link_libraries(bouffalo_sdk INTERFACE ota_flash_port)
 
 # zip/unzip console commands (component/monitor_config zip_cmd -> minizip). bl602's newlib malloc
 # is syscall_config's malloc -> pvPortMalloc -> TLSF (big heap), so no --wrap needed (unlike AmebaD's
-# tiny _sbrk arena). main() calls zip_cli_register().
-target_link_libraries(bouffalo_sdk INTERFACE zip_cmd)
+# tiny _sbrk arena). main() calls zip_cli_register(). LINK-LEVEL gate, same rule as amebad
+# (app_km4 CMakeLists "NOT QUIC AND NOT AWS_IOT"): AWS images are connect-and-run (heap headroom),
+# the QUIC image has no console.
+if(NOT AT_ENABLE_AWS AND NOT AT_ENABLE_QUIC)
+    target_link_libraries(bouffalo_sdk INTERFACE zip_cmd)
+endif()
 
 # iperf throughput probes (component/iperf_config) — main() registers the `iperf` console command.
 # NOT on bl602 AWS images: iperf's static ucTxBuf(8K)+ucRecvBuf(5.7K)+ucRxBuf(2K) = ~16 KB of .bss,

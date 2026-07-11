@@ -94,20 +94,10 @@ endif
 FW_VERSION ?= ota-A        # firmware version string stamped into the AWS image (printed + in telemetry); bump for an OTA target build, e.g. make AWS=ON FW_VERSION=ota-B
 APP_BUILD  ?= 1            # appFirmwareVersion build number (0.9.N) for the OTA self-test; an OTA target must be > the running image, e.g. make AWS=ON FW_VERSION=ota-E APP_BUILD=2
 # coreSNTP UTC time-sync is now default-on (every non-QUIC image) - no SNTP flag.
-ifeq ($(AWS),ON)
-# AWS=ON: the MQTT client private key lives in TF-M secure storage by default (implies STORAGE/TFM).
-# `make AWS=ON TFM=OFF` builds AWS WITHOUT the secure world; the key then falls back to a plain
-# LittleFS file (aws_provision.c / aws_cli.c, gated on AMEBAD_TFM_STORAGE). So only force STORAGE=ON
-# when TFM wasn't explicitly turned off on the command line.
-# NOTE: no trailing comment on the STORAGE := ON assignment — a trailing-space value breaks the ifeq.
-ifeq ($(origin TFM),command line)
-ifeq ($(TFM),ON)
-STORAGE    := ON
-endif
-else
-STORAGE    := ON
-endif
-endif
+# AWS images no longer imply STORAGE/TFM (aligned with bl602): the MQTT client private key
+# defaults to a plain LittleFS DER file (aws_secret_store_file.c) on BOTH platforms. Opt in to the
+# TF-M ITS key backend with `make AWS=ON STORAGE=ON` (STORAGE implies TFM below); TFM=ON alone
+# builds the secure world without moving the key.
 # HW-GCM (HWGCM follows TFM above, so ON for these TF-M images) is verified end-to-end for BOTH QUIC
 # (picotls/PSA AEAD: ~7.1 Mbps DL / 2.9 UL, vs 1.7 / 1.2 with software GCM) and AWS IoT (mbedTLS
 # TLS1.3 handshake + MQTT telemetry). gcm_alt.c brings the IPSEC engine up itself, once, via the NS

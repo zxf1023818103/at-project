@@ -393,10 +393,10 @@ void app_console_register_platform(void)
     // mbedTLS TLS transport for https, which - like aws_iot - is only linked with the AWS stack (AWS=ON).
     { extern void ota_http_register(void); ota_http_register(); }
 #endif
-#ifndef AT_PROJECT_AWS_IOT
-    zip_cli_register();                 // zip/unzip (minizip over the VFS). Dropped in the bl602 AWSOTA
-                                        // image: gc-sections then strips minizip's ~4 KB of .bss, which
-                                        // (living below __HeapBase) grows the heap for the AWS TLS handshake.
+#ifndef AT_PROJECT_AWS
+    zip_cli_register();                 // zip/unzip (minizip over the VFS). Dropped in ANY AWS image
+                                        // (link-level too, component/bouffalo_sdk/CMakeLists.txt), same
+                                        // rule as amebad: connect-and-run image, heap headroom.
 #endif
     { extern void net_cli_register(void); net_cli_register(); }   // shared `resolve` / `ip6`
 #if defined(AT_PROJECT_NIMBLE)
