@@ -316,8 +316,8 @@ if(AT_ENABLE_MCUMGR)
     target_include_directories(target_img2_km4 PRIVATE
         $<TARGET_PROPERTY:mcumgr,INTERFACE_INCLUDE_DIRECTORIES>)
     target_sources(target_img2_km4 PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/smp_img_ota.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/smp_fs.c")     # fs_mgmt impl over the LittleFS POSIX VFS
+        "${AT_ROOT}/component/mcumgr_config/smp_img_ota.c"
+        "${AT_ROOT}/component/mcumgr_config/smp_fs.c")     # fs_mgmt impl over the LittleFS POSIX VFS
     target_link_libraries(target_img2_km4 PRIVATE ota_flash_config)   # ota_flash.h for smp_img_ota.c + ota_flash.c
     set_property(SOURCE ${AT_MAIN_SRC}
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_MCUMGR

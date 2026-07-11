@@ -35,7 +35,7 @@ extern void amebad_nimble_sm_crypto_selftest(void); /* mbedtls_sm_glue.c: SM cry
 
 #ifdef AT_PROJECT_MCUMGR
 extern int  smp_bt_register(void);     /* mcumgr_port/smp_bt.c: register the SMP GATT service */
-extern void smp_img_ota_init(void);    /* app_km4/smp_img_ota.c: register img + os command groups */
+extern void smp_img_ota_init(void);    /* mcumgr_config/smp_img_ota.c: register img + os + fs command groups */
 #endif
 
 #ifndef NIMBLE_DEV_NAME

@@ -1,5 +1,5 @@
 /*
- * smp_fs.c - mcumgr fs_mgmt platform impl for AmebaD (RTL8721D).
+ * smp_fs.c - the SHARED mcumgr fs_mgmt impl (AmebaD + Bouffalo).
  *
  * Maps the SMP file-system group (download / upload) onto the LittleFS-backed POSIX VFS
  * (component/syscall_config/newlib_syscalls.c: open/lseek/read/write/close -> lfs_file_*). Paths are

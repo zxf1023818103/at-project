@@ -1,5 +1,6 @@
 /*
- * smp_img_ota.c - mcumgr img_mgmt + os_mgmt platform impls for AmebaD (RTL8721D).
+ * smp_img_ota.c - the SHARED mcumgr img_mgmt + os_mgmt impls (AmebaD + Bouffalo), over the
+ * cross-platform ota_flash contract (each platform supplies its ota_flash_port slot writer).
  *
  * Maps the mcumgr image-upload (img_mgmt_impl_*) onto the existing dual-bank OTA flash sink
  * (ota_flash.c: begin/feed/finish - detects the inactive slot, validates the Realtek 32-byte OTA
@@ -7,8 +8,8 @@
  * artifact is therefore the same signed OTA image (OTA_All.bin payload) AWS OTA / ota_http use,
  * NOT an MCUboot image - so the MCUboot-specific img_mgmt semantics (hash/version listing, the
  * test/confirm two-phase) are adapted: the slot is armed at upload-finish, write_pending/confirmed
- * are no-ops that succeed, and `image list` (impl_read) is unsupported. Driven over BLE by the
- * smp_bt transport (component/amebad/mcumgr_port). os reset -> deferred sys_reset.
+ * are no-ops that succeed, and `image list` (impl_read) is unsupported. Driven over BLE by each
+ * platform's smp_bt transport. os reset -> deferred sys_reset.
  *
  * Built only for AT_ENABLE_MCUMGR (implies NIMBLE). See doc / the project_amebad_ota memories.
  */

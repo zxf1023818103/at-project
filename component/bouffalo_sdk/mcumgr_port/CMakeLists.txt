@@ -2,7 +2,7 @@
 #
 # The mcumgr integration splits into a platform-agnostic core (component/mcumgr_config: the mgmt/smp
 # protocol + img/os/fs command groups) and a per-platform port. AmebaD's port is mcumgr_config's own
-# mcumgr_port (smp_bt.c) + the img/os/fs impls in project/amebad/app_km4 (smp_img_ota.c/smp_fs.c).
+# mcumgr_port (smp_bt.c) + the SHARED img/os/fs impls (component/mcumgr_config/smp_img_ota.c + smp_fs.c).
 # Those impl files are platform-AGNOSTIC — they ride the shared ota_flash.h slot writer (bl602
 # implements it in freertos_tcp_port/ota_flash_bl602.c: ota_flash_begin/feed/finish + the OTA_SRC_BLE
 # lock) and the LittleFS POSIX VFS (syscall_config) — so bl602 compiles the SAME files by path here
@@ -12,8 +12,8 @@
 # Sources:
 #   smp_bt.c          the SMP GATT service + BLE transport (component/mcumgr_config; registered with the
 #                     NimBLE host by nimble_app.c under AT_PROJECT_MCUMGR — same shared call site as AmebaD)
-#   smp_img_ota.c     img_mgmt + os_mgmt impls -> ota_flash slot writer (project/amebad/app_km4)
-#   smp_fs.c          fs_mgmt impl over the LittleFS POSIX VFS (project/amebad/app_km4)
+#   smp_img_ota.c     img_mgmt + os_mgmt impls -> ota_flash slot writer (component/mcumgr_config, shared)
+#   smp_fs.c          fs_mgmt impl over the LittleFS POSIX VFS (component/mcumgr_config, shared)
 #   mcumgr_reset_bflb.c   bl602 sys_reset() shim (smp_img_ota.c reboots via sys_reset, an AmebaD symbol)
 #
 # Built only for AT_ENABLE_MCUMGR; EXCLUDE_FROM_ALL until the bouffalo_sdk umbrella links it into the
@@ -22,8 +22,8 @@
 
 add_library(mcumgr_port STATIC EXCLUDE_FROM_ALL
     "${AT_ROOT}/component/mcumgr_config/smp_bt.c"
-    "${AT_ROOT}/project/amebad/app_km4/smp_img_ota.c"
-    "${AT_ROOT}/project/amebad/app_km4/smp_fs.c"
+    "${AT_ROOT}/component/mcumgr_config/smp_img_ota.c"
+    "${AT_ROOT}/component/mcumgr_config/smp_fs.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/mcumgr_reset_bflb.c"
 )
 
