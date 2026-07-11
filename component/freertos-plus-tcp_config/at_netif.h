@@ -71,8 +71,13 @@ void       at_netif_kick( void );            /* re-kick DHCP (FreeRTOS_NetworkDo
  * apply the DNS_SERVER/DNS_SERVER2 env override, and _up() fans out to app_on_network_up(). */
 void at_netif_on_network_up( void );
 void at_netif_on_network_down( void );
-/* IPv6 address logger seam: weak no-op default (at_netif.c); AmebaD strong-overrides it to print the
- * SLAAC link-local/global addresses. at_netif_on_network_up() calls it as "network UP". */
+/* IPv6 logging + MLDv2-snooping interop (shared; #if ipconfigUSE_IPv6, else no-op stubs):
+ *  - at_netif_log_ipv6: print each configured IPv6 address (called by at_netif_on_network_up).
+ *  - at_netif_ipv6_global_set: 1 once the SLAAC global address has formed.
+ *  - at_netif_ipv6_mld_start: start the periodic MLDv2 reporter (idempotent) so an MLD-snooping
+ *    bridge forwards inbound IPv6 (NS/RA/mDNS). Called from at_netif_bringup + AmebaD's bring-up. */
 void at_netif_log_ipv6( const char * tag );
+int  at_netif_ipv6_global_set( void );
+void at_netif_ipv6_mld_start( void );
 
 #endif /* AT_NETIF_H */
