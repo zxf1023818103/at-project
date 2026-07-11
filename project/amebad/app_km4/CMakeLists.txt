@@ -7,11 +7,11 @@ project(app_km4 C CXX ASM)
 get_filename_component(AT_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 set(AT_ROOT "${AT_ROOT}" CACHE INTERNAL "at-project repo root")
 # The AmebaD KM4 image compiles the SHARED, platform-neutral entry (src/main.cpp) + its AmebaD PORT
-# COMPONENT (component/amebad/app_port/amebad_app.cpp, the former app_km4/main.c body). Both are named
+# (the AmebaD body is folded into src/main.cpp like every other platform). Feature macros are named
 # in AT_MAIN_SRC so (a) add_executable builds both and (b) every feature-macro set_property(SOURCE
 # ${AT_MAIN_SRC} ...) below lands on BOTH — main() reads AT_PROJECT_QUIC, the port reads all the rest.
 # We compile just these two from src+port (not the whole src/ AT framework — the port never uses at::AtTask).
-set(AT_MAIN_SRC "${AT_ROOT}/src/main.cpp" "${AT_ROOT}/component/amebad/app_port/amebad_app.cpp")
+set(AT_MAIN_SRC "${AT_ROOT}/src/main.cpp")
 # ROMKAT links the ROM mbedTLS 2.4.0 (ABI-incompatible with upstream mbedcrypto), so fs_cli's
 # md5/sha*sum are compiled out. Tell monitor_config before it is added (AMEBAD_ENABLE_ROM_KAT is
 # a -D cache var, so it is already set here even though the option() default is declared later).
@@ -22,7 +22,6 @@ add_subdirectory(${AT_ROOT}/component ${CMAKE_BINARY_DIR}/component)
 # __FILE__ basename for this app's logs (moved from the deleted root CMakeLists).
 add_compile_options("-fmacro-prefix-map=${CMAKE_CURRENT_LIST_DIR}/=")
 add_compile_options("-fmacro-prefix-map=${AT_ROOT}/src/=")   # the shared main is now src/main.cpp -> basename in [KM4] logs
-add_compile_options("-fmacro-prefix-map=${AT_ROOT}/component/amebad/app_port/=")   # amebad_app.cpp -> basename in [KM4] logs
 # Shared component .c files this target compiles DIRECTLY (target_sources by absolute path) don't
 # inherit their component's own prefix-map, so their __FILE__ stayed a full /home/... path in the
 # logs (bl602 shows basenames because it compiles them inside the component lib). Map the roots we
@@ -599,7 +598,7 @@ target_link_libraries(target_img2_km4 PRIVATE net_cli)
 
 # The shared startup skeleton (app_startup_run + the app_platform_* weak hooks) now lives directly in
 # src/main.cpp; its contract header app_startup.h is in src/, so the AmebaD port TU
-# (component/amebad/app_port/amebad_app.cpp, which strong-overrides those hooks) needs src/ on its
+# (the AmebaD body inside src/main.cpp, which strong-overrides those hooks) needs src/ on its
 # include path to find it.
 target_include_directories(target_img2_km4 PRIVATE "${AT_ROOT}/src")
 

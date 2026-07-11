@@ -3,11 +3,11 @@
  *
  * The shared startup skeleton (app_startup_run + the helpers below) and the Bouffalo / Ameba-newer
  * platform bodies live in src/main.cpp; the AmebaD KM4 body lives in its own TU,
- * component/amebad/app_port/amebad_app.cpp (kept separate: it is large and XIP-layout-sensitive).
+ * the AmebaD section of src/main.cpp too (folded in; XIP-layout-sensitive — boot-test after edits).
  * Both TUs include this header for the hook contract. The startup path shared three near-identical
  * blocks -- LittleFS+env+TZ init, console + CLI registration, and the network-up service start; those
  * live once in src/main.cpp. The weak seams below default to no-ops (in src/main.cpp) and are
- * strong-overridden per platform (AmebaD in amebad_app.cpp; Bouffalo in src/main.cpp itself;
+ * strong-overridden per platform (AmebaD + Bouffalo in src/main.cpp itself;
  * app_network_dns_reinit by component/c-ares_config when CARES=ON). The symbols the helpers call
  * (vfs_lfs_mount / *_cli_register / monitor_start) resolve at the final image link.
  */
