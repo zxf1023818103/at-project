@@ -286,6 +286,15 @@ if(AMEBAD_ENABLE_NIMBLE)
     set(_hci_grp ",amebad_hci,nimble,nimble_config,mbedcrypto,mbedx509,mbedtls,mbedtls_port,mbedtls_config")
     set_property(SOURCE ${AT_MAIN_SRC}
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_NIMBLE)
+    # Force-pull nimble_platform_amebad.o out of libnimble.a. It only *overrides* nimble_app.c's
+    # __weak platform hooks (controller bring-up / coex / HCI RX task), so nothing references its
+    # symbols as undefined -> the object stays in the archive and the __weak no-op
+    # nimble_platform_controller_bringup() wins. That no-op is right for bl602 (on-chip callback
+    # controller) but fatal on amebad: bt_dtm_bringup() (power + HCI-UART FW patch) never runs, so
+    # every host HCI command times out (BLE_HS_ETIMEOUT_HCI reset loop, no advertising). -u anchors
+    # one symbol undefined -> the whole .o (all six strong overrides) is linked. Same idiom as
+    # rtw_sae below.
+    target_link_options(target_img2_km4 PRIVATE "-Wl,-u,nimble_platform_controller_bringup")
 elseif(AMEBAD_ENABLE_HCI)
     set_property(SOURCE ${AT_MAIN_SRC}
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_HCI)

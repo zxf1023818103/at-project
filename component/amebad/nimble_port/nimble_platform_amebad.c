@@ -25,5 +25,4 @@ void nimble_platform_transport_stop_rx(void)   { nimble_amebad_transport_stop_rx
 void nimble_platform_store_init(void)          { ble_store_lfs_init(); }
 
 /* nimble_platform_device_name is NOT overridden here: the shared weak default (nimble_app.c) already
- * returns the network hostname via pcApplicationHostnameHook(), so BLE == DHCP/mDNS name on every
- * platform. */
+ * returns the device hostname via at_netif_hostname(), so BLE == DHCP/mDNS name on every platform. */
