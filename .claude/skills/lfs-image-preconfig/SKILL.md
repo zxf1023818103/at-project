@@ -76,7 +76,10 @@ PRESEED_MARK=…` → embed into whole_flash → `-Mode whole` → board booted 
 found -> connect` → `network UP`, and `env` listed every baked-in var (the whole-flash wiped any
 prior LFS first).
 
-**AWS pre-seed (endpoint + EC client cert/key + Amazon Root CA, all in lfs.bin):**
+**AWS pre-seed (endpoint + client cert/key + Amazon Root CA, all in lfs.bin).** Verified with BOTH
+an **EC (secp256r1)** and an **RSA-2048** client cert/key on each platform — both connect + publish
+(RSA cert 861 B / key 1192 B DER, EC cert 651 B / key 121 B; all under `AWS_KEY_MAX=1536`). Details
+below use EC; the RSA run gave identical results (`handshake successful` → `connected` → telemetry).
 - **bl602** `make AWS=ON` (lean telemetry client, picotls): booted → WiFi → `[AWS] TLS connect …:8883`
   → picotls handshake PASS (server cert verified vs the pre-seeded CA; client cert `a81710cf6427`) →
   `[AWS] connected to AWS IoT Core` → **`[AWS] published seq=0 to bl602/a81710cf6427/telemetry`**. ✅
