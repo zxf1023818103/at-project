@@ -186,8 +186,11 @@ endif()
 # client (coreMQTT over the mbedTLS TLS transport). Like QUIC/PKCS11 it drops the iperf +
 # ROM-mbedTLS KAT TUs (it links the upstream mbedTLS, ABI-incompatible with the ROM one).
 # AWS=ON implies STORAGE=ON (the private key lives in TF-M Protected Storage). Declared here
-# so the diag gate below can see it.
-option(AMEBAD_ENABLE_AWS_IOT "Build the AWS IoT Core MQTT/TLS demo (coreMQTT + mbedTLS; key in TF-M PS)" OFF)
+# so the diag gate below can see it. AWS_IOT = ANY AWS image (lean or full — the heap-motivated
+# gates below apply to both); AWS_OTA additionally selects the full coreMQTT-Agent + OTA agent
+# (aws_iot_demo.c) instead of the lean telemetry client (aws_telemetry.c) — same split as bl602.
+option(AMEBAD_ENABLE_AWS_IOT "Build an AWS IoT image (lean telemetry client unless AWS_OTA)" OFF)
+option(AMEBAD_ENABLE_AWS_OTA "AWS image = the full coreMQTT-Agent + FreeRTOS OTA agent" OFF)
 
 # coreSNTP UTC time-sync is now default-on (linked in every non-QUIC image; see below) - no flag.
 
@@ -438,17 +441,26 @@ if(AMEBAD_ENABLE_AWS_IOT)
         target_compile_definitions(target_img2_km4 PRIVATE AT_PROJECT_CRT_BUNDLE)
     endif()
     target_sources(target_img2_km4 PRIVATE
-        "${AT_ROOT}/component/aws_iot_config/aws_iot_demo.c"     # shared AWS agent+telemetry+OTA orchestration (compiled per-app; AmebaD defaults)
         "${CMAKE_CURRENT_SOURCE_DIR}/aws_platform.c"             # aws_get_mac (efuse) + `aws blemac/secchk` + TF-M pstest/xiptest
         "${OTA_HTTP_SOURCES}"                                    # shared `ota_http <url>` + urlparse (component/ota_http_config)
         "${CMAKE_CURRENT_SOURCE_DIR}/ota_flash.c"                 # the AmebaD OTA slot writer (impl of ota_flash.h)
-        # AWS IoT OTA Agent over the shared coreMQTT-Agent: the agent foundation (queue/pool/
-        # subscription dispatch), the OTA PAL (ota_flash + mbedTLS code-sign verify), and the OTA
-        # app wiring (OtaInterfaces_t + OTA_EventProcessingTask) - now shared (component/aws_ota_config),
-        # compiled per-app. The OTA lib (aws_ota) already builds ota_mqtt.c + ota_os_freertos.c into
-        # its archive, so only these app/port TUs are listed.
-        "${AWS_OTA_SOURCES}"
         "${AT_ROOT}/component/amebad/mbed/efuse_api.c")   # efuse_logical_read (BLE MAC @ 0x190); not built into amebad_mbed
+    if(AMEBAD_ENABLE_AWS_OTA)
+        # Full agent image (AWSOTA=ON): shared agent+telemetry+OTA orchestration + the AWS IoT OTA
+        # Agent over the shared coreMQTT-Agent: the agent foundation (queue/pool/subscription
+        # dispatch), the OTA PAL (ota_flash + mbedTLS code-sign verify), and the OTA app wiring
+        # (OtaInterfaces_t + OTA_EventProcessingTask) - shared (component/aws_ota_config), compiled
+        # per-app. The OTA lib (aws_ota) already builds ota_mqtt.c + ota_os_freertos.c into its
+        # archive, so only these app/port TUs are listed.
+        target_sources(target_img2_km4 PRIVATE
+            "${AT_ROOT}/component/aws_iot_config/aws_iot_demo.c"
+            "${AWS_OTA_SOURCES}")
+    else()
+        # Lean image (AWS=ON alone): the telemetry-only coreMQTT client, same TU bl602 uses.
+        # Publishes bw20/<mac>/telemetry by default (no AWS_NO_TELEMETRY quirk here).
+        target_sources(target_img2_km4 PRIVATE
+            "${AT_ROOT}/component/aws_iot_config/aws_telemetry.c")
+    endif()
     set_source_files_properties("${AT_ROOT}/component/amebad/mbed/efuse_api.c"
         PROPERTIES COMPILE_OPTIONS "-w")
     set_source_files_properties("${AT_ROOT}/component/ota_http_config/urlparse.c"
@@ -461,22 +473,24 @@ if(AMEBAD_ENABLE_AWS_IOT)
         "${AT_ROOT}/component/corehttp_config/corehttp/source/include"
         "${AT_ROOT}/component/corehttp_config/corehttp/source/interface"
         "${AT_ROOT}/component/corehttp_config/corehttp/source/dependency/3rdparty/llhttp/include")
-    # coreMQTT-Agent (thread-safe wrapper that lets the telemetry + OTA tasks share one MQTT
-    # connection) + the AWS IoT OTA Agent. Both are one-directional: coremqtt_agent calls
-    # coreMQTT, aws_ota reaches MQTT only through the consumer-supplied OtaMqttInterface_t — so
-    # they topo-sort ahead of the mbedTLS cross_refs group and link as ordinary libs. The OTA
-    # PAL's mbedTLS signature verify (x509/pk) is already satisfied by the _aws_grp archives.
-    target_link_libraries(target_img2_km4 PRIVATE coremqtt-agent_config ota_config aws_ota_config)
-    target_include_directories(target_img2_km4 PRIVATE
-        "${AT_ROOT}/component/coremqtt-agent_config"
-        "${AT_ROOT}/component/coremqtt-agent_config/coremqtt-agent/source/include"
-        "${AT_ROOT}/component/ota_config"
-        "${AT_ROOT}/component/ota_config/ota/source/include"
-        "${AT_ROOT}/component/ota_config/ota/source/portable/os")
-    # The OTA lib (ota_mqtt.c stringBuilder) is the only caller of strncat in this image; newlib's
-    # strncat is not otherwise pulled, so resolve it to the ROM _strncat (string_rom_km4.ld),
-    # mirroring the global memcpy=_memcpy romalias above.
-    target_link_options(target_img2_km4 PRIVATE "-Wl,--defsym=strncat=_strncat")
+    if(AMEBAD_ENABLE_AWS_OTA)
+        # coreMQTT-Agent (thread-safe wrapper that lets the telemetry + OTA tasks share one MQTT
+        # connection) + the AWS IoT OTA Agent. Both are one-directional: coremqtt_agent calls
+        # coreMQTT, aws_ota reaches MQTT only through the consumer-supplied OtaMqttInterface_t — so
+        # they topo-sort ahead of the mbedTLS cross_refs group and link as ordinary libs. The OTA
+        # PAL's mbedTLS signature verify (x509/pk) is already satisfied by the _aws_grp archives.
+        target_link_libraries(target_img2_km4 PRIVATE coremqtt-agent_config ota_config aws_ota_config)
+        target_include_directories(target_img2_km4 PRIVATE
+            "${AT_ROOT}/component/coremqtt-agent_config"
+            "${AT_ROOT}/component/coremqtt-agent_config/coremqtt-agent/source/include"
+            "${AT_ROOT}/component/ota_config"
+            "${AT_ROOT}/component/ota_config/ota/source/include"
+            "${AT_ROOT}/component/ota_config/ota/source/portable/os")
+        # The OTA lib (ota_mqtt.c stringBuilder) is the only caller of strncat in this image; newlib's
+        # strncat is not otherwise pulled, so resolve it to the ROM _strncat (string_rom_km4.ld),
+        # mirroring the global memcpy=_memcpy romalias above.
+        target_link_options(target_img2_km4 PRIVATE "-Wl,--defsym=strncat=_strncat")
+    endif()
     # FreeRTOS-Plus-CLI header for aws_platform.c (FreeRTOS_CLIRegisterCommand); the freertos_cli
     # archive is already in the link group via _diag_grp.
     target_include_directories(target_img2_km4 PRIVATE
@@ -488,23 +502,25 @@ if(AMEBAD_ENABLE_AWS_IOT)
     target_link_libraries(target_img2_km4 PRIVATE aws_provision_core)
     target_include_directories(target_img2_km4 PRIVATE "${AT_ROOT}/component/aws_iot_config")
     target_compile_definitions(aws_provision_core PRIVATE AWS_KEY_MAX=1536)
-    # Lean AWS shape, aligned with bl602 (component/aws_iot_config): MQTT/CBOR OTA data plane (no 2nd
-    # HTTPS-S3 TLS), static task stacks in .bss, no separate telemetry task, dynamic MQTT net buffer.
-    # AWS_KEY_MAX stays 1536 (AmebaD provisions an RSA-2048 client key). AWS_AGENT_STACK_WORDS 3584 =
-    # bl602's cert-verify peak; AmebaD's HW-PKA server verify needs no more (configCHECK catches overflow).
-    target_compile_definitions(target_img2_km4 PRIVATE
-        AWS_KEY_MAX=1536
-        OTA_APP_ENABLE_HTTP=0
-        AWS_STATIC_TASKS
-        AWS_NET_BUFFER_DYNAMIC
-        AWS_NET_BUFFER_SZ=1536
-        AWS_AGENT_STACK_WORDS=3584)
-    # Telemetry publish task (bw20/<mac>/telemetry): dropped on the lean TF-M OTA build to save heap
-    # (there the OTA job status is the liveness signal). On TFM=OFF there is spare heap (no TF-M NS
-    # interface / secure storage) and cert+key live in LFS -- aligned with bl602's telemetry client --
-    # so keep the task so the device actually publishes telemetry.
-    if(AMEBAD_TFM_BOOT)
-        target_compile_definitions(target_img2_km4 PRIVATE AWS_NO_TELEMETRY)
+    target_compile_definitions(target_img2_km4 PRIVATE AWS_KEY_MAX=1536)
+    if(AMEBAD_ENABLE_AWS_OTA)
+        # Agent shape, aligned with bl602's AWSOTA (component/aws_iot_config): MQTT/CBOR OTA data
+        # plane (no 2nd HTTPS-S3 TLS), static task stacks in .bss, dynamic MQTT net buffer.
+        # AWS_KEY_MAX stays 1536 (AmebaD provisions an RSA-2048 client key). AWS_AGENT_STACK_WORDS
+        # 3584 = bl602's cert-verify peak; AmebaD's HW-PKA server verify needs no more.
+        target_compile_definitions(target_img2_km4 PRIVATE
+            OTA_APP_ENABLE_HTTP=0
+            AWS_STATIC_TASKS
+            AWS_NET_BUFFER_DYNAMIC
+            AWS_NET_BUFFER_SZ=1536
+            AWS_AGENT_STACK_WORDS=3584)
+        # Telemetry publish task (bw20/<mac>/telemetry): dropped on the agent TF-M build to save heap
+        # (there the OTA job status is the liveness signal). On TFM=OFF there is spare heap (no TF-M
+        # NS interface / secure storage) so keep the task. The LEAN image (else-branch above) always
+        # publishes -- telemetry IS its purpose.
+        if(AMEBAD_TFM_BOOT)
+            target_compile_definitions(target_img2_km4 PRIVATE AWS_NO_TELEMETRY)
+        endif()
     endif()
     if(AMEBAD_TFM_STORAGE)
         target_sources(target_img2_km4 PRIVATE "${AT_ROOT}/component/aws_iot_config/aws_secret_store_its.c")
@@ -512,10 +528,17 @@ if(AMEBAD_ENABLE_AWS_IOT)
         target_sources(target_img2_km4 PRIVATE "${AT_ROOT}/component/aws_iot_config/aws_secret_store_file.c")
     endif()
     # (--wrap=setenv + the LittleFS mount + env_init are now global, in the NOT-QUIC block above.)
+    # AT_PROJECT_AWS = any AWS image (lean or full); AT_PROJECT_AWS_IOT = the full agent image only.
+    # Same macro pair as bl602 (main.cpp / amebad_app.cpp gate the aws CLI on AWS, the agent start
+    # on AWS_IOT, the lean telemetry start on AWS-without-AWS_IOT).
     set_property(SOURCE ${AT_MAIN_SRC}
-                 APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_AWS_IOT)
+                 APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_AWS)
+    if(AMEBAD_ENABLE_AWS_OTA)
+        set_property(SOURCE ${AT_MAIN_SRC}
+                     APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_AWS_IOT)
+    endif()
     # OTA test/version stamp: the firmware version string printed at task start + published in
-    # telemetry (aws_iot_demo.c). Override per build: `make AWS=ON FW_VERSION=ota-B` (threaded to
+    # telemetry. Override per build: `make AWS=ON FW_VERSION=ota-B` (threaded to
     # -DAMEBAD_FW_VERSION by project/amebad/Makefile). Lets a bank-swapping OTA be verified by the
     # running version string.
     set(AMEBAD_FW_VERSION "ota-A" CACHE STRING "Firmware version string stamped into the AWS image")
@@ -525,13 +548,16 @@ if(AMEBAD_ENABLE_AWS_IOT)
     # the image keeps the default APP_VERSION_BUILD=2 (which made every OTA fail the self-test with
     # OtaErrSameFirmwareVersion, and pinned the version string to the "0.9.2-ota" default).
     set_property(SOURCE "${AT_ROOT}/component/aws_iot_config/aws_iot_demo.c"
+                        "${AT_ROOT}/component/aws_iot_config/aws_telemetry.c"
                  APPEND PROPERTY COMPILE_DEFINITIONS "AT_FW_VERSION=\"${AMEBAD_FW_VERSION}\"")
-    # OTA self-test version (appFirmwareVersion build number, ota_app.c). The OTA library commits the
-    # new image only if its version is HIGHER than the running one, so an OTA TARGET build must bump
-    # this above the running image. Override: `make AWS=ON APP_BUILD=2` (-> -DAMEBAD_APP_BUILD).
-    set(AMEBAD_APP_BUILD "1" CACHE STRING "appFirmwareVersion build number for the OTA self-test")
-    set_property(SOURCE "${AT_ROOT}/component/aws_ota_config/ota_app.c"
-                 APPEND PROPERTY COMPILE_DEFINITIONS "APP_VERSION_BUILD=${AMEBAD_APP_BUILD}")
+    if(AMEBAD_ENABLE_AWS_OTA)
+        # OTA self-test version (appFirmwareVersion build number, ota_app.c). The OTA library commits
+        # the new image only if its version is HIGHER than the running one, so an OTA TARGET build must
+        # bump this above the running image. Override: `make AWSOTA=ON APP_BUILD=2` (-> -DAMEBAD_APP_BUILD).
+        set(AMEBAD_APP_BUILD "1" CACHE STRING "appFirmwareVersion build number for the OTA self-test")
+        set_property(SOURCE "${AT_ROOT}/component/aws_ota_config/ota_app.c"
+                     APPEND PROPERTY COMPILE_DEFINITIONS "APP_VERSION_BUILD=${AMEBAD_APP_BUILD}")
+    endif()
     # AWS is a connect-and-run image: strip the boot diagnostics like MINIMAL — iperf / LFS
     # self-test / ROM-mbedTLS KAT and the TF-M HW-crypto KAT/GCM throughput bench (~40 s before
     # WiFi). The endpoint + client cert live in LittleFS (env var + plain file); only the private
@@ -671,10 +697,11 @@ endif()
 # — no BSD-sockets/pthread/cJSON/mmap shim, no dynamic per-stream buffers — so they
 # avoid the upstream-iperf3 port's heap churn. (iperf3 was tried as component/
 # iperf3_config but its mmap/pthread/cJSON path corrupted the TLSF heap on TX.)
-option(AMEBAD_ENABLE_IPERF "Build the homegrown iperf2 throughput probes" OFF)
+option(AMEBAD_ENABLE_IPERF "Build the homegrown iperf2 throughput probes" ON)
 if(AMEBAD_ENABLE_IPERF)
-    # The four probes moved to the shared component/iperf_config (target iperf); main.c still
-    # auto-runs iperf_server_start() from the network-up hook (AT_PROJECT_IPERF).
+    # The four probes + the `iperf` console command live in the shared component/iperf_config
+    # (target iperf, includes iperf_cli.c). Manual `iperf server|tx|udp` like bl602 -- no
+    # network-up auto-start. Default ON except AWS images (the Makefile forces IPERF=OFF there).
     target_link_libraries(target_img2_km4 PRIVATE iperf)
     set_property(SOURCE ${AT_MAIN_SRC}
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_IPERF)

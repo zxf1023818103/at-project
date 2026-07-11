@@ -49,11 +49,6 @@ extern void amebad_register_wlan_netif(int idx, unsigned char *mac);
 extern void amebad_freertos_tcp_set_ready(void);
 /* NTP server captured from DHCP option 42 (FreeRTOS_DHCP.c at-project patch); network byte order, 0=none. */
 extern uint32_t ulDHCPNtpServerAddress;
-/* Homegrown iperf2 throughput probes (make IPERF=ON); auto-run from the network-up hook. */
-extern void iperf_client_start(void);
-extern void iperf_server_start(void);
-extern void iperf_udp_client_start(void);
-extern void iperf_udp_server_start(void);
 
 #define WLAN_STA_IDX  0
 
@@ -559,32 +554,52 @@ int wifi_port_connect( const char *ssid, const char *pass, uint8_t chan, int sec
 
     /* Broadcast deauth before each attempt flushes the AP's stale station entry for this MAC (the
      * driver-only chip never deauthed on reset), so the assoc is accepted on the first try; the 8-try
-     * loop covers the rare transient status-30 reject. pscan restricts the connect probe to `chan`. */
+     * loop covers the transient status-30 reject. pscan restricts the connect probe to `chan`.
+     *
+     * status-30 comeback trap: on a PMF AP the unprotected deauth is ignored, the stale entry makes
+     * the first assoc answer status 30 ("denied temporarily"), and the driver's immediate comeback
+     * assoc SUCCEEDS -- but leaves the driver's RX path dead (no DHCP OFFER, no RA; TX still works).
+     * So "associated" alone is not success: after each associate, VERIFY a DHCP lease arrives; if it
+     * doesn't, disconnect and go around the loop (the comeback already cleared the AP's stale state,
+     * so the next associate is clean and DHCP completes normally). */
     for( attempt = 1; attempt <= 8; attempt++ )
     {
         u8 c = chan, ps = PSCAN_ENABLE;
+        int waited;
         rltk_wlan_tx_deauth( 1, 0 );
         vTaskDelay( pdMS_TO_TICKS( 80 ) );
         if( chan != 0 ) { wifi_set_pscan_chan( &c, &ps, 1 ); }
         if( wifi_connect( (char *) ssid, security, (char *) pass,
-                          (int) strlen( ssid ), (int) strlen( pass ), 0, NULL ) == RTW_SUCCESS )
+                          (int) strlen( ssid ), (int) strlen( pass ), 0, NULL ) != RTW_SUCCESS )
         {
-            ok = 1;
-            break;
+            log_error( "[KM4] wifi_connect attempt %d FAILED, retrying...", attempt );
+            vTaskDelay( pdMS_TO_TICKS( 800 ) );
+            continue;
         }
-        log_error( "[KM4] wifi_connect attempt %d FAILED, retrying...", attempt );
-        vTaskDelay( pdMS_TO_TICKS( 800 ) );
+
+        /* Post-associate (every connect): full power-save off + clear the reassoc hold so the
+         * re-DHCP's genuine network-up is honoured, then re-kick DHCP (fresh DISCOVER). */
+        wifi_set_power_mode( 0, 0 );
+        wifi_disable_powersave();
+        wifi_reassoc_set( 0 );
+        { int rssi = 0; wifi_get_rssi( &rssi ); log_info( "[KM4] associated; power-save off; RSSI %d dBm", rssi ); }
+        FreeRTOS_NetworkDown( &xInterface );
+
+        /* Lease verification (the status-30 comeback detector): up to 12 s for a non-zero IPv4. */
+        for( waited = 0; waited < 120; waited++ )
+        {
+            uint32_t ulIP = 0, ulMask, ulGW, ulDNS;
+            FreeRTOS_GetAddressConfiguration( &ulIP, &ulMask, &ulGW, &ulDNS );
+            if( ulIP != 0U ) { ok = 1; break; }
+            vTaskDelay( pdMS_TO_TICKS( 100 ) );
+        }
+        if( ok ) { break; }
+
+        log_error( "[KM4] associated but no DHCP lease in 12s (status-30 comeback / dead RX) - re-associating..." );
+        wifi_disconnect();
+        vTaskDelay( pdMS_TO_TICKS( 1500 ) );   /* let the AP-side state settle before the clean retry */
     }
     if( !ok ) return -1;
-
-    /* Post-associate (every connect): full power-save off + clear the reassoc hold so the re-DHCP's
-     * genuine network-up is honoured, then re-kick DHCP (fresh DISCOVER -> fast lease -> eNetworkUp
-     * -> WIFI_CONNECTED_BIT). */
-    wifi_set_power_mode( 0, 0 );
-    wifi_disable_powersave();
-    wifi_reassoc_set( 0 );
-    { int rssi = 0; wifi_get_rssi( &rssi ); log_info( "[KM4] associated; power-save off; RSSI %d dBm", rssi ); }
-    FreeRTOS_NetworkDown( &xInterface );
 
     /* First associate only (guarded so it does not re-run on every reconnect): the upstream Mbed TLS
      * microbenchmark / ROM-mbedTLS KAT diagnostic, which used to sit inline after the initial connect. */
@@ -828,6 +843,9 @@ void app_console_register_platform(void)
     { extern void wifi_cli_register(void); wifi_cli_register(); }               /* shared `wifi` forget/drop */
     { extern void amebad_wifi_cli_register(void); amebad_wifi_cli_register(); } /* AmebaD-only `iwpriv` */
     { extern void net_cli_register(void); net_cli_register(); }                 /* shared `resolve` / `ip6` */
+#ifdef AT_PROJECT_IPERF
+    { extern void iperf_cli_register(void); iperf_cli_register(); }              /* shared `iperf` server/tx/udp */
+#endif
 #ifdef AT_PROJECT_NIMBLE
     { extern void ble_tp_cli_register(void); ble_tp_cli_register(); }            /* shared `bletp` BLE throughput test */
 #endif
@@ -846,9 +864,10 @@ void app_console_register_platform(void)
 #if defined(AMEBAD_EFUSE_DEBUG) && defined(AMEBAD_TFM_STORAGE)
     { extern void efuse_burn_cli_register(void); efuse_burn_cli_register(); } /* DEBUG eFuse burn (provisioning) */
 #endif
-#ifdef AT_PROJECT_AWS_IOT
-    /* AWS: shared `aws` provisioning command (component/aws_iot_config) + AmebaD TF-M PSA diagnostics
-     * (pstest/xiptest) + `ota_http <url>`. aws_provision_init() is a shared weak no-op. */
+#ifdef AT_PROJECT_AWS
+    /* Any AWS image (lean telemetry or full agent): shared `aws` provisioning command
+     * (component/aws_iot_config) + AmebaD TF-M PSA diagnostics (pstest/xiptest) + `ota_http <url>`.
+     * aws_provision_init() is a shared weak no-op. */
     {
         extern void aws_provision_init(void);
         extern void aws_cli_register(void);
@@ -875,18 +894,17 @@ void app_network_up_start_services(void)
      * backs newlib's _gettimeofday (time_base.c), so logs / TLS / OTA see real wall-clock time. */
     { extern void sntp_sync_start(void); sntp_sync_start(); }
 #if defined(AT_PROJECT_AWS_IOT)
-    /* AWS IoT Core MQTT/TLS demo: connect over mutual TLS and publish telemetry (endpoint+cert from
-     * LittleFS, key from TF-M Protected Storage). */
+    /* Full AWS IoT agent (AWSOTA=ON): coreMQTT-Agent + telemetry + OTA over mutual TLS
+     * (endpoint+cert from LittleFS, key from TF-M Protected Storage). */
     extern void aws_iot_demo_start(void);
     aws_iot_demo_start();
-#elif defined(AT_PROJECT_IPERF)
-    /* Default throughput probe: device-as-server RX (host connects outbound -> no host firewall rule).
-     * The device->host TX + UDP probes stay available for diagnostics. */
-    iperf_server_start();
-    (void) iperf_client_start;
-    (void) iperf_udp_client_start;
-    (void) iperf_udp_server_start;
+#elif defined(AT_PROJECT_AWS)
+    /* Lean AWS image (AWS=ON alone): the telemetry-only client, exactly like bl602's AWS=ON. */
+    extern void aws_telemetry_start(void);
+    aws_telemetry_start();
 #endif
+    /* iperf: manual `iperf server|tx|udp` console command (registered above when linked), same as
+     * bl602 -- no auto-start at network-up. */
 #endif /* AT_PROJECT_QUIC */
 }
 

@@ -41,7 +41,7 @@ static void prvIperfClientTask( void *pvParameters )
     xSock = FreeRTOS_socket( FREERTOS_AF_INET, FREERTOS_SOCK_STREAM, FREERTOS_IPPROTO_TCP );
     if( ( xSock == FREERTOS_INVALID_SOCKET ) || ( xSock == NULL ) )
     {
-        log_error( "[KM4] iperf: socket() failed" );
+        log_error( "[iperf] socket() failed" );
         vTaskDelete( NULL );
         return;
     }
@@ -61,15 +61,15 @@ static void prvIperfClientTask( void *pvParameters )
     xServer.sin_port = FreeRTOS_htons( IPERF_PORT );
     xServer.sin_addr = IPERF_SERVER_IP;
 
-    log_info( "[KM4] iperf: connecting to 192.168.137.1:%d ...", IPERF_PORT );
+    log_info( "[iperf] connecting to 192.168.137.1:%d ...", IPERF_PORT );
     if( FreeRTOS_connect( xSock, &xServer, sizeof( xServer ) ) != 0 )
     {
-        log_error( "[KM4] iperf: connect FAILED" );
+        log_error( "[iperf] connect FAILED" );
         FreeRTOS_closesocket( xSock );
         vTaskDelete( NULL );
         return;
     }
-    log_info( "[KM4] iperf: connected; streaming %ds...", IPERF_SECONDS );
+    log_info( "[iperf] connected; streaming %ds...", IPERF_SECONDS );
 
     /* Zeroed iperf2 client header (24 bytes): flags = 0 => plain test. */
     {
@@ -92,7 +92,7 @@ static void prvIperfClientTask( void *pvParameters )
             }
             else
             {
-                log_info( "[KM4] iperf: send err %d", (int)xSent );
+                log_info( "[iperf] send err %d", (int)xSent );
                 break;
             }
         }
@@ -102,7 +102,7 @@ static void prvIperfClientTask( void *pvParameters )
         /* kbit/s = bytes-per-ms * 8 — 32-bit, no overflow, no 64-bit divide.
          * DiagPrintf only handles plain %d (no %u / width), so keep it simple. */
         ulKbits = ( ulTotal / xMs ) * 8U;
-        log_info( "[KM4] iperf: TX %d bytes in %d ms = %d Kbit/s",
+        log_info( "[iperf] TX %d bytes in %d ms = %d Kbit/s",
                     (int)ulTotal, (int)xMs, (int)ulKbits );
     }
 

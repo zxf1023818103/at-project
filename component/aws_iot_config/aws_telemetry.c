@@ -1,11 +1,11 @@
 /*
- * aws_telemetry.c - minimal AWS IoT Core telemetry client for the heap-tight bl602.
+ * aws_telemetry.c - the lean AWS IoT Core telemetry client (AWS=ON on BOTH platforms).
  *
- * Direct coreMQTT over the mbedTLS TLS transport (component/network_transport) - NO coreMQTT-Agent,
- * NO OTA (those don't fit bl602's ~68 KB heap; AmebaD runs the full agent+OTA image). Reuses the
- * SAME libraries + credential model as AmebaD: mutual TLS to AWS IoT Core :8883, server trust =
- * Amazon Root CA 1 (embedded), client cert/key provisioned to LittleFS (aws_provision.c, non-TF-M),
- * endpoint from env "endpoint". Publishes a telemetry JSON to bl602/<mac>/telemetry every period.
+ * Direct coreMQTT over the switchable TLS transport (component/network_transport) - NO
+ * coreMQTT-Agent, NO OTA agent (that's the AWSOTA=ON image, aws_iot_demo.c). Mutual TLS to AWS
+ * IoT Core :8883, server trust = CA bundle/file, client cert/key provisioned to LittleFS (or the
+ * key in TF-M ITS on AmebaD TFM images), endpoint from env "endpoint". Publishes the shared
+ * telemetry JSON to bw20/<mac>/telemetry every period.
  */
 #include <stdint.h>
 #include <stdio.h>
@@ -209,8 +209,11 @@ void aws_telemetry_start(void)
     xTaskCreate(prvTelemetryTask, "aws_tel", 2048, NULL, tskIDLE_PRIORITY + 3, NULL);
 }
 
-/* bl602 platform verb for the shared `aws` CLI (aws_cli.c): `aws start` kicks the telemetry task
- * (also auto-started on network-up, so this is mostly a manual re-trigger). */
+/* Platform verb for the shared `aws` CLI (aws_cli.c): `aws start` kicks the telemetry task
+ * (also auto-started on network-up, so this is mostly a manual re-trigger). WEAK: on AmebaD this
+ * TU now links into the lean AWS image alongside aws_platform.c, whose strong aws_cli_platform
+ * (blemac/secchk) wins -- amebad keeps its verbs, bl602 (no strong override) keeps `aws start`. */
+__attribute__((weak))
 int aws_cli_platform(const char *sub, size_t sublen, const char *arg, size_t arglen,
                      char *out, size_t outlen)
 {

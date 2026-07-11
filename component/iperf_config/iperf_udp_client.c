@@ -60,7 +60,7 @@ static void prvIperfUdpClientTask( void *pvParameters )
     xSock = FreeRTOS_socket( FREERTOS_AF_INET, FREERTOS_SOCK_DGRAM, FREERTOS_IPPROTO_UDP );
     if( ( xSock == FREERTOS_INVALID_SOCKET ) || ( xSock == NULL ) )
     {
-        log_error( "[KM4] iperf-udp: socket() failed" );
+        log_error( "[iperf-udp] socket() failed" );
         vTaskDelete( NULL );
         return;
     }
@@ -70,7 +70,7 @@ static void prvIperfUdpClientTask( void *pvParameters )
     xServer.sin_port = FreeRTOS_htons( IPERF_PORT );
     xServer.sin_addr = IPERF_SERVER_IP;
 
-    log_info( "[KM4] iperf-udp: blasting 192.168.2.73:%d for %ds (dgram %d)...",
+    log_info( "[iperf-udp] blasting 192.168.2.73:%d for %ds (dgram %d)...",
                 IPERF_PORT, IPERF_SECONDS, IPERF_UDP_DGRAM );
 
     {
@@ -106,7 +106,7 @@ static void prvIperfUdpClientTask( void *pvParameters )
          * -> 1e8 < 4.29e9. */
         ulKbits = ( ulTotal / xMs ) * 8U;
         ulPps   = ( ( uint32_t ) lSeq * 1000U ) / xMs;
-        log_info( "[KM4] iperf-udp: TX %d bytes / %d pkts in %d ms = %d Kbit/s, %d pps (stalls %d)",
+        log_info( "[iperf-udp] TX %d bytes / %d pkts in %d ms = %d Kbit/s, %d pps (stalls %d)",
                     ( int ) ulTotal, ( int ) lSeq, ( int ) xMs,
                     ( int ) ulKbits, ( int ) ulPps, ( int ) ulStall );
 

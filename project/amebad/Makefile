@@ -16,8 +16,11 @@
 #   make ROMKAT=ON       # ROM mbedTLS 2.4.0 + HW-crypto boot self-tests (no upstream mbedTLS; no md5sum/sha*sum)
 #   make TFM=ON          # in-tree TF-M secure world (SPE via ExternalProject; app_km4 = NSPE)
 #   make STORAGE=ON      # TF-M PSA secure storage (ITS + PS) + NS storage self-test (implies TFM=ON)
-#   make AWS=ON          # AWS IoT Core MQTT/TLS demo (coreMQTT + mbedTLS; cert/endpoint->LFS, key->TF-M PS; implies STORAGE=ON)
-#   make TLS_BACKEND=<fallback|picotls|mbedtls>  # TLS-over-TCP backend(s) for AWS. Default fallback:
+#   make AWS=ON          # lean AWS IoT telemetry client (coreMQTT; aws_telemetry.c, same as bl602's AWS=ON) +
+#                        # `aws` provisioning + `ota_http`; cert/endpoint->LFS, key->TF-M PS; implies STORAGE=ON
+#   make AWSOTA=ON       # full AWS IoT agent image (implies AWS=ON): coreMQTT-Agent + FreeRTOS OTA v3.3.0
+#                        # (aws_iot_demo.c) — same split as bl602's AWS/AWSOTA
+#   make TLS_BACKEND=<fallback|picotls|mbedtls>  # TLS-over-TCP backend(s) for AWS. Default picotls:
 #                        # links BOTH picotls (TLS 1.3) and mbedTLS (TLS 1.2), and each connection picks
 #                        # via NetworkCredentials_t.backendMode (AWS MQTT/OTA force picotls; ota_http uses
 #                        # fallback = picotls then mbedTLS). picotls = TLS 1.3 only, ~112 KB smaller flash
@@ -50,7 +53,8 @@ PKCS11     ?= OFF          # ON -> corePKCS11 token self-test (upstream mbedTLS 
 BENCH      ?= OFF          # ON -> upstream Mbed TLS v3.6.4 crypto microbenchmark ([MCB] scores)
 MINIMAL    ?= OFF          # ON -> strip diagnostics (iperf / KAT / HW-crypto bench); WiFi-connect only (pairs with TFM=ON)
 ROMKAT     ?= OFF          # ON -> ROM mbedTLS 2.4.0 / HW-crypto self-tests (no upstream mbedTLS; drops fs_cli md5sum/sha*sum)
-IPERF      ?= OFF          # ON -> `iperf` console command over upstream iperf3 + BSD-sockets shim (syscall_config)
+# IPERF: default resolved AFTER the AWS/AWSOTA block below (linked by default except AWS images,
+# matching bl602 -- iperf's ~16 KB .bss is reclaimed for the AWS TLS handshake heap there).
 CARES      ?= ON           # DEFAULT-ON on BOTH platforms (aligned with project/bouffalo/Makefile): resolve DNS via c-ares (select event loop) instead of the FreeRTOS+TCP resolver (AWS/SNTP/OTA)
 WPS        ?= OFF          # ON -> `wps` console command (WPS PBC/PIN connect test; compiles wifi_wps_config.c, links lib_wps.a)
 TFM        ?= OFF          # ON -> build + boot in-tree TF-M SPE (app_km4 becomes the NS side)
@@ -63,7 +67,24 @@ endif
 TLS_HEAP_TRACE ?= OFF      # ON = compile the gated picotls handshake heap trace (transport_picotls.c TLS_HEAP_MARK); logs free heap at connect/handshake/disconnect. Debug/measurement only.
 HWGCM      ?= $(TFM)       # default = TFM: route AES-GCM + ChaCha20-Poly1305 to the RTL8721D IPSEC HW engine (needs TFM=ON's SAU, so on iff TFM is on). Both TLS backends use it: mbedTLS via the classic one-shot mbedtls_gcm; picotls via the encrypt-coalesce shim in transport_picotls.c that reduces its PSA multi-part AEAD to the engine's one-shot path.
 STORAGE    ?= OFF          # ON -> TF-M PSA secure storage (ITS + PS) + NS storage self-test; implies TFM=ON
-AWS        ?= OFF          # ON -> AWS IoT Core MQTT/TLS demo (coreMQTT + mbedTLS); cert/endpoint->LFS, private key->TF-M PS
+# AWS/AWSOTA split, aligned with project/bouffalo: AWS=ON alone = the lean telemetry-only client
+# (aws_telemetry.c; publishes by default) + `aws` provisioning + `ota_http`. AWSOTA=ON = the full
+# coreMQTT-Agent + FreeRTOS OTA v3.3.0 agent image (aws_iot_demo.c); implies AWS=ON.
+AWSOTA     ?= OFF          # ON -> full AWS IoT agent + OTA image (implies AWS=ON)
+AWS        ?= OFF          # ON -> lean AWS IoT telemetry client (coreMQTT); cert/endpoint->LFS, private key->TF-M PS
+ifeq ($(AWSOTA),ON)
+override AWS := ON
+endif
+ifeq ($(filter $(AWSOTA),ON OFF),)
+$(error AWSOTA must be 'ON' or 'OFF')
+endif
+# iperf: manual `iperf server|tx|udp|udptx` console command (no auto-start), linked by default
+# except in AWS images (heap) -- same polarity + UX as bl602.
+ifeq ($(AWS),ON)
+override IPERF := OFF
+else
+IPERF      ?= ON
+endif
 # CRT_BUNDLE: verify the TLS server cert against the embedded compressed Mozilla CA root bundle
 # (esp_crt_bundle, ~121 roots), falling back to the `ca/` folder (project/resource/ca -> LittleFS)
 # for roots the bundle lacks (self-signed / niche CAs). ALWAYS ON for AWS images (not
@@ -144,7 +165,7 @@ _COMMON := -G $(GEN) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) -DAMEBAD_EFUSE_DEBUG=$(EFU
            -DAMEBAD_RSIP_ENABLE=$(RSIP) -DAMEBAD_RSIP_KEY=$(RSIP_KEY) -DAMEBAD_RSIP_IV=$(RSIP_IV)
 _KM4 := -DAMEBAD_ENABLE_NIMBLE=$(NIMBLE) -DAT_ENABLE_MCUMGR=$(MCUMGR) -DAMEBAD_ENABLE_HCI=$(HCI) -DAT_ENABLE_QUIC=$(QUIC) \
         -DAMEBAD_ENABLE_PKCS11=$(PKCS11) -DAMEBAD_ENABLE_CRYPTOBENCH=$(BENCH) -DAMEBAD_ENABLE_MINIMAL=$(MINIMAL) \
-        -DAMEBAD_ENABLE_ROM_KAT=$(ROMKAT) -DAMEBAD_ENABLE_IPERF=$(IPERF) -DAMEBAD_ENABLE_AWS_IOT=$(AWS) -DAMEBAD_ENABLE_CARES=$(CARES) \
+        -DAMEBAD_ENABLE_ROM_KAT=$(ROMKAT) -DAMEBAD_ENABLE_IPERF=$(IPERF) -DAMEBAD_ENABLE_AWS_IOT=$(AWS) -DAMEBAD_ENABLE_AWS_OTA=$(AWSOTA) -DAMEBAD_ENABLE_CARES=$(CARES) \
         -DAT_ENABLE_CRT_BUNDLE=$(CRT_BUNDLE) \
         -DAMEBAD_FW_VERSION=$(FW_VERSION) -DAMEBAD_APP_BUILD=$(APP_BUILD) -DTLS_BACKEND=$(TLS_BACKEND) \
         -DAT_TLS_HEAP_TRACE=$(TLS_HEAP_TRACE) \
