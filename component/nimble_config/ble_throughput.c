@@ -24,6 +24,10 @@
 extern uint8_t nimble_own_addr_type(void);
 extern void    nimble_restart_advertise(void);
 
+/* MTU 247 is the DLE sweet spot — measured, do not "round up": notify = 3 (ATT header) +
+ * 244 (payload) + 4 (L2CAP header) = 251 = exactly one max-DLE LL PDU. MTU 248 (payload 245)
+ * spills to 252 -> every notification fragments into TWO LL PDUs and throughput HALVES
+ * (measured on HW: 388->179 kbps amebad->bl602, 62->32 kbps bl602->amebad). */
 #define TP_MAX_PAYLOAD    244U        /* one DLE PDU (fits a single msys block) */
 #define TP_DEFAULT_SECS   10U
 #define TP_PREF_MTU       247U        /* -> up to 244-byte notifications */
