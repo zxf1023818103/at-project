@@ -1,7 +1,7 @@
 ---
 name: lfs-image-preconfig
 description: Generate a PRE-CONFIGURED LittleFS image (lfs.bin) for AT-project devices — bake in env vars (WIFI_SSID/WIFI_PASSWORD/NTP_SERVER/DNS_SERVER/TZ + any custom), AWS client cert/key, a (self-signed) CA, and arbitrary files, so a freshly-flashed board boots already provisioned. Fixed cross-platform geometry (0x300000, 960 KB, 4096/240/256). The bl602 + amebad flash skills call this to inject config, passing the params straight through.
-argument-hint: --wifi-ssid S --wifi-password P [--ntp-server H] [--dns-server IP] [--tz CST-8] [--endpoint H] [--env K=V ...] [--aws-cert cert.pem] [--aws-key key.pem] [--ca ca.pem] [--file src[:dest] ...] [--out lfs.bin]
+argument-hint: --wifi-ssid S --wifi-password P [--ntp-server H] [--dns-server IP] [--hostname N] [--tz CST-8] [--endpoint H] [--env K=V ...] [--aws-cert cert.pem] [--aws-key key.pem] [--ca ca.pem] [--file src[:dest] ...] [--out lfs.bin]
 allowed-tools: [Bash, Read, Edit]
 ---
 
@@ -18,6 +18,7 @@ from the repo's `component/lfs_image` on first use).
 |---|---|---|
 | `--wifi-ssid` / `--wifi-password` | `KV/WIFI_SSID` / `KV/WIFI_PASSWORD` | env → `wifi_service` connects at boot |
 | `--ntp-server` / `--dns-server` / `--tz` | `KV/NTP_SERVER` / `KV/DNS_SERVER` / `KV/TZ` | env (SNTP / resolver / newlib tz) |
+| `--hostname` | `KV/HOSTNAME` | env → `prvHostname` (DHCP/mDNS name); unset → `<chip>_<mac>` |
 | `--endpoint` | `KV/endpoint` | env — AWS IoT ATS endpoint |
 | `--env NAME=VALUE` (repeatable) | `KV/NAME` | env (`env_init` loads every `KV/*` into `environ`) |
 | `--aws-cert cert.pem` | `aws_cert.der` + `KV/cert` | client cert DER; env `cert` = path |

@@ -35,6 +35,7 @@ Usage: gen_lfs.sh [options]
   --wifi-password <pw>         -> KV/WIFI_PASSWORD
   --ntp-server <host>          -> KV/NTP_SERVER
   --dns-server <ip>            -> KV/DNS_SERVER
+  --hostname <name>            -> KV/HOSTNAME      (DHCP/mDNS hostname; else <chip>_<mac>)
   --tz <tz>                    -> KV/TZ            (e.g. CST-8)
   --endpoint <host>            -> KV/endpoint      (AWS IoT ATS endpoint)
   --env NAME=VALUE             -> KV/NAME          (any extra env var; repeatable)
@@ -69,6 +70,7 @@ while [ $# -gt 0 ]; do
         --wifi-password) ENV_PAIRS+=("WIFI_PASSWORD=$2"); shift 2;;
         --ntp-server)    ENV_PAIRS+=("NTP_SERVER=$2"); shift 2;;
         --dns-server)    ENV_PAIRS+=("DNS_SERVER=$2"); shift 2;;
+        --hostname)      ENV_PAIRS+=("HOSTNAME=$2"); shift 2;;
         --tz)            ENV_PAIRS+=("TZ=$2"); shift 2;;
         --endpoint)      ENV_PAIRS+=("endpoint=$2"); shift 2;;
         --env)           ENV_PAIRS+=("$2"); shift 2;;

@@ -16,6 +16,7 @@
 #include "at_netif.h"
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>                   /* getenv (HOSTNAME override) */
 #include <string.h>
 #include "bflb_sec_trng.h"    /* bflb_trng_readlen — HW TRNG for the DHCP xid / TCP ISN */
 
@@ -60,14 +61,27 @@ static BaseType_t prvGetRandom( uint32_t * out )
 
 static const char * prvHostname( void )
 {
-    static char host[ 24 ] = { 0 };
-    if( host[ 0 ] == '\0' )
+    static char dflt[ 24 ] = { 0 };
+    static char host[ 32 ];
+    const char * env;
+
+    if( dflt[ 0 ] == '\0' )
     {
         uint8_t mac[ 6 ] = { 0 };
         ( void ) wifi_mgmr_sta_mac_get( mac );
-        ( void ) snprintf( host, sizeof( host ), "bl602_%02x%02x%02x", mac[ 3 ], mac[ 4 ], mac[ 5 ] );
+        ( void ) snprintf( dflt, sizeof( dflt ), "bl602_%02x%02x%02x", mac[ 3 ], mac[ 4 ], mac[ 5 ] );
     }
-    return host;
+
+    /* Pre-seeded via lfs.bin (KV/HOSTNAME) or `env set HOSTNAME ...`; else <chip>_<mac>.
+     * Matches amebad realtek_netif.c prvHostname. */
+    env = getenv( "HOSTNAME" );
+    if( ( env != NULL ) && ( env[ 0 ] != '\0' ) )
+    {
+        ( void ) strncpy( host, env, sizeof( host ) - 1U );
+        host[ sizeof( host ) - 1U ] = '\0';
+        return host;
+    }
+    return dflt;
 }
 
 static void prvOnGotIP( uint32_t ulIP )
