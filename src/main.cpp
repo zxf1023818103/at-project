@@ -301,10 +301,10 @@ static void bflb_nimble_boot_task(void *arg) {
 // asserts. (Other Bouffalo chips: on_tcpip_init_done body is a no-op.)
 static void bflb_net_bootstrap_task(void *arg) {
     (void)arg;
-#ifndef AT_PROJECT_AWS
+#if !defined(AT_PROJECT_AWS) && !defined(AT_PROJECT_MINIMAL)
     // Portable LittleFS self-test (component/littlefs_config/lfs_selftest.c) — the same boot
     // write/read round-trip amebad runs. Post-scheduler here (LFS_THREADSAFE mutex); skipped in
-    // AWS images like amebad's MINIMAL skip (connect-and-run image, boot time + heap headroom).
+    // AWS + MINIMAL images, matching amebad (connect-and-run image, boot time + heap headroom).
     { extern void lfs_selftest(void); lfs_selftest(); }
 #endif
     on_tcpip_init_done(NULL);
@@ -409,10 +409,10 @@ void app_console_register_platform(void)
 #if defined(AT_PROJECT_NIMBLE)
     { extern void ble_tp_cli_register(void); ble_tp_cli_register(); }   // shared `bletp` BLE throughput test
 #endif
-#if !defined(BL602) || !defined(AT_PROJECT_AWS)
-    // iperf is stripped only on bl602 AWS images (its ~16 KB static buffers are reclaimed for the
-    // AWS TLS handshake heap; see component/bouffalo_sdk/CMakeLists.txt). Non-AWS bl602 images
-    // (e.g. NIMBLE, for the concurrent WiFi+BLE coex test) and the other Bouffalo chips keep it.
+#if (!defined(BL602) || !defined(AT_PROJECT_AWS)) && !defined(AT_PROJECT_MINIMAL)
+    // iperf is stripped on bl602 AWS images (its ~16 KB static buffers are reclaimed for the
+    // AWS TLS handshake heap; see component/bouffalo_sdk/CMakeLists.txt) and in MINIMAL images
+    // (WiFi-connect only, like amebad). Everything else keeps it.
     iperf_cli_register();               // iperf [server|tx|udp] throughput test
 #endif
 #if defined BL602 || defined BL702
@@ -596,7 +596,7 @@ void app_startup_run_headless(void)
 #if !defined(AT_PROJECT_QUIC) && !defined(AT_SDK_OWNS_MAIN)
 
 /* Symbols we call resolve at the final image link (forward-extern style). vfs_lfs_mount() is the shared
- * mount name on both platforms (AmebaD wraps amebad_lfs_mount). */
+ * mount name on both platforms. */
 extern void *vfs_lfs_mount(void);
 extern void  env_init(void);
 extern void  monitor_start(void);

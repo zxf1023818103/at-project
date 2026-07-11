@@ -375,7 +375,7 @@ target_link_libraries(bouffalo_sdk INTERFACE zip_cmd)
 # __HeapBase and gives the TLSF OCRAM pool a ~16 KB bigger *contiguous* run — the handshake was
 # failing on fragmentation, not total size). Non-AWS bl602 images (e.g. NIMBLE, for the concurrent
 # WiFi+BLE coex test) keep iperf; bl616/cl always keep it. main() gates iperf_cli_register() the same way.
-if(NOT ("${BOUFFALO_CHIP}" STREQUAL "bl602" AND AT_ENABLE_AWS))
+if(NOT ("${BOUFFALO_CHIP}" STREQUAL "bl602" AND AT_ENABLE_AWS) AND NOT AT_ENABLE_MINIMAL)
     target_link_libraries(bouffalo_sdk INTERFACE iperf)
 endif()
 
@@ -452,6 +452,13 @@ if(AT_ENABLE_QUIC)
     if("${BOUFFALO_CHIP}" STREQUAL "bl602")
         target_compile_definitions(quic_selftest PRIVATE QUIC_SMOKE)
     endif()
+endif()
+
+# MINIMAL=ON (same flag + semantics as amebad): WiFi-connect-only image — strips the boot
+# diagnostics (main.cpp gates the LFS self-test on AT_PROJECT_MINIMAL) and iperf (gate below).
+option(AT_ENABLE_MINIMAL "WiFi-connect-only image: strip boot diagnostics + iperf" OFF)
+if(AT_ENABLE_MINIMAL)
+    target_compile_definitions(bouffalo_sdk INTERFACE AT_PROJECT_MINIMAL)
 endif()
 
 # The Mbed TLS crypto self-tests (bench + crt_bundle + pkcs11) are OPT-IN, mirroring AmebaD's

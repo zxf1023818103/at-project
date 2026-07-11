@@ -79,8 +79,10 @@ ifeq ($(filter $(AWSOTA),ON OFF),)
 $(error AWSOTA must be 'ON' or 'OFF')
 endif
 # iperf: manual `iperf server|tx|udp|udptx` console command (no auto-start), linked by default
-# except in AWS images (heap) -- same polarity + UX as bl602.
+# except in AWS images (heap) and MINIMAL images (WiFi-connect only) -- same polarity + UX as bl602.
 ifeq ($(AWS),ON)
+override IPERF := OFF
+else ifeq ($(MINIMAL),ON)
 override IPERF := OFF
 else
 IPERF      ?= ON
@@ -132,6 +134,12 @@ CRT_BUNDLE ?= ON
 else
 CRT_BUNDLE ?= OFF
 endif
+# CRYPTO_SELFTESTS umbrella (same flag + form as bl602): bench + crt_bundle + pkcs11 as CONSOLE
+# COMMANDS (no boot auto-run). PKCS11=ON / BENCH=ON keep the boot-auto-run diagnostic form.
+CRYPTO_SELFTESTS ?= OFF
+ifeq ($(filter $(CRYPTO_SELFTESTS),ON OFF),)
+$(error CRYPTO_SELFTESTS must be 'ON' or 'OFF')
+endif
 VFSTEST    ?= OFF          # ON -> POSIX-fd VFS self-test (fopen/open/socket over LFS+sockets)
 CPPTEST    ?= OFF          # ON -> C++ std::filesystem/iostream self-test (cout/cin over LPUART, stderr LOGUART)
 SBOOT      ?= ON           # DEFAULT-ON: Ed25519-sign image2 (boot-ROM secure-boot format) every build,
@@ -168,7 +176,7 @@ _COMMON := -G $(GEN) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) -DAMEBAD_EFUSE_DEBUG=$(EFU
 _KM4 := -DAMEBAD_ENABLE_NIMBLE=$(NIMBLE) -DAT_ENABLE_MCUMGR=$(MCUMGR) -DAMEBAD_ENABLE_HCI=$(HCI) -DAT_ENABLE_QUIC=$(QUIC) \
         -DAMEBAD_ENABLE_PKCS11=$(PKCS11) -DAMEBAD_ENABLE_CRYPTOBENCH=$(BENCH) -DAMEBAD_ENABLE_MINIMAL=$(MINIMAL) \
         -DAMEBAD_ENABLE_ROM_KAT=$(ROMKAT) -DAMEBAD_ENABLE_IPERF=$(IPERF) -DAMEBAD_ENABLE_AWS_IOT=$(AWS) -DAMEBAD_ENABLE_AWS_OTA=$(AWSOTA) -DAMEBAD_ENABLE_CARES=$(CARES) \
-        -DAT_ENABLE_CRT_BUNDLE=$(CRT_BUNDLE) \
+        -DAT_ENABLE_CRT_BUNDLE=$(CRT_BUNDLE) -DAT_CRYPTO_SELFTESTS=$(CRYPTO_SELFTESTS) \
         -DAMEBAD_FW_VERSION=$(FW_VERSION) -DAMEBAD_APP_BUILD=$(APP_BUILD) -DTLS_BACKEND=$(TLS_BACKEND) \
         -DAT_TLS_HEAP_TRACE=$(TLS_HEAP_TRACE) \
         -DAMEBAD_MBEDTLS_HW_GCM=$(HWGCM) -DAMEBAD_TFM_BOOT=$(TFM) -DAMEBAD_TFM_STORAGE=$(STORAGE) \

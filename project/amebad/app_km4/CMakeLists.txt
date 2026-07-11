@@ -357,12 +357,15 @@ endif()
 # /mbedx509 + the mbedTLS FreeRTOS-threading/entropy glue join the cross_refs group (real
 # archive names; the _config/umbrella INTERFACEs don't expand inside LINK_GROUP).
 set(_pk11_grp "")
-if(AMEBAD_ENABLE_PKCS11)
-    # pkcs11_selftest.c + the fopen POSIX PAL moved to the shared component/pkcs11_selftest_config
-    # (target pkcs11_selftest). Its archive rides the cross_refs group alongside corepkcs11/mbedcrypto
-    # /mbedx509. main() auto-runs pkcs11_selftest_run() under AT_PROJECT_PKCS11 (the `pkcs11` console
-    # command in the shared lib is unused here — this image auto-runs it instead).
+if(AMEBAD_ENABLE_PKCS11 OR AT_CRYPTO_SELFTESTS)
+    # pkcs11_selftest.c + the fopen POSIX PAL + the `pkcs11` console command live in the shared
+    # component/pkcs11_selftest_config (target pkcs11_selftest). Its archive rides the cross_refs
+    # group alongside corepkcs11/mbedcrypto/mbedx509. Two consumers: PKCS11=ON auto-runs
+    # pkcs11_selftest_run() at boot (AT_PROJECT_PKCS11); CRYPTO_SELFTESTS=ON registers the
+    # `pkcs11` console command instead (bl602's form).
     set(_pk11_grp ",pkcs11_selftest,corepkcs11,mbedcrypto,mbedx509,mbedtls,mbedtls_port,mbedtls_config")
+endif()
+if(AMEBAD_ENABLE_PKCS11)
     set_property(SOURCE ${AT_MAIN_SRC}
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_PKCS11)
 endif()
@@ -376,10 +379,21 @@ endif()
 # main() auto-runs mbedtls_bench() under AT_PROJECT_CRYPTOBENCH (the `bench` console command in the
 # shared lib is unused here — this image auto-runs it instead).
 set(_bench_grp "")
-if(AMEBAD_ENABLE_CRYPTOBENCH)
+if(AMEBAD_ENABLE_CRYPTOBENCH OR AT_CRYPTO_SELFTESTS)
     set(_bench_grp ",mbedtls_bench,mbedcrypto,mbedx509,mbedtls,mbedtls_port,mbedtls_config")
+endif()
+if(AMEBAD_ENABLE_CRYPTOBENCH)
     set_property(SOURCE ${AT_MAIN_SRC}
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_CRYPTOBENCH)
+endif()
+# CRYPTO_SELFTESTS umbrella (same flag + form as bl602): the bench + crt_bundle + pkcs11 CONSOLE
+# COMMANDS (no boot auto-run). The bench/pkcs11 archives join via the groups above; crt_bundle adds
+# its CLI + the compressed CA bundle here (info/verify form -- no TLS transport in this image).
+if(AT_CRYPTO_SELFTESTS)
+    set(_bench_grp "${_bench_grp},crt_bundle_cli,esp_crt_bundle")
+    target_link_libraries(target_img2_km4 PRIVATE esp_crt_bundle_config)   # esp_crt_bundle.h
+    set_property(SOURCE ${AT_MAIN_SRC}
+                 APPEND PROPERTY COMPILE_DEFINITIONS AT_CRYPTO_SELFTESTS)
 endif()
 
 # AWS IoT Core MQTT/TLS demo (AMEBAD_ENABLE_AWS_IOT): coreMQTT v5.0.2 over the FreeRTOS

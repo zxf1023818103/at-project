@@ -858,6 +858,13 @@ void app_console_register_platform(void)
 #ifdef AT_PROJECT_CRT_BUNDLE
     { extern void crt_bundle_cli_register(void); crt_bundle_cli_register(); } /* compressed CA root bundle */
 #endif
+#ifdef AT_CRYPTO_SELFTESTS
+    /* Diagnostic image (make CRYPTO_SELFTESTS=ON): the Mbed TLS crypto self-test CONSOLE COMMANDS,
+     * same umbrella + form as bl602 (PKCS11=ON / BENCH=ON keep the boot-auto-run diagnostic form). */
+    { extern void bench_cli_register(void); bench_cli_register(); }              /* Mbed TLS microbenchmark */
+    { extern void crt_bundle_cli_register(void); crt_bundle_cli_register(); }    /* CA bundle info/verify */
+    { extern void pkcs11_cli_register(void); pkcs11_cli_register(); }            /* corePKCS11 self-test */
+#endif
 #ifdef AMEBAD_ENABLE_WPS
     { extern void wps_cli_register(void); wps_cli_register(); }     /* WPS (PBC/PIN) connect test */
 #endif

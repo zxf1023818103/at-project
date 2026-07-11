@@ -24,12 +24,12 @@ extern "C" {
  * flash/format error. Mounting twice without unmounting returns the same
  * already-mounted instance.
  */
-lfs_t *amebad_lfs_mount(void);
+lfs_t *vfs_lfs_mount(void);   /* the cross-platform mount entry (same name as bouffalo's lfs_port) */
 
 /* Unmount (lfs_unmount). Safe to pass NULL. */
 void amebad_lfs_unmount(lfs_t *lfs);
 
-/* diskio callbacks — wired into lfs_config by amebad_lfs_mount(); exposed for
+/* diskio callbacks — wired into lfs_config by vfs_lfs_mount(); exposed for
  * inspection / reuse. Addresses are relative to the LFS region base. */
 int amebad_lfs_read (const struct lfs_config *c, lfs_block_t block, lfs_off_t off, void *buffer, lfs_size_t size);
 int amebad_lfs_prog (const struct lfs_config *c, lfs_block_t block, lfs_off_t off, const void *buffer, lfs_size_t size);

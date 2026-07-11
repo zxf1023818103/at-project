@@ -150,10 +150,17 @@ endif
 
 # Mbed TLS crypto self-test CLIs (bench + crt_bundle + pkcs11), opt-in: all three together overflow
 # bl602's xip_memory (~100 KB over), so they're a diagnostic image. Threaded to AT_CRYPTO_SELFTESTS
-# (component/bouffalo_sdk); amebad exposes the equivalents as PKCS11/BENCH.
+# (component/bouffalo_sdk); amebad exposes the same umbrella flag.
 CRYPTO_SELFTESTS ?= OFF
 ifeq ($(filter $(CRYPTO_SELFTESTS),ON OFF),)
 $(error CRYPTO_SELFTESTS must be 'ON' or 'OFF')
+endif
+
+# MINIMAL=ON: WiFi-connect-only image — strip the boot diagnostics (LFS self-test) + iperf,
+# same flag + semantics as amebad's MINIMAL.
+MINIMAL ?= OFF
+ifeq ($(filter $(MINIMAL),ON OFF),)
+$(error MINIMAL must be 'ON' or 'OFF')
 endif
 
 # Pick the riscv toolchain bundled with the Bouffalo SDK submodule.
@@ -184,6 +191,7 @@ $(BUILD_DIR)/CMakeCache.txt: CMakeLists.txt proj.conf
 	    -DAT_ENABLE_NIMBLE=$(NIMBLE) \
 	    -DAT_ENABLE_MCUMGR=$(MCUMGR) \
 	    -DAT_CRYPTO_SELFTESTS=$(CRYPTO_SELFTESTS) \
+	    -DAT_ENABLE_MINIMAL=$(MINIMAL) \
 	    -DBOUFFALO_MBEDTLS_HW_GCM=$(HWGCM)
 
 configure: $(BUILD_DIR)/CMakeCache.txt
