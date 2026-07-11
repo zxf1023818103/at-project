@@ -133,6 +133,7 @@ struct wifi_event_beacon_ind
     int ssid_len;
     uint8_t wps;
     uint8_t group_cipher;
+    uint8_t country[2];   /* at-project: beacon 802.11d Country IE (first 2 chars; 0 = absent) */
 };
 
 #pragma  pack(push,1)

@@ -200,6 +200,7 @@ typedef struct wifi_mgmr_scan_item {
     uint8_t is_used;
     uint8_t wps;
     uint8_t group_cipher;
+    uint8_t country[2];   /* at-project: beacon 802.11d Country IE (0 = absent) */
 } wifi_mgmr_scan_item_t;
 
 struct wlan_netif {

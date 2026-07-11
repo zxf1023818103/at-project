@@ -420,6 +420,16 @@ static void _rx_handle_beacon(struct scanu_result_ind *ind, struct ieee80211_mgm
         ind_new.wps = 0;
     }
 
+    /* at-project: 802.11d Country IE (id 7) -> first 2 chars, for the country auto-detect
+     * majority vote (wifi_autodetect_country). 0/0 when the AP doesn't advertise one. */
+    #define MAC_ELTID_COUNTRY 7
+    elmt_addr = mac_ie_find(var_part_addr, var_part_len, MAC_ELTID_COUNTRY);
+    if (elmt_addr != 0 && co_read8p(elmt_addr + MAC_INFOELT_LEN_OFT) >= 2)
+    {
+        ind_new.country[0] = co_read8p(elmt_addr + MAC_INFOELT_INFO_OFT);
+        ind_new.country[1] = co_read8p(elmt_addr + MAC_INFOELT_INFO_OFT + 1);
+    }
+
     /* TODO: Only consider 2.4G and bgn mode 
      * (NO 5G and a/ac/ax) / (NO g-only and n-only difference)
      */

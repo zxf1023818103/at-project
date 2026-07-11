@@ -146,13 +146,18 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
     switch (code) {
         case CODE_WIFI_ON_INIT_DONE: {
             printf("[APP] [EVT] %s, CODE_WIFI_ON_INIT_DONE\n", __func__);
+            // Regulatory domain: the persisted WIFI_COUNTRY (set by the user or by
+            // wifi_autodetect_country's majority vote) wins; "CN" is only the first-boot default.
+            const char *cc = getenv("WIFI_COUNTRY");
+            if (!wifi_cc_valid(cc)) cc = NULL;   // garbage/empty persisted value -> default
 #if defined BL602 || defined BL702
             wifi_conf_t conf = { .country_code = "CN" };
+            if (cc != NULL) { conf.country_code[0] = cc[0]; conf.country_code[1] = cc[1]; conf.country_code[2] = '\0'; }
             wifi_mgmr_start_background(&conf);
 #endif // defined BL602 || defined BL702
 #if defined BL606P || defined BL808 || defined BL616 || defined BL616CL
             wifi_mgmr_init();
-            wifi_mgmr_set_country_code((char *)"CN");
+            wifi_mgmr_set_country_code((char *)((cc != NULL) ? cc : "CN"));
 #endif // defined BL606P || defined BL808 || defined BL616 || defined BL616CL
             break;
         }
@@ -349,6 +354,37 @@ void wifi_port_autoreconnect_disable(void) {
     // Kill wifi4's native timer-based reconnect so wifi_service is the single reconnect authority.
     wifi_mgmr_sta_autoconnect_disable();
 }
+// Country-code auto-detect: majority 802.11d Country IE over one broadcast scan -- the bl602
+// counterpart of AmebaD's wifi_autodetect_country, over the SAME shared wifi_cc_tally
+// (component/wifi_service_config). The per-AP Country IE reaches the scan items via the at-project
+// wifi4 patch (bl_rx.c IE-7 extract -> wifi_mgmr scan_item.country -> ap_item.country). Runs once,
+// before the first associate, only when WIFI_COUNTRY is unset; the vote persists to WIFI_COUNTRY
+// (KV/LFS via --wrap=setenv) and applies via wifi_mgmr_set_country_code (no driver reboot -- unlike
+// AmebaD's channel-plan reboot).
+static void bl602_cc_scan_cb(wifi_mgmr_ap_item_t *env, uint32_t *param1, wifi_mgmr_ap_item_t *item) {
+    (void)env;
+    wifi_cc_tally_add((wifi_cc_tally_t *)param1, (char)item->country[0], (char)item->country[1]);
+}
+static void wifi_autodetect_country(void) {
+    wifi_cc_tally_t t;
+    char ccs[3];
+    if (wifi_cc_valid(getenv("WIFI_COUNTRY")))
+        return;   // regulatory domain already provisioned - leave it alone (garbage value != provisioned)
+    memset(&t, 0, sizeof(t));
+    // Broadcast scan (all channels), synchronous via the same task-notify the directed scan uses.
+    s_bl602_scan_waiter = xTaskGetCurrentTaskHandle();
+    wifi_mgmr_scan_adv(NULL, bl602_scan_done_cb, NULL, 0, NULL, NULL, 0, 0);
+    ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(4000));
+    wifi_mgmr_scan_ap_all(NULL, (uint32_t *)&t, bl602_cc_scan_cb);
+    if (wifi_cc_tally_best(&t, ccs) == NULL) {
+        printf("[WIFI] country auto-detect: %d APs scanned, none advertised a Country IE - keeping default plan\n", t.aps);
+        return;
+    }
+    printf("[WIFI] country auto-detect: %d APs, majority %s -> set + save\n", t.aps, ccs);
+    setenv("WIFI_COUNTRY", ccs, 1);
+    wifi_mgmr_set_country_code(ccs);
+}
+
 int wifi_port_scan(const char *ssid, uint8_t *chan, int *sec) {
     wifi_mgmr_ap_item_t ap;
     s_bl602_scan_waiter = xTaskGetCurrentTaskHandle();
@@ -361,6 +397,7 @@ int wifi_port_scan(const char *ssid, uint8_t *chan, int *sec) {
 }
 int wifi_port_connect(const char *ssid, const char *pass, uint8_t chan, int sec) {
     (void)sec;   // wifi4 picks the security from the beacon; nothing to pass through
+    wifi_autodetect_country();   // once, when WIFI_COUNTRY is unset (same placement as AmebaD: before associating)
     s_bl602_conn_ok = 0;
     s_bl602_conn_waiter = xTaskGetCurrentTaskHandle();
     // A non-zero chan makes the wifi4 connect probe just that one channel for the BSSID.
@@ -709,35 +746,21 @@ static const char *wifi_sec_to_str( rtw_security_t sec )
  * 802.11d Country IE into the scan-result records, at offset 14 (right before the SSID). */
 extern void rltk_wlan_enable_scan_with_extended_countryinfo( int enable );
 
-/* Tally of the per-AP Country IEs seen in one scan, for the majority vote in wifi_autodetect_country().
- * Extended-country record layout: [0]=len [1..6]=bssid [7..10]=rssi [11]=sec [12]=wps [13]=channel
+/* Per-AP Country IE walk over the extended-country scan records; the tally/vote itself is the
+ * SHARED wifi_cc_tally (component/wifi_service_config -- bl602's wifi_autodetect_country uses the
+ * same one). Record layout: [0]=len [1..6]=bssid [7..10]=rssi [11]=sec [12]=wps [13]=channel
  * [14..15]=country [16..]=ssid. */
-typedef struct { char cc[ 16 ][ 2 ]; int count[ 16 ]; int num; int aps; } cc_tally_t;
-
 static int country_scan_handler( char *buf, int buflen, char *ssid, void *user_data )
 {
-    cc_tally_t *t = (cc_tally_t *) user_data;
+    wifi_cc_tally_t *t = (wifi_cc_tally_t *) user_data;
     int plen = 0;
     ( void ) ssid;
 
     while( plen < buflen )
     {
         int len = (unsigned char) buf[ plen ];
-        char c0, c1;
-        int i;
         if( len == 0 ) break;
-        t->aps++;
-        c0 = buf[ plen + 14 ];
-        c1 = buf[ plen + 15 ];
-        if( ( c0 >= 'A' && c0 <= 'Z' ) && ( c1 >= 'A' && c1 <= 'Z' ) )   /* AP advertised a Country IE */
-        {
-            for( i = 0; i < t->num; i++ )
-                if( t->cc[ i ][ 0 ] == c0 && t->cc[ i ][ 1 ] == c1 ) { t->count[ i ]++; break; }
-            if( i == t->num && t->num < 16 )
-            {
-                t->cc[ i ][ 0 ] = c0; t->cc[ i ][ 1 ] = c1; t->count[ i ] = 1; t->num++;
-            }
-        }
+        wifi_cc_tally_add( t, buf[ plen + 14 ], buf[ plen + 15 ] );
         plen += len;
     }
     return 0;
@@ -753,12 +776,12 @@ static int country_scan_handler( char *buf, int buflen, char *ssid, void *user_d
  * scan-done never returns in this driver-only image. Call after wifi_on, before associating. */
 static void wifi_autodetect_country( void )
 {
-    cc_tally_t  t;
+    wifi_cc_tally_t t;
     const char *ssid;
-    int         i, best = -1, best_n = 0;
+    char        ccs[ 3 ];
 
-    if( ( getenv( "WIFI_COUNTRY" ) != NULL ) || ( getenv( "WIFI_CHANPLAN" ) != NULL ) )
-        return;   /* regulatory domain already provisioned - leave it alone */
+    if( wifi_cc_valid( getenv( "WIFI_COUNTRY" ) ) || ( getenv( "WIFI_CHANPLAN" ) != NULL ) )
+        return;   /* regulatory domain already provisioned - leave it alone (garbage value != provisioned) */
 
     memset( &t, 0, sizeof( t ) );
     ssid = getenv( "WIFI_SSID" );   /* may be NULL -> broadcast probe; still hears every AP's Country IE */
@@ -770,22 +793,16 @@ static void wifi_autodetect_country( void )
                                   (char *) ssid, ssid ? (int) strlen( ssid ) : 0 );
     rltk_wlan_enable_scan_with_extended_countryinfo( 0 );
 
-    for( i = 0; i < t.num; i++ )
-        if( t.count[ i ] > best_n ) { best_n = t.count[ i ]; best = i; }
-
-    if( best < 0 )
+    if( wifi_cc_tally_best( &t, ccs ) == NULL )
     {
         log_info( "[KM4] country auto-detect: %d APs scanned, none advertised a Country IE - keeping default plan",
                     t.aps );
         return;
     }
-    {
-        char ccs[ 3 ] = { t.cc[ best ][ 0 ], t.cc[ best ][ 1 ], '\0' };
-        log_info( "[KM4] country auto-detect: %d APs, majority %s (%d of %d countries) -> set channel plan + save (reboots)",
-                    t.aps, ccs, best_n, t.num );
-        setenv( "WIFI_COUNTRY", ccs, 1 );
-        wifi_set_channel_plan_by_country_code( (unsigned char *) ccs );   /* applies now; triggers a driver reboot */
-    }
+    log_info( "[KM4] country auto-detect: %d APs, majority %s -> set channel plan + save (reboots)",
+                t.aps, ccs );
+    setenv( "WIFI_COUNTRY", ccs, 1 );
+    wifi_set_channel_plan_by_country_code( (unsigned char *) ccs );   /* applies now; triggers a driver reboot */
 }
 
 

@@ -241,6 +241,8 @@ int wifi_mgmr_scan_beacon_save( wifi_mgmr_scan_item_t *scan )
                 wifiMgmr.scan_items[pos_same_ssid].cipher = scan->cipher;
                 wifiMgmr.scan_items[pos_same_ssid].wps = scan->wps;
                 wifiMgmr.scan_items[pos_same_ssid].mode = scan->mode;
+                wifiMgmr.scan_items[pos_same_ssid].country[0] = scan->country[0];
+                wifiMgmr.scan_items[pos_same_ssid].country[1] = scan->country[1];
             }
         }else {
             /* find empty item */
@@ -257,6 +259,8 @@ int wifi_mgmr_scan_beacon_save( wifi_mgmr_scan_item_t *scan )
                 wifiMgmr.scan_items[pos_empty].cipher = scan->cipher;
                 wifiMgmr.scan_items[pos_empty].wps = scan->wps;
                 wifiMgmr.scan_items[pos_empty].mode = scan->mode;
+                wifiMgmr.scan_items[pos_empty].country[0] = scan->country[0];
+                wifiMgmr.scan_items[pos_empty].country[1] = scan->country[1];
                 wifiMgmr.scan_items[pos_empty].is_used = 1;
             }else {
                 /* if no empty item, copy to low rssi item */
@@ -273,6 +277,8 @@ int wifi_mgmr_scan_beacon_save( wifi_mgmr_scan_item_t *scan )
                     wifiMgmr.scan_items[pos_rssi].cipher = scan->cipher;
                     wifiMgmr.scan_items[pos_rssi].wps = scan->wps;
                     wifiMgmr.scan_items[pos_rssi].mode = scan->mode;
+                    wifiMgmr.scan_items[pos_rssi].country[0] = scan->country[0];
+                    wifiMgmr.scan_items[pos_rssi].country[1] = scan->country[1];
                     wifiMgmr.scan_items[pos_rssi].is_used = 1;
                 }
             }

@@ -39,6 +39,23 @@ void wifi_forget( void );
 /* Re-enable the reconnect monitor after a `wifi forget` (e.g. fresh credentials were set). */
 void wifi_reconnect_enable( void );
 
+/* ---- Country-code auto-detect helper: majority vote over the 802.11d Country IEs seen in one
+ * scan. Platform-neutral (both wifi_autodetect_country impls use it); the per-driver part is only
+ * how each scan record carries the 2-char IE. Zero-init the tally, wifi_cc_tally_add() per AP
+ * (invalid/absent codes are counted in .aps only), wifi_cc_tally_best() -> "XX" or NULL. */
+typedef struct
+{
+    char cc[ 16 ][ 2 ];
+    int  count[ 16 ];
+    int  num;
+    int  aps;
+} wifi_cc_tally_t;
+void         wifi_cc_tally_add( wifi_cc_tally_t * t, char c0, char c1 );
+const char * wifi_cc_tally_best( wifi_cc_tally_t * t, char out[ 3 ] );
+/* 1 iff cc looks like a 2-letter uppercase country code ("CN"). Use on the WIFI_COUNTRY env before
+ * trusting it (a garbage/empty persisted value must neither reach the driver nor block auto-detect). */
+int          wifi_cc_valid( const char * cc );
+
 #ifdef __cplusplus
 }
 #endif

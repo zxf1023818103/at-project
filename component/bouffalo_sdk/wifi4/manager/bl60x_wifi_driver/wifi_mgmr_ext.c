@@ -930,6 +930,8 @@ int wifi_mgmr_scan_ap_all(wifi_mgmr_ap_item_t *env, uint32_t *param1, scan_item_
             item.rssi = scan->rssi;
             item.auth = scan->auth;
             item.cipher = scan->cipher;
+            item.country[0] = scan->country[0];   /* at-project: 802.11d Country IE */
+            item.country[1] = scan->country[1];
             cb(env, param1, &item);
         }
     }

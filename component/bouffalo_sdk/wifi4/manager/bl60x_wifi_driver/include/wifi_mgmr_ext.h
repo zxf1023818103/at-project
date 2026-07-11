@@ -125,6 +125,7 @@ typedef struct wifi_mgmr_ap_item {
     uint8_t auth;
     uint8_t cipher;
     int8_t rssi;
+    uint8_t country[2];   /* at-project: beacon 802.11d Country IE (0 = absent) */
 } wifi_mgmr_ap_item_t;
 
 typedef struct wifi_mgmr_sta_connect_ind_stat_info {
