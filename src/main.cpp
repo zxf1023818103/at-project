@@ -38,8 +38,6 @@
 // path still assumes lwIP, so keep all of this out of the AmebaD compile.
 #if !defined(CONFIG_PLATFORM_8721D) && !defined(CONFIG_PLATFORM_8710C)
 #include "Common.h"
-#include "AtTask.h"
-#include "TestTask.h"
 #include "BoardFlashLock.h"
 #include "board_flash_lock.h"   /* cross-platform flash write-protect: board_flash_lock_fw / _log_status / flash_cli_register */
 #include "wifi_service.h"   /* shared WiFi provisioning + reconnect policy */
@@ -51,43 +49,17 @@ extern "C" {
 
 __attribute__((__weak__)) void *__dso_handle = (void *)&__dso_handle;
 
-#if !defined(CONFIG_PLATFORM_8721D) && !defined(CONFIG_PLATFORM_8710C)
+#if defined CONFIG_PLATFORM_AMEBALITE || defined CONFIG_PLATFORM_AMEBASMART || defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2
+/* Strong override of the Ameba-newer SDK's __weak wifi_do_fast_connect (wifi_fast_connect.c calls it
+ * via p_wifi_do_fast_connect at boot): a no-op, so the SDK's flash-blob fast-connect stays disabled --
+ * the shared wifi_service (env credentials + cached channel) owns provisioning. It used to spawn the
+ * C++ TestTask here, but TestTask::routine() has been all-commented-out for ages (an empty 12 KB-stack
+ * task); the spawn and the AtTask/TestTask includes are gone. */
 int wifi_do_fast_connect(void) {
-    // at::make_shared<at::AtTask>()->startAsync("AtTask", 256 * 12, 4);
-    at::make_shared<at::TestTask>()->startAsync("TestTask", 256 * 12, 4);
     return 0;
 }
 #endif
 
-#if 0  /* WiFi fast-reconnect disabled: FAST_RECONNECT_DATA (flash 0x3FF000) was
-        * folded into LittleFS (LFS grown to 1024 KB after the FTL/settings cluster
-        * was dropped). Kept for reference; not compiled. */
-static int wlan_write_reconnect_data_to_flash(uint8_t *data, uint32_t len) {
-    printf("%s() called with data length: %u\n", __func__, len);
-
-    struct wlan_fast_reconnect *reconnect_data = (struct wlan_fast_reconnect *)data;
-    if (reconnect_data == NULL || len < sizeof(struct wlan_fast_reconnect)) {
-        return -1; // Invalid data or length
-    }
-
-    printf("Writing WLAN fast reconnect data to flash...\n");
-    printf("PSK ESSID: %s\n", reconnect_data->psk_essid);
-    printf("PSK Passphrase: %s\n", reconnect_data->psk_passphrase);
-    printf("WPA Global PSK: %s\n", reconnect_data->wpa_global_PSK);
-    printf("Channel: %u\n", reconnect_data->channel);
-    printf("Security Type: %u\n", reconnect_data->security_type);
-#if defined(CONFIG_FAST_DHCP) && CONFIG_FAST_DHCP
-    printf("Offer IP: %u\n", reconnect_data->offer_ip);
-#endif
-#if ATCMD_VER == ATVER_2
-    printf("Enable: %u\n", reconnect_data->enable);
-#endif
-#if defined(CONFIG_ENABLE_WPS) && CONFIG_ENABLE_WPS
-    printf("Is WPS AP: %u\n", reconnect_data->is_wps_ap);
-#endif
-    return 0;
-}
-#endif // defined CONFIG_PLATFORM_8721D || defined CONFIG_PLATFORM_8710C
 
 #if defined CONFIG_PLATFORM_AMEBALITE || defined CONFIG_PLATFORM_AMEBASMART || defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2
 int write_fast_connect_data_to_flash(unsigned int offer_ip, unsigned int server_ip) {
@@ -170,7 +142,6 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
             // is safe to init before association.
             bouffalo_tcp_bringup();
 #endif // defined BL616 || defined BL616CL
-            wifi_do_fast_connect();
 #if defined BL602 || defined BL702
             // Start the shared WiFi provisioning + reconnect service (component/wifi_service_config).
             // It runs in its own task (a blocking connect must not run here: wifi_event_handler runs
