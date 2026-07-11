@@ -72,7 +72,12 @@ static TaskHandle_t s_rx_task_h;
 void
 nimble_amebad_transport_start_rx(void)
 {
-    xTaskCreate(nimble_amebad_rx_task, "nimble_hci_rx", 768, NULL,
+    /* 4096 words: ble_transport_to_hs_acl() runs the whole controller->host RX chain
+     * (H4 reassembly -> L2CAP -> ATT -> GATT -> the app's notify callback) INLINE in this
+     * task, so a sustained notification flood (the bletp throughput RX side) needs deep
+     * stack; 768 then 2048 both overflowed into the MSP region (SAU "Security Fault",
+     * MSP==PSP, in hci_h4_sm_rx). */
+    xTaskCreate(nimble_amebad_rx_task, "nimble_hci_rx", 4096, NULL,
                 tskIDLE_PRIORITY + 4, &s_rx_task_h);
 }
 

@@ -37,9 +37,12 @@
  * counts: POOL_ACL_COUNT = ACL_FROM_LL_COUNT, POOL_ISO_COUNT = ISO_FROM_LL_COUNT.) */
 #define MYNEWT_VAL_BLE_TRANSPORT_ISO_FROM_LL_COUNT (0)   /* no isochronous (LE Audio) -> drop pool_iso_buf (~3.5 KB) */
 #define MYNEWT_VAL_BLE_TRANSPORT_ISO_FROM_HS_COUNT (0)
-#define MYNEWT_VAL_BLE_TRANSPORT_ACL_FROM_LL_COUNT (4)   /* was 10; 1 low-throughput peripheral link (~1.5 KB) */
+#define MYNEWT_VAL_BLE_TRANSPORT_ACL_FROM_LL_COUNT (16)  /* controller->host ACL buffers: 4 exhausted under the
+                                                          * bletp RX flood -> hci_h4 alloc returned NULL and
+                                                          * hci_h4_sm_rx NULL-deref'd (secure fault). 16 sustains it. */
 #define MYNEWT_VAL_BLE_ATT_SVR_MAX_PREP_ENTRIES    (4)   /* was 64; no long/prepared writes (~1.3 KB) */
-#define MYNEWT_VAL_MSYS_1_BLOCK_COUNT              (10)  /* 8 for a single peripheral; +2 for mcumgr SMP notify mbufs (~0.6 KB .bss) */
+#define MYNEWT_VAL_MSYS_1_BLOCK_COUNT              (24)  /* was 10; the bletp notification blast needs mbuf headroom
+                                                          * on both the TX (notify) and RX (reassembly) paths */
 
 #endif /* H_ATPROJECT_NIMBLE_SYSCFG_ */
 

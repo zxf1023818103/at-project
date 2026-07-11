@@ -88,7 +88,13 @@ add_library(nimble STATIC EXCLUDE_FROM_ALL
     "${CMAKE_CURRENT_SOURCE_DIR}/transport_bflb.c"              # structured on-chip HCI transport (LL side)
     "${AT_ROOT}/component/nimble_config/nimble_app.c"           # SHARED nimble_start() — GAP/GATT sample + host task
     "${AT_ROOT}/component/nimble_config/mbedtls_sm_glue.c"      # SM AES/AES-CMAC/ECDH P-256 over mbedTLS
+    "${AT_ROOT}/component/nimble_config/ble_throughput.c"       # SHARED BLE throughput test (central/peripheral) + `bletp`
 )
+
+# ble_throughput.c's `bletp` command needs <FreeRTOS_CLI.h> (include-only; FreeRTOS_CLI.c is
+# already in the image via the console). Same genex-include pattern as the mbedTLS headers.
+target_include_directories(nimble SYSTEM PRIVATE
+    "$<TARGET_PROPERTY:freertos_cli,INTERFACE_INCLUDE_DIRECTORIES>")
 
 # Config + header surface (our syscfg.h FIRST, then the upstream NimBLE includes),
 # replicated from component/nimble_config's CMakeLists (we don't link that lib).

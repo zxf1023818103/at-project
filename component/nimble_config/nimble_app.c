@@ -29,6 +29,7 @@
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
 #include "store/ram/ble_store_ram.h"
+#include "ble_throughput.h"
 
 extern void amebad_nimble_sm_crypto_selftest(void); /* mbedtls_sm_glue.c: SM crypto KAT */
 
@@ -119,6 +120,7 @@ static int
 nimble_gap_event(struct ble_gap_event *event, void *arg)
 {
     (void)arg;
+    ble_tp_peripheral_event(event);   /* throughput test: start/stop the notify blast on subscribe */
     switch (event->type) {
     case BLE_GAP_EVENT_CONNECT:
         printf("[NimBLE] connect %s (handle %d)\n\r",
@@ -153,10 +155,16 @@ nimble_advertise(void)
     const char *name;
     int rc;
 
+    static const ble_uuid16_t tp_marker = BLE_UUID16_INIT(BLE_TP_ADV_UUID16);
+
     memset(&fields, 0, sizeof fields);
     fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
     fields.tx_pwr_lvl_is_present = 1;
     fields.tx_pwr_lvl = BLE_HS_ADV_TX_PWR_LVL_AUTO;
+    /* 16-bit marker so a `bletp central` peer can find us (see ble_throughput.h). */
+    fields.uuids16 = (ble_uuid16_t *)&tp_marker;
+    fields.num_uuids16 = 1;
+    fields.uuids16_is_complete = 1;
     name = ble_svc_gap_device_name();
     fields.name = (uint8_t *)name;
     fields.name_len = strlen(name);
@@ -179,6 +187,10 @@ nimble_advertise(void)
     }
     printf("[NimBLE] advertising as '%s'\n\r", name);
 }
+
+/* Accessors for the throughput module (ble_throughput.c). */
+uint8_t nimble_own_addr_type(void) { return own_addr_type; }
+void    nimble_restart_advertise(void) { nimble_advertise(); }
 
 static void
 nimble_on_sync(void)
@@ -244,6 +256,10 @@ nimble_start(void)
     }
     if (rc != 0) {
         printf("[NimBLE] gatt svc register rc=%d\n\r", rc);
+    }
+    rc = ble_tp_gatt_register();          /* throughput-test NOTIFY service */
+    if (rc != 0) {
+        printf("[NimBLE] tp svc register rc=%d\n\r", rc);
     }
 #ifdef AT_PROJECT_MCUMGR
     /* Register the SMP GATT service (mcumgr BLE DFU) alongside the sample service, then the

@@ -828,6 +828,9 @@ void app_console_register_platform(void)
     { extern void wifi_cli_register(void); wifi_cli_register(); }               /* shared `wifi` forget/drop */
     { extern void amebad_wifi_cli_register(void); amebad_wifi_cli_register(); } /* AmebaD-only `iwpriv` */
     { extern void net_cli_register(void); net_cli_register(); }                 /* shared `resolve` / `ip6` */
+#ifdef AT_PROJECT_NIMBLE
+    { extern void ble_tp_cli_register(void); ble_tp_cli_register(); }            /* shared `bletp` BLE throughput test */
+#endif
 #ifdef AMEBAD_ENABLE_MINIZIP
     { extern void zip_cli_register(void);  zip_cli_register();  }   /* zip/unzip demo (non-AWS images) */
 #endif

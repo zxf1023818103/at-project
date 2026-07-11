@@ -28,7 +28,13 @@ add_library(nimble_config STATIC EXCLUDE_FROM_ALL
     "${CMAKE_CURRENT_SOURCE_DIR}/nimble_app.c"         # shared nimble_start() + host task (printf)
     "${CMAKE_CURRENT_SOURCE_DIR}/mbedtls_sm_glue.c"    # SM AES/ECDH on upstream mbedTLS (replaces tinycrypt + the old wolfCrypt glue)
     "${CMAKE_CURRENT_SOURCE_DIR}/ble_store_lfs.c"      # LittleFS-persistent BLE store (bonds survive reboot)
+    "${CMAKE_CURRENT_SOURCE_DIR}/ble_throughput.c"     # shared BLE throughput test (central/peripheral) + `bletp` command
 )
+
+# ble_throughput.c's `bletp` command needs <FreeRTOS_CLI.h>. Include-only (no link edge —
+# FreeRTOS_CLI.c is already in the image via the console/monitor), like the mbedTLS headers below.
+target_include_directories(nimble_config SYSTEM PRIVATE
+    "$<TARGET_PROPERTY:freertos_cli,INTERFACE_INCLUDE_DIRECTORIES>")
 
 # Config + header surface. PUBLIC so both this lib's own sources and the port see
 # it. Include ORDER matters — our include/ is FIRST so syscfg/syscfg.h shadows the

@@ -400,6 +400,9 @@ void app_console_register_platform(void)
                                         // (living below __HeapBase) grows the heap for the AWS TLS handshake.
 #endif
     { extern void net_cli_register(void); net_cli_register(); }   // shared `resolve` / `ip6`
+#if defined(AT_PROJECT_NIMBLE)
+    { extern void ble_tp_cli_register(void); ble_tp_cli_register(); }   // shared `bletp` BLE throughput test
+#endif
 #if !defined(BL602)
     // iperf is stripped on bl602 (its ~16 KB static buffers are reclaimed for the AWS TLS handshake
     // heap; see component/bouffalo_sdk/CMakeLists.txt). Other Bouffalo chips keep it.
