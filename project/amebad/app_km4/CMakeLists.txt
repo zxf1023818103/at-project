@@ -23,6 +23,12 @@ add_subdirectory(${AT_ROOT}/component ${CMAKE_BINARY_DIR}/component)
 add_compile_options("-fmacro-prefix-map=${CMAKE_CURRENT_LIST_DIR}/=")
 add_compile_options("-fmacro-prefix-map=${AT_ROOT}/src/=")   # the shared main is now src/main.cpp -> basename in [KM4] logs
 add_compile_options("-fmacro-prefix-map=${AT_ROOT}/component/amebad/app_port/=")   # amebad_app.cpp -> basename in [KM4] logs
+# Shared component .c files this target compiles DIRECTLY (target_sources by absolute path) don't
+# inherit their component's own prefix-map, so their __FILE__ stayed a full /home/... path in the
+# logs (bl602 shows basenames because it compiles them inside the component lib). Map the roots we
+# pull from so aws_iot_demo.c / aws_secret_store_*.c / time_selftest.c log as basenames like bl602.
+add_compile_options("-fmacro-prefix-map=${AT_ROOT}/component/aws_iot_config/=")
+add_compile_options("-fmacro-prefix-map=${AT_ROOT}/component/sntp_time_config/=")
 
 # AmebaD KM4 HP application image (image2, non-secure) — produces
 # target_img2_km4.axf. **Bootstrap / WIP**: the full KM4 image2 links the
