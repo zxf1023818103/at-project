@@ -403,9 +403,10 @@ void app_console_register_platform(void)
 #if defined(AT_PROJECT_NIMBLE)
     { extern void ble_tp_cli_register(void); ble_tp_cli_register(); }   // shared `bletp` BLE throughput test
 #endif
-#if !defined(BL602)
-    // iperf is stripped on bl602 (its ~16 KB static buffers are reclaimed for the AWS TLS handshake
-    // heap; see component/bouffalo_sdk/CMakeLists.txt). Other Bouffalo chips keep it.
+#if !defined(BL602) || !defined(AT_PROJECT_AWS)
+    // iperf is stripped only on bl602 AWS images (its ~16 KB static buffers are reclaimed for the
+    // AWS TLS handshake heap; see component/bouffalo_sdk/CMakeLists.txt). Non-AWS bl602 images
+    // (e.g. NIMBLE, for the concurrent WiFi+BLE coex test) and the other Bouffalo chips keep it.
     iperf_cli_register();               // iperf [server|tx|udp] throughput test
 #endif
 #if defined BL602 || defined BL702

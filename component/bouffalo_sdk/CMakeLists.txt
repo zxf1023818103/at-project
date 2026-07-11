@@ -370,11 +370,12 @@ target_link_libraries(bouffalo_sdk INTERFACE ota_flash_port)
 target_link_libraries(bouffalo_sdk INTERFACE zip_cmd)
 
 # iperf throughput probes (component/iperf_config) — main() registers the `iperf` console command.
-# NOT on bl602: iperf's static ucTxBuf(8K)+ucRecvBuf(5.7K)+ucRxBuf(2K) = ~16 KB of .bss, which the
-# heap-tight bl602 needs for the AWS mutual-TLS handshake peak (freeing them drops __HeapBase and
-# gives the TLSF OCRAM pool a ~16 KB bigger *contiguous* run — the handshake was failing on
-# fragmentation, not total size). bl616/cl keep iperf. main() gates iperf_cli_register() the same way.
-if(NOT "${BOUFFALO_CHIP}" STREQUAL "bl602")
+# NOT on bl602 AWS images: iperf's static ucTxBuf(8K)+ucRecvBuf(5.7K)+ucRxBuf(2K) = ~16 KB of .bss,
+# which the heap-tight bl602 needs for the AWS mutual-TLS handshake peak (freeing them drops
+# __HeapBase and gives the TLSF OCRAM pool a ~16 KB bigger *contiguous* run — the handshake was
+# failing on fragmentation, not total size). Non-AWS bl602 images (e.g. NIMBLE, for the concurrent
+# WiFi+BLE coex test) keep iperf; bl616/cl always keep it. main() gates iperf_cli_register() the same way.
+if(NOT ("${BOUFFALO_CHIP}" STREQUAL "bl602" AND AT_ENABLE_AWS))
     target_link_libraries(bouffalo_sdk INTERFACE iperf)
 endif()
 
