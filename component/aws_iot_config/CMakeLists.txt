@@ -48,6 +48,15 @@ else()
     set(_aws_tls network_transport_mbedtls)
 endif()
 
+# Firmware version string for the telemetry `fw` field + the OTA version print (bouffalo Makefile
+# FW_VERSION -> -DAWS_FW_VERSION; amebad stamps the same AT_FW_VERSION via its own set_property).
+# Unset -> the TU default ("dev", aws_telemetry_common.h).
+if(NOT DEFINED AWS_FW_VERSION OR AWS_FW_VERSION STREQUAL "")
+    set(_aws_fw_def "")
+else()
+    set(_aws_fw_def "AT_FW_VERSION=\"${AWS_FW_VERSION}\"")
+endif()
+
 if(AT_ENABLE_AWS_OTA)
     # AWSOTA=ON: the full coreMQTT-Agent + FreeRTOS OTA v3.3.0 agent (MQTT data plane), sharing AmebaD's
     # orchestration (aws_iot_demo.c) + ota_app/ota_pal + agent support (${AWS_OTA_SOURCES}, from
@@ -139,4 +148,8 @@ else()
         "${CMAKE_CURRENT_SOURCE_DIR}/../network_transport"
         "${CMAKE_CURRENT_SOURCE_DIR}/../freertos-cli_config/freertos-cli"
     )
+endif()
+
+if(NOT _aws_fw_def STREQUAL "")
+    target_compile_definitions(aws_iot PRIVATE "${_aws_fw_def}")   # both variants (telemetry `fw` field)
 endif()

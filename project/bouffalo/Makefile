@@ -103,8 +103,12 @@ endif
 
 # OTA firmware version-gate build number (appFirmwareVersion .build). The FreeRTOS OTA agent only
 # commits an update whose version EXCEEDS the running image, so bump this above the running build for
-# an OTA target: make CHIP=bl602 BOARD=bl602dk AWSOTA=ON APP_BUILD=3
-APP_BUILD ?= 2
+# an OTA target: make CHIP=bl602 BOARD=bl602dk AWSOTA=ON APP_BUILD=2
+APP_BUILD ?= 1
+
+# Firmware version string stamped into the AWS image (printed + published in the telemetry `fw`
+# field); bump for an OTA target build, e.g. make ... AWSOTA=ON FW_VERSION=ota-B. Same flag as amebad.
+FW_VERSION ?= ota-A
 
 # CRT_BUNDLE: verify the TLS server cert against the embedded compressed Mozilla CA root bundle
 # (component/esp_crt_bundle_config, ~121 roots in ~56 KB .rodata) instead of a single pinned root.
@@ -167,6 +171,7 @@ $(BUILD_DIR)/CMakeCache.txt: CMakeLists.txt proj.conf
 	    -DAT_ENABLE_AWS=$(AWS) \
 	    -DAT_ENABLE_AWS_OTA=$(AWSOTA) \
 	    -DAWS_APP_BUILD=$(APP_BUILD) \
+	    -DAWS_FW_VERSION=$(FW_VERSION) \
 	    -DAT_ENABLE_CRT_BUNDLE=$(CRT_BUNDLE) \
 	    -DAT_ENABLE_NIMBLE=$(NIMBLE) \
 	    -DAT_ENABLE_MCUMGR=$(MCUMGR) \

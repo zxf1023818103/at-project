@@ -122,12 +122,72 @@ static BaseType_t cmd_echo( char *out, size_t outlen, const char *cmd )
     return pdFALSE;
 }
 
+/* dw/ew — portable memory dword peek/poke (was AmebaD-only, via its ROM shell handlers; now a
+ * generic volatile access so every platform's console has the same debug verbs). A bad address
+ * faults, as on any MCU shell. Local hex parser: the AmebaD KM0 (LP) image links no newlib
+ * strtoul (ROM libc), so keep this TU libc-free here. */
+static unsigned long mon_hex( const char *s )
+{
+    unsigned long v = 0;
+    if( ( s[ 0 ] == '0' ) && ( ( s[ 1 ] == 'x' ) || ( s[ 1 ] == 'X' ) ) )
+    {
+        s += 2;
+    }
+    for( ; ; s++ )
+    {
+        char c = *s;
+        if( ( c >= '0' ) && ( c <= '9' ) )      { v = ( v << 4 ) | ( unsigned long ) ( c - '0' ); }
+        else if( ( c >= 'a' ) && ( c <= 'f' ) ) { v = ( v << 4 ) | ( unsigned long ) ( c - 'a' + 10 ); }
+        else if( ( c >= 'A' ) && ( c <= 'F' ) ) { v = ( v << 4 ) | ( unsigned long ) ( c - 'A' + 10 ); }
+        else { break; }
+    }
+    return v;
+}
+
+static BaseType_t cmd_dw( char *out, size_t outlen, const char *cmd )
+{
+    BaseType_t plen = 0;
+    const char *p = FreeRTOS_CLIGetParameter( cmd, 1, &plen );
+    if( p == NULL )
+    {
+        snprintf( out, outlen, "usage: dw <hexaddr>\r\n" );
+        return pdFALSE;
+    }
+    {
+        unsigned long addr = mon_hex( p );
+        snprintf( out, outlen, "[0x%08lx] = 0x%08lx\r\n",
+                  addr, ( unsigned long ) *( volatile uint32_t * ) addr );
+    }
+    return pdFALSE;
+}
+
+static BaseType_t cmd_ew( char *out, size_t outlen, const char *cmd )
+{
+    BaseType_t plen = 0;
+    const char *pa = FreeRTOS_CLIGetParameter( cmd, 1, &plen );
+    const char *pv = FreeRTOS_CLIGetParameter( cmd, 2, &plen );
+    if( ( pa == NULL ) || ( pv == NULL ) )
+    {
+        snprintf( out, outlen, "usage: ew <hexaddr> <hexval>\r\n" );
+        return pdFALSE;
+    }
+    {
+        unsigned long addr = mon_hex( pa );
+        unsigned long val  = mon_hex( pv );
+        *( volatile uint32_t * ) addr = ( uint32_t ) val;
+        snprintf( out, outlen, "[0x%08lx] <- 0x%08lx\r\n", addr, val );
+    }
+    return pdFALSE;
+}
+
 static const CLI_Command_Definition_t kCmds[] = {
     { "version",   "version:\r\n print firmware / kernel version + this core\r\n",  cmd_version,   0 },
     { "heap",      "heap:\r\n print free / minimum-ever heap\r\n",                  cmd_heap,      0 },
     { "heapreset", "heapreset:\r\n reset the min-ever heap watermark (needs CONFIG_MM_ENABLE_MIN_FREE_TRACKING)\r\n", cmd_heapreset, 0 },
     { "tasks",     "tasks:\r\n list the FreeRTOS tasks\r\n",                        cmd_tasks,     0 },
     { "echo",      "echo <text>:\r\n echo the argument back\r\n",                   cmd_echo,      1 },
+    { "dw",        "dw <hexaddr>:\r\n dump a memory dword\r\n",                     cmd_dw,        -1 },
+    { "ew",        "ew <hexaddr> <hexval>:\r\n write a memory dword\r\n",           cmd_ew,        -1 },
 };
 
 /* ---- line processing + input loop ---------------------------------------- */

@@ -225,8 +225,8 @@ static BaseType_t run_rom_cmd( mon_cmd_fn fn, const char *cmd, char *out, size_t
     return pdFALSE;
 }
 
-static BaseType_t cmd_dw( char *o, size_t n, const char *c )    { return run_rom_cmd( cmd_dump_word,  c, o, n ); }
-static BaseType_t cmd_ew( char *o, size_t n, const char *c )    { return run_rom_cmd( cmd_write_word, c, o, n ); }
+/* dw/ew moved to the shared monitor (component/monitor_config/monitor.c) — portable volatile
+ * access, same verbs on every platform; the ROM cmd_dump_word/cmd_write_word delegation is gone. */
 static BaseType_t cmd_flash_( char *o, size_t n, const char *c ){ return run_rom_cmd( cmd_flash,      c, o, n ); }
 static BaseType_t cmd_efuse_( char *o, size_t n, const char *c ){ return run_rom_cmd( cmd_efuse,      c, o, n ); }
 
@@ -254,8 +254,6 @@ static BaseType_t cmd_sw_km4( char *out, size_t outlen, const char *cmd )    { (
 
 static const CLI_Command_Definition_t kAmebadCmds[] = {
     { "reboot",  "reboot [uartburn]:\r\n watchdog-reset this core (uartburn -> UART download mode)\r\n", cmd_reboot, -1 },
-    { "dw",      "dw <hexaddr>:\r\n dump a memory dword\r\n",                     cmd_dw,        -1 },
-    { "ew",      "ew <hexaddr> <hexval>:\r\n write a memory dword\r\n",           cmd_ew,        -1 },
     { "flashdbg", "flashdbg <erase|read|write|status|cache> ...:\r\n AmebaD raw flash debug ops (KM4). lock/unlock/status = the cross-platform `flash` command\r\n", cmd_flash_, -1 },
     { "efuse",   "efuse <wmap|rmap|wraw|rraw> ...:\r\n efuse ops (wmap/wraw BURN efuse)\r\n", cmd_efuse_, -1 },
     { ">>",      ">>:\r\n hand the console to the other core\r\n",                cmd_sw_toggle, 0 },

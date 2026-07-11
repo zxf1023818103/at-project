@@ -301,6 +301,12 @@ static void bflb_nimble_boot_task(void *arg) {
 // asserts. (Other Bouffalo chips: on_tcpip_init_done body is a no-op.)
 static void bflb_net_bootstrap_task(void *arg) {
     (void)arg;
+#ifndef AT_PROJECT_AWS
+    // Portable LittleFS self-test (component/littlefs_config/lfs_selftest.c) — the same boot
+    // write/read round-trip amebad runs. Post-scheduler here (LFS_THREADSAFE mutex); skipped in
+    // AWS images like amebad's MINIMAL skip (connect-and-run image, boot time + heap headroom).
+    { extern void lfs_selftest(void); lfs_selftest(); }
+#endif
     on_tcpip_init_done(NULL);
     vTaskDelete(NULL);
 }
