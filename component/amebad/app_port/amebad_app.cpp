@@ -167,14 +167,6 @@ static const char *wifi_sec_to_str( rtw_security_t sec )
     }
 }
 
-/* setenv only when the value changed, so the IP task does not rewrite KV/LFS every DHCP event. */
-static void env_set_if_changed( const char *name, const char *value )
-{
-    const char *cur = getenv( name );
-    if( cur == NULL || strcmp( cur, value ) != 0 )
-        setenv( name, value, 1 );
-}
-
 /* Extended-country scan mode (lib_wlan.a): when enabled the driver appends each AP's 2-byte beacon
  * 802.11d Country IE into the scan-result records, at offset 14 (right before the SSID). */
 extern void rltk_wlan_enable_scan_with_extended_countryinfo( int enable );

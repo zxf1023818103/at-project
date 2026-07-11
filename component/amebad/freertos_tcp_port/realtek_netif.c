@@ -56,13 +56,24 @@ extern unsigned int Rand( void );
 static BaseType_t prvGetRandom( uint32_t * out ) { *out = ( uint32_t ) Rand(); return pdTRUE; }
 
 /* Read a 6-byte MAC from the efuse logical map (efuse_logical_read is weak -> present on TF-M
- * AWS/STORAGE images); on plain images, or a blank field, fall back to the interface (WiFi) MAC. */
+ * AWS/STORAGE images); on plain images, or a blank field, fall back to the interface (WiFi) MAC.
+ * The read is guarded by the osdep efuse device mutex (weak too) so it can't race a concurrent
+ * driver efuse access -- same guard the old aws_platform.c aws_get_mac had. */
 static void prvEfuseMac( uint16_t addr, uint8_t mac[ 6 ] )
 {
-    extern int efuse_logical_read( uint16_t a, uint16_t size, uint8_t * pbuf ) __attribute__( ( weak ) );
-    if( ( efuse_logical_read != NULL ) && ( efuse_logical_read( addr, 6U, mac ) == 0 ) )
+    extern int  efuse_logical_read( uint16_t a, uint16_t size, uint8_t * pbuf ) __attribute__( ( weak ) );
+    extern void device_mutex_lock( uint32_t device ) __attribute__( ( weak ) );
+    extern void device_mutex_unlock( uint32_t device ) __attribute__( ( weak ) );
+    if( efuse_logical_read != NULL )
     {
-        return;
+        int ret;
+        if( device_mutex_lock != NULL ) { device_mutex_lock( 0U ); }    /* 0 = RT_DEV_LOCK_EFUSE */
+        ret = efuse_logical_read( addr, 6U, mac );
+        if( device_mutex_unlock != NULL ) { device_mutex_unlock( 0U ); }
+        if( ret == 0 )
+        {
+            return;
+        }
     }
     NetworkEndPoint_t * px = FreeRTOS_FirstEndPoint( NULL );
     if( px != NULL ) { ( void ) memcpy( mac, px->xMACAddress.ucBytes, 6 ); }

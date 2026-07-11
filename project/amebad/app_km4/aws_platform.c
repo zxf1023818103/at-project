@@ -29,35 +29,9 @@
 
 #include "aws_iot.h"
 
-/* efuse logical read (component/amebad/mbed/efuse_api.c, added to the AWS build) + the osdep device
- * lock guarding the efuse map. Declared here to avoid pulling the mbed/osdep header trees in. */
-extern int  efuse_logical_read(uint16_t addr, uint16_t size, uint8_t *pbuf);
-extern void device_mutex_lock(uint32_t device);
-extern void device_mutex_unlock(uint32_t device);
-#define DEV_LOCK_EFUSE   0u          /* RT_DEV_LOCK_EFUSE (osdep/device_lock.h) */
-#define EFUSE_BLE_MAC    0x190       /* logical efuse address of the 6-byte BT/BLE MAC */
-
-/* ------------------------------------------------------- MAC (Thing name) ---- */
-/* The shared AWS component's aws_get_mac() hook: the module BLE MAC as 12 lowercase hex + NUL. */
-int aws_get_mac(char *out, size_t out_len)
-{
-    uint8_t mac[6];
-    int     ret;
-
-    if (out == NULL || out_len < 13) return -1;
-    device_mutex_lock(DEV_LOCK_EFUSE);
-    ret = efuse_logical_read(EFUSE_BLE_MAC, sizeof(mac), mac);
-    device_mutex_unlock(DEV_LOCK_EFUSE);
-    if (ret != 0) return -2;
-
-    for (int i = 0; i < 6; i++) {
-        static const char hex[] = "0123456789abcdef";
-        out[i * 2]     = hex[(mac[i] >> 4) & 0xf];
-        out[i * 2 + 1] = hex[mac[i] & 0xf];
-    }
-    out[12] = '\0';
-    return 0;
-}
+/* aws_get_mac moved to the shared component/aws_iot_config/aws_mac.c (BT MAC via
+ * at_netif_bt_mac -> efuse 0x190 here, now device-mutex-guarded in realtek_netif.c) —
+ * one Thing-name identity on every platform. */
 
 /* ------------------------------------------------ `aws` platform sub-verbs ---- */
 /* Called by the shared aws_cli.c for an `aws <sub>` verb it doesn't handle. AmebaD adds `blemac`

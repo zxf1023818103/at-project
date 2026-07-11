@@ -374,16 +374,9 @@ void wifi_port_disconnect(void) {
 int wifi_port_sec_from_str(const char *s) { (void)s; return -1; }   // wifi4 auto-detects security
 const char *wifi_port_sec_to_str(int sec) { (void)sec; return ""; }
 
-// AWS IoT platform hook (component/aws_iot_config): the WiFi STA MAC is the Thing name / MQTT client
-// ID / telemetry topic. Fills "aabbccddeeff" + NUL (out_len must be >= 13). 0 = ok.
-int aws_get_mac(char *out, size_t out_len) {
-    uint8_t mac[6];
-    if (out == NULL || out_len < 13) return -1;
-    if (wifi_mgmr_sta_mac_get(mac) != 0) return -1;
-    snprintf(out, out_len, "%02x%02x%02x%02x%02x%02x",
-             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    return 0;
-}
+/* aws_get_mac moved to the shared component/aws_iot_config/aws_mac.c (BT MAC via
+ * at_netif_bt_mac) — one Thing-name identity on every platform. */
+
 }  // extern "C"
 #endif
 

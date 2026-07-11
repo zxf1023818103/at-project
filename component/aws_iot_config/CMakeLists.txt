@@ -15,6 +15,7 @@ add_library(aws_provision_core STATIC EXCLUDE_FROM_ALL
     aws_provision.c
     aws_cli.c
     aws_connect.c
+    aws_mac.c        # shared aws_get_mac (Thing name = BT MAC via at_netif_bt_mac)
 )
 target_include_directories(aws_provision_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(aws_provision_core PUBLIC FreeRTOS mbedtls_config freertos_cli)

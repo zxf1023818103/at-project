@@ -158,8 +158,8 @@ static void prvTelemetryTask(void *arg)
      * psa_crypto_init with PSA_ERROR_SERVICE_FAILURE (-144). Idempotent; harmless for the mbedTLS path. */
     mbedtls_platform_threading_init();
 
-    /* Thing name / client ID / topic = the WiFi MAC (aws_get_mac is the platform hook). */
-    if (aws_get_mac(s_mac, sizeof(s_mac)) != 0) strcpy(s_mac, "bl602unknown");
+    /* Thing name / client ID / topic = the BT MAC (shared aws_get_mac over at_netif_bt_mac). */
+    if (aws_get_mac(s_mac, sizeof(s_mac)) != 0) strcpy(s_mac, "unknown-mac");
     snprintf(s_topic, sizeof(s_topic), AWS_TOPIC_TELEMETRY_FMT, s_mac);   /* bw20/<mac>/telemetry */
 
     for (;;) {
