@@ -16,10 +16,6 @@ extern void amebad_nimble_coex_set_conn(int connected);
 extern void nimble_amebad_transport_start_rx(void);  /* transport_amebad.c: HCI RX task */
 extern void nimble_amebad_transport_stop_rx(void);
 extern void ble_store_lfs_init(void);                /* ble_store_lfs.c: LittleFS bond store */
-/* realtek_netif.c: the WiFi hostname ($HOSTNAME or "amebad_<BLE-MAC last 3>"). Reused as the
- * BLE device name so the chip shows one identity on WiFi (mDNS) and BLE. Declared here because
- * the upstream prototype is gated behind ipconfigDHCP_REGISTER_HOSTNAME (off). */
-extern const char *pcApplicationHostnameHook(void);
 
 void nimble_platform_controller_bringup(void)  { bt_dtm_bringup(); }
 void nimble_platform_coex_init(void)           { amebad_nimble_coex_init(); }
@@ -28,8 +24,6 @@ void nimble_platform_transport_start_rx(void)  { nimble_amebad_transport_start_r
 void nimble_platform_transport_stop_rx(void)   { nimble_amebad_transport_stop_rx(); }
 void nimble_platform_store_init(void)          { ble_store_lfs_init(); }
 
-const char *nimble_platform_device_name(void)
-{
-    const char *n = pcApplicationHostnameHook();
-    return (n != NULL && n[0] != '\0') ? n : "amebad-nimble";
-}
+/* nimble_platform_device_name is NOT overridden here: the shared weak default (nimble_app.c) already
+ * returns the network hostname via pcApplicationHostnameHook(), so BLE == DHCP/mDNS name on every
+ * platform. */

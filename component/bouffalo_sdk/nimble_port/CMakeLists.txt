@@ -133,9 +133,8 @@ target_link_libraries(nimble PUBLIC
     mbedtls_config
 )
 
-# The shared nimble_app.c's __weak nimble_platform_device_name() returns this when a
-# platform provides no override (Bouffalo has no platform hook file — the defaults fit).
-target_compile_definitions(nimble PRIVATE "NIMBLE_DEV_NAME=\"bflb-nimble\"")
+# The default BLE advert name comes from the shared nimble_app.c weak hook = the network hostname
+# (bl602_<mac> / HOSTNAME); NIMBLE_DEV_NAME stays the built-in "at-nimble" empty-hostname fallback.
 
 # Vendored upstream — silence its warnings (-w last overrides the global -Werror).
 target_compile_options(nimble PRIVATE -w)

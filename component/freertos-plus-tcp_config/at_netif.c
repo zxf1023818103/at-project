@@ -135,18 +135,18 @@ void at_netif_ipv6_init( void )
     NetworkInterface_t     * pxIf = at_netif_get();
     NetworkEndPoint_t      * pxIPv4;
     IPv6_Address_t           xLinkLocal, xLLPrefix, xGlobal, xGlobalPrefix, xGateway;
-    const uint8_t          * mac;
+    uint8_t                  mac[ 6 ];
 
     if( ( xDone != pdFALSE ) || ( pxIf == NULL ) )
     {
         return;
     }
-    pxIPv4 = FreeRTOS_FirstEndPoint( pxIf );   /* the IPv4 endpoint carries our MAC */
+    pxIPv4 = FreeRTOS_FirstEndPoint( pxIf );   /* require the IPv4 endpoint (interface is up) */
     if( pxIPv4 == NULL )
     {
         return;
     }
-    mac = pxIPv4->xMACAddress.ucBytes;
+    at_netif_wifi_mac( mac );   /* WiFi MAC -> EUI-64 link-local (== the interface L2 MAC) */
 
     ( void ) memset( xLinkLocal.ucBytes, 0, ipSIZE_OF_IPv6_ADDRESS );
     xLinkLocal.ucBytes[ 0 ]  = 0xfeU;
@@ -240,10 +240,10 @@ uint32_t ulApplicationGetNextSequenceNumber( uint32_t ulSourceAddress, uint16_t 
 
 /* Shared fallback-hostname resolver (every platform's prvHostname wraps this). Returns the
  * HOSTNAME env override if set (pre-seeded via lfs.bin KV/HOSTNAME or `env set HOSTNAME ...`),
- * else "<platform_name>_<mac[3]><mac[4]><mac[5]>" formatted once into a static buffer. mac_get
- * fills mac[6] and is invoked at most once (only to build the default), so a platform may use an
- * expensive source (e.g. AmebaD efuse-over-TF-M) without paying it on every mDNS query. */
-const char * at_netif_hostname( const char * platform_name, void ( * mac_get )( uint8_t mac[ 6 ] ) )
+ * else "<platform_name>_<mac[3]><mac[4]><mac[5]>" from the Bluetooth MAC, formatted once into a
+ * static buffer (at_netif_bt_mac is read at most once, so an expensive source -- e.g. AmebaD
+ * efuse-over-TF-M -- isn't paid on every mDNS query). */
+const char * at_netif_hostname( void )
 {
     static char dflt[ 32 ] = { 0 };
     static char host[ 32 ];
@@ -252,12 +252,9 @@ const char * at_netif_hostname( const char * platform_name, void ( * mac_get )( 
     if( dflt[ 0 ] == '\0' )
     {
         uint8_t mac[ 6 ] = { 0 };
-        if( mac_get != NULL )
-        {
-            mac_get( mac );
-        }
+        at_netif_bt_mac( mac );
         ( void ) snprintf( dflt, sizeof( dflt ), "%s_%02x%02x%02x",
-                           platform_name, mac[ 3 ], mac[ 4 ], mac[ 5 ] );
+                           at_netif_platform_name(), mac[ 3 ], mac[ 4 ], mac[ 5 ] );
     }
 
     env = getenv( "HOSTNAME" );

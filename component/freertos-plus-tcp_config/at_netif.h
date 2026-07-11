@@ -47,9 +47,22 @@ typedef struct
 /* Register the platform ops (call once, before at_netif_bringup). */
 void at_netif_set_ops( const at_netif_ops_t * ops );
 
-/* Shared fallback hostname for a platform's ops.hostname: HOSTNAME env override if set, else
- * "<platform_name>_<mac[3..5]>". mac_get fills mac[6], called at most once (builds the default). */
-const char * at_netif_hostname( const char * platform_name, void ( * mac_get )( uint8_t mac[ 6 ] ) );
+/* Read the module's WiFi / Bluetooth MAC into mac[6]. Implemented per platform in the matching
+ * freertos_tcp_port (bl602/bl616: WiFi = driver STA MAC, BT = mfg/efuse MAC; amebad: efuse 0x11A
+ * WiFi / 0x190 BT, with an interface-MAC fallback). The WiFi MAC drives the IPv6 link-local EUI-64;
+ * the BT MAC drives the default hostname (and, via it, the default BLE advert name). On Bouffalo
+ * WiFi + BT share one efuse MAC field, so the two return the same value there. */
+void at_netif_wifi_mac( uint8_t mac[ 6 ] );
+void at_netif_bt_mac( uint8_t mac[ 6 ] );
+
+/* Short platform tag for the default hostname ("bl602" / "bl616" / "amebad"). Per-platform in the
+ * matching freertos_tcp_port. */
+const char * at_netif_platform_name( void );
+
+/* The device hostname: HOSTNAME env override if set, else "<platform>_<bt-mac[3..5]>" (built once,
+ * cached). Self-contained -- reads at_netif_platform_name() + at_netif_bt_mac(), no ops / network
+ * needed -- so it is safe to call from the WiFi hostname hook AND early from BLE (advert name). */
+const char * at_netif_hostname( void );
 
 /* Fill + register the STA interface descriptor (shared prv* over the ops). Stores it
  * for RX tagging; returns the interface. idx = WLAN VIF index (0 = STA). */

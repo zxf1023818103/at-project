@@ -38,8 +38,14 @@ extern void smp_img_ota_init(void);    /* app_km4/smp_img_ota.c: register img + 
 #endif
 
 #ifndef NIMBLE_DEV_NAME
-#define NIMBLE_DEV_NAME   "at-nimble"   /* per-platform -DNIMBLE_DEV_NAME overrides this default */
+#define NIMBLE_DEV_NAME   "at-nimble"   /* fallback only, if the hostname is somehow empty */
 #endif
+
+/* The default BLE advert name is the device hostname (bt-mac-derived "<chip>_<mac>" or the HOSTNAME
+ * override), so BLE, DHCP and mDNS all present the same identity. at_netif_hostname() is self-
+ * contained (component/freertos-plus-tcp_config/at_netif.c) -- no ops/network needed -- so it is
+ * safe here even though BLE can come up before the WiFi netif is registered. */
+extern const char *at_netif_hostname(void);
 
 /* ===== Platform hooks — __weak defaults; a platform's nimble_port overrides ===== */
 __attribute__((weak)) void nimble_platform_controller_bringup(void) { }
@@ -48,7 +54,11 @@ __attribute__((weak)) void nimble_platform_coex_set_conn(int connected) { (void)
 __attribute__((weak)) void nimble_platform_transport_start_rx(void) { }
 __attribute__((weak)) void nimble_platform_transport_stop_rx(void) { }
 __attribute__((weak)) void nimble_platform_store_init(void) { ble_store_ram_init(); }
-__attribute__((weak)) const char *nimble_platform_device_name(void) { return NIMBLE_DEV_NAME; }
+__attribute__((weak)) const char *nimble_platform_device_name(void)
+{
+    const char *n = at_netif_hostname();
+    return (n != NULL && n[0] != '\0') ? n : NIMBLE_DEV_NAME;
+}
 
 /* Sample 128-bit service 0x59462f12-9543-9999-12c8-58b459a2712d with one
  * read/write characteristic (...2d -> ...2e). */

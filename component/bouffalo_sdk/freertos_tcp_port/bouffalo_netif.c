@@ -145,18 +145,21 @@ static BaseType_t prvTx( const uint8_t * frame, uint16_t len )
 }
 
 static BaseType_t prvLinkUp( void )     { return ( wifi_mgmr_sta_state_get() != 0 ) ? pdTRUE : pdFALSE; }
-static void prvMacGet( uint8_t mac[ 6 ] ) { ( void ) platform_get_mac( WL80211_VIF_STA, mac ); }
+
+/* WiFi STA MAC (efuse-backed, loaded by the driver) -> netif endpoint + IPv6 link-local EUI-64. */
+void at_netif_wifi_mac( uint8_t mac[ 6 ] ) { ( void ) platform_get_mac( WL80211_VIF_STA, mac ); }
 
 static BaseType_t prvGetRandom( uint32_t * out )
 {
     return ( bflb_trng_readlen( ( uint8_t * ) out, sizeof( *out ) ) == 0 ) ? pdTRUE : pdFALSE;
 }
 
-/* BT MAC (== the BLE BD_ADDR basis, matching amebad's efuse 0x190): mfg_media_read_macaddr_with_lock
- * is the raw efuse/mfg MAC the Bouffalo BT controller loads as its public address (WiFi + BT share
- * this one efuse field). It lives in the std lib (always linked, no BLE image needed); on a
- * blank-MAC board it returns non-zero and we fall back to the WiFi STA MAC. */
-static void prvHostMac( uint8_t mac[ 6 ] )
+/* Bluetooth MAC (== the BLE BD_ADDR basis, matching amebad's efuse 0x190) -> default hostname +
+ * BLE advert name. mfg_media_read_macaddr_with_lock is the raw efuse/mfg MAC the Bouffalo BT
+ * controller loads as its public address (WiFi + BT share this one efuse field). It lives in the
+ * std lib (always linked, no BLE image needed); on a blank-MAC board it returns non-zero and we
+ * fall back to the WiFi STA MAC. */
+void at_netif_bt_mac( uint8_t mac[ 6 ] )
 {
     extern int mfg_media_read_macaddr_with_lock( uint8_t m[ 6 ], uint8_t reload );
     if( mfg_media_read_macaddr_with_lock( mac, 1 ) != 0 )
@@ -165,9 +168,11 @@ static void prvHostMac( uint8_t mac[ 6 ] )
     }
 }
 
+const char * at_netif_platform_name( void ) { return "bl616"; }
+
 static const char * prvHostname( void )
 {
-    return at_netif_hostname( "bl616", prvHostMac );   /* HOSTNAME override else bl616_<mac> */
+    return at_netif_hostname();   /* HOSTNAME override else bl616_<bt-mac> */
 }
 
 static const at_netif_ops_t bouffalo_ops =
@@ -175,14 +180,11 @@ static const at_netif_ops_t bouffalo_ops =
     .tx         = prvTx,
     .link_up    = prvLinkUp,
     .running    = NULL,
-    .mac_get    = prvMacGet,
+    .mac_get    = at_netif_wifi_mac,
     .get_random = prvGetRandom,
     .hostname   = prvHostname,
     .on_got_ip  = NULL,
 };
-
-/* Read the STA MAC (kept: some callers use it by name). Returns 0 on success. */
-int bouffalo_wlan_get_mac( uint8_t mac[ 6 ] ) { return platform_get_mac( WL80211_VIF_STA, mac ); }
 
 /* ===== app-facing API (unchanged names) ==================================== */
 void bouffalo_freertos_tcp_set_ready( void ) { at_netif_set_ready(); }

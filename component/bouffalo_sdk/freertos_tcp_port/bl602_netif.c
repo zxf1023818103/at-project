@@ -48,21 +48,18 @@ static BaseType_t prvLinkUp( void )
     return ( ( state == 0x03 ) || ( state == 0x04 ) ) ? pdTRUE : pdFALSE;
 }
 
-static void prvMacGet( uint8_t mac[ 6 ] )
+/* WiFi STA MAC (efuse-backed, loaded by the driver) -> netif endpoint + IPv6 link-local EUI-64. */
+void at_netif_wifi_mac( uint8_t mac[ 6 ] )
 {
     ( void ) wifi_mgmr_sta_mac_get( mac );
 }
 
-static BaseType_t prvGetRandom( uint32_t * out )
-{
-    return ( bflb_trng_readlen( ( uint8_t * ) out, sizeof( *out ) ) == 0 ) ? pdTRUE : pdFALSE;
-}
-
-/* BT MAC (== the BLE BD_ADDR basis, matching amebad's efuse 0x190): mfg_media_read_macaddr_with_lock
- * is the raw efuse/mfg MAC the Bouffalo BT controller loads as its public address (WiFi + BT share
- * this one efuse field). It lives in the std lib (always linked, no BLE image needed); on a
- * blank-MAC board it returns non-zero and we fall back to the WiFi STA MAC. */
-static void prvHostMac( uint8_t mac[ 6 ] )
+/* Bluetooth MAC (== the BLE BD_ADDR basis, matching amebad's efuse 0x190) -> default hostname +
+ * BLE advert name. mfg_media_read_macaddr_with_lock is the raw efuse/mfg MAC the Bouffalo BT
+ * controller loads as its public address (WiFi + BT share this one efuse field). It lives in the
+ * std lib (always linked, no BLE image needed); on a blank-MAC board it returns non-zero and we
+ * fall back to the WiFi STA MAC. */
+void at_netif_bt_mac( uint8_t mac[ 6 ] )
 {
     extern int mfg_media_read_macaddr_with_lock( uint8_t m[ 6 ], uint8_t reload );
     if( mfg_media_read_macaddr_with_lock( mac, 1 ) != 0 )
@@ -71,9 +68,16 @@ static void prvHostMac( uint8_t mac[ 6 ] )
     }
 }
 
+static BaseType_t prvGetRandom( uint32_t * out )
+{
+    return ( bflb_trng_readlen( ( uint8_t * ) out, sizeof( *out ) ) == 0 ) ? pdTRUE : pdFALSE;
+}
+
+const char * at_netif_platform_name( void ) { return "bl602"; }
+
 static const char * prvHostname( void )
 {
-    return at_netif_hostname( "bl602", prvHostMac );   /* HOSTNAME override else bl602_<mac> */
+    return at_netif_hostname();   /* HOSTNAME override else bl602_<bt-mac> */
 }
 
 static void prvOnGotIP( uint32_t ulIP )
@@ -91,7 +95,7 @@ static const at_netif_ops_t bl602_ops =
     .tx         = prvTx,
     .link_up    = prvLinkUp,
     .running    = NULL,           /* driver up before the IP task -> always initialised */
-    .mac_get    = prvMacGet,
+    .mac_get    = at_netif_wifi_mac,
     .get_random = prvGetRandom,
     .hostname   = prvHostname,
     .on_got_ip  = prvOnGotIP,
