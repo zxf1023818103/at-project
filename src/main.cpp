@@ -88,16 +88,23 @@ static void event_cb_wifi_event(platform_event_t *event, void *code2) {
 extern void wifi_main(void *param);
 
 static int hal_wifi_start_firmware_task(void) {
-    /* enable wifi clock */
-    GLB_PER_Clock_UnGate(GLB_AHB_CLOCK_IP_WIFI_PHY | GLB_AHB_CLOCK_IP_WIFI_MAC_PHY | GLB_AHB_CLOCK_IP_WIFI_PLATFORM);
-    GLB_AHB_MCU_Software_Reset(GLB_AHB_MCU_SW_WIFI);
+    /* WiFi clock ungate + WiFi AHB reset were already done once in board_init (board.c
+     * system_clock_init, CONFIG_WIFI6). */
 
     /* Enable wifi irq */
     extern void interrupt0_handler(void);
     bflb_irq_attach(WIFI_IRQn, (irq_callback)interrupt0_handler, NULL);
     bflb_irq_enable(WIFI_IRQn);
 
-    xTaskCreate(wifi_main, (char *)"fw", WIFI_STACK_SIZE, NULL, TASK_PRIORITY_FW, NULL);
+    /* Create the macsw firmware task via the SDK's own wifi_task_create() (macsw_plat.c) rather than a
+     * bare xTaskCreate(wifi_main, ...). wifi_task_create() stores the handle in macsw's private
+     * `wifi_task_handle`, which the WiFi ISR path uses (wifi_task_resume -> vTaskNotifyGiveFromISR) to
+     * wake wifi_main. A hand-rolled xTaskCreate leaves that handle NULL, so the MAC-hardware IRQ can
+     * never wake the FW task -> its MAC bring-up blocks forever (macsw prints "features/mode/dma" then
+     * stalls; the whole device idles) and every later wifi_mgmr kmsg hits a NULL command queue. It also
+     * uses the correct macsw priority (27) and stack (1324). */
+    extern void wifi_task_create(void);
+    wifi_task_create();
 
     return 0;
 }
@@ -107,6 +114,18 @@ static int hal_wifi_start_firmware_task(void) {
 // FreeRTOS-Plus-TCP bring-up (component/bouffalo_sdk/freertos_tcp_port): register the
 // STA interface + DHCP endpoint + start the IP task. Called once the WiFi driver is up.
 extern "C" void bouffalo_tcp_bringup(void);
+
+// wl80211's app-facing event fan-out (component/bouffalo_sdk/wl80211/wifi_mgmr.c:240). No public
+// prototype in wifi_mgmr.h; the callback takes (int,int). We register bl616_wifi_event_cb, which
+// widens to the shared wifi_event_handler(uint32_t,uint32_t) -- the wl80211 analog of bl602's
+// platform_register_event(EV_WIFI, event_cb_wifi_event) at app_platform_boot_init.
+extern "C" int wl80211_register_wifi_event(void (*cb)(int code, int value));
+static void bl616_scan_done(void);            // wakes wifi_port_scan  (CODE_WIFI_ON_SCAN_DONE)
+static void bl616_conn_event(int connected);  // wakes wifi_port_connect (CODE_WIFI_ON_CONNECTED/_DISCONNECT)
+static void bl616_wifi_event_cb(int code, int value) {
+    void wifi_event_handler(uint32_t code, uint32_t code2);   // defined below
+    wifi_event_handler((uint32_t) code, (uint32_t) value);
+}
 #endif // defined BL616 || defined BL616CL
 
 #if defined BL602 || defined BL702
@@ -129,8 +148,18 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
             wifi_mgmr_start_background(&conf);
 #endif // defined BL602 || defined BL702
 #if defined BL606P || defined BL808 || defined BL616 || defined BL616CL
-            wifi_mgmr_init();
-            wifi_mgmr_set_country_code((char *)((cc != NULL) ? cc : "CN"));
+            // wl80211: wifi_mgmr_init() is the bootstrap that FIRES this INIT_DONE (it self-dispatches
+            // INIT_DONE then MGMR_DONE synchronously), so it is called from on_tcpip_init_done(), NOT
+            // here -- calling it here would recurse.
+            //
+            // Do NOT call wifi_mgmr_set_country_code() here: on wl80211 it round-trips a kmsg to the MAC
+            // firmware (wl80211_set_country_code -> macif_kmsg_call -> ke_msg_alloc -> xQueueSemaphoreTake),
+            // whose message-queue semaphore is not created until the WiFi FW task (hal_wifi_start_firmware_
+            // task) is up -- at INIT_DONE it is still NULL, so the take hits configASSERT(pxQueue) -> abort
+            // and kills the bootstrap task before MGMR_DONE. The regulatory domain is already seeded from
+            // efuse via rfparam_init ("country_code = CN"); the WIFI_COUNTRY override is applied later, from
+            // wifi_port_scan() (below), where the MAC is guaranteed ready. cc is cached there.
+            (void)cc;
 #endif // defined BL606P || defined BL808 || defined BL616 || defined BL616CL
             break;
         }
@@ -142,6 +171,11 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
             // waits on phy-link (wifi_mgmr_sta_state_get) before sending DHCP, so it
             // is safe to init before association.
             bouffalo_tcp_bringup();
+            // Start the shared WiFi provisioning + reconnect service (same as bl602/amebad): it runs in
+            // its own task (a blocking connect must not run here) reading WIFI_SSID/WIFI_PASSWORD from
+            // env and driving the bl616 wifi_port_* HAL below. bouffalo_tcp_bringup() started the IP task
+            // synchronously; wifi_service_start() only xTaskCreate's -- its first connect runs later.
+            wifi_service_start();
 #endif // defined BL616 || defined BL616CL
 #if defined BL602 || defined BL702
             // Start the shared WiFi provisioning + reconnect service (component/wifi_service_config).
@@ -155,6 +189,9 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
         }
         case CODE_WIFI_ON_SCAN_DONE: {
             printf("[APP] [EVT] %s, CODE_WIFI_ON_SCAN_DONE\n", __func__);
+#if defined BL616 || defined BL616CL
+            bl616_scan_done();   // wake wifi_port_scan: results are ready
+#endif
             break;
         }
         case CODE_WIFI_ON_CONNECTING: {
@@ -165,6 +202,10 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
             printf("[APP] [EVT] %s, CODE_WIFI_ON_CONNECTED\n", __func__);
 #if defined BL602 || defined BL702
             bl602_conn_event(1);   // wake wifi_port_connect: association succeeded
+            wifi_service_on_event(WIFI_SVC_EV_CONNECTED);
+#endif
+#if defined BL616 || defined BL616CL
+            bl616_conn_event(1);   // wake wifi_port_connect: association succeeded
             wifi_service_on_event(WIFI_SVC_EV_CONNECTED);
 #endif
             break;
@@ -184,6 +225,10 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
 #if defined BL602 || defined BL702
             bl602_conn_event(0);   // wake wifi_port_connect: association failed/dropped
             wifi_service_on_event(WIFI_SVC_EV_DISCONNECT);
+#endif
+#if defined BL616 || defined BL616CL
+            bl616_conn_event(0);   // wake wifi_port_connect: association failed/dropped
+            wifi_service_on_event(WIFI_SVC_EV_DISCONNECT);   // tell wsvc to re-associate
 #endif
             break;
         }
@@ -209,13 +254,16 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
     }
 }
 
-#if defined BL602 || defined BL702
+#if defined BL602 || defined BL702 || defined BL616 || defined BL616CL
 /* Network-up trigger, unified with AmebaD: the FreeRTOS+TCP IP task fires eNetworkUp when DHCP
- * completes (bl602_tcp_bringup -> at_netif_bringup -> FreeRTOS_IPInit_Multi). This is now the single
- * network-up cue on both platforms -- it replaces the SDK's CODE_WIFI_ON_GOT_IP -> app_on_network_up().
+ * completes (bl602_tcp_bringup / bouffalo_tcp_bringup -> at_netif_bringup -> FreeRTOS_IPInit_Multi).
+ * This is the single network-up cue -- it replaces the SDK's CODE_WIFI_ON_GOT_IP -> app_on_network_up().
+ * The shared weak hook (at_netif.c) only prints; it does NOT call at_netif_on_network_up(), so bl616
+ * needs this strong override too. On bl616 at_netif_signal_got_ip() is a safe no-op (bouffalo_ops.on_got_ip
+ * is NULL, guarded in at_netif.c) -- wl80211 uses use_dhcp=0 so the driver never waits on its own got-IP.
  * The IPv6 link-local endpoint + the DHCP give-up fallback both fire this with a 0.0.0.0 lease, and the
  * IPv6 global (SLAAC) endpoint re-fires it once up, so guard on a non-zero lease and dedup per up/down. */
-extern void at_netif_signal_got_ip( uint32_t );   /* drive bl602 wifi_mgmr out of ipObtaining */
+extern void at_netif_signal_got_ip( uint32_t );   /* drive bl602 wifi_mgmr out of ipObtaining (no-op on bl616) */
 extern void at_netif_on_network_up( void );        /* shared network-up body (component/freertos-plus-tcp_config) */
 extern void at_netif_on_network_down( void );
 void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
@@ -260,6 +308,23 @@ static void on_tcpip_init_done(void *arg) {
     // nothing processes and block forever on the event-group ACK.
     wifi_task_create();
 #endif // defined BL602 || defined BL702
+#if defined BL616 || defined BL616CL
+    // wl80211 bootstrap: wifi_mgmr_init() registers wl80211's internal handler and SYNCHRONOUSLY
+    // fans out CODE_WIFI_ON_INIT_DONE then CODE_WIFI_ON_MGMR_DONE to the app handler (already
+    // registered in app_platform_boot_init via wl80211_register_wifi_event).
+    //
+    // ★ wl80211_init() FIRST: it is the wl80211 driver-core init (initializes wl80211_glb -- the
+    // scan_ops STAILQ, the command environment, etc.). The SDK's macsw/wl80211 bring-up is
+    // wifi_task_create() -> wl80211_init() -> wifi_mgmr_init() (examples/wifi/macsw_bare/main.c). We
+    // create wifi_main in hal_wifi_start_firmware_task (pre-scheduler); wifi_main is prio 27 so it runs
+    // its me_init/mm_init and reaches its idle loop before this lower-prio net_boot task gets here, so
+    // no delay is needed. Without wl80211_init the first scan stores into an un-STAILQ_INIT'd list head
+    // -> Store access fault at 0x0 (wl80211_mac_do_scan). It is not referenced elsewhere, so it is only
+    // pulled from the prebuilt libwl80211 .a because of this call.
+    extern void wl80211_init(void);
+    wl80211_init();
+    wifi_mgmr_init();
+#endif // defined BL616 || defined BL616CL
 }
 
 #if defined(AT_PROJECT_NIMBLE)
@@ -361,6 +426,107 @@ const char *wifi_port_sec_to_str(int sec) { (void)sec; return ""; }
 }  // extern "C"
 #endif
 
+// ===================================================================================
+// bl616 WiFi HAL (wifi_port.h): the wl80211 mechanics behind the shared wifi_service policy.
+// Mirrors the bl602 block above, but over wl80211's params-struct API -- which is source-incompatible
+// with wifi4 (wifi_mgmr_sta_connect takes ONE struct; there is no wifi_mgmr_sta_enable, the STA MAC
+// comes from efuse via platform_get_mac). Scan/connect are async: the driver's CODE_WIFI_ON_* events
+// (routed through bl616_wifi_event_cb -> wifi_event_handler) wake these blocking calls, which run in
+// the wifi_service task. Notify-before-wait is race-safe (xTaskNotifyGive latches).
+// ===================================================================================
+#if defined BL616 || defined BL616CL
+
+static TaskHandle_t s_bl616_scan_waiter;
+static void bl616_scan_done(void) {
+    TaskHandle_t t = s_bl616_scan_waiter;
+    if (t) { s_bl616_scan_waiter = NULL; xTaskNotifyGive(t); }
+}
+static TaskHandle_t s_bl616_conn_waiter;
+static volatile int s_bl616_conn_ok;
+static void bl616_conn_event(int connected) {
+    TaskHandle_t t = s_bl616_conn_waiter;
+    if (t) { s_bl616_conn_ok = connected; s_bl616_conn_waiter = NULL; xTaskNotifyGive(t); }
+}
+
+/* wifi_mgmr_scan_ap_all() calls this for each AP in the result tree; take the channel of the first
+ * exact-SSID match. */
+struct bl616_scan_ctx { const char *ssid; int found; uint8_t chan; };
+static void bl616_scan_match_cb(void *env, void *arg, wifi_mgmr_scan_item_t *it) {
+    (void)arg;
+    struct bl616_scan_ctx *c = (struct bl616_scan_ctx *)env;
+    if (!c->found && it->ssid_len == (int)strlen(c->ssid) &&
+        memcmp(c->ssid, it->ssid, (size_t)it->ssid_len) == 0) {
+        c->found = 1;
+        c->chan  = it->channel;
+    }
+}
+
+extern "C" {
+
+unsigned wifi_port_task_stack_words(void) { return 1536; }   // wl80211 connect drives the supplicant
+
+int wifi_port_enable(void) {
+    return 0;   // no wifi_mgmr_sta_enable on wl80211; the STA MAC is read from efuse (platform_get_mac)
+}
+
+void wifi_port_autoreconnect_disable(void) {
+    wifi_mgmr_sta_autoconnect_disable();   // wifi_service is the single reconnect authority
+}
+
+int wifi_port_scan(const char *ssid, uint8_t *chan, int *sec) {
+    // Regulatory domain, deferred from CODE_WIFI_ON_INIT_DONE (where the MAC kmsg queue is still NULL ->
+    // configASSERT abort). wsvc only reaches here after MGMR_DONE + the WiFi FW task is up, so the MAC is
+    // ready for wifi_mgmr_set_country_code's kmsg round-trip. Apply the persisted WIFI_COUNTRY override
+    // once; "CN" (already seeded from efuse by rfparam_init) is the fallback.
+    static bool s_cc_set = false;
+    if (!s_cc_set) {
+        s_cc_set = true;
+        const char *cc = getenv("WIFI_COUNTRY");
+        if (!dot11d_cc_valid(cc)) cc = NULL;
+        wifi_mgmr_set_country_code((char *)((cc != NULL) ? cc : "CN"));
+    }
+    wifi_mgmr_scan_params_t p;
+    memset(&p, 0, sizeof(p));
+    size_t n = strlen(ssid);
+    if (n > MGMR_SSID_LEN) n = MGMR_SSID_LEN;
+    p.ssid_length = (uint8_t)n;
+    memcpy(p.ssid_array, ssid, n);          // directed active scan (passive stays 0)
+    s_bl616_scan_waiter = xTaskGetCurrentTaskHandle();
+    if (wifi_mgmr_sta_scan(&p) != 0) { s_bl616_scan_waiter = NULL; return -1; }
+    (void)ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(4000));   // woken by CODE_WIFI_ON_SCAN_DONE
+    struct bl616_scan_ctx ctx = { ssid, 0, 0 };
+    wifi_mgmr_scan_ap_all(&ctx, NULL, bl616_scan_match_cb);
+    if (!ctx.found) return -1;              // SSID not present
+    if (chan) *chan = ctx.chan;
+    if (sec)  *sec  = -1;                   // wl80211 derives security from the beacon (no cache)
+    return 0;
+}
+
+int wifi_port_connect(const char *ssid, const char *pass, uint8_t chan, int sec) {
+    (void)chan; (void)sec;                  // freq1=0 -> driver does its own directed scan+connect;
+                                            // security is beacon-derived
+    wifi_mgmr_sta_connect_params_t cp;
+    memset(&cp, 0, sizeof(cp));
+    strncpy(cp.ssid, ssid, MGMR_SSID_LEN);
+    strncpy(cp.key, pass ? pass : "", MGMR_KEY_LEN);
+    cp.use_dhcp = 0;   // *** LOAD-BEARING: FreeRTOS+TCP owns DHCP. use_dhcp=1 arms a ~15s driver
+                       // dhcp_ip_timeout that self-disconnects -- the wl80211 analog of bl602's got-IP fix.
+    cp.pmf_cfg  = 1;   // PMF-capable (WPA2/WPA3 interop)
+    s_bl616_conn_ok = 0;
+    s_bl616_conn_waiter = xTaskGetCurrentTaskHandle();
+    if (wifi_mgmr_sta_connect(&cp) != 0) { s_bl616_conn_waiter = NULL; return -1; }   // request rejected
+    if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(12000)) == 0) { s_bl616_conn_waiter = NULL; return -1; }
+    return s_bl616_conn_ok ? 0 : -1;        // set by CODE_WIFI_ON_CONNECTED / _DISCONNECT
+}
+
+void wifi_port_disconnect(void) { wifi_mgmr_sta_disconnect(); }
+
+int          wifi_port_sec_from_str(const char *s) { (void)s;   return -1; }
+const char * wifi_port_sec_to_str(int sec)         { (void)sec; return ""; }
+
+}  // extern "C"
+#endif // defined BL616 || defined BL616CL
+
 /* ---- shared-startup platform seams: strong overrides for the Bouffalo platform -------------------
  * Strong overrides of the weak no-ops below. We're inside the outer `extern "C"` block, so these keep
  * C linkage and override the weak C symbols. app_console_start() calls the first; app_on_network_up()
@@ -389,10 +555,14 @@ void app_console_register_platform(void)
     // (WiFi-connect only, like amebad). Everything else keeps it.
     iperf_cli_register();               // iperf [server|tx|udp] throughput test
 #endif
-#if defined BL602 || defined BL702
-    // The shared wifi_service `wifi` (forget/drop) + minimal AWS IoT telemetry (`aws`): only BL602/BL702
-    // supply the wifi_port_* HAL / fit the telemetry heap. Same libraries + credential model as AmebaD.
+#if defined BL602 || defined BL702 || defined BL616 || defined BL616CL
+    // The shared wifi_service `wifi` (forget/drop/status): every platform with a wifi_port_* HAL
+    // (bl602/bl616/amebad) registers it.
     { extern void wifi_cli_register(void); wifi_cli_register(); }
+#endif
+#if defined BL602 || defined BL702
+    // Minimal AWS IoT telemetry (`aws`): bl602/bl702 only (fits the telemetry heap; same credential
+    // model as AmebaD).
 #ifdef AT_PROJECT_AWS
     { extern void aws_cli_register(void); aws_cli_register(); }
 #endif
@@ -441,8 +611,15 @@ void app_platform_boot_init(void)
     // cross-platform helper (component/flash_cli_config, over board_flash_protect
     // in bouffalo_sdk/board_flash_port) replaces the old at::lockFirmwareFlash;
     // board_flash_log_status() prints the resulting lock state at boot.
+#if !defined(BL616) && !defined(BL616CL)
     board_flash_lock_fw();
-    board_flash_log_status();
+#endif
+    // BL616/BL616CL: skip the boot-time WRITE lock -- keep the firmware region unlocked for now
+    // (no re-lock -> no dependence on the eflash-loader clearing protection at reflash). The SR
+    // read/write path itself IS now XIP-quiesced (board_flash_bl602.c), so an un-quiesced raw
+    // WRSR/RDSR no longer races the XIP continuous-read here -- that race previously hung the boot
+    // in Clock_Peripheral_Clock_Get and left a CMP-inverted, brick-for-reflash status register.
+    board_flash_log_status();   // SR1/SR2 diag print (read path is XIP-quiesced on every chip)
 #if defined BL606P || defined BL808 || defined BL616 || defined BL616CL
     hal_wifi_start_firmware_task();
 #endif // defined BL606P || defined BL808 || defined BL616 || defined BL616CL
@@ -451,6 +628,12 @@ void app_platform_boot_init(void)
     // wifi_mgmr also registers its internal handler; platform_post_event fans out to both.
     platform_register_event(EV_WIFI, event_cb_wifi_event, NULL);
 #endif // defined BL602 || defined BL702
+#if defined BL616 || defined BL616CL
+    // wl80211 analog: register the app handler with wl80211's fan-out BEFORE wifi_mgmr_init()
+    // (called from on_tcpip_init_done) dispatches INIT_DONE/MGMR_DONE. wifi_mgmr_init also registers
+    // its own internal handler; wl80211_dispatch_wifi fans out to both (max 3 callbacks).
+    wl80211_register_wifi_event(bl616_wifi_event_cb);
+#endif // defined BL616 || defined BL616CL
     if (0 != rfparam_init(0, NULL, 0))
         printf("rfparam_init() failed\n");   // non-fatal: keep booting so the console still comes up
     bflb_mtd_init();

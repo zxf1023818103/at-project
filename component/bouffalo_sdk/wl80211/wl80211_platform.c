@@ -146,14 +146,23 @@ void rtos_mutex_delete(rtos_mutex mutex)
     vSemaphoreDelete(mutex);
 }
 
+/* The prebuilt macsw calls rtos_mutex_lock(NULL)/rtos_mutex_unlock(NULL) as its "no lock needed"
+ * convention (e.g. macif_kmsg_call_t issues a hard `rtos_mutex_lock(NULL)` on every MAC command).
+ * A bare xSemaphoreTake(NULL) hits configASSERT(pxQueue) -> abort, which killed the wsvc task on the
+ * first wifi_mgmr op (scan / set_country_code) -> WiFi never associated. Treat a NULL handle as a no-op
+ * so the macsw's optional-lock convention works. */
 void rtos_mutex_lock(rtos_mutex mutex)
 {
-    xSemaphoreTake(mutex, portMAX_DELAY);
+    if (mutex) {
+        xSemaphoreTake(mutex, portMAX_DELAY);
+    }
 }
 
 void rtos_mutex_unlock(rtos_mutex mutex)
 {
-    xSemaphoreGive(mutex);
+    if (mutex) {
+        xSemaphoreGive(mutex);
+    }
 }
 
 extern unsigned int timeouts_handler(void);
@@ -197,7 +206,10 @@ void rtos_start_evt_task(void (*handler)(void))
         return;
     }
 
-    xTaskCreate((void *)evt_handler_wrapper, "evt", 256, handler, 20, NULL);
+    /* 256 words overflowed on SCAN_DONE -> dump_scan_result (heavy printf of the AP list, wide banner
+     * lines) -> vApplicationStackOverflowHook(evt). The driver's deferred handlers (dump_scan_result /
+     * connected_tsk / disconnect_tsk) run here; give them room. */
+    xTaskCreate((void *)evt_handler_wrapper, "evt", 1024, handler, 20, NULL);
 }
 #endif
 

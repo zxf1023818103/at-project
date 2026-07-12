@@ -5,18 +5,21 @@
  * 1 MB LittleFS writable), LOCK_ALL = SR1 0x1C, UNLOCK = 0. SR1+SR2 are written together via the
  * 16-bit WRSR (0x01 + two data bytes: SR1 then SR2), read back with RDSR1 (0x05) / RDSR2 (0x35).
  *
- * XIP-quiesce (BL602): the manual SR SPI commands must run with the flash XIP/cache + IRQs frozen,
- * else the raw RDSR2 races the XIP continuous-read and returns SR1's value instead of SR2 (the CMP bit
- * then can never be read back / verified). This is the bl602 analog of AmebaD's FLASH_Write_Lock. We
- * follow the exact sequence bflb_flash.c uses (bflb_irq_save -> bflb_xip_sflash_opt_enter ->
- * state_save -> ...cmds... -> state_restore_ext -> opt_exit -> bflb_irq_restore) and run the whole
- * transaction from TCM (ATTR .tcm_code) so no instruction is fetched from flash during the window.
+ * XIP-quiesce (BL602 + BL616/CL): the manual SR SPI commands must run with the flash XIP/cache + IRQs
+ * frozen, else a raw RDSR/WRSR races the XIP continuous-read -> the next XIP instruction fetch returns
+ * garbage. On bl616 this is not academic: the un-quiesced version hung the boot in Clock_Peripheral_
+ * Clock_Get and a raced WRSR left a corrupted (CMP-inverted) status register that bricked the flash for
+ * reflashing. We follow the exact sequence bflb_flash.c uses (bflb_irq_save -> bflb_xip_sflash_opt_enter
+ * -> state_save -> ...cmds... -> state_restore[_ext] -> opt_exit -> bflb_irq_restore) and run the whole
+ * transaction from TCM (ATTR .tcm_code) so no instruction is fetched from flash during the window. Only
+ * the restore form differs per chip: BL602 = state_restore_ext, BL616/CL = state_restore.
  */
 #include "board_flash_lock.h"
 
 #include <stdint.h>
 
-/* Place the quiesced transaction in TCM (the linker collects *(.tcm_code.*), bl602_flash.ld). noinline
+/* Place the quiesced transaction in TCM (the linker collects *(.tcm_code.*): bl602_flash.ld on bl602,
+ * the generated bl616 linker.ld's itcm section on bl616). noinline
  * is REQUIRED: a section attribute does not stop the compiler inlining this static function into its
  * XIP callers, which would run the XIP-off window from flash -> instruction-fetch hang. */
 #define BF_TCM __attribute__( ( noinline, section( ".tcm_code.board_flash_bl602" ) ) )
@@ -32,17 +35,24 @@ extern int  bflb_sflash_read_reg_with_cmd( struct spi_flash_cfg_type * cfg, uint
 extern int  bflb_sflash_write_reg_with_cmd( struct spi_flash_cfg_type * cfg, uint8_t cmd,
                                             uint8_t * reg_value, uint8_t reg_len );
 
-#if defined( BL602 )
-/* XIP/cache + IRQ freeze around the manual flash commands (signatures from bl602_std:
- * bl602_romapi.c / bl602_xip_sflash_ext.c). */
+#if defined( BL602 ) || defined( BL616 ) || defined( BL616CL )
+/* XIP/cache + IRQ freeze around the manual flash commands (bl602_std bl602_romapi.c /
+ * bl602_xip_sflash_ext.c; bl616 lhal bflb_xip_sflash.c). The enter/save/opt entry points are
+ * common; only the restore form differs: BL602 uses the _ext variant, BL616/CL the plain one
+ * (mirrors bflb_flash.c's own #if split). */
 extern uintptr_t bflb_irq_save( void );
 extern void      bflb_irq_restore( uintptr_t flags );
 extern void      bflb_xip_sflash_opt_enter( uint8_t * aes_enable );
 extern void      bflb_xip_sflash_opt_exit( uint8_t aes_enable );
 extern int       bflb_xip_sflash_state_save( struct spi_flash_cfg_type * cfg, uint32_t * offset,
                                              uint8_t group, uint8_t bank );
+#if defined( BL602 )
 extern int       bflb_xip_sflash_state_restore_ext( struct spi_flash_cfg_type * cfg, uint32_t offset,
                                                     uint8_t group, uint8_t bank );
+#else
+extern int       bflb_xip_sflash_state_restore( struct spi_flash_cfg_type * cfg, uint32_t offset,
+                                                uint8_t group, uint8_t bank );
+#endif
 #endif
 
 #define SF_CMD_RDSR1  0x05   /* Read Status Register-1  */
@@ -72,7 +82,7 @@ static int BF_TCM bl602_sr_txn( int do_write, uint8_t w1, uint8_t w2, uint8_t * 
         return 0;
     }
 
-#if defined( BL602 )
+#if defined( BL602 ) || defined( BL616 ) || defined( BL616CL )
     {
         uintptr_t flag = bflb_irq_save();
         uint8_t   aes  = 0;
@@ -91,17 +101,21 @@ static int BF_TCM bl602_sr_txn( int do_write, uint8_t w1, uint8_t w2, uint8_t * 
         bflb_sflash_read_reg_with_cmd( cfg, SF_CMD_RDSR1, &s1, 1 );
         bflb_sflash_read_reg_with_cmd( cfg, SF_CMD_RDSR2, &s2, 1 );
 
+#if defined( BL602 )
         bflb_xip_sflash_state_restore_ext( cfg, off, 0, 0 );
+#else
+        bflb_xip_sflash_state_restore( cfg, off, 0, 0 );
+#endif
         bflb_xip_sflash_opt_exit( aes );
         bflb_irq_restore( flag );
     }
 #else
-    /* Other Bouffalo chips (bl616/cl): plain access, no XIP-quiesce (the flash-lock is a bl602 focus;
-     * the quiesce entry points differ per chip - state_restore vs _ext). Untested on these parts. */
+    /* Any other Bouffalo chip without a wired-up XIP-quiesce path: plain access (untested). */
     if( do_write )
     {
         pair[ 0 ] = w1;
         pair[ 1 ] = w2;
+        bflb_sflash_write_enable( cfg );
         bflb_sflash_write_reg_with_cmd( cfg, SF_CMD_WRSR, pair, 2 );
     }
     bflb_sflash_read_reg_with_cmd( cfg, SF_CMD_RDSR1, &s1, 1 );

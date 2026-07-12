@@ -46,6 +46,18 @@ target_sources(bflb_lhal PRIVATE
     src/bl_rand_stub.c
 )
 
+# arch_memset/arch_memcpy (bflb_common.c) and the flash-quiesce helpers (bflb_sflash.c /
+# bflb_xip_sflash.c / bflb_sf_ctrl.c) are ATTR_TCM_SECTION so they can run with the flash XIP
+# disabled -- SR read/write, and the continuous-read reset that state_save issues. At -O2/-O3 GCC's
+# loop-distribution rewrites their inline zero/copy loops into a *call* to libc memset/memcpy, which
+# link into XIP flash. During the XIP-off window that call fetches instructions from the disabled XIP
+# window -> garbage -> the CPU runs away (observed on bl616: boot hang deep in a quiesced flash read,
+# arch_memset -> memset @0xa00xxxxx, a NULL-pointer store that stalls the bus). -fno-builtin does NOT
+# stop the loop->mem*-call rewrite; -fno-tree-loop-distribute-patterns does. This keeps every TCM
+# routine self-contained so nothing is fetched from flash while XIP is off. (bl602 dodged this only
+# because its flash cfg leaves continuous-read off, so state_save never took the reset path.)
+target_compile_options(bflb_lhal PRIVATE -fno-tree-loop-distribute-patterns)
+
 if("${BOUFFALO_CHIP}" STREQUAL "bl602")
     target_sources(bflb_lhal PRIVATE
         src/bflb_adc.c

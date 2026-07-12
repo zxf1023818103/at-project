@@ -35,3 +35,22 @@ __attribute__((weak)) void _wifi_mgmr_ap_start_dhcpd(bool use_ipcfg, bool use_dh
 __attribute__((weak)) void _wifi_mgmr_ap_stop_dhcpd(void)
 {
 }
+
+/* wifi_mgmr_event_handler (the wl80211 internal CODE_WIFI_ON_* handler) calls this on GOT_IP to print
+ * the lwIP netif's IP/GW/mask. lwIP is gone (FreeRTOS-Plus-TCP owns addressing and prints [NET] on
+ * eNetworkUp via at_netif_on_network_up), so a no-op is correct. Surfaced once BL616's wifi_mgmr_init
+ * got wired from the app -- same lwIP-era origin as the stubs above. */
+__attribute__((weak)) void _wifi_mgmr_ip_got_dump(void)
+{
+}
+
+/* wl80211_init() (prebuilt macsw.c) calls wl80211_lwip_init() to attach the lwIP netif + register the
+ * RX input callback. lwIP is gone; the FreeRTOS-Plus-TCP netif (bouffalo_netif.c) owns the RX up-call
+ * (wl80211_tcpip_input) and TX, registering its own input cb. So a no-op (return 0) is correct here --
+ * it only lets wl80211_init link (wl80211_init itself is what initializes wl80211_glb: the scan_ops
+ * STAILQ + command environment, without which the first scan faults). __weak so the tcp port can
+ * override. */
+__attribute__((weak)) int wl80211_lwip_init(void)
+{
+    return 0;
+}
