@@ -313,7 +313,10 @@ static void console_init()
     struct bflb_device_s *gpio;
 
     gpio = bflb_device_get_by_name("gpio");
-    bflb_gpio_uart_init(gpio, GPIO_PIN_30, GPIO_UART_FUNC_UART0_TX);
+    /* This bench's bl616dk wires the console-capture UART (COM22) to GPIO21, not the SDK
+     * default GPIO30 — verified by reading the third-party image's live GPIO func_sel and by
+     * stock helloworld printing on GPIO21. TX -> GPIO21 so the console lands on COM22. */
+    bflb_gpio_uart_init(gpio, GPIO_PIN_21, GPIO_UART_FUNC_UART0_TX);
     bflb_gpio_uart_init(gpio, GPIO_PIN_22, GPIO_UART_FUNC_UART0_RX);
 
     struct bflb_uart_config_s cfg = { 0 };

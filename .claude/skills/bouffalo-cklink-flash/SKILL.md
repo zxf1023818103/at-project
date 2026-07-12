@@ -1,6 +1,6 @@
 ---
 name: bouffalo-cklink-flash
-description: Flash Bouffalo (BL602/BL616/BL616CL) firmware from WSL, then reset + read the console log (COM19 @2M) + optionally start a GDB server. Two paths: (A) ★UART ISP flash of the whole image via COM18 with a synced COM19-RTS reset on "Please Press Reset Key!" — the RELIABLE path when CKLink halt fails; (B) CKLink via the patched bflb-iot-tool. Handles the CKLink "LOAD HELP BIN FAIL" halt-window / two-probe collision trap, the "flash succeeds but reset always fails" trap, the two-UART/two-baud split (AT COM18@115200 vs log COM19@2M), and the C-Sky DebugServer + gdb-over-WSL caveats.
+description: Flash Bouffalo (BL602/BL616/BL616CL) firmware from WSL, then reset + read the console log + optionally start a GDB server. BL616 flashes ONLY over UART (CKLink is debug-only for the E907 family) — separate COM23 control lines (DTR→BOOT active-low, RTS→reset) + COM22 data @2M, app console @2M (project firmware; a given image may differ), post-flash log captured open-reader-first-then-RTS-reset, driven by bl616_flash_com22.ps1. BL602 has two paths: (A) ★UART ISP flash via COM18 with a synced COM19-RTS reset — RELIABLE when CKLink halt fails; (B) CKLink via the patched bflb-iot-tool. Handles the CKLink "LOAD HELP BIN FAIL" halt-window / two-probe collision trap, the "flash succeeds but reset always fails" trap, the bl616 DTR/RTS polarity + SET-CLOCK-PLL-FAIL(=BOOT-not-held) traps, the two-UART/two-baud splits, and the C-Sky DebugServer + gdb-over-WSL caveats.
 argument-hint: bl602|bl616|bl616cl [--whole] [--at-port COM18] [--log-port COM19] [--debug]
 allowed-tools: [Bash, Read, Edit]
 ---
@@ -17,6 +17,74 @@ are Windows-side; drive them from WSL via `cmd.exe`/`powershell.exe`.
 > on the RISC-V DM (software-disable is *blocked on this Windows edition*, so even unplugging
 > leaves stale ghost entries). **When CKLink fails, use the UART ISP path below — it is the
 > proven reliable method (verified 2026-07-11: `Verify success` SHA-match end to end).**
+
+> **BL602 vs BL616 — completely different story.** The bl602/bl702 sections below (CKLink +
+> UART-ISP-with-DTR/RTS-on-the-data-port) are **bl602-only**. **BL616 (and the whole 616/808/618
+> E907 family) CANNOT be flashed over CKLink at all** — its eflash loader is ROM-resident and
+> only speaks UART/USB (no JTAG data interface); CKLink is **debug-only** for bl616. Flash bl616
+> over **UART with separate BOOT/reset control lines** — see the dedicated bl616 section next.
+> (4-layer proof + working procedure: memory `reference_bl616_cklink_cannot_flash`.)
+
+## ★ BL616 / bl616dk — UART ISP flash, separate COM23 control + COM22 data (VERIFIED)
+
+**bl616 flashes ONLY over UART — CKLink is debug-only** (see the note above; do not waste time on
+CKLink flashing for bl616). On this bench bl616dk uses **two ports** and a **separate control-line
+adapter** (unlike bl602 where DTR/RTS live on the data port):
+
+- **COM23** = an FTDI "USB Serial Port" whose **DTR → chip BOOT pin, RTS → chip reset**. These are
+  **active-low at the pin**: `DtrEnable=$true` drives the pin **LOW**, `$false` drives it **HIGH**.
+  So *BOOT pin HIGH = `DtrEnable=$false`*; *reset assert (low) = `RtsEnable=$true`*, *release
+  (high) = `RtsEnable=$false`*.
+- **COM22** = the CKLink-Lite probe's UART (composite `FACTORYAIOT_PROG_D5EA78` MI_01). It is the
+  **bl616 bootrom UART0 (flash data)** AND the **app console** — but at two different bauds:
+  **flash @ 2000000**, **app console @ 115200** (same port!).
+
+**Enter ISP:** BOOT high + reset pulse → `DtrEnable=$false`; `RtsEnable=$true` (250 ms) → `$false`.
+**Keep COM23 open** (holding BOOT high) through the whole flash. **Normal boot:** BOOT low + reset
+pulse → `DtrEnable=$true`; `RtsEnable=$true`→`$false`.
+
+**One-shot script** `D:\MCU_Tools\bflb-cklink\bl616_flash_com22.ps1` does enter-ISP → flash →
+**open COM22 reader → RTS-reset → capture boot log** (all with COM23 held open):
+```
+# whole 4M image (--single --addr 0x0); -Fw defaults to fw_bl616\at_bl616_whole_flash_data.bin
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File D:\MCU_Tools\bflb-cklink\bl616_flash_com22.ps1 \
+    -Baud 2000000 -Fw "C:\path\to\BL616_AT_4M.bin"          # add -LogBaud 115200 for a 115200-console image
+# tool result + captured boot log:
+powershell.exe -NoProfile -Command "Get-Content D:\MCU_Tools\bflb-cklink\bl616_flash_out.txt | Select -Last 20"
+powershell.exe -NoProfile -Command "Get-Content D:\MCU_Tools\bflb-cklink\bl616_bootlog.txt"
+```
+**Post-flash log ORDER (baked into the script): open the COM22 reader FIRST, THEN pulse COM23 RTS
+to reset** — otherwise the boot burst is gone before the reader is listening. Params: `-LogBaud`
+(default 2000000 = the project's own bl616 AT console; a given image may differ — BL616_AT_4M.bin
+was 115200), `-LogSeconds` (default 8). The log is saved to `bl616_bootlog.txt`.
+Bare tool invocation it runs (official DevCube 1.8.7 tool — bl616 UART path uses the **ROM** eflash
+loader, so no external loader bin is needed):
+```
+D:\MCU_Tools\BouffaloLabDevCube-v1.8.7\bflb_iot_tool.exe --interface uart --port COM22 \
+  --baudrate 2000000 --chipname bl616 --single --firmware <win-path.bin> --addr 0x0
+```
+Success = `Load N/N {progress:100}` → `Sha caled by host == by dev` → `Verify success` →
+`[All Success]` (verified 2026-07-12, two images SHA-matched end to end).
+
+**Traps:**
+- **Polarity is everything.** `DtrEnable=$true` for "BOOT high" FAILS (`shake hand fail`); it must be
+  `$false`. The script's default (`-Invert` OFF) already maps pin-HIGH→`Enable=$false`; pass
+  `-Invert` only if a differently-wired adapter needs the opposite.
+- **`SET CLOCK PLL FAIL` = BOOT was not actually held high during reset.** Auto-download over a
+  data-port-only reset (e.g. trying COM5/COM22 DTR/RTS) half-enters ISP and the ROM loader can't
+  lock the high-speed PLL. With COM23 holding BOOT high it disappears — it is NOT a hardware/xtal
+  fault on a healthy bl616dk+40M.
+- **Reading the console:** the project's own bl616 AT firmware console is **COM22 @ 2000000**
+  (`CONFIG_CONSOLE_UART_BAUDRATE`); a third-party image can differ (BL616_AT_4M.bin printed
+  `invaild bind info` at **115200**, garbage at 2M). If 2M is garbage, try 115200 (`-LogBaud 115200`).
+  **Open the reader BEFORE resetting**, and **keep COM23 OPEN** in run-state (`DtrEnable=$true`,
+  `RtsEnable=$false`) while capturing — *closing* COM23 lets its DTR/RTS float and can hold the chip
+  in reset (→ `LEN=0`, looks dead but isn't). Reboot with a COM23 RTS pulse (`$true`→`$false`).
+- **`Access to COM23 denied`** = a prior PowerShell still holds the port; close/kill it (or ask the
+  user to release) before re-running.
+- **Two VID_42BF probes (bl602 + bl616) collide on the RISC-V DM** — irrelevant to bl616 *UART*
+  flashing (COM22/COM23), but if you also debug bl616 over CKLink, disable the bl602 probe first
+  (`FACTORYAIOT`, needs one UAC).
 
 ## ★ RELIABLE PATH — UART ISP flash of the whole image (COM18) + synced COM19 RTS reset
 
