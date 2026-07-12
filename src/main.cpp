@@ -115,16 +115,19 @@ static int hal_wifi_start_firmware_task(void) {
 // STA interface + DHCP endpoint + start the IP task. Called once the WiFi driver is up.
 extern "C" void bouffalo_tcp_bringup(void);
 
-// wl80211's app-facing event fan-out (component/bouffalo_sdk/wl80211/wifi_mgmr.c:240). No public
-// prototype in wifi_mgmr.h; the callback takes (int,int). We register bl616_wifi_event_cb, which
-// widens to the shared wifi_event_handler(uint32_t,uint32_t) -- the wl80211 analog of bl602's
-// platform_register_event(EV_WIFI, event_cb_wifi_event) at app_platform_boot_init.
-extern "C" int wl80211_register_wifi_event(void (*cb)(int code, int value));
+// fhost's app-facing event fan-out is the shared async_event bus: async_register_event_filter(EV_WIFI,
+// cb, priv) with cb(async_input_event_t ev, void*), ev->code carrying the CODE_WIFI_ON_* event
+// (mirrors the SDK's examples/wifi/sta/wifi_tcp/main.c). We register bl616_wifi_event_cb, which widens
+// to the shared wifi_event_handler(uint32_t,uint32_t).
+extern "C" {
+#include "async_event.h"      // async_input_event_t / async_register_event_filter / EV_WIFI
+}
 static void bl616_scan_done(void);            // wakes wifi_port_scan  (CODE_WIFI_ON_SCAN_DONE)
 static void bl616_conn_event(int connected);  // wakes wifi_port_connect (CODE_WIFI_ON_CONNECTED/_DISCONNECT)
-static void bl616_wifi_event_cb(int code, int value) {
+static void bl616_wifi_event_cb(async_input_event_t ev, void *priv) {
+    (void) priv;
     void wifi_event_handler(uint32_t code, uint32_t code2);   // defined below
-    wifi_event_handler((uint32_t) code, (uint32_t) value);
+    wifi_event_handler((uint32_t) ev->code, (uint32_t) ev->value);
 }
 #endif // defined BL616 || defined BL616CL
 
@@ -147,20 +150,17 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
             if (cc != NULL) { conf.country_code[0] = cc[0]; conf.country_code[1] = cc[1]; conf.country_code[2] = '\0'; }
             wifi_mgmr_start_background(&conf);
 #endif // defined BL602 || defined BL702
-#if defined BL606P || defined BL808 || defined BL616 || defined BL616CL
-            // wl80211: wifi_mgmr_init() is the bootstrap that FIRES this INIT_DONE (it self-dispatches
-            // INIT_DONE then MGMR_DONE synchronously), so it is called from on_tcpip_init_done(), NOT
-            // here -- calling it here would recurse.
-            //
-            // Do NOT call wifi_mgmr_set_country_code() here: on wl80211 it round-trips a kmsg to the MAC
-            // firmware (wl80211_set_country_code -> macif_kmsg_call -> ke_msg_alloc -> xQueueSemaphoreTake),
-            // whose message-queue semaphore is not created until the WiFi FW task (hal_wifi_start_firmware_
-            // task) is up -- at INIT_DONE it is still NULL, so the take hits configASSERT(pxQueue) -> abort
-            // and kills the bootstrap task before MGMR_DONE. The regulatory domain is already seeded from
-            // efuse via rfparam_init ("country_code = CN"); the WIFI_COUNTRY override is applied later, from
-            // wifi_port_scan() (below), where the MAC is guaranteed ready. cc is cached there.
+#if defined BL606P || defined BL808
             (void)cc;
-#endif // defined BL606P || defined BL808 || defined BL616 || defined BL616CL
+#endif
+#if defined BL616 || defined BL616CL
+            // fhost bootstrap: fhost_init() (from on_tcpip_init_done) fires INIT_DONE; the wifi_mgmr
+            // task is started HERE in response (mirrors examples/wifi/sta/wifi_tcp/main.c's
+            // wifi_event_handler), which then dispatches MGMR_DONE. Country code is applied later from
+            // wifi_port_scan() (MAC guaranteed ready), same as before.
+            { extern void wifi_mgmr_task_start(void); wifi_mgmr_task_start(); }
+            (void)cc;
+#endif // defined BL616 || defined BL616CL
             break;
         }
         case CODE_WIFI_ON_MGMR_DONE: {
@@ -309,21 +309,12 @@ static void on_tcpip_init_done(void *arg) {
     wifi_task_create();
 #endif // defined BL602 || defined BL702
 #if defined BL616 || defined BL616CL
-    // wl80211 bootstrap: wifi_mgmr_init() registers wl80211's internal handler and SYNCHRONOUSLY
-    // fans out CODE_WIFI_ON_INIT_DONE then CODE_WIFI_ON_MGMR_DONE to the app handler (already
-    // registered in app_platform_boot_init via wl80211_register_wifi_event).
-    //
-    // ★ wl80211_init() FIRST: it is the wl80211 driver-core init (initializes wl80211_glb -- the
-    // scan_ops STAILQ, the command environment, etc.). The SDK's macsw/wl80211 bring-up is
-    // wifi_task_create() -> wl80211_init() -> wifi_mgmr_init() (examples/wifi/macsw_bare/main.c). We
-    // create wifi_main in hal_wifi_start_firmware_task (pre-scheduler); wifi_main is prio 27 so it runs
-    // its me_init/mm_init and reaches its idle loop before this lower-prio net_boot task gets here, so
-    // no delay is needed. Without wl80211_init the first scan stores into an un-STAILQ_INIT'd list head
-    // -> Store access fault at 0x0 (wl80211_mac_do_scan). It is not referenced elsewhere, so it is only
-    // pulled from the prebuilt libwl80211 .a because of this call.
-    extern void wl80211_init(void);
-    wl80211_init();
-    wifi_mgmr_init();
+    // fhost bootstrap (mirrors examples/wifi/sta/wifi_tcp/main.c's wifi_start_firmware_task):
+    // fhost_init() brings up the wifi6 full-host stack on the wifi_main task (created pre-scheduler in
+    // hal_wifi_start_firmware_task via wifi_task_create) and fans out CODE_WIFI_ON_INIT_DONE to the app
+    // handler (registered just below via async_register_event_filter). The INIT_DONE handler then calls
+    // wifi_mgmr_task_start() -> MGMR_DONE. Replaces the old wl80211_init()+wifi_mgmr_init() pair.
+    { extern int fhost_init(void); fhost_init(); }
 #endif // defined BL616 || defined BL616CL
 }
 
@@ -505,21 +496,22 @@ int wifi_port_scan(const char *ssid, uint8_t *chan, int *sec) {
 int wifi_port_connect(const char *ssid, const char *pass, uint8_t chan, int sec) {
     (void)chan; (void)sec;                  // freq1=0 -> driver does its own directed scan+connect;
                                             // security is beacon-derived
-    wifi_mgmr_sta_connect_params_t cp;
-    memset(&cp, 0, sizeof(cp));
-    strncpy(cp.ssid, ssid, MGMR_SSID_LEN);
-    strncpy(cp.key, pass ? pass : "", MGMR_KEY_LEN);
-    cp.use_dhcp = 0;   // *** LOAD-BEARING: FreeRTOS+TCP owns DHCP. use_dhcp=1 arms a ~15s driver
-                       // dhcp_ip_timeout that self-disconnects -- the wl80211 analog of bl602's got-IP fix.
-    cp.pmf_cfg  = 1;   // PMF-capable (WPA2/WPA3 interop)
+    // Use fhost's convenience connector (same one the SDK CLI `wifi_sta_connect` uses); it assembles the
+    // wifi_mgmr_sta_connect_params_t (ssid/key + lengths, akm) correctly. AKM: WPA2 = "RSN" (the valid
+    // set is WPA/RSN/SAE). use_dhcp=0 -- FreeRTOS+TCP owns DHCP (use_dhcp=1 arms the driver's ~15s
+    // self-disconnect on DHCP timeout). Async: CODE_WIFI_ON_CONNECTED/_DISCONNECT wakes the waiter below.
+    extern int wifi_sta_connect(const char *ssid, const char *key, const char *bssid,
+                                const char *akm_str, uint8_t pmf_cfg, uint16_t freq1, uint16_t freq2,
+                                uint8_t use_dhcp);
+    const char *akm = NULL;   // wifi_sta_connect scans internally -> auto-detects AKM from the beacon
     s_bl616_conn_ok = 0;
     s_bl616_conn_waiter = xTaskGetCurrentTaskHandle();
-    if (wifi_mgmr_sta_connect(&cp) != 0) { s_bl616_conn_waiter = NULL; return -1; }   // request rejected
+    if (wifi_sta_connect(ssid, pass, NULL, akm, 0, 0, 0, 0) != 0) { s_bl616_conn_waiter = NULL; return -1; }
     if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(12000)) == 0) { s_bl616_conn_waiter = NULL; return -1; }
     return s_bl616_conn_ok ? 0 : -1;        // set by CODE_WIFI_ON_CONNECTED / _DISCONNECT
 }
 
-void wifi_port_disconnect(void) { wifi_mgmr_sta_disconnect(); }
+void wifi_port_disconnect(void) { extern int wifi_sta_disconnect(void); wifi_sta_disconnect(); }   // fhost: wifi_sta_disconnect (not wifi_mgmr_sta_disconnect)
 
 int          wifi_port_sec_from_str(const char *s) { (void)s;   return -1; }
 const char * wifi_port_sec_to_str(int sec)         { (void)sec; return ""; }
@@ -628,10 +620,9 @@ void app_platform_boot_init(void)
     platform_register_event(EV_WIFI, event_cb_wifi_event, NULL);
 #endif // defined BL602 || defined BL702
 #if defined BL616 || defined BL616CL
-    // wl80211 analog: register the app handler with wl80211's fan-out BEFORE wifi_mgmr_init()
-    // (called from on_tcpip_init_done) dispatches INIT_DONE/MGMR_DONE. wifi_mgmr_init also registers
-    // its own internal handler; wl80211_dispatch_wifi fans out to both (max 3 callbacks).
-    wl80211_register_wifi_event(bl616_wifi_event_cb);
+    // Register the app handler on the async EV_WIFI bus BEFORE fhost_init() (on_tcpip_init_done)
+    // dispatches INIT_DONE/MGMR_DONE. (fhost + wifi_mgmr also register their own EV_WIFI filters.)
+    async_register_event_filter(EV_WIFI, bl616_wifi_event_cb, NULL);
 #endif // defined BL616 || defined BL616CL
     if (0 != rfparam_init(0, NULL, 0))
         printf("rfparam_init() failed\n");   // non-fatal: keep booting so the console still comes up

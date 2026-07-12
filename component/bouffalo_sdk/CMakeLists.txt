@@ -202,22 +202,16 @@ if(CONFIG_WIFI4 AND "${BOUFFALO_CHIP}" STREQUAL "bl602")
     add_subdirectory(wifi4)
 endif()
 
-# Wi-Fi 6 stack on BL616 / BL616CL: three coupled components.
-#   wl80211 — Bouffalo's 802.11 driver + wifi_mgmr API surface.
-#   macsw   — MAC software layer (prebuilt .a per chip × variant +
-#             macsw_plat.c shim).
-#   bl_wpa_supplicant — Bouffalo port of wpa_supplicant.
-# CONFIG_WIFI6 is the umbrella switch in proj.conf (matches upstream).
-# CONFIG_WL80211 + CONFIG_BL_WPA_SUPPLICANT are individually gated to
-# mirror upstream's Kconfig but in practice on this fork the three move
-# together; we wire them inside the same CONFIG_WIFI6 block.
+# Wi-Fi 6 stack on BL616 / BL616CL: switching from wl80211 to fhost.
+# The wl80211 driver (component/bouffalo_sdk/{wl80211,macsw,bl_wpa_supplicant})
+# was REMOVED — under sustained TCP/OTA load its prebuilt macsw TX-stalls and
+# hard-asserts in hal_machw_abs_timer_handler (unfixable in source; see the
+# project_bl616_aws_ota memory). Replaced by the fhost (wifi6) stack from
+# platform/bouffalo_sdk/components/wireless/wifi6/ (prebuilt libfhost_bl616_*.a,
+# different TX architecture, same wifi_mgmr_* API). fhost wiring: TODO (step 2).
 if(CONFIG_WIFI6 AND ("${BOUFFALO_CHIP}" STREQUAL "bl616" OR
                     "${BOUFFALO_CHIP}" STREQUAL "bl616cl"))
-    add_subdirectory(macsw)
-    add_subdirectory(bl_wpa_supplicant)
-    if(CONFIG_WL80211)
-        add_subdirectory(wl80211)
-    endif()
+    add_subdirectory(fhost)
 endif()
 
 # Generic RF parameter loader for non-BL602 chips (BL602 uses its own
@@ -320,13 +314,7 @@ endif()
 
 if(CONFIG_WIFI6 AND ("${BOUFFALO_CHIP}" STREQUAL "bl616" OR
                     "${BOUFFALO_CHIP}" STREQUAL "bl616cl"))
-    target_link_libraries(bouffalo_sdk INTERFACE
-        macsw
-        bl_wpa_supplicant
-    )
-    if(TARGET wl80211)
-        target_link_libraries(bouffalo_sdk INTERFACE wl80211)
-    endif()
+    target_link_libraries(bouffalo_sdk INTERFACE fhost)
 endif()
 
 if(TARGET rfparam)

@@ -84,6 +84,10 @@ target_link_options(bl616_board_config INTERFACE
     # that include resolves.
     "-L${CMAKE_CURRENT_LIST_DIR}"
     "-ufw_header"
+    # The prebuilt fhost SDK .a's (libwpa_supplicant/libmacsw_os_adapter) bundle their own copies of
+    # common symbols that clash with ours (crc32 vs zlib; vApplicationStackOverflowHook vs
+    # freertos_config). Let the linker take the first definition rather than erroring.
+    "-Wl,--allow-multiple-definition"
 )
 
 set_target_properties(bl616_board_config PROPERTIES

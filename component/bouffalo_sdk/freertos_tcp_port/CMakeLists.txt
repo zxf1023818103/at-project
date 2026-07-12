@@ -31,14 +31,14 @@ target_link_libraries(bouffalo_freertos_tcp PUBLIC
 # bflb_lhal carries bflb_sec_trng.h (the HW TRNG the RNG hooks use), both chips.
 target_link_libraries(bouffalo_freertos_tcp PRIVATE bflb_lhal)
 
-# wl80211.h (struct iovec / ALIGN4_HI / WL80211_VIF_* / wl80211_tcpip_input proto)
-# transitively pulls "queue/queue.h" + "tree/tree.h" — only the wl80211 chips need it.
-# Headers only — the driver symbols resolve at the final image link via bouffalo_sdk's
-# --start-group, so do NOT link the wl80211 target (cycle).
+# fhost net_al bridge headers (net_al.h / fhost_api.h / wifi_mgmr.h) — the bl616 netif bridge
+# (bouffalo_netif.c) is being rewritten against fhost's net_al interface (step 3). The fhost
+# driver symbols resolve at the final image link via bouffalo_sdk's --start-group.
 if("${BOUFFALO_CHIP}" STREQUAL "bl616" OR "${BOUFFALO_CHIP}" STREQUAL "bl616cl")
-    target_link_libraries(bouffalo_freertos_tcp PRIVATE bflb_queue bflb_tree)
     target_include_directories(bouffalo_freertos_tcp PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/../wl80211/include")
+        "${AT_ROOT}/platform/bouffalo_sdk/components/wireless/wifi6/fhost/include"
+        "${AT_ROOT}/platform/bouffalo_sdk/components/wireless/wifi6/macsw_os_adapter/include"
+        "${AT_ROOT}/platform/bouffalo_sdk/components/wireless/macsw/inc")   # mac_types.h etc.
 endif()
 
 target_compile_options(bouffalo_freertos_tcp PRIVATE
