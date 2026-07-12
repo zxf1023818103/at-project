@@ -22,5 +22,7 @@ target_include_directories(ota_flash_port PRIVATE
 # pt_table + bflb_flash symbols resolve from the umbrella group at the image link.
 target_link_libraries(ota_flash_port PRIVATE bflb_lhal FreeRTOS rxi_log)
 
-# xz-embedded is vendored 3rd-party; silence its warnings. board_flash_lock.h basename map for the port.
-target_compile_options(ota_flash_port PRIVATE -w)
+# xz-embedded is vendored 3rd-party; silence its warnings. The prefix-map strips the absolute build
+# path from __FILE__ so the rxi log shows just "ota_flash_bl602.c:NNN" (same idiom as the other
+# components, see the feedback_log_basename_prefix_map memory).
+target_compile_options(ota_flash_port PRIVATE -w "-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=")
