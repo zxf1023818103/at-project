@@ -535,9 +535,10 @@ void app_console_register_platform(void)
 {
     bouffalo_monitor_cmds_register();   // reboot
     flash_cli_register();               // shared `flash` lock/unlock/status (component/flash_cli_config)
-#if defined(BL602) && defined(AT_PROJECT_AWS)
-    // Shared `ota_http <url>` (bflb_flash + pt_table + inline-xz slot writer). bl602 only: it needs the
-    // mbedTLS TLS transport for https, which - like aws_iot - is only linked with the AWS stack (AWS=ON).
+#if defined(AT_PROJECT_AWS)
+    // Shared `ota_http <url>` (bflb_flash + pt_table + inline-xz slot writer). Linked on the AWS chips
+    // (bl602/bl616/bl616cl): it needs the mbedTLS/picotls TLS transport for https, which - like aws_iot -
+    // is only linked with the AWS stack (AWS=ON). AT_PROJECT_AWS is defined for exactly those chips.
     { extern void ota_http_register(void); ota_http_register(); }
 #endif
 #ifndef AT_PROJECT_AWS
@@ -560,12 +561,10 @@ void app_console_register_platform(void)
     // (bl602/bl616/amebad) registers it.
     { extern void wifi_cli_register(void); wifi_cli_register(); }
 #endif
-#if defined BL602 || defined BL702
-    // Minimal AWS IoT telemetry (`aws`): bl602/bl702 only (fits the telemetry heap; same credential
-    // model as AmebaD).
 #ifdef AT_PROJECT_AWS
+    // AWS IoT provisioning + telemetry (`aws`): the AWS chips (bl602/bl616/bl616cl); same credential
+    // model as AmebaD. AT_PROJECT_AWS is defined only for those chips + AWS=ON.
     { extern void aws_cli_register(void); aws_cli_register(); }
-#endif
 #endif
 #ifdef AT_CRYPTO_SELFTESTS
     // Opt-in diagnostic image (make CRYPTO_SELFTESTS=ON): the Mbed TLS crypto self-tests. Default OFF
@@ -581,8 +580,8 @@ void app_network_up_start_services(void)
     // coreSNTP UTC time sync (idempotent). BL602/BL702 reach here from GOT_IP; the other Bouffalo chips
     // start SNTP from main() instead (they don't post GOT_IP).
     sntp_sync_start();
-#if (defined BL602 || defined BL702) && defined(AT_PROJECT_AWS)
-    // Auto-start AWS once DHCP is up (bl602). Idempotent + a no-op until provisioned, so it Just Works
+#if defined(AT_PROJECT_AWS)
+    // Auto-start AWS once DHCP is up (bl602/bl616/bl616cl). Idempotent + a no-op until provisioned, so it Just Works
     // after `aws endpoint/ca/cert/key ...`; the connect loop self-heals until SNTP supplies real UTC
     // (needed for the mbedTLS server-cert validity check). AWSOTA=ON runs the shared agent+telemetry+OTA
     // orchestration (aws_iot_demo.c); default runs the lean telemetry-only client (aws_telemetry.c).

@@ -409,7 +409,7 @@ target_link_libraries(bouffalo_sdk INTERFACE net_cli)
 # -> a leaner image (no aws_iot / coreMQTT / TLS transport / ota_http), e.g. a pure NIMBLE/MCUMGR BLE-DFU
 # image. AT_PROJECT_AWS gates the `aws` CLI + telemetry auto-start (and, mirroring AmebaD, the `ota_http`
 # command, which rides the same TLS transport) in src/main.cpp.
-if("${BOUFFALO_CHIP}" STREQUAL "bl602" AND AT_ENABLE_AWS)
+if(("${BOUFFALO_CHIP}" STREQUAL "bl602" OR "${BOUFFALO_CHIP}" STREQUAL "bl616" OR "${BOUFFALO_CHIP}" STREQUAL "bl616cl") AND AT_ENABLE_AWS)
     target_link_libraries(bouffalo_sdk INTERFACE aws_iot)
     target_compile_definitions(bouffalo_sdk INTERFACE AT_PROJECT_AWS)
     # AWS credential provisioning pastes a ~1.6 KB base64 body as ONE `aws cert/key/ca <b64>` CLI
