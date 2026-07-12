@@ -1554,6 +1554,22 @@ __attribute__((weak)) void app_network_up_start_services(void) { }
 void app_startup_run_headless(void)
 {
     app_platform_boot_init();
+    /* Load persisted env even in the console-less image: WiFi provisioning (WIFI_SSID/WIFI_PASSWORD)
+     * comes from /KV via env_init(), and the QUIC self-test's wsvc reads getenv("WIFI_SSID"). Without
+     * it the LFS env is never loaded -> "no WIFI_SSID provisioned - staying offline" and the chip
+     * never reaches the network for the QUIC perf run. app_env_time_init() itself is compiled out of
+     * the QUIC image (#if !AT_PROJECT_QUIC), so inline its env-load here (vfs_lfs_mount + env_init are
+     * both linked -- LFS is used by the bootstrap self-test; env_init's TU links because we call it).
+     * (AmebaD's QUIC used a compile-time SSID; bl616 uses env -> a baked /KV image, lfs-image-preconfig,
+     * provisions the console-less QUIC build.) */
+    {
+        extern void *vfs_lfs_mount(void);
+        extern void  env_init(void);
+        void *lfs = vfs_lfs_mount();
+        printf("[LFS] mount %s\n", lfs ? "OK" : "FAILED");
+        if (lfs != NULL)
+            env_init();
+    }
     {
         const char *tz = getenv("TZ");
         if ((tz == NULL) || (tz[0] == '\0'))
