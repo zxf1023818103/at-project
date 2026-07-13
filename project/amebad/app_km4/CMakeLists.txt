@@ -521,7 +521,6 @@ if(AMEBAD_ENABLE_AWS_IOT)
         # AWS_KEY_MAX stays 1536 (AmebaD provisions an RSA-2048 client key). AWS_AGENT_STACK_WORDS
         # 3584 = bl602's cert-verify peak; AmebaD's HW-PKA server verify needs no more.
         target_compile_definitions(target_img2_km4 PRIVATE
-            OTA_APP_ENABLE_HTTP=0
             AWS_STATIC_TASKS
             AWS_NET_BUFFER_DYNAMIC
             AWS_NET_BUFFER_SZ=1536

@@ -79,7 +79,6 @@ if(AT_ENABLE_AWS_OTA)
     # platforms (no AWS_NO_TELEMETRY carve-outs anymore).
     target_compile_definitions(aws_iot PRIVATE
         APP_VERSION_BUILD=${AWS_APP_BUILD}   # OTA version gate (bl602 Makefile APP_BUILD; > running build)
-        OTA_APP_ENABLE_HTTP=0
         AWS_TLS_RX_RESERVE=0
         AWS_TLS_BACKEND_MODE=0
         AWS_CA_USE_ENV
@@ -116,6 +115,8 @@ if(AT_ENABLE_AWS_OTA)
         ${_aws_tls}
         mbedtls_config
         freertos_cli
+        corehttp_config         # HTTP data plane (presigned-S3 download) — uniform on every platform
+        ota_http_config         # urlparse.h + ota_http_interface.h for ota_app.c's S3 fetcher
     )
     target_include_directories(aws_iot PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/../coremqtt_config/coremqtt/source/include"
