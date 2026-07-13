@@ -19,3 +19,5 @@ add_library(bouffalo_syscall_port OBJECT console_bflb_uart.c)
 # from the shared dispatcher. at_console is PUBLIC so its archive propagates to the image.
 target_link_libraries(bouffalo_syscall_port PRIVATE bflb_lhal)
 target_link_libraries(bouffalo_syscall_port PUBLIC at_console)
+# FreeRTOS StreamBuffer + FreeRTOSConfig.h for the IRQ-driven console RX (OBJECT lib: headers only).
+target_link_libraries(bouffalo_syscall_port PRIVATE FreeRTOS)
