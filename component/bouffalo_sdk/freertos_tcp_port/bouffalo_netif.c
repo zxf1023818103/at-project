@@ -12,14 +12,16 @@
  *   RX  fhost core -> net_al_input() [here] -> at_netif_rx_alloc/submit, then free_fn(net_buf)
  *   netif  fhost core -> net_if_add() [here, binds fhost vif <-> our g_sta_if]
  *
- * ★ HW-VERIFY (marked TODO below): these fhost-internal contracts need on-HW iteration —
- *   (a) the TX payload must sit in MAC-DMA-reachable RAM ("shram"/WRAM). We alloc via
- *       platform_malloc (fhost's own allocator); confirm it returns DMA-able memory, else
- *       switch to a WRAM heap (the old wl80211 used a dedicated CONFIG_WRAM_ADDRESS pool).
- *   (b) fhost_tx_req_do()'s exact prototype isn't in a public header — the extern below is a
- *       best-guess from net_al.c's call site; verify arg order/types against a HW run.
+ * HW-verified constraints (both bit on real HW before being fixed):
+ *   (a) TX payloads MUST come from the WRAM heap (MM_FLAG_HEAP_WRAM_0) — the MAC DMA cannot
+ *       reach the normal heap; platform_malloc (= kmalloc(...,0)) trips
+ *       "ASSERT REC at hal_machw_gen_handler" mid-TX.
+ *   (b) TX submission goes through fhost_tx_start() (staid resolve + queueing), same as the
+ *       lwip adapter — NOT a bare fhost_tx_req_do(), which is only the internal resubmit hook
+ *       reached back through net_al_tx_req().
  */
 #include "FreeRTOS.h"
+#include "semphr.h"
 #include "FreeRTOS_IP.h"
 #include "at_netif.h"
 #include <stdint.h>
@@ -28,56 +30,87 @@
 #include "bflb_sec_trng.h"   /* bflb_trng_readlen — HW TRNG for the DHCP xid / TCP ISN */
 
 #include "net_al.h"          /* net_al_* / net_if_* / net_buf_tx_* contract + NET_AL_TX_HEADROOM */
+#include "mm.h"              /* kmalloc(MM_FLAG_HEAP_WRAM_0) — MAC-DMA-reachable WRAM heap */
 
 /* fhost internal allocator (DMA-capable per fhost's own usage) + the TX submit + wifi_mgmr link
  * query. platform_malloc/free are declared in platform_al.h; fhost_tx_req_do is fhost-internal. */
 extern void * platform_malloc( uint32_t size );
 extern void   platform_free( void * ptr );
 extern int    wifi_mgmr_sta_state_get( void );   /* != 0 when associated */
-/* ★ HW-VERIFY (b): best-guess prototype from net_al.c's call site
- *   fhost_tx_req_do(net_if, ibuf, type, cfm_cb, cfm_cb_arg, buf_rx, no_cck) */
+/* fhost_tx_req_do: internal resubmit hook — only reached from fhost core via net_al_tx_req
+ * (prototype per the lwip adapter's own extern, wifi6_lwip_adapter/net_al.c:57). */
 extern int fhost_tx_req_do( net_al_if_t net_if, net_al_tx_t net_buf, int type,
                             void * cfm_cb, void * cfm_cb_arg, void * buf_rx, int no_cck );
+/* fhost_tx_start: the proper TX entry point (staid resolve + queueing). Exported by libfhost;
+ * prototype per wifi6_lwip_adapter/net_al.c:54, cb type per fhost_api.h:692 (cb_fhost_tx). */
+extern int fhost_tx_start( net_al_if_t net_if, net_al_tx_t net_buf,
+                           void ( * cfm_cb )( uint32_t frame_id, bool acknowledged, void * arg ),
+                           void * cfm_cb_arg );
+
+/* wpa_supplicant eloop (eloop_rtos.c, in libwpa_supplicant.a) — pure RTOS queue, no sockets.
+ * eloop_event_commit COPIES the payload (os_malloc+memcpy), so the RX buffer can be freed
+ * right after the call. Event ids per eloop_rtos.h: wl1 -> 10, wl2 -> 11, fallback 3. */
+extern int eloop_event_commit( int type, const char * request, int req_len );
+#define ELOOP_EVT_WPA_L2_DATA        3
+#define ELOOP_EVT_WPA_L2_DATA_WL1    10
+#define ELOOP_EVT_WPA_L2_DATA_WL2    11
 
 /* ===== our net interface handle (what fhost's net_al_if_t points at) ======== */
 typedef struct
 {
     uint8_t hwaddr[ 6 ];
     void *  vif;             /* fhost mac_vif private (from net_if_add) */
+    char    name[ 4 ];       /* "wl1" (STA, first vif) / "wl2" (AP, second) — supplicant looks up by name */
 } fhost_netif_t;
 
 static fhost_netif_t * g_sta_if;   /* the STA vif's net_if (set by net_if_add, used by prvTx) */
+static fhost_netif_t * g_ap_if;    /* the AP vif's net_if (second net_if_add) */
+
+/* ===== L2 (EAPOL) ethertype filters: which RX frames go to the supplicant's eloop instead of
+ * the IP stack. Registered by l2_packet_init -> net_l2_socket_create. Same shape as the lwip
+ * adapter's l2_filter[] (wifi6_lwip_adapter/net_al.c). ======================== */
+#define L2_FILTER_COUNT    2
+static struct
+{
+    net_al_if_t net_if;
+    uint16_t    ethertype;
+} l2_filter[ L2_FILTER_COUNT ];
 
 /* ===== TX buffer: [NET_AL_TX_HEADROOM(384) headroom][payload]. fhost prepends the 802.11
  * header into the headroom, then DMAs [header..][payload]. net_al_tx_t is opaque to fhost —
  * it reads it only via net_buf_tx_info(). ======================================= */
 typedef struct
 {
-    uint16_t len;                        /* payload length */
+    uint32_t len;                        /* payload length. 32-bit ON PURPOSE: keeps buf[] (and the
+                                          * 384B headroom, a multiple of 4) 4-aligned — fhost does
+                                          * word stores into the headroom (HW: "Store/AMO address
+                                          * misaligned" @ +2 with a uint16_t here). */
     uint8_t  buf[ NET_AL_TX_HEADROOM ];  /* + payload appended after (flexible via over-alloc) */
 } fhost_tx_buf_t;
 
 net_al_tx_t net_buf_tx_alloc_fill( const uint8_t * frame, uint32_t length )
 {
-    /* ★ HW-VERIFY (a): platform_malloc must be MAC-DMA-reachable (shram/WRAM). */
-    fhost_tx_buf_t * b = platform_malloc( sizeof( *b ) + length );
+    /* MUST come from the WRAM heap: the MAC DMA cannot reach the normal heap (kmalloc(...,0)
+     * payloads trip "ASSERT REC at hal_machw_gen_handler" — HW-verified). Same constraint the
+     * bl602 wl80211 port had (TX blocks in ram_wifi). */
+    fhost_tx_buf_t * b = kmalloc( sizeof( *b ) + length, MM_FLAG_HEAP_WRAM_0 );
     if( b == NULL )
     {
         return NULL;
     }
-    b->len = ( uint16_t ) length;
+    b->len = length;
     ( void ) memcpy( b->buf + NET_AL_TX_HEADROOM, frame, length );
     return ( net_al_tx_t ) b;
 }
 
 net_al_tx_t net_buf_tx_alloc( uint32_t length )
 {
-    fhost_tx_buf_t * b = platform_malloc( sizeof( *b ) + length );
+    fhost_tx_buf_t * b = kmalloc( sizeof( *b ) + length, MM_FLAG_HEAP_WRAM_0 );
     if( b == NULL )
     {
         return NULL;
     }
-    b->len = ( uint16_t ) length;
+    b->len = length;
     return ( net_al_tx_t ) b;
 }
 
@@ -85,7 +118,7 @@ net_al_tx_t net_buf_tx_alloc_ref( uint32_t length ) { return net_buf_tx_alloc( l
 
 void net_buf_tx_free( net_al_tx_t net_buf )
 {
-    platform_free( net_buf );
+    kfree( net_buf );
 }
 
 /* Return the single payload segment + the reserved headroom pointer. */
@@ -94,7 +127,7 @@ void * net_buf_tx_info( net_al_tx_t * net_buf, uint16_t * tot_len, int * seg_cnt
 {
     fhost_tx_buf_t * b = ( fhost_tx_buf_t * ) net_buf;   /* net_al.c treats the ** as the buffer ptr */
 
-    *tot_len      = b->len;
+    *tot_len      = ( uint16_t ) b->len;
     *seg_cnt      = 1;
     seg_addr[ 0 ] = ( uint32_t ) ( b->buf + NET_AL_TX_HEADROOM );
     seg_len[ 0 ]  = b->len;
@@ -104,10 +137,8 @@ void * net_buf_tx_info( net_al_tx_t * net_buf, uint16_t * tot_len, int * seg_cnt
 
 bool net_buf_tx_all_shram( net_al_tx_t net_buf )
 {
-    /* ★ HW-VERIFY (a): true iff the payload is in MAC-DMA RAM. Returning true routes TX straight
-     * to fhost_tx_req_do (no bounce). If platform_malloc is NOT DMA-able this must return false —
-     * but the FHOST_BUFFER_COPY bounce path lives in the lwip adapter we don't link, so the real
-     * fix is to alloc from WRAM. Assume DMA-able for now. */
+    /* True: all TX buffers come from the WRAM heap (MAC-DMA reachable), so fhost may DMA
+     * directly with no bounce copy. */
     ( void ) net_buf;
     return true;
 }
@@ -128,9 +159,38 @@ void net_al_input( net_al_rx_t net_buf, void * payload, net_al_if_t net_if,
                    uint16_t length, uint8_t offset, uint8_t skip_after_eth_hdr,
                    net_buf_free_fn free_fn )
 {
-    ( void ) net_if;
     uint8_t * eth = ( uint8_t * ) payload + offset;
     uint16_t  len = ( uint16_t ) ( length - skip_after_eth_hdr );
+
+    /* Make the frame contiguous: move the 14B eth header down over the skip gap (same trick as
+     * the lwip adapter's net_al_input; regions may overlap, hence memmove). */
+    if( skip_after_eth_hdr != 0 )
+    {
+        ( void ) memmove( eth + skip_after_eth_hdr, eth, 14 );
+        eth += skip_after_eth_hdr;
+    }
+
+    /* L2 filter: divert EAPOL (0x888E) etc. to the supplicant's eloop, not the IP stack.
+     * The WPA2/WPA3 handshake dies without this. eloop_event_commit copies the frame. */
+    if( len >= 14 )
+    {
+        uint16_t ethertype = ( uint16_t ) ( ( eth[ 12 ] << 8 ) | eth[ 13 ] );
+        for( int i = 0; i < L2_FILTER_COUNT; i++ )
+        {
+            if( ( l2_filter[ i ].net_if == net_if ) && ( l2_filter[ i ].ethertype == ethertype ) )
+            {
+                fhost_netif_t * nif = ( fhost_netif_t * ) net_if;
+                int event_id = ( nif == g_ap_if ) ? ELOOP_EVT_WPA_L2_DATA_WL2
+                                                  : ELOOP_EVT_WPA_L2_DATA_WL1;
+                if( eloop_event_commit( event_id, ( const char * ) eth, ( int ) len ) != 0 )
+                {
+                    printf( "netif: L2 eloop commit failed (ev %d len %u)\r\n", event_id, len );
+                }
+                free_fn( net_buf );
+                return;
+            }
+        }
+    }
 
     /* Drop our own broadcast reflected by the AP (src MAC == ours). */
     if( g_sta_if != NULL )
@@ -150,7 +210,7 @@ void net_al_input( net_al_rx_t net_buf, void * payload, net_al_if_t net_if,
     NetworkBufferDescriptor_t * pxBuf = at_netif_rx_alloc( ( size_t ) len );
     if( pxBuf != NULL )
     {
-        ( void ) memcpy( pxBuf->pucEthernetBuffer, eth + skip_after_eth_hdr, len );
+        ( void ) memcpy( pxBuf->pucEthernetBuffer, eth, len );
         at_netif_rx_submit( pxBuf, ( size_t ) len );
     }
     else
@@ -178,14 +238,39 @@ int net_if_add( net_al_if_t * net_if, const uint8_t * mac_addr, const uint32_t *
     ( void ) memcpy( nif->hwaddr, mac_addr, 6 );
     nif->vif = vif;
     *net_if  = ( net_al_if_t ) nif;
-    if( g_sta_if == NULL ) g_sta_if = nif;   /* STA is the FIRST vif; do NOT overwrite with the AP vif */
+    /* fhost adds the STA vif first ("wl1"), then the AP vif ("wl2") — the supplicant finds
+     * them by these names (net_if_find_from_name / eloop_get_l2_event_id). */
+    if( g_sta_if == NULL )     { g_sta_if = nif; ( void ) strcpy( nif->name, "wl1" ); }
+    else if( g_ap_if == NULL ) { g_ap_if = nif;  ( void ) strcpy( nif->name, "wl2" ); }
+    else                       { nif->name[ 0 ] = 0; }
     return 0;
 }
 
 const uint8_t * net_if_get_mac_addr( net_al_if_t net_if ) { return ( ( fhost_netif_t * ) net_if )->hwaddr; }
 void *          net_if_vif_info( net_al_if_t net_if )     { return ( ( fhost_netif_t * ) net_if )->vif; }
-net_al_if_t     net_if_find_from_name( const char * name ) { ( void ) name; return ( net_al_if_t ) g_sta_if; }
-int             net_if_get_name( net_al_if_t net_if, char * buf, int len ) { ( void ) net_if; if( len > 0 ) buf[ 0 ] = 0; return 0; }
+
+net_al_if_t net_if_find_from_name( const char * name )
+{
+    if( name != NULL )
+    {
+        if( ( g_sta_if != NULL ) && ( strcmp( name, g_sta_if->name ) == 0 ) ) { return ( net_al_if_t ) g_sta_if; }
+        if( ( g_ap_if != NULL ) && ( strcmp( name, g_ap_if->name ) == 0 ) )   { return ( net_al_if_t ) g_ap_if; }
+    }
+    return NULL;
+}
+
+/* Contract (net_al.h): copy the name (incl. '\0' if it fits); return strlen(name), <0 on error. */
+int net_if_get_name( net_al_if_t net_if, char * buf, int len )
+{
+    if( net_if == NULL ) { return -1; }
+    const char * name = ( ( fhost_netif_t * ) net_if )->name;
+    int n = ( int ) strlen( name );
+    if( len > 0 )
+    {
+        ( void ) memcpy( buf, name, ( n + 1 <= len ) ? ( size_t ) ( n + 1 ) : ( size_t ) len );
+    }
+    return n;
+}
 void            net_if_up_cb( net_al_if_t net_if )   { ( void ) net_if; }
 void            net_if_down_cb( net_al_if_t net_if ) { ( void ) net_if; }
 /* fhost_to_net_if is provided by libfhost (fhost.c) — do not redefine here. */
@@ -208,9 +293,8 @@ void net_al_set_ipv6_enable( net_al_if_t net_if, int en ) { ( void ) net_if; ( v
 
 /* ===== net_init + L2 (EAPOL) socket API ====================================
  * fhost/supplicant use these for the WPA handshake. FreeRTOS+TCP owns L3; net_init just marks the
- * IP task ready. net_l2_send is the EAPOL TX (blocking-ish); the L2 socket is the EAPOL RX path.
- * ★ HW-TODO: EAPOL RX routing — net_al_input must divert ethertype 0x888E frames to the supplicant's
- *   L2 socket instead of at_netif (IP). Until then WPA2 association can't complete (open networks OK).
+ * IP task ready. net_l2_send is the EAPOL TX (blocking-ish); RX goes net_al_input -> l2_filter
+ * match -> eloop_event_commit (see above) into the supplicant's eloop task.
  */
 extern void fhost_task_ready( int task );   /* fhost_api.h: mark IP task up (best-guess IP_TASK id) */
 
@@ -221,14 +305,29 @@ int net_init( void )
     return 0;
 }
 
+/* Blocking TX confirm for net_l2_send (EAPOL). Mirrors the lwip adapter: one in-flight L2
+ * frame at a time, cfm callback stores the ack and wakes the sender. */
+static SemaphoreHandle_t l2_send_sem;
+static void net_l2_send_cfm( uint32_t frame_id, bool acknowledged, void * arg )
+{
+    ( void ) frame_id;
+    if( arg != NULL ) { *( ( bool * ) arg ) = acknowledged; }
+    ( void ) xSemaphoreGive( l2_send_sem );
+}
+
 int net_l2_send( net_al_if_t net_if, const uint8_t * data, int data_len, uint16_t ethertype,
                  const uint8_t * dst_addr, bool * ack )
 {
     if( ack != NULL ) { *ack = false; }
+    if( l2_send_sem == NULL )
+    {
+        l2_send_sem = xSemaphoreCreateBinary();   /* created once, on the supplicant task */
+        if( l2_send_sem == NULL ) { return -1; }
+    }
 
     /* Build the ethernet frame (prepend hdr if dst given), copy into a WRAM TX buffer, submit. */
     uint16_t hdr = ( dst_addr != NULL ) ? 14U : 0U;
-    fhost_tx_buf_t * b = platform_malloc( sizeof( *b ) + hdr + data_len );
+    fhost_tx_buf_t * b = kmalloc( sizeof( *b ) + hdr + data_len, MM_FLAG_HEAP_WRAM_0 );
     if( b == NULL )
     {
         return -1;
@@ -242,23 +341,63 @@ int net_l2_send( net_al_if_t net_if, const uint8_t * data, int data_len, uint16_
         p[ 13 ] = ( uint8_t ) ( ethertype & 0xFF );
     }
     ( void ) memcpy( p + hdr, data, data_len );
-    b->len = ( uint16_t ) ( hdr + data_len );
+    b->len = ( uint32_t ) ( hdr + data_len );
 
-    struct net_al_tx_req req = { 0 };
-    req.net_buf = ( net_al_tx_t ) b;
-    req.net_if  = ( net_if != NULL ) ? net_if : ( net_al_if_t ) g_sta_if;
-    if( net_al_tx_req( req ) != 0 )
+    /* Blocking: submit via fhost_tx_start with a confirm cb, wait for the TX completion
+     * (the supplicant retries on !ack — see net_l2_send in the lwip adapter). */
+    int res = fhost_tx_start( ( net_if != NULL ) ? net_if : ( net_al_if_t ) g_sta_if,
+                              ( net_al_tx_t ) b, net_l2_send_cfm, ack );
+    if( res != 0 )
     {
         net_buf_tx_free( ( net_al_tx_t ) b );
         return -2;
     }
-    if( ack != NULL ) { *ack = true; }
+    if( xSemaphoreTake( l2_send_sem, pdMS_TO_TICKS( 2000 ) ) != pdTRUE )
+    {
+        printf( "netif: L2 TX confirm timeout\r\n" );
+    }
     return 0;
 }
 
-/* ★ HW-TODO: real L2 socket for EAPOL RX (route 0x888E in net_al_input to the supplicant). */
-int  net_l2_socket_create( net_al_if_t net_if, uint16_t ethertype ) { ( void ) net_if; ( void ) ethertype; return 0; }
-int  net_l2_socket_delete( net_al_if_t net_if ) { ( void ) net_if; return 0; }
+/* L2 "socket" = an ethertype filter slot; RX delivery happens in net_al_input -> eloop.
+ * Same semantics as the lwip adapter (no real socket object; caller ignores the fd). */
+int net_l2_socket_create( net_al_if_t net_if, uint16_t ethertype )
+{
+    int free_slot = -1;
+    for( int i = 0; i < L2_FILTER_COUNT; i++ )
+    {
+        if( ( l2_filter[ i ].net_if == net_if ) && ( l2_filter[ i ].ethertype == ethertype ) )
+        {
+            return -1;   /* already registered */
+        }
+        if( ( l2_filter[ i ].net_if == NULL ) && ( free_slot < 0 ) )
+        {
+            free_slot = i;
+        }
+    }
+    if( free_slot < 0 )
+    {
+        return -1;
+    }
+    l2_filter[ free_slot ].net_if    = net_if;
+    l2_filter[ free_slot ].ethertype = ethertype;
+    return 0;
+}
+
+int net_l2_socket_delete( net_al_if_t net_if )
+{
+    for( int i = 0; i < L2_FILTER_COUNT; i++ )
+    {
+        if( l2_filter[ i ].net_if == net_if )
+        {
+            l2_filter[ i ].net_if    = NULL;
+            l2_filter[ i ].ethertype = 0;
+            return 0;
+        }
+    }
+    return -1;
+}
+
 void net_buf_tx_cat( net_al_tx_t a, net_al_tx_t b ) { ( void ) a; ( void ) b; }
 
 /* ===== lwip byte-order / ntop shims (fhost/supplicant pull a few; we have no lwip) =========== */
@@ -289,10 +428,10 @@ static BaseType_t prvTx( const uint8_t * frame, uint16_t len )
     {
         return pdFALSE;
     }
-    struct net_al_tx_req req = { 0 };
-    req.net_buf = nb;
-    req.net_if  = ( net_al_if_t ) g_sta_if;
-    if( net_al_tx_req( req ) != 0 )
+    /* fhost_tx_start = the proper TX entry (staid resolve + queueing), same as the lwip
+     * adapter's low_level_output. It frees the buffer on failure paths it owns; on a
+     * non-zero return the buffer was not consumed. */
+    if( fhost_tx_start( ( net_al_if_t ) g_sta_if, nb, NULL, NULL ) != 0 )
     {
         net_buf_tx_free( nb );
         return pdFALSE;

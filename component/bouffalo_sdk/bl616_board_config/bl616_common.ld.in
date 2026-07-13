@@ -226,6 +226,15 @@ SECTIONS
         *libgcc.a:_clz.o*(.rodata)
 #endif
 
+        /* Our FreeRTOS trap/ISR hot path MUST run from RAM, not XIP: under sustained WiFi
+         * RX interrupt load the XIP instruction fetch on this part returns corrupt words
+         * (HW-caught: mtval held an RV64 `ld` opcode inside freertos_risc_v_trap_handler
+         * while the flash bytes were correct -> illegal-instruction loop, silent hang).
+         * The SDK's own WFA block above pins its libfreertos.a the same way; our kernel
+         * libs are named differently, so pin them explicitly (unconditional). */
+        *libfreertos_kernel_port.a:*.o*(.text*)
+        *libfreertos_kernel.a:tasks.c.o*(.text*)
+
         *(.tcm_code.*)
         *(.tcm_const.*)
         *(.sclock_rlt_code.*)

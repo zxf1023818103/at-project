@@ -67,14 +67,27 @@ static BaseType_t cmd_version( char *out, size_t outlen, const char *cmd )
     return pdFALSE;
 }
 
+/* Weak: only platforms with a registered secondary WRAM heap (bl616 WiFi-DMA TX buffers)
+ * report it; elsewhere kfree_size resolves to NULL or the heap id is unregistered (-> 0). */
+extern size_t kfree_size( uint32_t heap_id ) __attribute__( ( weak ) );
+#define MONITOR_MM_HEAP_WRAM_0    3   /* mm.h mm_heap_type_t MM_HEAP_WRAM_0 */
+
 static BaseType_t cmd_heap( char *out, size_t outlen, const char *cmd )
 {
     ( void ) cmd;
     /* %d (not %u): KM0's snprintf is the ROM DiagSnPrintf, which doesn't implement %u.
      * Heap sizes are small positive values, so signed prints the same. */
-    snprintf( out, outlen, "free heap: %d bytes  (min ever: %d)\r\n",
-              ( int ) xPortGetFreeHeapSize(),
-              ( int ) xPortGetMinimumEverFreeHeapSize() );
+    int n = snprintf( out, outlen, "free heap: %d bytes  (min ever: %d)\r\n",
+                      ( int ) xPortGetFreeHeapSize(),
+                      ( int ) xPortGetMinimumEverFreeHeapSize() );
+    if( ( kfree_size != NULL ) && ( n > 0 ) && ( ( size_t ) n < outlen ) )
+    {
+        size_t w = kfree_size( MONITOR_MM_HEAP_WRAM_0 );
+        if( w > 0 )
+        {
+            snprintf( out + n, outlen - ( size_t ) n, "WRAM free: %d bytes\r\n", ( int ) w );
+        }
+    }
     return pdFALSE;
 }
 

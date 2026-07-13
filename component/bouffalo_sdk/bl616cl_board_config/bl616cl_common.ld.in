@@ -201,6 +201,13 @@ SECTIONS
         INCLUDE run_in_ram_function.ld.in
 #endif
 
+        /* FreeRTOS trap/ISR hot path in RAM, not XIP — under sustained WiFi RX interrupt
+         * load the XIP instruction fetch returns corrupt words (HW-caught on bl616:
+         * illegal-instruction loop inside freertos_risc_v_trap_handler while the flash
+         * bytes were correct). Same pin as bl616_common.ld.in. */
+        *libfreertos_kernel_port.a:*.o*(.text*)
+        *libfreertos_kernel.a:tasks.c.o*(.text*)
+
         *(.tcm_code.*)
         *(.tcm_const.*)
         *(.sclock_rlt_code.*)
