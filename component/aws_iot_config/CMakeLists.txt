@@ -88,8 +88,10 @@ if(AT_ENABLE_AWS_OTA)
                                      # 2 KB of that .bss back to the heap for the modexp (which needs a
                                      # comfortable margin or it corrupts near-OOM). configCHECK=2 catches
                                      # an overflow cleanly if 14 KB proves too tight.
-        AWS_NET_BUFFER_SZ=1536       # holds one incoming 1 KB OTA-block CBOR PUBLISH + MQTT overhead
-                                     # (bl602 uses 1 KB blocks, otaconfigLOG2_FILE_BLOCK_SIZE=10)
+        # AWS_NET_BUFFER_SZ: default 4736, uniform with AmebaD. HW-caught: the old 1536 became
+        # the MQTT maximum-packet-size the broker enforces (silent drop!), and the HTTP-data-plane
+        # job document (~1.8 KB with its presigned S3 URL) never arrived - the agent camped in
+        # WaitingForJob forever while every retry was accepted server-side with no response.
         AWS_NET_BUFFER_DYNAMIC       # malloc the 2.5 KB MQTT buffer AFTER the TLS handshake (not .bss)
                                      # so the heap-tight server-cert RSA-2048 verify (software modexp,
                                      # since the BL602 HW PKA mis-computes a 2048-bit modulus) has room.
