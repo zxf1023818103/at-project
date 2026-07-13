@@ -17,6 +17,7 @@
 #include "bflb_uart.h"
 #include "bflb_irq.h"
 #include "FreeRTOS.h"
+#include "task.h"           /* xTaskGetSchedulerState */
 #include "stream_buffer.h"
 #endif
 
@@ -53,20 +54,27 @@ static void bflb_console_rx_isr(void)
     portYIELD_FROM_ISR(woken);
 }
 
-/* Install the RX ISR once the console UART device is known. Idempotent-ish: called from
- * bflb_uart_set_console() right after the SDK hands us the configured device. */
-static void bflb_console_rx_irq_init(void)
+/* Arm the IRQ-driven RX. Called LAZILY from the first getc() (which runs on the monitor task,
+ * i.e. after the scheduler is up) — NOT from bflb_uart_set_console(), which the SDK calls very
+ * early in board_init(): enabling the line there let a stray RX byte fire the ISR before the
+ * scheduler existed, and portYIELD_FROM_ISR then dereferenced a NULL pxCurrentTCB -> boot hang.
+ * Returns 1 once armed. */
+static int bflb_console_rx_arm(void)
 {
-    if (console == NULL || s_rx_stream != NULL) {
-        return;
+    if (s_rx_stream != NULL) {
+        return 1;
+    }
+    if (console == NULL || xTaskGetSchedulerState() != taskSCHEDULER_RUNNING) {
+        return 0;
     }
     s_rx_stream = xStreamBufferCreate(CONSOLE_RX_STREAM_SZ, 1);
     if (s_rx_stream == NULL) {
-        return;   /* falls back to the polling getc below */
+        return 0;   /* falls back to the polling getc below */
     }
     bflb_irq_attach(console->irq_num, (irq_callback) bflb_console_rx_isr, NULL);
     bflb_uart_rxint_mask(console, false);   /* unmask RX FIFO + timeout interrupt */
     bflb_irq_enable(console->irq_num);
+    return 1;
 }
 #endif /* !CONFIG_CONSOLE_WO */
 
@@ -78,8 +86,7 @@ void bflb_wo_set_console(struct bflb_device_s *dev)
 #else
 void bflb_uart_set_console(struct bflb_device_s *dev)
 {
-    console = dev;
-    bflb_console_rx_irq_init();   /* IRQ-driven RX once the device is known */
+    console = dev;   /* RX IRQ is armed lazily from the first getc() (post-scheduler) */
 }
 #endif
 
@@ -103,16 +110,17 @@ static void bflb_console_putc(char c)
 #ifndef CONFIG_CONSOLE_WO
 static int bflb_console_getc(void)
 {
-    /* Pop one byte from the IRQ-fed SW FIFO (non-blocking: the monitor RX loop expects <0 when
-     * idle and adds its own vTaskDelay). Falls back to a direct HW read before the ISR is armed. */
-    if (s_rx_stream != NULL) {
+    /* Lazily arm the IRQ RX on the first call (we're on the monitor task now, scheduler up).
+     * Then pop one byte from the IRQ-fed SW FIFO (non-blocking: the monitor RX loop expects
+     * <0 when idle and adds its own vTaskDelay). */
+    if (bflb_console_rx_arm()) {
         uint8_t c;
         if (xStreamBufferReceive(s_rx_stream, &c, 1, 0) == 1) {
             return (int) c;
         }
         return -1;
     }
-    return bflb_uart_getchar(console);   /* pre-init fallback; <0 if no input */
+    return bflb_uart_getchar(console);   /* pre-scheduler fallback; <0 if no input */
 }
 #endif
 
