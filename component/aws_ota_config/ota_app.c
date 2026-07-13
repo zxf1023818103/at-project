@@ -109,6 +109,30 @@ int ota_app_is_active( void )
     return ( ( st > OtaAgentStateWaitingForJob ) && ( st < OtaAgentStateSuspended ) ) ? 1 : 0;
 }
 
+/* Periodic job-poll self-heal: the OTA library sends ONE $next/get after connect and then waits
+ * forever for the job document (no retry in WaitingForJob). That single response is lost when the
+ * broker still holds a half-open ghost of this clientId (a hard-reset device never sends MQTT
+ * DISCONNECT; deliveries go to the ghost until its keep-alive expires — HW-caught: DescribeJobExecution
+ * Success on the AWS side, nothing ever reaching the fresh connection). Called from the telemetry
+ * task's 5 s loop; every 12th call (~60 s) in WaitingForJob it re-issues OTA_CheckForUpdate, by which
+ * time the ghost has expired and the response lands on the live connection. */
+void ota_app_poll_job( void )
+{
+    static uint32_t s_ticks = 0;
+
+    if( OTA_GetState() != OtaAgentStateWaitingForJob )
+    {
+        s_ticks = 0;
+        return;
+    }
+    if( ++s_ticks >= 12U )
+    {
+        s_ticks = 0;
+        OTA_APP_LOG( "still WaitingForJob - re-issuing job request" );
+        ( void ) OTA_CheckForUpdate();
+    }
+}
+
 /* ------------------------------------------------------------- buffers -------- */
 /* OtaAppBuffer_t static backing (sizes per the task brief). */
 static uint8_t s_updateFilePath[ 256 ];

@@ -526,6 +526,10 @@ static void aws_telemetry_task(void *param)
             wasConnected = 1;
         }
 
+        /* OTA job-poll self-heal (see ota_app_poll_job): re-request the job document if the
+         * agent has been stuck in WaitingForJob (lost $next/get response). */
+        ota_app_poll_job();
+
         {
             char payload[160];
             MQTTPublishInfo_t pub;

@@ -44,4 +44,12 @@ void ota_app_on_mqtt_disconnected( void );
  */
 int ota_app_is_active( void );
 
+/**
+ * @brief Call periodically (~5 s cadence, e.g. from the telemetry loop). If the agent has sat in
+ *        WaitingForJob for ~60 s it re-issues OTA_CheckForUpdate — self-heals the lost-job-document
+ *        case (broker delivered the $next/get response to a half-open ghost connection left by a
+ *        hard reset).
+ */
+void ota_app_poll_job( void );
+
 #endif /* OTA_APP_H */
