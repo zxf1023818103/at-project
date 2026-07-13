@@ -59,6 +59,31 @@ extern int       bflb_xip_sflash_state_restore( struct spi_flash_cfg_type * cfg,
 #define SF_CMD_RDSR2  0x35   /* Read Status Register-2 (holds CMP at bit 6) */
 #define SF_CMD_WRSR   0x01   /* Write Status Register: GD25Q32 accepts the 16-bit form (SR1 then SR2) */
 
+/* Flash models the SR1=0x14 + SR2.CMP=1 "bottom 3 MB locked, top 1 MB (LFS) writable" encoding
+ * is VERIFIED on. The BP/CMP protection map is vendor/part-specific: the same SR bits on a
+ * different part can cover the LFS region too — HW-caught on a second bl616 board, where the
+ * boot-time lock left LittleFS unwritable (every prog failed read-back -> cascade of
+ * "Bad block" -> "No more free space"), silently eating the OTA self-test flag and failing
+ * the job with 0x11 ImageStateMismatch. Unknown JEDEC ids now FAIL OPEN (no write-protect). */
+static const uint32_t k_lock_jedec_ok[] =
+{
+    0x1640C8,   /* GD25Q32  (bl602dk)  */
+    0x1640EF,   /* W25Q32   (bl616dk)  */
+};
+
+static int lock_jedec_supported( void )
+{
+    extern uint32_t bflb_flash_get_jedec_id( void );
+    uint32_t id = bflb_flash_get_jedec_id() & 0xFFFFFF;
+    for( size_t i = 0; i < sizeof( k_lock_jedec_ok ) / sizeof( k_lock_jedec_ok[ 0 ] ); i++ )
+    {
+        if( k_lock_jedec_ok[ i ] == id ) { return 1; }
+    }
+    printf( "flash: jedec 0x%06X not in the write-protect whitelist - lock skipped (fail-open)\r\n",
+            ( unsigned ) id );
+    return 0;
+}
+
 static struct spi_flash_cfg_type * flash_cfg( void )
 {
     uint8_t * cfg = 0;
@@ -136,6 +161,14 @@ int board_flash_protect( board_flash_prot_t mode,
                          uint8_t * o_sr1b, uint8_t * o_sr1a, uint8_t * o_sr2b, uint8_t * o_sr2a )
 {
     uint8_t sr1_cur = 0, sr2_cur = 0, w1, w2, v1 = 0, v2 = 0;
+
+    /* LOCK on an unverified flash can shield the WRONG region (incl. LittleFS) — demote it to
+     * an UNLOCK: that both skips the bad lock AND clears any protection a previous (unfixed)
+     * firmware already left in the part's persistent SR bits. UNLOCK itself is safe anywhere. */
+    if( ( mode != BOARD_FLASH_UNLOCK ) && !lock_jedec_supported() )
+    {
+        mode = BOARD_FLASH_UNLOCK;
+    }
 
     if( !bl602_sr_txn( 0, 0, 0, &sr1_cur, &sr2_cur ) )   /* read current SR (quiesced) */
     {
