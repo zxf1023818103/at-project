@@ -75,8 +75,8 @@ if(AT_ENABLE_AWS_OTA)
     endif()
     # bl602 heap is tight (~45 KB free after WiFi+DHCP). AWS_STATIC_TASKS puts the agent + OTA task
     # stacks in .bss so a fragmented heap can't fail their contiguous allocation (the observed
-    # xTaskCreate failure). AWS_NO_TELEMETRY drops the optional demo publish task (~4 KB). The agent
-    # stack is 8 KB (2048 words) - the proven bl602 TLS-handshake peak - vs AmebaD's 20 KB.
+    # xTaskCreate failure). The telemetry publish task is always included — uniform across
+    # platforms (no AWS_NO_TELEMETRY carve-outs anymore).
     target_compile_definitions(aws_iot PRIVATE
         APP_VERSION_BUILD=${AWS_APP_BUILD}   # OTA version gate (bl602 Makefile APP_BUILD; > running build)
         OTA_APP_ENABLE_HTTP=0
@@ -84,7 +84,6 @@ if(AT_ENABLE_AWS_OTA)
         AWS_TLS_BACKEND_MODE=0
         AWS_CA_USE_ENV
         AWS_STATIC_TASKS
-        AWS_NO_TELEMETRY
         AWS_AGENT_STACK_WORDS=3584   # 14 KB: the cert-chain verify + software RSA-2048 modexp peaks
                                      # ~12 KB (8 KB overflowed -> HardFault). Trimmed from 16 KB to give
                                      # 2 KB of that .bss back to the heap for the modexp (which needs a

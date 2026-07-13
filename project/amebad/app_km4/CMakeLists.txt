@@ -526,13 +526,10 @@ if(AMEBAD_ENABLE_AWS_IOT)
             AWS_NET_BUFFER_DYNAMIC
             AWS_NET_BUFFER_SZ=1536
             AWS_AGENT_STACK_WORDS=3584)
-        # Telemetry publish task (bw20/<mac>/telemetry): dropped on the agent TF-M build to save heap
-        # (there the OTA job status is the liveness signal). On TFM=OFF there is spare heap (no TF-M
-        # NS interface / secure storage) so keep the task. The LEAN image (else-branch above) always
-        # publishes -- telemetry IS its purpose.
-        if(AMEBAD_TFM_BOOT)
-            target_compile_definitions(target_img2_km4 PRIVATE AWS_NO_TELEMETRY)
-        endif()
+        # Telemetry publish task (bw20/<mac>/telemetry) is ALWAYS in the agent image, uniform
+        # across every platform and build flavor (the old AWS_NO_TELEMETRY carve-outs for the
+        # TF-M build here and for bl602 are gone — one behavior everywhere; if a heap-tight
+        # target OOMs, fix the heap, don't fork the feature set).
     endif()
     if(AMEBAD_TFM_STORAGE)
         target_sources(target_img2_km4 PRIVATE "${AT_ROOT}/component/aws_iot_config/aws_secret_store_its.c")

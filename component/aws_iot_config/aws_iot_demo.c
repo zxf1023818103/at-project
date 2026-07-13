@@ -602,9 +602,8 @@ void aws_iot_demo_start(void)
         log_error("[AWS] xTaskCreate(aws_agent) FAILED");
 #endif
 
-#ifndef AWS_NO_TELEMETRY
-    /* 1024 words (4 KB): `tasks` high-water shows the telemetry task only ever used ~1.7 KB. The bl602
-     * OTA build omits it (AWS_NO_TELEMETRY) to save heap - OTA job status is the liveness signal there. */
+    /* 1024 words (4 KB): `tasks` high-water shows the telemetry task only ever used ~1.7 KB.
+     * Unconditional on every platform/build (the old AWS_NO_TELEMETRY carve-outs are gone). */
 #ifdef AWS_STATIC_TASKS
     {
         static StackType_t  s_teleStack[ AWS_TELE_STACK_WORDS ];
@@ -618,5 +617,4 @@ void aws_iot_demo_start(void)
                     tskIDLE_PRIORITY + 2, NULL) != pdPASS)
         log_error("[AWS] xTaskCreate(aws_tele) FAILED");
 #endif
-#endif /* !AWS_NO_TELEMETRY */
 }
