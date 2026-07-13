@@ -8,6 +8,7 @@
  */
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -61,9 +62,38 @@ int monitor_after_command( void )
 
 /* ---- reboot command ------------------------------------------------------ */
 
+#if defined( BL616 ) || defined( BL616CL )
+/* `reboot uartburn` (mirrors the AmebaD command): force the boot ROM into UART ISP so the
+ * host can flash over the console UART with no BOOT-pin press. HBN_RSV2 (0x2000F108) is in
+ * the always-on domain: RELEASE_CORE=4 (the ROM's "honour user_boot_sel" flag) | USER_BOOT_SEL=1
+ * (ISP) = 0x44000000; the ROM consumes it on the next boot. The reset MUST be
+ * GLB_SW_System_Reset (SYS_RESET keeps the HBN domain) — bl_sys_reset_por is a power-on reset
+ * that would wipe the flag. Field layout per bl616_hbn.h; values per OpenOCD's bl616 support. */
+#define BL616_HBN_RSV2         ( *( volatile uint32_t * ) 0x2000F108u )
+#define BL616_BOOT_SEL_ISP     0x44000000u
+extern int GLB_SW_System_Reset( void );   /* bl616_glb.c (resolves at image link) */
+#endif
+
 static BaseType_t cmd_reboot( char *out, size_t outlen, const char *cmd )
 {
-    ( void ) cmd;
+    BaseType_t plen = 0;
+    const char * p = FreeRTOS_CLIGetParameter( cmd, 1, &plen );
+
+    if( ( p != NULL ) && ( plen == 8 ) && ( strncmp( p, "uartburn", 8 ) == 0 ) )
+    {
+#if defined( BL616 ) || defined( BL616CL )
+        snprintf( out, outlen, "rebooting into UART ISP (bootrom download mode) ...\r\n" );
+        vTaskDelay( pdMS_TO_TICKS( 50 ) );
+        BL616_HBN_RSV2 = BL616_BOOT_SEL_ISP;
+        GLB_SW_System_Reset();
+        return pdFALSE;                  /* not reached */
+#else
+        /* bl602's boot ROM has no user_boot_sel — ISP entry is BOOT-pin-only on that chip. */
+        snprintf( out, outlen, "uartburn: not supported on this chip (BOOT pin only)\r\n" );
+        return pdFALSE;
+#endif
+    }
+
     snprintf( out, outlen, "rebooting ...\r\n" );
     vTaskDelay( pdMS_TO_TICKS( 50 ) );   /* let the line flush before the reset fires */
     bl_sys_reset_por();
@@ -71,7 +101,7 @@ static BaseType_t cmd_reboot( char *out, size_t outlen, const char *cmd )
 }
 
 static const CLI_Command_Definition_t kBflbCmds[] = {
-    { "reboot", "reboot:\r\n reset the chip\r\n", cmd_reboot, 0 },
+    { "reboot", "reboot [uartburn]:\r\n reset the chip (uartburn -> bootrom UART download mode)\r\n", cmd_reboot, -1 },
 };
 
 /* Called from main() after monitor_start() (the register-after-start pattern). */
