@@ -48,6 +48,7 @@ add_compile_options("-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=")
 # _recv / _send / DNS directly (self-contained — it does NOT use the legacy sockets_wrapper).
 add_library(network_transport_sockets STATIC EXCLUDE_FROM_ALL
     tcp_sockets_wrapper.c
+    transport_https.c   # shared Https_Connect() — backend-agnostic; TLS_FreeRTOS_Connect resolves at image link
 )
 target_include_directories(network_transport_sockets SYSTEM PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(network_transport_sockets PUBLIC freertos-plus-tcp_config freertos_config)

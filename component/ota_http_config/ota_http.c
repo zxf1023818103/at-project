@@ -26,7 +26,8 @@
 #include "llhttp.h"
 #include "core_http_client.h"
 #include "at_log.h"                 /* rxi log.h enum must precede transport_tls.h's logging_levels.h LOG_* macros (mbedtls backend) */
-#include "transport_tls.h"          /* TLS_FreeRTOS_Connect/send/recv/Disconnect, NetworkCredentials_t */
+#include "transport_tls.h"          /* TLS_FreeRTOS_send/recv/Disconnect, NetworkContext_t */
+#include "transport_https.h"        /* shared Https_Connect (server-only trust, unified with AWS OTA) */
 #include "ota_flash.h"
 #include "FreeRTOS_CLI.h"
 #include "psa/crypto.h"             /* psa_crypto_init - PSA backs picotls/mbedTLS RNG + the handshake */
@@ -70,18 +71,15 @@ static int conn_connect( conn_t * c, int is_https, const char * host, uint16_t p
     if( is_https )
     {
         static NetworkContext_t netctx;          /* TLS context (static: one OTA at a time) */
-        NetworkCredentials_t creds;
         TlsTransportStatus_t st;
 
         memset( c, 0, sizeof( *c ) );
         c->is_https = 1;
-        memset( &creds, 0, sizeof( creds ) );
-        creds.pRootCaPath  = "ca";   /* CA folder on LittleFS (+ embedded bundle when CRT_BUNDLE=ON) */
-        creds.rxReserveSize = OTA_HTTP_RXRESERVE;   /* full record up front - no mid-stream realloc */
-        creds.backendMode   = TLS_BACKEND_MODE_FALLBACK; /* arbitrary host - allow TLS 1.2 fallback */
         netctx.pParams     = &c->tlsParams;
         c->tls             = &netctx;
-        st = TLS_FreeRTOS_Connect( c->tls, host, port, &creds, OTA_HTTP_RECV_TMO_MS, OTA_HTTP_SEND_TMO_MS );
+        /* Shared server-only HTTPS connect (transport_https.c) — same config as the AWS OTA data
+         * plane, so both verify S3 the same way (crt bundle / Amazon Root CA, picotls TLS 1.3). */
+        st = Https_Connect( c->tls, host, port, OTA_HTTP_RXRESERVE, OTA_HTTP_RECV_TMO_MS, OTA_HTTP_SEND_TMO_MS );
         if( st != TLS_TRANSPORT_SUCCESS )
         {
             log_error( "[OTA] TLS connect to %s:%u failed (%d)", host, port, (int) st );

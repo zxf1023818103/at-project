@@ -49,7 +49,8 @@
  * the shared TLS transport (picotls/mbedTLS), plain FreeRTOS+TCP for http://, and the vendored
  * URL parser. Mirrors ota_http.c's transport setup; here it feeds the OTA agent file blocks. */
 #include "core_http_client.h"
-#include "transport_tls.h"          /* TLS_FreeRTOS_*, NetworkCredentials_t, TlsTransportParams_t */
+#include "transport_tls.h"          /* TLS_FreeRTOS_send/recv/Disconnect, TlsTransportParams_t */
+#include "transport_https.h"        /* shared Https_Connect (server-only, runtime backend) */
 #include "transport_interface.h"
 #include "urlparse.h"
 
@@ -259,29 +260,6 @@ static OtaHttpStatus_t prvOtaHttpDeinit( void );
 #define OTA_HTTP_REQ_RETRIES    6u
 #define OTA_HTTP_HOST_BUF       128u
 
-/* Amazon Root CA 1 - the trust anchor for *.s3*.amazonaws.com (and most AWS endpoints).
- * (Same anchor ota_http.c uses for the console `ota_http` command.) */
-static const char OTA_AMAZON_ROOT_CA1[] =
-    "-----BEGIN CERTIFICATE-----\n"
-    "MIIDQTCCAimgAwIBAgITBmyfz5m/jAo54vB4ikPmljZbyjANBgkqhkiG9w0BAQsF\n"
-    "ADA5MQswCQYDVQQGEwJVUzEPMA0GA1UEChMGQW1hem9uMRkwFwYDVQQDExBBbWF6\n"
-    "b24gUm9vdCBDQSAxMB4XDTE1MDUyNjAwMDAwMFoXDTM4MDExNzAwMDAwMFowOTEL\n"
-    "MAkGA1UEBhMCVVMxDzANBgNVBAoTBkFtYXpvbjEZMBcGA1UEAxMQQW1hem9uIFJv\n"
-    "b3QgQ0EgMTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALJ4gHHKeNXj\n"
-    "ca9HgFB0fW7Y14h29Jlo91ghYPl0hAEvrAIthtOgQ3pOsqTQNroBvo3bSMgHFzZM\n"
-    "9O6II8c+6zf1tRn4SWiw3te5djgdYZ6k/oI2peVKVuRF4fn9tBb6dNqcmzU5L/qw\n"
-    "IFAGbHrQgLKm+a/sRxmPUDgH3KKHOVj4utWp+UhnMJbulHheb4mjUcAwhmahRWa6\n"
-    "VOujw5H5SNz/0egwLX0tdHA114gk957EWW67c4cX8jJGKLhD+rcdqsq08p8kDi1L\n"
-    "93FcXmn/6pUCyziKrlA4b9v7LWIbxcceVOF34GfID5yHI9Y/QCB/IIDEgEw+OyQm\n"
-    "jgSubJrIqg0CAwEAAaNCMEAwDwYDVR0TAQH/BAUwAwEB/zAOBgNVHQ8BAf8EBAMC\n"
-    "AYYwHQYDVR0OBBYEFIQYzIU07LwMlJQuCFmcx7IQTgoIMA0GCSqGSIb3DQEBCwUA\n"
-    "A4IBAQCY8jdaQZChGsV2USggNiMOruYou6r4lK5IpDB/G/wkjUu0yKGX9rbxenDI\n"
-    "U5PMCCjjmCXPI6T53iHTfIUJrU6adTrCC2qJeHZERxhlbI1Bjjt/msv0tadQ1wUs\n"
-    "N+gDS63pYaACbvXy8MWy7Vu33PqUXHeeE6V/Uq2V8viTO96LXFvKWlJbYK8U90vv\n"
-    "o/ufQJVtMVT8QtPHRh8jrdkPSHCa2XV4cdFyQzR1bldZwgJcJmApzyMZFo6IQ6XU\n"
-    "5MsI+yMRQ+hDKXJioaldXgjUkK642M4UwtBV8ob2xJNDd2ZhwLnoQdeXeGADbkpy\n"
-    "rqXRfboQnoZsG4q5WTP468SQvvG5\n"
-    "-----END CERTIFICATE-----\n";
 
 /* Open connection state (one OTA at a time). */
 static struct
@@ -394,23 +372,18 @@ static OtaHttpStatus_t prvHttpOpenConn( void )
 {
     if( s_http.isHttps )
     {
-        NetworkCredentials_t creds;
-
         /* Free BLE heap before opening the OTA data-plane TLS (partial mitigation; see note above). */
         if( nimble_stop != NULL )
         {
             nimble_stop();
         }
 
-        memset( &creds, 0, sizeof( creds ) );
-        creds.pRootCa        = ( const uint8_t * ) OTA_AMAZON_ROOT_CA1;
-        creds.rootCaSize     = sizeof( OTA_AMAZON_ROOT_CA1 );   /* incl. NUL, as mbedTLS PEM wants */
-        creds.rxReserveSize  = OTA_HTTP_RXRESERVE;
-        creds.backendMode    = TLS_BACKEND_MODE_PICOTLS;   /* AWS S3 supports TLS 1.3; never fall back */
         s_http.netCtx.pParams = &s_http.tlsParams;
 
-        if( TLS_FreeRTOS_Connect( &s_http.netCtx, s_http.host, s_http.port, &creds,
-                                  OTA_HTTP_RECV_TMO_MS, OTA_HTTP_SEND_TMO_MS ) != TLS_TRANSPORT_SUCCESS )
+        /* Shared server-only HTTPS connect (transport_https.c) — same server-trust + the same
+         * runtime-selected backend (at_tls_get_backend) as the ota_http command and AWS MQTT. */
+        if( Https_Connect( &s_http.netCtx, s_http.host, s_http.port, OTA_HTTP_RXRESERVE,
+                           OTA_HTTP_RECV_TMO_MS, OTA_HTTP_SEND_TMO_MS ) != TLS_TRANSPORT_SUCCESS )
         {
             OTA_APP_LOG( "http: TLS connect to %s:%u FAIL", s_http.host, ( unsigned ) s_http.port );
             /* CRITICAL: free what TLS_FreeRTOS_Connect allocated before failing - a transient

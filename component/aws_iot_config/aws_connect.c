@@ -10,6 +10,7 @@
 #include <stdbool.h>
 
 #include "aws_connect.h"
+#include "transport_https.h"   /* at_tls_get_backend — the shared runtime TLS backend */
 
 int aws_connect_tls( NetworkContext_t *      net,
                      NetworkCredentials_t *  creds,
@@ -29,7 +30,7 @@ int aws_connect_tls( NetworkContext_t *      net,
     creds->privateKeySize  = p->keyLen;
     creds->disableSni      = 0;
     creds->rxReserveSize   = p->rxReserveSize;
-    creds->backendMode     = ( TlsBackendMode_t ) p->backendMode;
+    creds->backendMode     = at_tls_get_backend();   /* shared runtime backend (ota_http / OTA / MQTT all use it) */
 
     printf( "[AWS] TLS connect %s:%u ...\r\n", p->endpoint, ( unsigned ) p->port );
     ts = TLS_FreeRTOS_Connect( net, p->endpoint, p->port, creds, p->recvTmoMs, p->sendTmoMs );

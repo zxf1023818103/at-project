@@ -32,6 +32,7 @@
 #include "core_mqtt.h"
 #include "core_mqtt_agent.h"
 #include "transport_tls.h"
+#include "transport_https.h"   /* at_tls_set_backend / at_tls_backend_from_str (shared runtime TLS backend) */
 #include "backoff_algorithm.h"
 
 #include "aws_iot_config.h"
@@ -586,6 +587,14 @@ void aws_iot_demo_start(void)
         return;
     }
     s_started = 1;
+
+    /* Shared runtime TLS backend for every AWS/HTTPS connection (MQTT + OTA + ota_http): the
+     * compile-time default (AWS_TLS_BACKEND_MODE), overridable at runtime via the "tls_backend"
+     * env var ("fallback"/"picotls"/"mbedtls"). Only a fallback build can actually switch. */
+    {
+        const char * b = getenv("tls_backend");
+        at_tls_set_backend(b != NULL ? at_tls_backend_from_str(b) : (TlsBackendMode_t)AWS_TLS_BACKEND_MODE);
+    }
 
     /* 5120 words (20 KB) on AmebaD: MQTTAgent_CommandLoop + the one-shot TLS handshake (mbedTLS
      * RSA-2048 cert-chain verify peaks ~12 KB of stack). bl602 (AWS_AGENT_STACK_WORDS=2048) runs the
