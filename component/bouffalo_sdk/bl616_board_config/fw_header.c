@@ -92,7 +92,7 @@ __attribute__((section(".fw_header"))) struct bootheader_t fw_header = {
     /* clock cfg */
     .clk_cfg.magiccode = 0x47464350,
     .clk_cfg.cfg.xtal_type = 0x07,      /*!< 0:None,1:24M,2:32M,3:38.4M,4:40M,5:26M,6:RC32M  */
-    .clk_cfg.cfg.mcu_clk = 0x05,        /*!< mcu_clk 0:RC32M;1:XTAL;2:aupll_div2;3:aupll_div1;4:wifipll_240M;5:wifipll_320M */
+    .clk_cfg.cfg.mcu_clk = 0x04,        /*!< wifipll_240M (NOT 0x05/320M — see board.c system_clock_init: 320M fetch corruption) */
     .clk_cfg.cfg.mcu_clk_div = 0x00,    /*!< mcu_clk divider */
     .clk_cfg.cfg.mcu_bclk_div = 0x00,   /*!< mcu_bclk divider */
     .clk_cfg.cfg.mcu_pbclk_div = 0x03,  /*!< mcu_pclk divider */

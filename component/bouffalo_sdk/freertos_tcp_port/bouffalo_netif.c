@@ -416,6 +416,44 @@ const char * lwip_inet_ntop( int af, const void * src, char * dst, uint32_t size
     return dst;
 }
 
+/* ===== TX-wedge watchdog =====================================================
+ * The macsw MAC core intermittently wedges its TX AC queues (frames stay "transmitting"
+ * forever, "internal frame left:N" + hal_machw asserts; reproduced with the stock SDK
+ * example too — pre-built firmware, not fixable here). Detect it from the data path:
+ * every prvTx submit carries a confirm callback; if confirms stop while frames are
+ * in flight, force a WiFi reassociation (fhost flushes/cfms pending TX on sta_del and
+ * wifi_service auto-reconnects; MQTT/OTA layers resume on their own). */
+#define TX_WEDGE_MIN_INFLIGHT    1                          /* any un-confirmed frame counts: once the
+                                                             * MAC wedges, fhost's credits run out and
+                                                             * fhost_tx_start starts FAILING, so the
+                                                             * in-flight count stops growing */
+#define TX_WEDGE_STALL_TICKS     pdMS_TO_TICKS( 12000 )
+#define TX_WEDGE_MAX_SUBMIT_FAIL 16                         /* consecutive fhost_tx_start failures */
+static volatile uint32_t   s_tx_outstanding;
+static volatile uint32_t   s_tx_submit_fail;
+static volatile TickType_t s_tx_last_cfm;
+static volatile uint8_t    s_tx_wedge_kick;
+
+static void prvTxCfm( uint32_t frame_id, bool acknowledged, void * arg )
+{
+    ( void ) frame_id; ( void ) acknowledged; ( void ) arg;
+    if( s_tx_outstanding > 0 ) { s_tx_outstanding--; }
+    s_tx_last_cfm = xTaskGetTickCount();
+}
+
+static void prvWedgeRecoveryTask( void * arg )
+{
+    ( void ) arg;
+    extern int wifi_sta_disconnect( void );
+    printf( "netif: TX wedge (in-flight %u, no cfm) -> WiFi reassociate\r\n",
+            ( unsigned ) s_tx_outstanding );
+    ( void ) wifi_sta_disconnect();   /* DISCONNECT event -> wifi_service reconnects */
+    s_tx_outstanding = 0;
+    s_tx_submit_fail = 0;
+    s_tx_wedge_kick  = 0;
+    vTaskDelete( NULL );
+}
+
 /* ===== at_netif platform ops (unchanged app-facing shape) ==================== */
 static BaseType_t prvTx( const uint8_t * frame, uint16_t len )
 {
@@ -423,6 +461,23 @@ static BaseType_t prvTx( const uint8_t * frame, uint16_t len )
     {
         return pdFALSE;   /* not associated yet: fhost has no mac_vif -> TX would crash */
     }
+
+    /* Wedge check on the way in: un-confirmed frames stalled for a long while, or fhost
+     * refusing submissions outright (credits exhausted by the wedged MAC queue). */
+    TickType_t now = xTaskGetTickCount();
+    if( ( s_tx_wedge_kick == 0 ) &&
+        ( ( ( s_tx_outstanding >= TX_WEDGE_MIN_INFLIGHT ) &&
+            ( ( now - s_tx_last_cfm ) > TX_WEDGE_STALL_TICKS ) ) ||
+          ( s_tx_submit_fail >= TX_WEDGE_MAX_SUBMIT_FAIL ) ) )
+    {
+        s_tx_wedge_kick = 1;
+        if( xTaskCreate( prvWedgeRecoveryTask, "txwedge", 512, NULL,
+                         tskIDLE_PRIORITY + 1, NULL ) != pdPASS )
+        {
+            s_tx_wedge_kick = 0;
+        }
+    }
+
     net_al_tx_t nb = net_buf_tx_alloc_fill( frame, len );
     if( nb == NULL )
     {
@@ -431,11 +486,16 @@ static BaseType_t prvTx( const uint8_t * frame, uint16_t len )
     /* fhost_tx_start = the proper TX entry (staid resolve + queueing), same as the lwip
      * adapter's low_level_output. It frees the buffer on failure paths it owns; on a
      * non-zero return the buffer was not consumed. */
-    if( fhost_tx_start( ( net_al_if_t ) g_sta_if, nb, NULL, NULL ) != 0 )
+    if( s_tx_outstanding == 0 ) { s_tx_last_cfm = now; }   /* re-arm the stall clock */
+    s_tx_outstanding++;
+    if( fhost_tx_start( ( net_al_if_t ) g_sta_if, nb, prvTxCfm, NULL ) != 0 )
     {
+        if( s_tx_outstanding > 0 ) { s_tx_outstanding--; }
+        s_tx_submit_fail++;
         net_buf_tx_free( nb );
         return pdFALSE;
     }
+    s_tx_submit_fail = 0;
     return pdTRUE;
 }
 

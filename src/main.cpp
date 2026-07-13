@@ -508,6 +508,16 @@ int wifi_port_connect(const char *ssid, const char *pass, uint8_t chan, int sec)
     s_bl616_conn_waiter = xTaskGetCurrentTaskHandle();
     if (wifi_sta_connect(ssid, pass, NULL, akm, 0, 0, 0, 0) != 0) { s_bl616_conn_waiter = NULL; return -1; }
     if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(12000)) == 0) { s_bl616_conn_waiter = NULL; return -1; }
+    /* Pin the TX rate to legacy 11g 24M (no HT/AMPDU path): the macsw MAC core wedges its
+     * TX AC queues under bidirectional TCP on auto rate (internal frame left:N + hal_machw
+     * asserts; reproduced with the stock SDK example too). Called HERE (wifi service task)
+     * and not in the CONNECTED event callback — that runs in the async-event Timer context
+     * where the blocking kmsg round-trip inside wifi_mgmr_rate_config trips configASSERT. */
+    if( s_bl616_conn_ok )
+    {
+        struct wifi_mgmr_rate_config rc = { 12 /* WIFI_RC_IDX_24M */, 8 /* WIFI_RC_IDX_6M */ };
+        ( void ) wifi_mgmr_rate_config( &rc );
+    }
     return s_bl616_conn_ok ? 0 : -1;        // set by CODE_WIFI_ON_CONNECTED / _DISCONNECT
 }
 

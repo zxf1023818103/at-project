@@ -46,7 +46,13 @@
  * the cost of 2x the block count (slower download, fine for a demo). */
 #define otaconfigLOG2_FILE_BLOCK_SIZE      ( 10UL )
 #elif defined(BL616) || defined(BL616CL)
-#define otaconfigLOG2_FILE_BLOCK_SIZE      ( 11UL )
+/* bl616: 1 KB, NOT 2 KB. Same trap as AmebaD's 4 KB note below: this account's AWS MQTT
+ * file-delivery silently serves ZERO data/cbor blocks for any non-1KB get/cbor request
+ * (CloudWatch shows Publish-In Success on get, no Publish-Out, no error). HW-verified on
+ * bl616: 2 KB requests -> WaitingForFileBlock forever; 1 KB downloads. Heap fits: the
+ * AWSOTA image uses picotls (not the mbedTLS IN-buffer layout the 2 KB choice was sized
+ * against). */
+#define otaconfigLOG2_FILE_BLOCK_SIZE      ( 10UL )
 #else
 /* AmebaD: 1 KB over the MQTT data plane, matching bl602. 4 KB (the old HTTPS-era value) is inside AWS's
  * documented 256 B..128 KB GetStream range, but AWS's MQTT file-delivery served ZERO data/cbor blocks
