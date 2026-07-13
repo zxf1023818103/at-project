@@ -748,7 +748,6 @@ static OtaMqttStatus_t prvOtaMqttSubscribe( const char * pTopicFilter,
 {
     MQTTStatus_t st;
     MQTTAgentSubscribeArgs_t subscribeArgs;
-    MQTTSubscribeInfo_t subscribeInfo;
     MQTTAgentCommandInfo_t commandInfo = { 0 };
     OtaMqttCmdCtx_t ctx;
 
@@ -766,12 +765,16 @@ static OtaMqttStatus_t prvOtaMqttSubscribe( const char * pTopicFilter,
         return OtaMqttSubscribeFailed;
     }
 
-    /* The OTA library only SUBSCRIBES to '.../jobs/notify-next', but AWS auto-delivers the
-     * $next/get job-document response on '.../jobs/$next/get/accepted' (sent to the requester
-     * without a separate subscription). Register the OTA handler for that response topic too, so
-     * the job document routes (otherwise the agent stalls at WaitingForJob). */
+    /* The OTA library only SUBSCRIBES to '.../jobs/notify-next' and relies on AWS delivering the
+     * $next/get job-document response on '.../jobs/$next/get/accepted' to the requester. HW-caught:
+     * that reply-to-requester delivery can NOT be relied on (the broker only delivered it while a
+     * matching subscription existed; without one the agent stalls forever at WaitingForJob while
+     * telemetry keeps flowing). So when the library subscribes to notify-next, ALSO really
+     * SUBSCRIBE to $next/get/accepted on the broker (piggy-backed on the same SUBSCRIBE packet)
+     * and register the OTA handler for it. */
+    static char s_getAcceptedTopic[ 96 ];
+    int getAcceptedLen = 0;
     {
-        static char s_getAcceptedTopic[ 96 ];
         const char * pNN = "notify-next";
         size_t nnLen = strlen( pNN );
         if( ( topicFilterLength > nnLen ) &&
@@ -782,18 +785,28 @@ static OtaMqttStatus_t prvOtaMqttSubscribe( const char * pTopicFilter,
                               "%.*s$next/get/accepted", ( int ) prefixLen, pTopicFilter );
             if( ( n > 0 ) && ( n < ( int ) sizeof( s_getAcceptedTopic ) ) )
             {
-                ( void ) SubscriptionManager_AddSubscription( s_getAcceptedTopic, ( uint16_t ) n,
-                                                              prvOtaIncomingPublish, NULL );
+                if( SubscriptionManager_AddSubscription( s_getAcceptedTopic, ( uint16_t ) n,
+                                                         prvOtaIncomingPublish, NULL ) )
+                {
+                    getAcceptedLen = n;
+                }
             }
         }
     }
 
-    memset( &subscribeInfo, 0, sizeof( subscribeInfo ) );
-    subscribeInfo.qos = ( MQTTQoS_t ) ucQoS;
-    subscribeInfo.pTopicFilter = pTopicFilter;
-    subscribeInfo.topicFilterLength = topicFilterLength;
-    subscribeArgs.pSubscribeInfo = &subscribeInfo;
-    subscribeArgs.numSubscriptions = 1U;
+    MQTTSubscribeInfo_t subscribeInfos[ 2 ];
+    memset( subscribeInfos, 0, sizeof( subscribeInfos ) );
+    subscribeInfos[ 0 ].qos = ( MQTTQoS_t ) ucQoS;
+    subscribeInfos[ 0 ].pTopicFilter = pTopicFilter;
+    subscribeInfos[ 0 ].topicFilterLength = topicFilterLength;
+    if( getAcceptedLen > 0 )
+    {
+        subscribeInfos[ 1 ].qos = MQTTQoS1;
+        subscribeInfos[ 1 ].pTopicFilter = s_getAcceptedTopic;
+        subscribeInfos[ 1 ].topicFilterLength = ( uint16_t ) getAcceptedLen;
+    }
+    subscribeArgs.pSubscribeInfo = subscribeInfos;
+    subscribeArgs.numSubscriptions = ( getAcceptedLen > 0 ) ? 2U : 1U;
     subscribeArgs.pProperties = NULL;
 
     ctx.task = xTaskGetCurrentTaskHandle();
