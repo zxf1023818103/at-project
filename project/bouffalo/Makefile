@@ -128,6 +128,15 @@ ifeq ($(filter $(CRT_BUNDLE),ON OFF),)
 $(error CRT_BUNDLE must be 'ON' or 'OFF')
 endif
 
+# PSRAM: register the on-die PSRAM as heap (mm MM_HEAP_PSRAM_0; pvPortMalloc uses MM_FLAG_HEAP_ANY so
+# it falls back there when OCRAM/WRAM are full). DEFAULT OFF: a plain BL616 die has no PSRAM and
+# board_psram_x8_init() hangs at detection. Set PSRAM=ON only on a BL618 (PSRAM) die - it gives ota_http
+# room for its 2nd (S3) TLS alongside the live AWS MQTT TLS without OOM.
+PSRAM ?= OFF
+ifeq ($(filter $(PSRAM),ON OFF),)
+$(error PSRAM must be 'ON' or 'OFF')
+endif
+
 # Apache NimBLE host on the on-chip BLE controller (component/bouffalo_sdk/nimble_port). OFF (default,
 # same as AmebaD's AMEBAD_ENABLE_NIMBLE): the base image is WiFi + console + sntp. ON builds a BLE image
 # (advertises `bflb-nimble`, GAP/GATT sample service). proj.conf honors this -D (else defaults OFF).
@@ -192,6 +201,7 @@ $(BUILD_DIR)/CMakeCache.txt: CMakeLists.txt proj.conf
 	    -DAT_ENABLE_MCUMGR=$(MCUMGR) \
 	    -DAT_CRYPTO_SELFTESTS=$(CRYPTO_SELFTESTS) \
 	    -DAT_ENABLE_MINIMAL=$(MINIMAL) \
+	    -DAT_ENABLE_PSRAM=$(PSRAM) \
 	    -DBOUFFALO_MBEDTLS_HW_GCM=$(HWGCM)
 
 configure: $(BUILD_DIR)/CMakeCache.txt
