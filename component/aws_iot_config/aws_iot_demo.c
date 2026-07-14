@@ -65,13 +65,16 @@ struct NetworkContext
     TlsTransportParams_t * pParams;
 };
 
+/* AWS_NET_BUFFER_SZ is the ONE cross-platform coreMQTT-agent network-buffer size (this is the shared
+ * "port" default; amebad/bl616/bl602 all use it - do NOT re-define it smaller per platform).
+ * It is a HARD FLOOR, not just a data-plane convenience: coreMQTT v5, when the app sets no CONNECT
+ * properties, advertises networkBuffer.size AS the Maximum Packet Size, and the broker then SILENTLY
+ * DROPS every downlink larger than it. A --protocols HTTP OTA job's document carries a presigned S3
+ * URL signed with the OTA service role's STS temporary creds (long X-Amz-Security-Token) -> ~1.7 KB,
+ * so anything below that (the old amebad 1536) made the HTTP job doc never arrive (device stuck in
+ * WaitingForJob, no error). 4736 also holds a 4 KB MQTT/CBOR OTA block PUBLISH. Keep it >= ~2 KB. */
 #ifndef AWS_NET_BUFFER_SZ
-#define AWS_NET_BUFFER_SZ      4736   /* MQTT data plane: hold a 4 KB OTA block PUBLISH. largest
-                                        * packet pumped through the shared connection - OTA
-                                        * job docs / 4 KB stream data blocks dwarf the tiny
-                                        * telemetry PUBLISH, so this is bumped from the old
-                                        * 1 KB telemetry-only buffer. bl602 overrides to 2560
-                                        * (2 KB blocks) via -D to save heap. */
+#define AWS_NET_BUFFER_SZ      4736
 #endif
 #define AWS_TLS_RECV_TMO_MS    1000
 #define AWS_TLS_SEND_TMO_MS    1000

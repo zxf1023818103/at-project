@@ -21,6 +21,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>   /* getenv/setenv/unsetenv: persist the ota_http-takeover job id across reboot */
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -62,6 +63,8 @@
 #include "FreeRTOS_DNS.h"
 
 #include "ota_http_interface.h"
+#include "ota_flash.h"   /* ota_lock_release(OTA_SRC_AWS): hand the slot to the ota_http engine */
+#include "ota_http.h"    /* ota_http_start(): apply the job-doc presigned URL via the ota_http downloader */
 #endif /* OTA_APP_ENABLE_HTTP */
 
 #include "ota_app.h"
@@ -176,6 +179,16 @@ static StaticSemaphore_t s_bufferMutexStorage;
 
 /* Shared MQTT-Agent context (owned by aws_iot_demo.c). */
 static MQTTAgentContext_t * s_pAgent = NULL;
+
+/* Thing name (BLE MAC), saved by ota_app_init so the ota_http-takeover path can build the
+ * $aws/things/<thing>/jobs/<jobId>/update topic to mark the execution SUCCEEDED. */
+static char s_thingName[ 64 ];
+
+#if OTA_APP_ENABLE_HTTP
+/* ota_http takeover: when set, the OTA library's HTTP data plane is inert (prvOtaHttpRequest parks)
+ * because the ota_http engine owns the download+reboot. See prvOtaHttpInit. */
+static volatile int s_http_takeover = 0;
+#endif
 
 /* The OTA Agent interfaces (must stay in scope for the life of the agent). */
 static OtaInterfaces_t s_otaInterfaces;
@@ -298,7 +311,10 @@ static int32_t prvHttpTransportRecv( NetworkContext_t * pCtx, void * pBuf, size_
     return ( int32_t ) FreeRTOS_recv( s_http.sock, pBuf, len, 0 );
 }
 
-/* Parse pUrl into s_http.host / s_http.path / s_http.port / s_http.isHttps. 0 on success. */
+/* Parse pUrl into s_http.host / s_http.path / s_http.port / s_http.isHttps. 0 on success.
+ * (unused) since the ota_http-takeover path bypasses the library's ranged-GET data plane and hands the
+ * whole URL to ota_http; kept (with the rest of the ranged-GET machinery) as a compiled-in reference. */
+static int prvHttpParseUrl( const char * pUrl ) __attribute__( ( unused ) );
 static int prvHttpParseUrl( const char * pUrl )
 {
     urlparse_url u;
@@ -382,7 +398,7 @@ static OtaHttpStatus_t prvHttpOpenConn( void )
 
         /* Shared server-only HTTPS connect (transport_https.c) — same server-trust + the same
          * runtime-selected backend (at_tls_get_backend) as the ota_http command and AWS MQTT. */
-        if( Https_Connect( &s_http.netCtx, s_http.host, s_http.port, OTA_HTTP_RXRESERVE,
+        if( Https_Connect( &s_http.netCtx, s_http.host, s_http.port,
                            OTA_HTTP_RECV_TMO_MS, OTA_HTTP_SEND_TMO_MS ) != TLS_TRANSPORT_SUCCESS )
         {
             OTA_APP_LOG( "http: TLS connect to %s:%u FAIL", s_http.host, ( unsigned ) s_http.port );
@@ -453,30 +469,56 @@ static void prvHttpCloseConn( void )
     s_http.inUse = 0;
 }
 
+/* Forward decl (defined with the other MQTT helpers, ~prvOtaMqttPublish). */
+static void prvPublishJobSucceeded( const char * jobName );
+
+/* OtaHttpInterface_t.init. Instead of driving the library's ranged-GET data plane, HAND OFF the full
+ * presigned S3 URL (from the job doc) to the ota_http engine: one GET, streams to the inactive slot,
+ * reboots on success. Cross-platform (this shared ota_app.c is built on amebad/bl616/bl602) and needs
+ * no per-platform MQTT wiring since the URL is in hand right here.
+ *
+ * Re-download guard: the presigned URL would be re-fetched on every reconnect while the job execution
+ * stays IN_PROGRESS. So we persist the job id (LFS env) on the first sighting; ota_http reboots only on
+ * success, so seeing the SAME job id again (next boot) means it already applied -> mark the execution
+ * SUCCEEDED and stop (no re-download). */
 static OtaHttpStatus_t prvOtaHttpInit( char * pUrl )
 {
+    const char * jobName;
+    const char * prevJob;
+
     if( ( pUrl == NULL ) || ( pUrl[ 0 ] == '\0' ) )
     {
         return OtaHttpInitFailed;
     }
 
-    if( s_http.inUse )
+    jobName = OTA_GetActiveJobName();
+    prevJob = getenv( "ota_http_job" );
+
+    if( ( prevJob != NULL ) && ( jobName != NULL ) && ( jobName[ 0 ] != '\0' ) &&
+        ( strcmp( prevJob, jobName ) == 0 ) )
     {
-        /* A stale connection from an aborted job; close it before reopening. */
-        ( void ) prvOtaHttpDeinit();
+        /* Second sighting of this job = ota_http already applied it (it only reboots on success).
+         * Ack the execution SUCCEEDED so AWS stops re-notifying, then park (don't re-download). */
+        OTA_APP_LOG( "http-takeover: job '%s' already applied -> mark SUCCEEDED, skip re-download", jobName );
+        prvPublishJobSucceeded( jobName );
+        ( void ) unsetenv( "ota_http_job" );
+        s_http_takeover = 1;
+        return OtaHttpSuccess;
     }
 
-    memset( &s_http, 0, sizeof( s_http ) );
-
-    if( prvHttpParseUrl( pUrl ) != 0 )
+    /* First sighting: remember the job (persists across the reboot ota_http will trigger), release the
+     * PAL's AWS slot lock (closes its write session) so the ota_http worker can claim OTA_SRC_HTTP, and
+     * hand the presigned URL to ota_http. */
+    if( ( jobName != NULL ) && ( jobName[ 0 ] != '\0' ) )
     {
-        return OtaHttpInitFailed;
+        ( void ) setenv( "ota_http_job", jobName, 1 );
     }
-
-    OTA_APP_LOG( "http: %s host=%s port=%u", s_http.isHttps ? "https" : "http",
-                 s_http.host, ( unsigned ) s_http.port );
-
-    return prvHttpOpenConn();
+    ota_lock_release( OTA_SRC_AWS );
+    s_http_takeover = 1;
+    OTA_APP_LOG( "http-takeover: handing presigned URL to ota_http (job '%s')",
+                 ( jobName != NULL ) ? jobName : "?" );
+    ota_http_start( pUrl );
+    return OtaHttpSuccess;
 }
 
 /* Millisecond clock for coreHTTP's recv-retry budget (HTTPResponse_t.getTime). */
@@ -498,6 +540,16 @@ static OtaHttpStatus_t prvOtaHttpRequest( uint32_t rangeStart, uint32_t rangeEnd
     OtaEventMsg_t        eventMsg = { 0 };
     OtaEventData_t *     pData;
     unsigned             attempt;
+
+    /* ota_http owns the download (prvOtaHttpInit handed it the presigned URL and it will reboot on
+     * success). Park the library's request loop so it never opens a second connection to the same
+     * slot; on the first boot ota_http reboots out from under this, on the re-notify boot the job is
+     * already SUCCEEDED. */
+    if( s_http_takeover )
+    {
+        vTaskDelay( pdMS_TO_TICKS( 2000 ) );
+        return OtaHttpSuccess;
+    }
 
     /* In-call reconnect-retry loop (see OTA_HTTP_REQ_RETRIES): S3 closes the keep-alive every few
      * ranged GETs - HTTPClient_Send then fails, or returns 206 with an empty body. Instead of
@@ -913,6 +965,30 @@ static OtaMqttStatus_t prvOtaMqttPublish( const char * const pacTopic,
     return OtaMqttSuccess;
 }
 
+#if OTA_APP_ENABLE_HTTP
+/* Mark the job execution SUCCEEDED (IoT Jobs UpdateJobExecution) so AWS stops re-notifying the
+ * presigned URL after the ota_http-takeover path applied the image. Uses the same MQTT-agent publish
+ * path as the OTA library's job status. */
+static void prvPublishJobSucceeded( const char * jobName )
+{
+    char         topic[ 160 ];
+    const char * body = "{\"status\":\"SUCCEEDED\"}";
+    int          n;
+
+    if( ( jobName == NULL ) || ( jobName[ 0 ] == '\0' ) || ( s_thingName[ 0 ] == '\0' ) )
+    {
+        return;
+    }
+    n = snprintf( topic, sizeof( topic ), "$aws/things/%s/jobs/%s/update", s_thingName, jobName );
+    if( ( n <= 0 ) || ( n >= ( int ) sizeof( topic ) ) )
+    {
+        return;
+    }
+    ( void ) prvOtaMqttPublish( topic, ( uint16_t ) n, body, ( uint32_t ) strlen( body ), 1U /*QoS1*/ );
+    OTA_APP_LOG( "http-takeover: UpdateJobExecution SUCCEEDED -> %s", topic );
+}
+#endif /* OTA_APP_ENABLE_HTTP */
+
 /* ----------------------------------------------------- OTA app callback ------- */
 static void prvOtaAppCallback( OtaJobEvent_t eEvent, const void * pData )
 {
@@ -977,6 +1053,9 @@ int ota_app_init( MQTTAgentContext_t * pAgent, const char * pThingName )
     }
 
     s_pAgent = pAgent;
+
+    /* Save the thing name for the ota_http-takeover job-status publish (jobs/<jobId>/update). */
+    ( void ) snprintf( s_thingName, sizeof( s_thingName ), "%s", pThingName );
 
     s_bufferMutex = xSemaphoreCreateMutexStatic( &s_bufferMutexStorage );
     if( s_bufferMutex == NULL )

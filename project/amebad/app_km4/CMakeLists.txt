@@ -520,10 +520,14 @@ if(AMEBAD_ENABLE_AWS_IOT)
         # plane (no 2nd HTTPS-S3 TLS), static task stacks in .bss, dynamic MQTT net buffer.
         # AWS_KEY_MAX stays 1536 (AmebaD provisions an RSA-2048 client key). AWS_AGENT_STACK_WORDS
         # 3584 = bl602's cert-verify peak; AmebaD's HW-PKA server verify needs no more.
+        # AWS_NET_BUFFER_SZ is deliberately NOT set here: it is the ONE cross-platform value (4736)
+        # defined in component/aws_iot_config/aws_iot_demo.c and shared by amebad/bl616/bl602. It is a
+        # coreMQTT v5 Maximum-Packet-Size floor (a smaller per-platform override, as amebad's old 1536,
+        # silently dropped the ~1.7 KB --protocols HTTP OTA job doc). AWS_NET_BUFFER_DYNAMIC keeps it
+        # off .bss (malloc'd after the TLS handshake) - an amebad heap choice, orthogonal to the size.
         target_compile_definitions(target_img2_km4 PRIVATE
             AWS_STATIC_TASKS
             AWS_NET_BUFFER_DYNAMIC
-            AWS_NET_BUFFER_SZ=1536
             AWS_AGENT_STACK_WORDS=3584)
         # Telemetry publish task (bw20/<mac>/telemetry) is ALWAYS in the agent image, uniform
         # across every platform and build flavor (the old AWS_NO_TELEMETRY carve-outs for the

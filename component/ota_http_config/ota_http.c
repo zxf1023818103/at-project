@@ -32,12 +32,6 @@
 #include "FreeRTOS_CLI.h"
 #include "psa/crypto.h"             /* psa_crypto_init - PSA backs picotls/mbedTLS RNG + the handshake */
 
-/* rxPlain reserve for the OTA HTTPS connection. The streaming GET pulls S3's large TLS-1.3 records,
- * so picotls must hold a full ~16 KB record. Reserve it UP FRONT (at connect, heap still fresh) so
- * picotls never reallocs rxPlain mid-stream - that mid-stream 16 KB realloc at a fragmented/low heap
- * is what OOMs. (Was implicit via the old picotls default; that default is now 4 KB, so set it here.) */
-#define OTA_HTTP_RXRESERVE      16640u
-
 /* The TLS transport leaves struct NetworkContext incomplete; each consumer defines it (the AWS demo
  * does the same). It holds just the TlsTransportParams_t the transport functions use. */
 struct NetworkContext
@@ -48,8 +42,14 @@ struct NetworkContext
 #define OTA_HTTP_RECV_TMO_MS    15000u
 #define OTA_HTTP_SEND_TMO_MS    10000u
 #define OTA_RECV_BUF            2048u
-#define OTA_REQ_BUF             1280u           /* request line + headers; presigned S3 query is long */
-#define OTA_PATH_BUF            1024u           /* path + ?query (SigV4 presigned URLs are ~500 chars) */
+/* An AWS IoT OTA job's presigned S3 URL is signed with the OTA service role's STS TEMPORARY creds, so
+ * it carries a long X-Amz-Security-Token (~600 chars) on top of the usual SigV4 query -> the path+query
+ * runs ~1200 chars, well past a plain `aws s3 presign` (~380). Size the path + request buffers for it. */
+#define OTA_REQ_BUF             2048u           /* GET request line (incl. full path) + headers */
+#define OTA_PATH_BUF            2048u           /* path + ?query (AWS IoT STS-signed presigned URL) */
+/* Connect (DNS + TLS) attempts: the FIRST resolve of a fresh host (e.g. the S3 bucket, never hit
+ * before) can time out / "fail (no cache)" - the AWS MQTT path shows the same first-fail-then-ok. */
+#define OTA_CONNECT_RETRIES     4u
 
 /* Amazon Root CA 1 - the trust anchor for *.s3*.amazonaws.com (and most AWS endpoints). */
 /* Server trust = the `ca/` folder on LittleFS (+ the embedded Mozilla CA bundle when
@@ -79,7 +79,7 @@ static int conn_connect( conn_t * c, int is_https, const char * host, uint16_t p
         c->tls             = &netctx;
         /* Shared server-only HTTPS connect (transport_https.c) — same config as the AWS OTA data
          * plane, so both verify S3 the same way (crt bundle / Amazon Root CA, picotls TLS 1.3). */
-        st = Https_Connect( c->tls, host, port, OTA_HTTP_RXRESERVE, OTA_HTTP_RECV_TMO_MS, OTA_HTTP_SEND_TMO_MS );
+        st = Https_Connect( c->tls, host, port, OTA_HTTP_RECV_TMO_MS, OTA_HTTP_SEND_TMO_MS );
         if( st != TLS_TRANSPORT_SUCCESS )
         {
             log_error( "[OTA] TLS connect to %s:%u failed (%d)", host, port, (int) st );
@@ -269,9 +269,26 @@ static void ota_http_task( void * param )
         goto out;
     sink.started = 1;
 
-    /* 3. connect */
-    if( conn_connect( &conn, is_https, host, port ) < 0 )
-        goto out;
+    /* 3. connect - retry a few times so a transient first-resolve DNS timeout (fresh S3 host, no cache)
+     * or a picotls recv -6 doesn't abort the whole OTA (the AWS MQTT path retries the same way). */
+    {
+        unsigned tries;
+        int      ok = 0;
+
+        for( tries = 0; tries < OTA_CONNECT_RETRIES; tries++ )
+        {
+            if( conn_connect( &conn, is_https, host, port ) >= 0 )
+            {
+                ok = 1;
+                break;
+            }
+            log_error( "[OTA] connect attempt %u/%u failed - retrying", tries + 1u, OTA_CONNECT_RETRIES );
+            conn_close( &conn );                 /* drop any half-open state before the next attempt */
+            vTaskDelay( pdMS_TO_TICKS( 1500 ) );
+        }
+        if( !ok )
+            goto out;
+    }
 
     /* 4. build the GET request with coreHTTP, then send it */
     memset( &reqInfo, 0, sizeof( reqInfo ) );
@@ -356,6 +373,38 @@ out:
     vTaskDelete( NULL );
 }
 
+/* ---- programmatic trigger -------------------------------------------------------------------- *
+ * Launch the async downloader for `url` (a private copy is made). Used both by the console command
+ * and by the AWS OTA path (ota_app.c prvOtaHttpInit hands off the job-doc presigned URL here). The
+ * worker streams OTA_All.bin to the inactive slot and reboots on success; on failure it just logs
+ * and exits (no reboot). Non-blocking: returns once the 12 KB task is created. */
+void ota_http_start( const char * url )
+{
+    size_t len;
+    char * copy;
+
+    if( url == NULL )
+    {
+        return;
+    }
+    len = strlen( url );
+    copy = pvPortMalloc( len + 1 );
+    if( copy == NULL )
+    {
+        log_error( "[OTA] ota_http_start: out of memory" );
+        return;
+    }
+    memcpy( copy, url, len + 1 );
+
+    /* 3072 words (12 KB): measured TLS-handshake high-water is ~1941 words (~7.8 KB), so this leaves
+     * ~1131 words (~4.5 KB) headroom while reclaiming ~4 KB of heap vs the old 4096. */
+    if( xTaskCreate( ota_http_task, "ota_http", 3072, copy, tskIDLE_PRIORITY + 3, NULL ) != pdPASS )
+    {
+        vPortFree( copy );
+        log_error( "[OTA] ota_http_start: failed to create task" );
+    }
+}
+
 /* ---- console command ------------------------------------------------------------------------- */
 static BaseType_t cmd_ota_http( char * out, size_t outlen, const char * cmd )
 {
@@ -378,14 +427,8 @@ static BaseType_t cmd_ota_http( char * out, size_t outlen, const char * cmd )
     memcpy( url, arg, (size_t) arglen );
     url[ arglen ] = '\0';
 
-    /* 3072 words (12 KB): measured TLS-handshake high-water is ~1941 words (~7.8 KB), so this leaves
-     * ~1131 words (~4.5 KB) headroom while reclaiming ~4 KB of heap vs the old 4096. */
-    if( xTaskCreate( ota_http_task, "ota_http", 3072, url, tskIDLE_PRIORITY + 3, NULL ) != pdPASS )
-    {
-        vPortFree( url );
-        snprintf( out, outlen, "ota_http: failed to start task\r\n" );
-        return pdFALSE;
-    }
+    ota_http_start( url );
+    vPortFree( url );   /* ota_http_start made its own copy */
     snprintf( out, outlen, "ota_http: downloading - watch the log; the device reboots on success\r\n" );
     return pdFALSE;
 }
