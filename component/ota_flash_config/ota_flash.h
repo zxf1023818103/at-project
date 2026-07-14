@@ -42,6 +42,36 @@ int ota_flash_feed( ota_ctx_t * c, const uint8_t * d, uint32_t n );
  * old slot's signature. Returns 0 on success (caller should then ota_flash_reboot()), <0 on error. */
 int ota_flash_finish( ota_ctx_t * c );
 
+/* ---- random-access variant (out-of-order blocks + read-back verify) ------------------------- *
+ * For a data source (the AWS OTA agent) whose blocks can arrive out of order after a reconnect.
+ * Blocks are programmed at their offset in ANY order, then the whole slot is read back to verify.
+ *
+ * REQUIRES RSIP=OFF: the slot read-back must equal the plaintext that was written (== the signed
+ * image). On an RSIP=ON board the inactive-slot read-back is wrong-keystream garbage (RSIP is
+ * address-keyed), so these functions must NOT be used there -- use the streaming ota_flash_feed path.
+ * Offsets are DOWNLOAD offsets into the OTA_All.bin: 32-byte header first, then the payload. */
+
+/* Like ota_flash_begin(), plus fully erase the destination slot up front so subsequent
+ * ota_flash_write_at() calls can program any offset, in any order, without a per-block erase. */
+int ota_flash_begin_random( ota_ctx_t * c );
+
+/* Program `len` bytes at download offset `off`. Captures header bytes into c->hdr (parsing IMAGE_LEN
+ * + CHECKSUM once the 32-byte header is complete); holds the first 8 payload bytes (boot signature)
+ * in c->sig, written LAST by ota_flash_finish_random(); programs the remaining payload to flash.
+ * Any order; a re-sent block is idempotent. Returns 0 on success, <0 on error. */
+int ota_flash_write_at( ota_ctx_t * c, uint32_t off, const uint8_t * d, uint32_t len );
+
+/* Read `len` image bytes back at download offset `off` for verification: off<32 returns the captured
+ * header (c->hdr); the first 8 payload bytes return the held c->sig (flash still erased there until
+ * finish); the rest is the flash read-back (RSIP-OFF plaintext). Lets the caller recompute the
+ * code-sign hash over the exact downloaded image. Returns 0 on success, <0 on error. */
+int ota_flash_read_image( const ota_ctx_t * c, uint32_t off, uint8_t * out, uint32_t len );
+
+/* After all blocks were written: read the payload back, verify length + 32-bit checksum against the
+ * header (a missing block leaves that region 0xFF, so the checksum catches it), then arm the new slot
+ * (write the boot signature last, clear the old slot's signature). Returns 0 on success, <0 on error. */
+int ota_flash_finish_random( ota_ctx_t * c );
+
 /* Full system reset (WDG) so the bootloader re-selects the now-active slot. Does not return. */
 void ota_flash_reboot( void );
 

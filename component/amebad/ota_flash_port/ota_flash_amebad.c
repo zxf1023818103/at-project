@@ -14,12 +14,19 @@
  * Integrity is guaranteed end-to-end by the 32-bit checksum in the OTA header, computed over the
  * received bytes; a transmission error fails the upload before the slot is armed.
  *
- * NOTE - no read-back verify: on an RSIP-fused board the image is stored encrypted and flash_stream_read
- * returns the RSIP-OTF-*decrypted* bytes, while our source buffer holds the *encrypted* image, so a
- * byte-compare read-back always mismatches even on a perfect write (and NS can't disable RSIP OTF to
- * read raw). The bootloader validates the decrypted image, same as ota_http / AWS OTA. The boot
- * signature (first 8 payload bytes) is held back and written last so a power loss never leaves a
- * valid-looking-but-incomplete slot.
+ * NOTE - the STREAMING path (ota_flash_feed/finish, used by ota_http + BLE mcumgr) does NO read-back
+ * verify: on an RSIP-fused board the image is stored encrypted and flash_stream_read returns the
+ * RSIP-OTF-*decrypted* bytes, while our source buffer holds the *encrypted* image, so a byte-compare
+ * read-back always mismatches even on a perfect write (and NS can't disable RSIP OTF to read raw). The
+ * bootloader validates the decrypted image. The boot signature (first 8 payload bytes) is held back and
+ * written last so a power loss never leaves a valid-looking-but-incomplete slot.
+ *
+ * The RANDOM-ACCESS path (ota_flash_*_random, used by the AWS OTA agent) programs blocks at their
+ * offset in ANY order into a lazily-erased slot, then reads the whole payload back to verify the
+ * checksum (and lets the caller re-hash it for the code-sign verify). This DOES read back and so
+ * REQUIRES RSIP=OFF (read-back == the plaintext we wrote == the signed image); it must not be used on
+ * an RSIP=ON board, where the inactive-slot read-back is wrong-keystream garbage (RSIP is address-keyed).
+ * That is the bench/AWS default (project/amebad/Makefile RSIP?=OFF).
  */
 #include "ota_flash.h"
 #include <string.h>
@@ -148,6 +155,16 @@ static flash_t * const s_flash = NULL;
 
 /* Sector accumulation buffer. Static: one OTA runs at a time. */
 static uint8_t s_secbuf[ SECTOR_SIZE ];
+
+/* Random-access path: which slot sectors have already been erased this OTA. On-demand (a sector is
+ * erased the first time ota_flash_write_at touches it) so the erase cost overlaps the download instead
+ * of a ~16 s up-front full-slot erase; the bitmap stops a later out-of-order block in the same sector
+ * from re-erasing (which would wipe earlier blocks). One OTA at a time, so file-scope is fine. */
+#define SLOT_SECTORS    ( SLOT_SIZE / SECTOR_SIZE )               /* 381 */
+static uint8_t s_erased_bm[ ( SLOT_SECTORS + 7 ) / 8 ];          /* 48 bytes */
+
+static int  bm_test( const uint8_t * bm, uint32_t i ) { return ( bm[ i >> 3 ] >> ( i & 7u ) ) & 1u; }
+static void bm_set ( uint8_t * bm, uint32_t i ) { bm[ i >> 3 ] |= ( uint8_t ) ( 1u << ( i & 7u ) ); }
 
 static uint32_t rd_le32( const uint8_t * p )
 {
@@ -346,6 +363,210 @@ int ota_flash_finish( ota_ctx_t * c )
     }
     ota_flash_close_session();   /* writes done -> relock the fw region + restore the wfe-sleep park */
     log_info( "[OTA] image complete (checksum OK) + armed slot @0x%06x; clearing old @0x%06x",
+              (unsigned) c->write_off, (unsigned) c->active_off );
+    return 0;
+}
+
+/* ==== random-access variant (out-of-order blocks + read-back verify; RSIP=OFF only) =========== */
+
+int ota_flash_begin_random( ota_ctx_t * c )
+{
+    int rc = ota_flash_begin( c );   /* slot detect + fw-region unlock + KM0 spin-park + open session */
+
+    if( rc != 0 )
+        return rc;
+    memset( s_erased_bm, 0, sizeof( s_erased_bm ) );   /* nothing erased yet; write_at erases on demand */
+    log_info( "[OTA] random-access write into slot @0x%06x (lazy per-sector erase)",
+              (unsigned) c->write_off );
+    return 0;
+}
+
+/* Program n bytes at absolute flash addr, erasing (once, bitmap-tracked) each 4 KB sector first. */
+static int ota_random_program( ota_ctx_t * c, uint32_t addr, const uint8_t * d, uint32_t n )
+{
+    uint32_t a   = addr & ~( SECTOR_SIZE - 1u );
+    uint32_t end = addr + n;
+
+    for( ; a < end; a += SECTOR_SIZE )
+    {
+        uint32_t idx = ( a - c->write_off ) / SECTOR_SIZE;
+
+        if( idx < SLOT_SECTORS && !bm_test( s_erased_bm, idx ) )
+        {
+            flash_erase_sector( s_flash, a );
+            bm_set( s_erased_bm, idx );
+        }
+    }
+    if( flash_stream_write( s_flash, addr, n, ( uint8_t * ) d ) < 0 )
+    {
+        log_error( "[OTA] random program @0x%06x len %u failed", (unsigned) addr, (unsigned) n );
+        return -1;
+    }
+    return 0;
+}
+
+int ota_flash_write_at( ota_ctx_t * c, uint32_t off, const uint8_t * d, uint32_t len )
+{
+    /* Region 1: header bytes [0,32). A 1 KB block-0 delivers the whole 32-byte header in one call, but
+     * track a high-water count so a (hypothetical) split is still parsed once complete. */
+    if( off < OTA_HDR_LEN )
+    {
+        uint32_t hn = OTA_HDR_LEN - off;
+
+        if( hn > len )
+            hn = len;
+        memcpy( c->hdr + off, d, hn );
+        if( off + hn > c->hdr_got )
+            c->hdr_got = off + hn;
+        off += hn; d += hn; len -= hn;
+
+        if( !c->have_hdr && c->hdr_got >= OTA_HDR_LEN )
+        {
+            if( memcmp( c->hdr + 8, OTA_FILE_SIGN, 4 ) != 0 )
+            {
+                log_error( "[OTA] bad OTA header signature (not '%s')", OTA_FILE_SIGN );
+                return -1;
+            }
+            c->hdr_checksum = rd_le32( c->hdr + 16 );
+            c->image_len    = rd_le32( c->hdr + 20 );
+            if( c->image_len == 0 || c->image_len > SLOT_SIZE )
+            {
+                log_error( "[OTA] bad image length %u", (unsigned) c->image_len );
+                return -1;
+            }
+            c->have_hdr = 1;
+            log_info( "[OTA] image %u bytes, checksum 0x%08x -> random write",
+                      (unsigned) c->image_len, (unsigned) c->hdr_checksum );
+        }
+        if( len == 0 )
+            return 0;
+    }
+
+    /* off >= 32 now: payload, at payload offset p = off - 32. */
+    {
+        uint32_t p = off - OTA_HDR_LEN;
+
+        /* Region 2: boot signature = payload [0,8). Held in c->sig, NOT programmed (written last by
+         * ota_flash_finish_random so a power loss never arms a half-written slot). */
+        if( p < 8u )
+        {
+            uint32_t sn = 8u - p;
+
+            if( sn > len )
+                sn = len;
+            memcpy( c->sig + p, d, sn );
+            p += sn; d += sn; len -= sn;
+        }
+
+        /* Region 3: payload [8, image_len) -> flash. */
+        if( len > 0 )
+        {
+            if( c->have_hdr && ( p + len > c->image_len ) )       /* ignore bytes past the declared image */
+                len = ( p < c->image_len ) ? ( c->image_len - p ) : 0u;
+            if( len > 0 && ota_random_program( c, c->write_off + p, d, len ) < 0 )
+                return -1;
+        }
+    }
+    return 0;
+}
+
+int ota_flash_read_image( const ota_ctx_t * c, uint32_t off, uint8_t * out, uint32_t len )
+{
+    /* Region 1: header from the captured copy. */
+    if( off < OTA_HDR_LEN )
+    {
+        uint32_t hn = OTA_HDR_LEN - off;
+
+        if( hn > len )
+            hn = len;
+        memcpy( out, c->hdr + off, hn );
+        off += hn; out += hn; len -= hn;
+    }
+    if( len == 0 )
+        return 0;
+
+    {
+        uint32_t p = off - OTA_HDR_LEN;
+
+        /* Region 2: boot sig -> the held copy (flash there is still erased until finish arms it). */
+        if( p < 8u )
+        {
+            uint32_t sn = 8u - p;
+
+            if( sn > len )
+                sn = len;
+            memcpy( out, c->sig + p, sn );
+            p += sn; out += sn; len -= sn;
+        }
+        /* Region 3: payload read-back from flash (RSIP-OFF plaintext). */
+        if( len > 0 && flash_stream_read( s_flash, c->write_off + p, len, out ) < 0 )
+        {
+            log_error( "[OTA] read-back @0x%06x len %u failed", (unsigned) ( c->write_off + p ), (unsigned) len );
+            return -1;
+        }
+    }
+    return 0;
+}
+
+int ota_flash_finish_random( ota_ctx_t * c )
+{
+    uint8_t  buf[ 256 ];
+    uint8_t  empty[ 8 ] = { 0 };
+    uint32_t p, sum = 0;
+
+    if( !c->have_hdr )
+    {
+        log_error( "[OTA] finish: header never arrived" );
+        ota_flash_close_session();
+        return -1;
+    }
+
+    /* Read the whole payload back (RSIP-OFF plaintext) and recompute the 32-bit checksum, splicing the
+     * held boot sig over payload [0,8) (still erased on flash). A missing block reads back as 0xFF, so
+     * the checksum catches an incomplete download. Matches ota_flash_feed's sum-of-all-payload-bytes. */
+    for( p = 0; p < c->image_len; )
+    {
+        uint32_t n = c->image_len - p;
+        uint32_t i;
+
+        if( n > sizeof( buf ) )
+            n = sizeof( buf );
+        if( flash_stream_read( s_flash, c->write_off + p, n, buf ) < 0 )
+        {
+            log_error( "[OTA] finish: read-back @0x%06x failed", (unsigned) ( c->write_off + p ) );
+            ota_flash_close_session();
+            return -1;
+        }
+        for( i = 0; i < n; i++ )
+            sum += ( p + i < 8u ) ? c->sig[ p + i ] : buf[ i ];
+        p += n;
+    }
+    c->checksum = sum;
+    c->written  = c->image_len;   /* parity with the streaming path's bookkeeping */
+
+    if( sum != c->hdr_checksum )
+    {
+        log_error( "[OTA] checksum mismatch (read-back): calc 0x%08x, header 0x%08x",
+                   (unsigned) sum, (unsigned) c->hdr_checksum );
+        ota_flash_close_session();
+        return -1;
+    }
+
+    /* Arm the new slot LAST: write the held boot signature into the still-erased first 8 bytes. */
+    if( flash_stream_write( s_flash, c->write_off, 8, c->sig ) < 0 )
+    {
+        log_error( "[OTA] boot-sig write failed; slot NOT armed" );
+        ota_flash_close_session();
+        return -1;
+    }
+    if( flash_stream_write( s_flash, c->active_off, 8, empty ) < 0 )   /* invalidate the old slot */
+    {
+        log_error( "[OTA] clearing old-slot signature failed" );
+        ota_flash_close_session();
+        return -1;
+    }
+    ota_flash_close_session();
+    log_info( "[OTA] image complete (read-back checksum OK) + armed slot @0x%06x; clearing old @0x%06x",
               (unsigned) c->write_off, (unsigned) c->active_off );
     return 0;
 }

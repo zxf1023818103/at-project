@@ -1,29 +1,27 @@
 /*
- * ota_pal.c - FreeRTOS OTA PAL for AmebaD (RTL8721D), make AWS=ON.
+ * ota_pal.c - FreeRTOS OTA PAL for the AWS IoT OTA Agent (make AWS=ON). Shared by AmebaD (RTL8721D)
+ * and Bouffalo (bl602/bl616); the slot mechanics come from the per-platform ota_flash implementation.
  *
- * Bridges the AWS IoT OTA Agent's OtaPalInterface_t to the in-tree slot writer
- * (ota_flash.c). The OTA *file* downloaded from AWS IS the build's OTA_All.bin
- * (32-byte Realtek OTA header + image2[+IMG3]); the agent streams it block-by-block
- * (otaconfigFILE_BLOCK_SIZE) and each block is fed straight to ota_flash_feed(),
- * which parses the header, erases + writes the inactive slot, holds the 8-byte boot
- * signature, and accumulates the firmware checksum. closeFile() runs ota_flash_finish()
- * (length + checksum verify, arms the new slot) and then verifies the AWS code-sign
- * signature over the downloaded bytes with mbedTLS.
+ * Bridges the OTA Agent's OtaPalInterface_t to the in-tree slot writer (ota_flash.h). The OTA *file*
+ * downloaded from AWS IS the build's OTA_All.bin (32-byte Realtek OTA header + image2[+IMG3]); the
+ * agent delivers it block-by-block (otaconfigFILE_BLOCK_SIZE). closeFile() verifies the AWS code-sign
+ * ECDSA signature (SHA-256 over the whole downloaded OTA_All.bin, header + image) against the embedded
+ * signer cert, then arms the new slot. The AWS Signer job must sign the SAME OTA_All.bin end-to-end.
  *
- * Block ordering: ota_flash_feed() is a *sequential* stream consumer and the signature SHA-256 is
- * hashed in arrival order, so writeBlock() must present blocks in order. Blocks normally arrive in
- * order (otaconfigMAX_NUM_BLOCKS_REQUEST is small), but a reconnect (WiFi SKB starvation -> MQTT
- * keepalive timeout -> resume) can deliver one ahead of the expected offset. writeBlock() tolerates
- * that with a small reorder window (OTA_PAL_REORDER_BLOCKS, ota_config.h): a future block is buffered
- * and drained in order once the gap fills; a duplicate/already-consumed block is ack'd and dropped.
- * This keeps the streaming hash intact (no read-back hashing, which would break RSIP-encrypted images
- * whose signature is over the downloaded ciphertext). Window=0 (Bouffalo) = strict sequential.
+ * Two write strategies, selected by OTA_PAL_READBACK_VERIFY (ota_config.h):
  *
- * Signature verify (simplification to scrutinise on HW): the SHA-256 is computed
- * INCREMENTALLY over every byte fed to ota_flash_feed() - i.e. over the full
- * OTA_All.bin as downloaded (header + image). The AWS Signer / `create-stream`
- * job must therefore sign the SAME OTA_All.bin artifact end-to-end. The cert PEM is
- * read from pFileContext->pCertFilepath via newlib fopen over the LFS VFS.
+ *   Streaming (Bouffalo, =0): each block is fed IN ORDER to ota_flash_feed() (sequential slot writer +
+ *     accumulated checksum) while the code-sign SHA-256 is hashed in arrival order. Out-of-order (a
+ *     reconnect resume) fails the image. No read-back (would break an RSIP-encrypted image, whose
+ *     signature is over the downloaded ciphertext).
+ *
+ *   Random-write + read-back (AmebaD, =1): each block is programmed at its offset in ANY order
+ *     (ota_flash_write_at into a pre-erased slot). closeFile() then reads the whole image back
+ *     (ota_flash_read_image, RSIP-OFF plaintext) to compute BOTH the code-sign hash and the checksum
+ *     (ota_flash_finish_random) -- so a WiFi-reconnect reorder can no longer fail the download, and no
+ *     reorder buffer is needed. REQUIRES RSIP=OFF (read-back == the signed plaintext).
+ *
+ * The signer cert is embedded (below); the OTA job's pCertFilepath is ignored.
  */
 #include <stdint.h>
 #include <stdio.h>
@@ -58,37 +56,14 @@ const char OTA_JsonFileSignatureKey[ OTA_FILE_SIG_KEY_STR_MAX_LENGTH ] = "sig-sh
 
 /* Single in-flight file context state (OTA_MAX_FILES == 1). */
 static ota_ctx_t          s_slot;
-static mbedtls_sha256_context s_sha;
-static uint32_t           s_consumed;     /* bytes fed to ota_flash_feed so far (== expected next offset) */
 static int                s_active;       /* a file is currently open */
 
-#if ( OTA_PAL_REORDER_BLOCKS > 0U )
-/* Out-of-order tolerance (OTA_PAL_REORDER_BLOCKS in ota_config.h): the sequential consumer
- * (ota_flash_feed) + the streaming signature SHA-256 both require in-order bytes, so a block that
- * arrives ahead of s_consumed (reconnect-induced reorder) is stashed here and drained in order once the
- * gap fills -- reordered, not fatal, and WITHOUT read-back hashing (which would break RSIP-encrypted
- * images whose signature is over the downloaded ciphertext). */
-typedef struct { uint32_t offset; uint32_t len; uint8_t valid; } reorder_slot_t;
-static reorder_slot_t     s_reorder[ OTA_PAL_REORDER_BLOCKS ];
-static uint8_t *          s_reorder_pool;   /* OTA_PAL_REORDER_BLOCKS * OTA_FILE_BLOCK_SIZE, malloc'd per OTA */
-#endif
-
-/* Reset all PAL state. */
-static void prvPalReset( void )
-{
-    memset( &s_slot, 0, sizeof( s_slot ) );
-    mbedtls_sha256_free( &s_sha );
-    s_consumed = 0;
-    s_active = 0;
-#if ( OTA_PAL_REORDER_BLOCKS > 0U )
-    memset( s_reorder, 0, sizeof( s_reorder ) );
-    if( s_reorder_pool != NULL )
-    {
-        vPortFree( s_reorder_pool );
-        s_reorder_pool = NULL;
-    }
-#endif
-}
+#if !OTA_PAL_READBACK_VERIFY
+/* Streaming path (Bouffalo, OTA_PAL_READBACK_VERIFY=0): the sequential slot writer (ota_flash_feed) and
+ * the code-sign SHA-256 are both hashed in ARRIVAL order, so blocks must arrive in order. The AmebaD
+ * random-write + read-back path (=1) needs neither of these -- it hashes from the read-back at close. */
+static mbedtls_sha256_context s_sha;
+static uint32_t           s_consumed;     /* bytes fed to ota_flash_feed so far (== expected next offset) */
 
 /* Feed one block to the sequential slot writer + the rolling signature hash, advancing s_consumed.
  * The caller guarantees offset == s_consumed (in order). */
@@ -102,6 +77,18 @@ static int prvFeedInOrder( const uint8_t * pData, uint32_t blockSize )
     s_consumed += blockSize;
     return 0;
 }
+#endif /* !OTA_PAL_READBACK_VERIFY */
+
+/* Reset all PAL state. */
+static void prvPalReset( void )
+{
+    memset( &s_slot, 0, sizeof( s_slot ) );
+    s_active = 0;
+#if !OTA_PAL_READBACK_VERIFY
+    mbedtls_sha256_free( &s_sha );
+    s_consumed = 0;
+#endif
+}
 
 /* ----------------------------------------------------------------- create ---- */
 static OtaPalStatus_t prvAbort( OtaFileContext_t * const pFileContext )
@@ -110,7 +97,7 @@ static OtaPalStatus_t prvAbort( OtaFileContext_t * const pFileContext )
 
     if( s_active )
     {
-        OTA_PAL_LOG( "abort: discarding in-progress download (%u bytes)", ( unsigned ) s_consumed );
+        OTA_PAL_LOG( "abort: discarding in-progress download" );
     }
     prvPalReset();
     ota_lock_release( OTA_SRC_AWS );
@@ -138,6 +125,17 @@ static OtaPalStatus_t prvCreateFileForRx( OtaFileContext_t * const pFileContext 
         return OTA_PAL_COMBINE_ERR( OtaPalRxFileCreateFailed, 0 );
     }
 
+#if OTA_PAL_READBACK_VERIFY
+    /* AmebaD: random-write into a lazily-erased slot; the hash + checksum come from the read-back at
+     * close, so no rolling SHA is started here. Requires RSIP=OFF (read-back == the signed plaintext). */
+    if( ota_flash_begin_random( &s_slot ) != 0 )
+    {
+        OTA_PAL_LOG( "createFile: ota_flash_begin_random FAIL" );
+        ota_lock_release( OTA_SRC_AWS );
+        return OTA_PAL_COMBINE_ERR( OtaPalRxFileCreateFailed, 0 );
+    }
+#else
+    /* Bouffalo: sequential stream + rolling code-sign SHA-256. */
     if( ota_flash_begin( &s_slot ) != 0 )
     {
         OTA_PAL_LOG( "createFile: ota_flash_begin FAIL" );
@@ -152,20 +150,10 @@ static OtaPalStatus_t prvCreateFileForRx( OtaFileContext_t * const pFileContext 
         ota_lock_release( OTA_SRC_AWS );
         return OTA_PAL_COMBINE_ERR( OtaPalRxFileCreateFailed, 0 );
     }
-
     s_consumed = 0;
-    s_active = 1;
-
-#if ( OTA_PAL_REORDER_BLOCKS > 0U )
-    /* Reorder window buffer (freed in prvPalReset on close/abort). Not fatal if it fails to allocate:
-     * s_reorder_pool stays NULL and prvWriteBlock falls back to strict-sequential (rejects reorder). */
-    s_reorder_pool = pvPortMalloc( ( size_t ) OTA_PAL_REORDER_BLOCKS * OTA_FILE_BLOCK_SIZE );
-    if( s_reorder_pool == NULL )
-    {
-        OTA_PAL_LOG( "createFile: reorder pool alloc FAIL (%u B) - strict sequential",
-                     ( unsigned ) ( OTA_PAL_REORDER_BLOCKS * OTA_FILE_BLOCK_SIZE ) );
-    }
 #endif
+
+    s_active = 1;
 
     /* The agent checks pFile for non-NULL before calling writeBlock/closeFile;
      * use a non-NULL sentinel (we keep all real state in file scope). */
@@ -178,98 +166,10 @@ static OtaPalStatus_t prvCreateFileForRx( OtaFileContext_t * const pFileContext 
 }
 
 /* ------------------------------------------------------------- write block --- */
-/* Ingest one block at its offset: feed in order (+ drain buffered followers), buffer a future block, or
- * drop a duplicate. Returns blockSize on success (incl. buffered), -1 on error. Split out of
- * prvWriteBlock so the reorder self-test hook can drive it out of order. */
-static int16_t prvIngestOne( uint32_t offset,
-                             uint8_t * const pData,
-                             uint32_t blockSize )
-{
-    /* Already consumed (a duplicate / re-sent block after a reconnect): ack without re-writing. */
-    if( offset < s_consumed )
-    {
-        return ( int16_t ) blockSize;
-    }
-
-    /* The expected next block: feed it in order, then drain any buffered followers. */
-    if( offset == s_consumed )
-    {
-        if( prvFeedInOrder( pData, blockSize ) != 0 )
-        {
-            OTA_PAL_LOG( "writeBlock: feed FAIL at offset=%u", ( unsigned ) offset );
-            return -1;
-        }
-#if ( OTA_PAL_REORDER_BLOCKS > 0U )
-        if( s_reorder_pool != NULL )
-        {
-            int drained = 1;
-            while( drained )
-            {
-                uint32_t i;
-                drained = 0;
-                for( i = 0; i < OTA_PAL_REORDER_BLOCKS; i++ )
-                {
-                    if( s_reorder[ i ].valid && ( s_reorder[ i ].offset == s_consumed ) )
-                    {
-                        if( prvFeedInOrder( s_reorder_pool + ( size_t ) i * OTA_FILE_BLOCK_SIZE,
-                                            s_reorder[ i ].len ) != 0 )
-                        {
-                            OTA_PAL_LOG( "writeBlock: drained feed FAIL at offset=%u",
-                                         ( unsigned ) s_reorder[ i ].offset );
-                            return -1;
-                        }
-                        s_reorder[ i ].valid = 0;
-                        drained = 1;
-                    }
-                }
-            }
-        }
-#endif
-        return ( int16_t ) blockSize;
-    }
-
-    /* offset > s_consumed: a future (out-of-order) block. */
-#if ( OTA_PAL_REORDER_BLOCKS > 0U )
-    if( ( s_reorder_pool != NULL ) && ( blockSize <= OTA_FILE_BLOCK_SIZE ) )
-    {
-        uint32_t i;
-
-        for( i = 0; i < OTA_PAL_REORDER_BLOCKS; i++ )   /* already buffered (dup future block)? */
-        {
-            if( s_reorder[ i ].valid && ( s_reorder[ i ].offset == offset ) )
-            {
-                return ( int16_t ) blockSize;
-            }
-        }
-        for( i = 0; i < OTA_PAL_REORDER_BLOCKS; i++ )   /* stash in a free slot */
-        {
-            if( !s_reorder[ i ].valid )
-            {
-                memcpy( s_reorder_pool + ( size_t ) i * OTA_FILE_BLOCK_SIZE, pData, blockSize );
-                s_reorder[ i ].offset = offset;
-                s_reorder[ i ].len    = blockSize;
-                s_reorder[ i ].valid  = 1;
-                OTA_PAL_LOG( "writeBlock: buffered out-of-order offset=%u (expected=%u)",
-                             ( unsigned ) offset, ( unsigned ) s_consumed );
-                return ( int16_t ) blockSize;
-            }
-        }
-        OTA_PAL_LOG( "writeBlock: reorder window full (%u blocks) at offset=%u expected=%u",
-                     ( unsigned ) OTA_PAL_REORDER_BLOCKS, ( unsigned ) offset, ( unsigned ) s_consumed );
-        return -1;
-    }
-#endif
-    OTA_PAL_LOG( "writeBlock: OUT-OF-ORDER offset=%u expected=%u (sequential PAL)",
-                 ( unsigned ) offset, ( unsigned ) s_consumed );
-    return -1;
-}
-
-/* One-shot reorder self-test: set to a block index (>0) to HOLD that block until the following one
- * arrives, so the follower hits the reorder buffer+drain path -- a deterministic HW check that the
- * out-of-order handling + the in-order signature hash are correct. 0 = disabled; MUST stay 0 in
- * committed code (it is a debug scaffold, and holding a block would break a real download otherwise). */
-#define OTA_PAL_REORDER_TEST    0
-
+#if OTA_PAL_READBACK_VERIFY
+/* AmebaD: random-access write -- program each block at its offset, in ANY order, into the pre-erased
+ * slot. The 32-bit checksum and the code-sign hash are computed later from the read-back (prvCloseFile),
+ * so there is no in-order constraint and no reorder buffering. A re-sent block is idempotent. */
 static int16_t prvWriteBlock( OtaFileContext_t * const pFileContext,
                               uint32_t offset,
                               uint8_t * const pData,
@@ -282,42 +182,44 @@ static int16_t prvWriteBlock( OtaFileContext_t * const pFileContext,
         OTA_PAL_LOG( "writeBlock: no active file" );
         return -1;
     }
-
-#if ( OTA_PAL_REORDER_TEST > 0 )
+    if( ota_flash_write_at( &s_slot, offset, pData, blockSize ) != 0 )
     {
-        static uint8_t  s_test_state;                       /* 0=armed, 1=holding, 2=done */
-        static uint8_t  s_test_hold[ OTA_FILE_BLOCK_SIZE ];
-        static uint32_t s_test_hold_off;
-        static uint32_t s_test_hold_len;
-
-        if( ( s_test_state == 0U ) &&
-            ( offset == ( uint32_t ) OTA_PAL_REORDER_TEST * OTA_FILE_BLOCK_SIZE ) )
-        {
-            ( void ) memcpy( s_test_hold, pData, blockSize );
-            s_test_hold_off = offset;
-            s_test_hold_len = blockSize;
-            s_test_state = 1U;
-            OTA_PAL_LOG( "TEST: holding block offset=%u to force reorder on the next block",
-                         ( unsigned ) offset );
-            return ( int16_t ) blockSize;   /* ack so the agent requests the following block */
-        }
-        if( s_test_state == 1U )
-        {
-            int16_t r;
-            s_test_state = 2U;
-            r = prvIngestOne( offset, pData, blockSize );   /* out of order -> reorder buffers it */
-            if( ( r >= 0 ) &&
-                ( prvIngestOne( s_test_hold_off, s_test_hold, s_test_hold_len ) < 0 ) )
-            {
-                r = -1;                                     /* release the held one -> drains the buffered */
-            }
-            return r;
-        }
+        OTA_PAL_LOG( "writeBlock: write_at FAIL at offset=%u", ( unsigned ) offset );
+        return -1;
     }
-#endif
-
-    return prvIngestOne( offset, pData, blockSize );
+    return ( int16_t ) blockSize;
 }
+#else /* streaming (Bouffalo): strict in-order feed into the sequential slot writer + rolling hash. */
+static int16_t prvWriteBlock( OtaFileContext_t * const pFileContext,
+                              uint32_t offset,
+                              uint8_t * const pData,
+                              uint32_t blockSize )
+{
+    ( void ) pFileContext;
+
+    if( !s_active )
+    {
+        OTA_PAL_LOG( "writeBlock: no active file" );
+        return -1;
+    }
+    if( offset < s_consumed )   /* duplicate / re-sent block after a reconnect: ack without re-writing. */
+    {
+        return ( int16_t ) blockSize;
+    }
+    if( offset > s_consumed )
+    {
+        OTA_PAL_LOG( "writeBlock: OUT-OF-ORDER offset=%u expected=%u (sequential PAL)",
+                     ( unsigned ) offset, ( unsigned ) s_consumed );
+        return -1;
+    }
+    if( prvFeedInOrder( pData, blockSize ) != 0 )
+    {
+        OTA_PAL_LOG( "writeBlock: feed FAIL at offset=%u", ( unsigned ) offset );
+        return -1;
+    }
+    return ( int16_t ) blockSize;
+}
+#endif /* OTA_PAL_READBACK_VERIFY */
 
 /* ------------------------------------------------ signature verify (close) --- */
 /* The at-project OTA code-signing certificate (ECDSA P-256), embedded so no LFS cert provisioning is
@@ -337,11 +239,12 @@ static const char s_otaSignerCertPem[] =
     "ZBLWLzi7u/Y=\n"
     "-----END CERTIFICATE-----\n";
 
-static OtaPalStatus_t prvVerifySignature( OtaFileContext_t * const pFileContext )
+/* Verify the AWS code-sign ECDSA signature against @p hash (SHA-256 over the whole downloaded image;
+ * the caller computes it -- streaming: rolling s_sha; read-back: re-hashed from flash at close). */
+static OtaPalStatus_t prvVerifySignature( OtaFileContext_t * const pFileContext, const uint8_t * hash )
 {
     int rc;
     mbedtls_x509_crt crt;
-    uint8_t hash[ OTA_PAL_SHA256_LEN ];
     OtaPalStatus_t status = OTA_PAL_COMBINE_ERR( OtaPalSuccess, 0 );
 
     if( ( pFileContext->pSignature == NULL ) || ( pFileContext->pSignature->size == 0U ) )
@@ -350,13 +253,6 @@ static OtaPalStatus_t prvVerifySignature( OtaFileContext_t * const pFileContext 
         return OTA_PAL_COMBINE_ERR( OtaPalSignatureCheckFailed, 0 );
     }
     ( void ) pFileContext->pCertFilepath;   /* ignored: the code-sign cert is embedded above */
-
-    /* Finalize the rolling hash over the downloaded image. */
-    if( mbedtls_sha256_finish( &s_sha, hash ) != 0 )
-    {
-        OTA_PAL_LOG( "verify: sha256_finish FAIL" );
-        return OTA_PAL_COMBINE_ERR( OtaPalSignatureCheckFailed, 0 );
-    }
 
     /* Parse the EMBEDDED code-signing cert (no LFS provisioning needed). */
     mbedtls_x509_crt_init( &crt );
@@ -391,6 +287,7 @@ static OtaPalStatus_t prvVerifySignature( OtaFileContext_t * const pFileContext 
 static OtaPalStatus_t prvCloseFile( OtaFileContext_t * const pFileContext )
 {
     OtaPalStatus_t sigStatus;
+    uint8_t        hash[ OTA_PAL_SHA256_LEN ];
 
     if( !s_active )
     {
@@ -398,12 +295,58 @@ static OtaPalStatus_t prvCloseFile( OtaFileContext_t * const pFileContext )
         return OTA_PAL_COMBINE_ERR( OtaPalFileClose, 0 );
     }
 
-    /* Verify the code-sign signature first (mbedTLS); finalizes the hash. */
-    sigStatus = prvVerifySignature( pFileContext );
+    /* Compute the code-sign hash over the whole downloaded image (header + payload). */
+#if OTA_PAL_READBACK_VERIFY
+    /* Random-write path: the download arrived out of order, so re-hash from the slot read-back
+     * (RSIP-OFF plaintext, with the held header + boot sig spliced in). */
+    {
+        mbedtls_sha256_context sha;
+        uint8_t  buf[ 256 ];
+        uint32_t off, total = ( uint32_t ) sizeof( s_slot.hdr ) + s_slot.image_len;
+        int      rc = 0;
+
+        mbedtls_sha256_init( &sha );
+        if( mbedtls_sha256_starts( &sha, 0 /* SHA-256 */ ) != 0 )
+        {
+            rc = -1;
+        }
+        for( off = 0; ( rc == 0 ) && ( off < total ); )
+        {
+            uint32_t n = total - off;
+            if( n > sizeof( buf ) ) { n = sizeof( buf ); }
+            if( ota_flash_read_image( &s_slot, off, buf, n ) != 0 ) { rc = -1; break; }
+            if( mbedtls_sha256_update( &sha, buf, n ) != 0 ) { rc = -1; break; }
+            off += n;
+        }
+        if( ( rc == 0 ) && ( mbedtls_sha256_finish( &sha, hash ) != 0 ) ) { rc = -1; }
+        mbedtls_sha256_free( &sha );
+        if( rc != 0 )
+        {
+            OTA_PAL_LOG( "closeFile: read-back hash FAIL" );
+            prvPalReset();
+            ota_lock_release( OTA_SRC_AWS );
+            if( pFileContext != NULL ) { pFileContext->pFile = NULL; }
+            return OTA_PAL_COMBINE_ERR( OtaPalSignatureCheckFailed, 0 );
+        }
+    }
+#else
+    /* Streaming path: finalize the rolling hash accumulated in writeBlock. */
+    if( mbedtls_sha256_finish( &s_sha, hash ) != 0 )
+    {
+        OTA_PAL_LOG( "closeFile: sha256_finish FAIL" );
+        prvPalReset();
+        ota_lock_release( OTA_SRC_AWS );
+        if( pFileContext != NULL ) { pFileContext->pFile = NULL; }
+        return OTA_PAL_COMBINE_ERR( OtaPalSignatureCheckFailed, 0 );
+    }
+#endif
+
+    /* Verify the code-sign signature first (mbedTLS). */
+    sigStatus = prvVerifySignature( pFileContext, hash );
     if( OTA_PAL_MAIN_ERR( sigStatus ) != OtaPalSuccess )
     {
-        /* Leave the slot un-armed: ota_flash_finish would write the boot sig last, so
-         * skipping it means the bootloader will not pick this (un-finished) slot. */
+        /* Leave the slot un-armed: finish writes the boot sig last, so skipping it means the
+         * bootloader will not pick this (un-finished) slot. */
         prvPalReset();
         ota_lock_release( OTA_SRC_AWS );
         if( pFileContext != NULL ) { pFileContext->pFile = NULL; }
@@ -411,7 +354,11 @@ static OtaPalStatus_t prvCloseFile( OtaFileContext_t * const pFileContext )
     }
 
     /* Signature good: verify length+checksum and arm the new slot (writes boot sig last). */
+#if OTA_PAL_READBACK_VERIFY
+    if( ota_flash_finish_random( &s_slot ) != 0 )
+#else
     if( ota_flash_finish( &s_slot ) != 0 )
+#endif
     {
         OTA_PAL_LOG( "closeFile: ota_flash_finish (len/checksum) FAIL" );
         prvPalReset();
@@ -420,7 +367,7 @@ static OtaPalStatus_t prvCloseFile( OtaFileContext_t * const pFileContext )
         return OTA_PAL_COMBINE_ERR( OtaPalFileClose, 0 );
     }
 
-    OTA_PAL_LOG( "closeFile: image written + armed (%u bytes downloaded)", ( unsigned ) s_consumed );
+    OTA_PAL_LOG( "closeFile: image written + armed (%u bytes)", ( unsigned ) s_slot.image_len );
     /* Mark the freshly-armed image as pending-commit so that after the activate-reboot
      * getPlatformImageState() reports PendingCommit and the OTA library runs the self-test (else it
      * rejects: "job in self-test state while platform is not"). Persisted in KV/LFS across reboot;

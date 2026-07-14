@@ -65,20 +65,25 @@
  * ota_flash_feed (a sequential consumer), and a modest in-flight window keeps the RAM use bounded. */
 #define otaconfigMAX_NUM_BLOCKS_REQUEST    ( 1U )
 
-/* PAL out-of-order tolerance (ota_pal.c). ota_flash_feed()/ota_flash_bl602 are sequential consumers and
- * the signature SHA-256 is hashed in arrival order, so a block arriving ahead of the expected offset
- * would otherwise fail the image (IngestResultWriteBlockFailed). That happens when a WiFi SKB starvation
- * trips an MQTT keepalive timeout -> reconnect -> the resume delivers a block out of order. The PAL
- * buffers up to this many *future* blocks (malloc'd only during an OTA, N * OTA_FILE_BLOCK_SIZE) and
- * drains them in order into the sequential consumer + the hash -- so out-of-order is reordered, not
- * fatal, WITHOUT read-back hashing (which would break RSIP-encrypted images, whose signature is over the
- * downloaded ciphertext, not the OTF-decrypted read-back). 0 = strict sequential.
- *   Bouffalo: 0 -- tight OTA heap (~7 KB free on bl602 mid-download), in-order MQTT download proven.
- *   AmebaD:   8 -- ~120 KB OTA heap; 8 KB window covers the observed 1-2 block reconnect reorder. */
+/* PAL verify strategy (ota_pal.c) -- two mutually exclusive paths, selected per platform:
+ *
+ *   Bouffalo (=0): STREAMING. Blocks are fed in arrival order to the sequential slot writer
+ *     (ota_flash_feed / ota_flash_bl602) while the code-sign SHA-256 is hashed incrementally, so
+ *     blocks MUST arrive in order (a reconnect-induced reorder fails the image). bl602's boot2+xz
+ *     download has offset semantics that only make sense in order, and its OTA heap is tight (~7 KB
+ *     free mid-download), so in-order MQTT download stays the proven path.
+ *
+ *   AmebaD (=1): RANDOM-WRITE + READ-BACK. Blocks are programmed at their offset in ANY order
+ *     (ota_flash_write_at into a pre-erased slot); closeFile then reads the whole slot back and
+ *     computes the 32-bit checksum + the ECDSA verify hash from the read-back bytes. Out-of-order is
+ *     therefore free (no reorder buffering) and a WiFi-reconnect resume can no longer fail the
+ *     download. REQUIRES RSIP=OFF: read-back == plaintext == the signed image (the bench/AWS default,
+ *     project/amebad/Makefile RSIP?=OFF). On an RSIP=ON board the inactive-slot read-back is
+ *     wrong-keystream garbage, so this path must not be used there. */
 #if defined(BL602) || defined(BL702) || defined(BL616) || defined(BL616CL)
-#define OTA_PAL_REORDER_BLOCKS             ( 0U )
+#define OTA_PAL_READBACK_VERIFY            ( 0 )   /* Bouffalo: streaming in-order */
 #else
-#define OTA_PAL_REORDER_BLOCKS             ( 8U )
+#define OTA_PAL_READBACK_VERIFY            ( 1 )   /* AmebaD: random-write + read-back (RSIP=OFF) */
 #endif
 
 /* ---- thing name ----
