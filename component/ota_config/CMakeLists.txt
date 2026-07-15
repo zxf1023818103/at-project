@@ -30,12 +30,13 @@ add_library(aws_ota STATIC EXCLUDE_FROM_ALL
     ${OTA_HTTP_SOURCES}         # ota_http.c
     ${OTA_OS_FREERTOS_SOURCES}  # ota_os_freertos.c
 )
-# PUBLIC (SYSTEM): OTA's source/include + source/portable, and this dir for ota_config.h
-# (ota.c pulls ota_config_defaults.h -> ota_config.h). PRIVATE: source/ internals (ota_private.h).
-# The bundled coreJSON/tinycbor include dirs are intentionally NOT added — core_json.h / cbor.h
-# come from corejson_config / tinycbor_config.
+# PUBLIC (SYSTEM): OTA's source/include + source/portable, portable/os (ota_os_freertos.h, which the
+# OTA app links against), and this dir for ota_config.h (ota.c pulls ota_config_defaults.h ->
+# ota_config.h). PRIVATE: source/ internals (ota_private.h). The bundled coreJSON/tinycbor include
+# dirs are intentionally NOT added — core_json.h / cbor.h come from corejson_config / tinycbor_config.
 target_include_directories(aws_ota SYSTEM PUBLIC
     ${OTA_INCLUDE_PUBLIC_DIRS}
+    "${CMAKE_CURRENT_SOURCE_DIR}/ota/source/portable/os"   # ota_os_freertos.h (consumed by ota_app.c)
     "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 target_include_directories(aws_ota SYSTEM PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/ota/source")

@@ -68,7 +68,7 @@
 /* PAL verify strategy (ota_pal.c) -- two mutually exclusive paths, selected per platform:
  *
  *   Bouffalo (=0): STREAMING. Blocks are fed in arrival order to the sequential slot writer
- *     (ota_flash_feed / ota_flash_bl602) while the code-sign SHA-256 is hashed incrementally, so
+ *     (ota_flash_feed / ota_flash_bouffalo) while the code-sign SHA-256 is hashed incrementally, so
  *     blocks MUST arrive in order (a reconnect-induced reorder fails the image). bl602's boot2+xz
  *     download has offset semantics that only make sense in order, and its OTA heap is tight (~7 KB
  *     free mid-download), so in-order MQTT download stays the proven path.

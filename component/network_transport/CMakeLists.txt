@@ -43,6 +43,13 @@
 # target defined below in this file (the .c sources all live in this dir).
 add_compile_options("-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=")
 
+# Header-only view of this dir (transport_tls.h / transport_https.h / transport_interface.h / the
+# NetworkContext seam) for consumers that need the transport headers but MUST NOT pull a concrete
+# transport archive — the TLS_FreeRTOS_* symbols resolve at the final image link. Link this instead
+# of reaching into component/network_transport by path.
+add_library(network_transport_headers INTERFACE)
+target_include_directories(network_transport_headers SYSTEM INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
+
 # --- sockets layer: TCP_Sockets_* over FreeRTOS-Plus-TCP -----------------------------------
 # The base every transport sits on. tcp_sockets_wrapper.c calls FreeRTOS_socket / _connect /
 # _recv / _send / DNS directly (self-contained — it does NOT use the legacy sockets_wrapper).

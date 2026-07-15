@@ -10,6 +10,4 @@ endif()
 add_library(board_flash_port STATIC board_flash_amebad.c)
 
 # ameba_soc.h (FLASH_* fwlib + flash_init_para) + board_flash_lock.h.
-target_link_libraries(board_flash_port PRIVATE amebad_sdk_includes FreeRTOS)
-target_include_directories(board_flash_port PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../flash_cli_config")
+target_link_libraries(board_flash_port PRIVATE amebad_sdk_includes FreeRTOS board_flash_lock)  # board_flash_lock.h

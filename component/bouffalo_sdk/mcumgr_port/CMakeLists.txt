@@ -4,7 +4,7 @@
 # protocol + img/os/fs command groups) and a per-platform port. AmebaD's port is mcumgr_config's own
 # mcumgr_port (smp_bt.c) + the SHARED img/os/fs impls (component/mcumgr_config/smp_img_ota.c + smp_fs.c).
 # Those impl files are platform-AGNOSTIC — they ride the shared ota_flash.h slot writer (bl602
-# implements it in freertos_tcp_port/ota_flash_bl602.c: ota_flash_begin/feed/finish + the OTA_SRC_BLE
+# implements it in ota_flash_port/ota_flash_bouffalo.c: ota_flash_begin/feed/finish + the OTA_SRC_BLE
 # lock) and the LittleFS POSIX VFS (syscall_config) — so bl602 compiles the SAME files by path here
 # rather than copying them, mirroring how bl602's nimble_port compiles the shared nimble_app.c by path
 # instead of linking the amebad-gated nimble_config lib.

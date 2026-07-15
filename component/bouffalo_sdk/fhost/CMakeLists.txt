@@ -31,7 +31,6 @@ set(_fhost_libs
     "${CMAKE_CURRENT_SOURCE_DIR}/lib/libwpa_supplicant.a"
     "${CMAKE_CURRENT_SOURCE_DIR}/lib/libmacsw_os_adapter.a"
     "${CMAKE_CURRENT_SOURCE_DIR}/lib/libfhost_config.a"
-    "${CMAKE_CURRENT_SOURCE_DIR}/lib/libmacsw_plat.a"   # wifi_task_create / wifi_syslog / macsw_platform_*
     "${CMAKE_CURRENT_SOURCE_DIR}/lib/libutils.a"        # async_event_init/loop/register/post
     "${_macsw}/libmacsw_${BOUFFALO_CHIP}_default.a"
     "${_macsw}/libmacsw_config_${BOUFFALO_CHIP}_default.a")
@@ -41,13 +40,36 @@ foreach(_lib IN LISTS _fhost_libs)
     endif()
 endforeach()
 
-# Prebuilt-.a integration (same as the old wl80211): the macsw platform shim (libmacsw_plat.a:
-# wifi_task_create / wifi_syslog / macsw_platform_*) and the async_event bus (libutils.a) are the
-# SDK-built .a's — compiling their sources here would drag the whole SDK phy/macsw include chain.
+# The macsw platform shim (macsw_plat.c: wifi_task_create / wifi_syslog / bl_tpc_* / hal_macsw_lp_* /
+# macsw_platform_*) is compiled FROM SOURCE (was the prebuilt libmacsw_plat.a). It sits in the SDK's
+# wireless tree and pulls the macsw + phy + lhal + freertos include chain, so it links the project's
+# wrappers for those (bflb_autoconf for the forced -include autoconf.h with BL616/CONFIG_*, the chip
+# std/phyrf, bflb_sys, freertos_config) and adds the macsw/os-adapter headers directly. The config
+# macros it branches on (CFG_BL_WIFI_PS_ENABLE, MACSW_TWT) come from macsw_config.h/macsw.h, and
+# CONFIG_MACSW_SELECT_INCLUDE picks the SAME 'default' variant the prebuilt fhost/macsw .a's used, so
+# it stays ABI-matched with them.
+add_library(macsw_plat STATIC "${AT_ROOT}/platform/bouffalo_sdk/components/wireless/macsw_plat.c")
+target_compile_definitions(macsw_plat PRIVATE CONFIG_MACSW_SELECT_INCLUDE="macsw_default_config.h")
+# Headers via the SDK/config libs. macsw_plat.c's calls (bflb_rtc_get_time, bl_lp_*, phy/wl_api,
+# FreeRTOS) resolve at the final image link from the bouffalo_sdk umbrella, same as the prebuilt
+# libmacsw_plat.a's unresolved refs did.
+target_include_directories(macsw_plat PRIVATE
+    "${AT_ROOT}/platform/bouffalo_sdk/components/wireless/macsw/inc"  # macsw.h/coexm.h/mac_types.h/macsw_plat.h/macsw_config.h
+    "${_wifi6}/macsw_os_adapter/include")                            # rtos_al.h / platform_al.h
+target_link_libraries(macsw_plat PRIVATE
+    bflb_autoconf                 # forced -include autoconf.h (BL616 / CONFIG_* global config)
+    "${BOUFFALO_CHIP}_std"        # bl616_hbn.h + (transitively) bflb_lhal -> bflb_rtc.h
+    "${BOUFFALO_CHIP}_phyrf"      # wl_api.h / phy.h
+    bflb_sys                      # bl_lp.h (+ bl616_lp.h)
+    freertos_config)              # FreeRTOS.h / task.h
+
+# Prebuilt-.a integration (same as the old wl80211): the fhost core + wpa_supplicant + os-adapter +
+# config + async_event bus (libutils.a) stay SDK-built .a's — compiling their sources here would drag
+# the whole SDK phy/macsw include chain. macsw_plat (above) is the one compiled from source.
 add_library(fhost INTERFACE)
 target_include_directories(fhost INTERFACE
     "${_wifi6}/fhost/include"               # fhost_api.h / net_al.h / wifi_mgmr.h / wifi_mgmr_ext.h / fhost.h
     "${_wifi6}/macsw_os_adapter/include"    # rtos_al.h / platform_al.h
     "${AT_ROOT}/platform/bouffalo_sdk/components/wireless/macsw/inc"    # mac_types.h (pulled by wifi_mgmr_ext.h)
     "${AT_ROOT}/platform/bouffalo_sdk/components/utils/async_event")    # async_event.h (EV_WIFI event bus)
-target_link_libraries(fhost INTERFACE ${_fhost_libs})
+target_link_libraries(fhost INTERFACE ${_fhost_libs} macsw_plat)

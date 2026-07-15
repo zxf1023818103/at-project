@@ -24,8 +24,8 @@ target_compile_definitions(mbedtls_cfg INTERFACE
     MBEDTLS_AES_ALT
     MBEDTLS_ECP_ALT)
 target_include_directories(mbedtls_cfg SYSTEM INTERFACE
-    "${CMAKE_CURRENT_SOURCE_DIR}"                  # timing_alt.h / aes_alt.h / sha*_alt.h / ecp_alt.h / gcm_alt.h
-    "${AT_ROOT}/component/mbedtls_config")          # shared mbedtls_user_config.h + threading_alt.h
+    "${CMAKE_CURRENT_SOURCE_DIR}")                 # timing_alt.h / aes_alt.h / sha*_alt.h / ecp_alt.h / gcm_alt.h
+target_link_libraries(mbedtls_cfg INTERFACE mbedtls_config_headers)  # shared mbedtls_user_config.h + threading_alt.h
 
 # Optional HW AES-GCM (BOUFFALO_MBEDTLS_HW_GCM, from the Makefile HWGCM flag). When on, MBEDTLS_GCM_ALT
 # swaps the software mbedtls_gcm module for gcm_alt.c (BL602 Sec_Eng HW AES-CTR, chunked, + software

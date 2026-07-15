@@ -15,6 +15,4 @@ add_library(ota_flash_port STATIC ota_flash_amebad.c)
 # ota_flash.h (the shared contract) + board_flash_lock.h (unlock/relock around slot writes) +
 # the SDK flash HAL headers + FreeRTOS (task delays) + at_log.h.
 target_link_libraries(ota_flash_port PUBLIC ota_flash_config)
-target_link_libraries(ota_flash_port PRIVATE amebad_sdk_includes rxi_log FreeRTOS)
-target_include_directories(ota_flash_port PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../flash_cli_config")   # board_flash_lock.h
+target_link_libraries(ota_flash_port PRIVATE amebad_sdk_includes rxi_log FreeRTOS board_flash_lock)  # board_flash_lock.h

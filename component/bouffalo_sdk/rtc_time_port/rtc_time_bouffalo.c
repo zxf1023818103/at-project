@@ -1,5 +1,5 @@
 /*
- * rtc_time_bl602.c - Bouffalo (BL602/BL616/BL616CL) port of the shared RTC seam (rtc_time.h):
+ * rtc_time_bouffalo.c - Bouffalo (BL602/BL616/BL616CL) port of the shared RTC seam (rtc_time.h):
  * a retained wall clock across a warm reboot / deep-sleep wake, mirroring what AmebaD's rtc_time.c
  * does over the Realtek RTC.
  *

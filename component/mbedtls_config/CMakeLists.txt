@@ -55,5 +55,11 @@ set(MBEDTLS_CONFIG_DIR "${CMAKE_CURRENT_SOURCE_DIR}" CACHE INTERNAL
 # All resolve as forward references at generate time. EXCLUDE_FROM_ALL: built only when linked.
 # NB AmebaD additionally attaches its HW-ALT/entropy `mbedtls_port` onto this umbrella from
 # component/amebad/mbedtls_port (a platform-specific augmentation kept out of this shared file).
+# Header-only view of the shared mbedTLS config (mbedtls_user_config.h / mbedtls_threading_alt.h) for
+# the per-platform mbedtls_cfg configs that -include them WITHOUT linking the mbedtls_config archive —
+# which would pull mbedcrypto and cycle back through the config. Link this instead of a raw path.
+add_library(mbedtls_config_headers INTERFACE)
+target_include_directories(mbedtls_config_headers SYSTEM INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
+
 add_library(mbedtls_config STATIC EXCLUDE_FROM_ALL mbedtls_threading_alt.c)
 target_link_libraries(mbedtls_config mbedcrypto mbedx509 mbedtls FreeRTOS freertos_config)

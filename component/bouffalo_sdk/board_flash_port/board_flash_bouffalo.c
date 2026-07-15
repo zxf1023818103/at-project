@@ -1,5 +1,5 @@
 /*
- * board_flash_bl602.c - Bouffalo (BL602/BL616/BL616CL) impl of the cross-platform firmware flash
+ * board_flash_bouffalo.c - Bouffalo (BL602/BL616/BL616CL) impl of the cross-platform firmware flash
  * write-protect (component/flash_cli_config, board_flash_lock.h) over the LHAL bflb_sflash. Same
  * W25Q/GD25 SR1/SR2 BP/CMP layout as AmebaD: LOCK_FW = SR1 0x14 + SR2 CMP=1 (bottom 3 MB locked, top
  * 1 MB LittleFS writable), LOCK_ALL = SR1 0x1C, UNLOCK = 0. SR1+SR2 are written together via the
@@ -22,7 +22,7 @@
  * the generated bl616 linker.ld's itcm section on bl616). noinline
  * is REQUIRED: a section attribute does not stop the compiler inlining this static function into its
  * XIP callers, which would run the XIP-off window from flash -> instruction-fetch hang. */
-#define BF_TCM __attribute__( ( noinline, section( ".tcm_code.board_flash_bl602" ) ) )
+#define BF_TCM __attribute__( ( noinline, section( ".tcm_code.board_flash_bouffalo" ) ) )
 
 /* LHAL flash APIs (drivers/lhal). The cfg is opaque here (pointer passed straight through). We use the
  * *_with_cmd read/write forms with EXPLICIT opcodes: on the bl602dk GD25Q32 (jedec 0x1640C8) the cfg's

@@ -20,14 +20,10 @@ add_library(aws_provision_core STATIC EXCLUDE_FROM_ALL
 target_include_directories(aws_provision_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(aws_provision_core PUBLIC FreeRTOS mbedtls_config freertos_cli)
 # aws_connect.c needs coreMQTT (MQTTConnectInfo_t / TransportInterface_t) + the TLS transport header.
-# The TLS_FreeRTOS_* symbols resolve at the final image link (both AWS images link network_transport).
-target_link_libraries(aws_provision_core PRIVATE coremqtt_config)   # core_mqtt.h / core_mqtt_config.h
-target_include_directories(aws_provision_core PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/../freertos-cli_config/freertos-cli"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../coremqtt_config/coremqtt/source/include"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../coremqtt_config/coremqtt/source/interface"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../network_transport"
-)
+# coremqtt_config brings core_mqtt.h + its include/interface dirs; freertos_cli (linked PUBLIC above)
+# brings the CLI headers; network_transport_headers is the header-only seam for transport_tls.h — the
+# TLS_FreeRTOS_* symbols resolve at the final image link (both AWS images link a concrete transport).
+target_link_libraries(aws_provision_core PRIVATE coremqtt_config network_transport_headers)
 
 # --- default key backend: plain LittleFS DER file --------------------------------------------------
 add_library(aws_secret_store_file STATIC EXCLUDE_FROM_ALL
@@ -129,17 +125,8 @@ if(AT_ENABLE_AWS_OTA)
         corehttp_config         # HTTP data plane (presigned-S3 download) — uniform on every platform
         ota_http_config         # urlparse.h + ota_http_interface.h for ota_app.c's S3 fetcher
     )
-    target_include_directories(aws_iot PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/../coremqtt_config/coremqtt/source/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/../coremqtt_config/coremqtt/source/interface"
-        "${CMAKE_CURRENT_SOURCE_DIR}/../coremqtt-agent_config"
-        "${CMAKE_CURRENT_SOURCE_DIR}/../coremqtt-agent_config/coremqtt-agent/source/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/../ota_config"
-        "${CMAKE_CURRENT_SOURCE_DIR}/../ota_config/ota/source/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/../ota_config/ota/source/portable/os"
-        "${CMAKE_CURRENT_SOURCE_DIR}/../network_transport"
-        "${CMAKE_CURRENT_SOURCE_DIR}/../freertos-cli_config/freertos-cli"
-    )
+    # All the coreMQTT / coreMQTT-Agent / OTA (incl. portable/os) / network_transport / CLI headers
+    # arrive through the target_link_libraries above — no cross-component include paths needed.
 else()
     # Default: the lean telemetry-only client (direct coreMQTT over the TLS transport; no agent/OTA).
     add_library(aws_iot STATIC EXCLUDE_FROM_ALL
@@ -154,12 +141,7 @@ else()
         mbedtls_config
         freertos_cli
     )
-    target_include_directories(aws_iot PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/../coremqtt_config/coremqtt/source/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/../coremqtt_config/coremqtt/source/interface"
-        "${CMAKE_CURRENT_SOURCE_DIR}/../network_transport"
-        "${CMAKE_CURRENT_SOURCE_DIR}/../freertos-cli_config/freertos-cli"
-    )
+    # coreMQTT / network_transport / CLI headers all arrive through target_link_libraries above.
 endif()
 
 if(NOT _aws_fw_def STREQUAL "")

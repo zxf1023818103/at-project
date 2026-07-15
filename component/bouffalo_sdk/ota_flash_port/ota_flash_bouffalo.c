@@ -1,5 +1,5 @@
 /*
- * ota_flash_bl602.c - Bouffalo (BL602) impl of the shared OTA slot writer (component/ota_flash_config,
+ * ota_flash_bouffalo.c - Bouffalo (BL602/BL616/BL616CL) impl of the shared OTA slot writer (component/ota_flash_config,
  * ota_flash.h), the streaming sink for `ota_http`. Approach B: drive bflb_flash + the pt_table
  * directly (the AmebaD ota_flash.c analog), not the SDK bflb_ota (which needs the size up front and
  * leaves a compressed image for boot2).

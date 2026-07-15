@@ -6,7 +6,7 @@
 # rxi log lines print __FILE__: map this dir's prefix away so they show basenames.
 add_compile_options("-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=")
 
-add_library(rtc_time_port STATIC rtc_time_bl602.c)
+add_library(rtc_time_port STATIC rtc_time_bouffalo.c)
 
 # rtc_time.h (the shared seam); bflb_rtc.h / bflb_core.h (the HBN RTC HAL); at_log.h (the single
 # project logger, bflb_log is gone). syscalls.h (amebad_set_unix_time) is header-only here - the

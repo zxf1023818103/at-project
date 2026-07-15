@@ -617,7 +617,7 @@ void app_platform_boot_init(void)
 #endif
     // BL616/BL616CL: skip the boot-time WRITE lock -- keep the firmware region unlocked for now
     // (no re-lock -> no dependence on the eflash-loader clearing protection at reflash). The SR
-    // read/write path itself IS now XIP-quiesced (board_flash_bl602.c), so an un-quiesced raw
+    // read/write path itself IS now XIP-quiesced (board_flash_bouffalo.c), so an un-quiesced raw
     // WRSR/RDSR no longer races the XIP continuous-read here -- that race previously hung the boot
     // in Clock_Peripheral_Clock_Get and left a CMP-inverted, brick-for-reflash status register.
     board_flash_log_status();   // SR1/SR2 diag print (read path is XIP-quiesced on every chip)
