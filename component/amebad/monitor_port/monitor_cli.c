@@ -17,6 +17,7 @@
  */
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -24,8 +25,18 @@
 #include "FreeRTOS_CLI.h"
 
 #include "ameba_soc.h"   /* LOGUART_Readable/GetChar, DiagPutChar, WDG_*, ipc_send_message,
-                          * IPC_INT_CHAN_SHELL_SWITCH, shell_switch_ipc_int decl (shell.h) */
+                          * IPC_INT_CHAN_SHELL_SWITCH, shell_switch_ipc_int decl (shell.h);
+                          * also pulls freertos_pmu.h -> pmu_*_wakelock / pmu_tickless_debug / PMU_OS */
 #include "monitor.h"     /* the shared engine seam (component/monitor_config) */
+
+#ifdef AT_AMEBAD_KM4
+/* WiFi power-save API (wifi_conf.h); extern-declared to avoid pulling the whole wifi header set into
+ * this monitor TU. main.cpp turns power-save OFF on every associate (wifi_set_power_mode(0,0) +
+ * wifi_disable_powersave), so `tickless` re-enables it here. KM4-only (wifi_* is in the KM4 wlan lib). */
+extern int wifi_set_lps_dtim(unsigned char dtim);
+extern int wifi_enable_powersave(void);
+extern int wifi_disable_powersave(void);
+#endif
 
 /* Console-owner token (per core; KM4 = 1 at boot, KM0 = 0). Set to 1 by the IPC handler
  * on the core being handed the console. s_active tracks whether our RX is enabled. */
@@ -252,6 +263,46 @@ static BaseType_t cmd_sw_toggle( char *out, size_t outlen, const char *cmd ) { (
 static BaseType_t cmd_sw_km0( char *out, size_t outlen, const char *cmd )    { ( void ) cmd; return do_switch( out, outlen, "KM0" ); }
 static BaseType_t cmd_sw_km4( char *out, size_t outlen, const char *cmd )    { ( void ) cmd; return do_switch( out, outlen, "KM4" ); }
 
+/* `tickless <dtim>` / `tickless off` — WiFi-retention low power on AmebaD, the RTL8721D equivalent of
+ * the bl616 `tickless` command. AmebaD's tickless is built in (freertos_pmu + WiFi LPS), so this just
+ * drives it, mirroring the SDK's `ATXP=dtim,<n>` + `TICKPS r debug`:
+ *   - wifi_set_lps_dtim(n)      : DTIM listen interval (how many DTIMs the WiFi sleeps between wakes)
+ *   - wifi_enable_powersave()   : wext_enable_powersave(ips=1,lps=1) — undo main.cpp's connect-time
+ *                                 wifi_set_power_mode(0,0), so the WiFi actually enters LPS
+ *   - pmu_tickless_debug(ENABLE): the "debug" tail of `TICKPS r debug` (sleep/wake trace)
+ *   - pmu_release_wakelock(PMU_OS): drop the default OS wakelock so the FreeRTOS idle enters tickless
+ *                                   CPU sleep (held by default = never sleeps)
+ * `off` re-acquires the wakelock and disables LPS (back to always-on). DTIM default 1: keep it small
+ * (RC32K-class 32k timing drift + no keepalive on the standard wlan variant -> a long DTIM risks
+ * missing beacons / the AP aging out the station; the `lt` wlan variant adds keepalive for long sleeps). */
+#ifdef AT_AMEBAD_KM4
+static BaseType_t cmd_tickless( char *out, size_t outlen, const char *cmd )
+{
+    BaseType_t len = 0;
+    const char *arg = FreeRTOS_CLIGetParameter( cmd, 1, &len );
+
+    if ( arg && ( strncmp( arg, "off", 3 ) == 0 ) )
+    {
+        pmu_acquire_wakelock( PMU_OS );   /* hold the CPU awake again */
+        wifi_disable_powersave();         /* WiFi out of LPS */
+        snprintf( out, outlen, "tickless disabled (wakelock held, WiFi PS off)\r\n" );
+        return pdFALSE;
+    }
+
+    int dtim = arg ? atoi( arg ) : 1;
+    if ( dtim < 1 )
+        dtim = 1;
+
+    wifi_set_lps_dtim( ( unsigned char ) dtim );   /* ATXP=dtim,<n> */
+    wifi_enable_powersave();                        /* re-enable LPS (main.cpp disabled it on associate) */
+    pmu_tickless_debug( ENABLE );                   /* TICKPS r debug */
+    pmu_release_wakelock( PMU_OS );                 /* release OS wakelock -> idle enters tickless sleep */
+
+    snprintf( out, outlen, "tickless enabled: dtim=%d (WiFi LPS + CPU tickless, DTIM wake)\r\n", dtim );
+    return pdFALSE;
+}
+#endif /* AT_AMEBAD_KM4 */
+
 static const CLI_Command_Definition_t kAmebadCmds[] = {
     { "reboot",  "reboot [uartburn]:\r\n watchdog-reset this core (uartburn -> UART download mode)\r\n", cmd_reboot, -1 },
     { "flashdbg", "flashdbg <erase|read|write|status|cache> ...:\r\n AmebaD raw flash debug ops (KM4). lock/unlock/status = the cross-platform `flash` command\r\n", cmd_flash_, -1 },
@@ -259,6 +310,9 @@ static const CLI_Command_Definition_t kAmebadCmds[] = {
     { ">>",      ">>:\r\n hand the console to the other core\r\n",                cmd_sw_toggle, 0 },
     { "km0",     "km0:\r\n switch the console to KM0\r\n",                        cmd_sw_km0,    0 },
     { "km4",     "km4:\r\n switch the console to KM4\r\n",                        cmd_sw_km4,    0 },
+#ifdef AT_AMEBAD_KM4
+    { "tickless", "tickless <dtim>|off:\r\n WiFi-retention low power (LPS + CPU tickless, DTIM wake); dtim default 1\r\n", cmd_tickless, -1 },
+#endif
 };
 
 /* Called from main.c after monitor_start() (the register-after-start pattern). */

@@ -45,6 +45,9 @@ if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
     add_library(monitor_port STATIC monitor_cli.c monitor_plat_lp.c)
 elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     add_library(monitor_port STATIC monitor_cli.c monitor_plat_hp.c monitor_rom.c)
+    # The `tickless` command drives WiFi LPS (wifi_*) which only exists in the KM4 wlan lib (KM0 also
+    # has no full libc for atoi), so it's KM4-only. monitor_cli.c is shared across both cores.
+    target_compile_definitions(monitor_port PRIVATE AT_AMEBAD_KM4=1)
 endif()
 target_link_libraries(monitor_port PUBLIC monitor FreeRTOS)
 target_compile_options(monitor_port PRIVATE ${_monitor_warnings})
