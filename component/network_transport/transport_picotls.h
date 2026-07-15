@@ -53,6 +53,13 @@ typedef struct TlsTransportParams
     ptls_t      * tls;        /**< @brief picotls connection (ptls_client_new). */
     ptls_buffer_t rxPlain;    /**< @brief Decrypted-plaintext sink for recv (grows on demand). */
     size_t        rxConsumed; /**< @brief Bytes of rxPlain already returned to the caller. */
+    /* Record-framing recv (transport_picotls.c): a reused per-connection buffer that accumulates ONE
+     * whole TLS record before feeding it to ptls_receive, so upstream picotls takes its zero-alloc
+     * fast path (no per-record recvbuf.rec malloc/free). Without this, a long download on a fragmented
+     * no-PSRAM heap eventually can't malloc a 16 KB record -> PTLS_ERROR_NO_MEMORY. */
+    uint8_t     * rxFrame;      /**< @brief Reused one-record assembly buffer (PICOTLS_MAX_RECORD, heap). */
+    size_t        rxFrameFilled;/**< @brief Bytes of the current record already read into rxFrame. */
+    size_t        rxFrameNeed;  /**< @brief Total bytes of the current record (0 until the header is in). */
 } TlsTransportParams_t;
 
 /* NetworkCredentials_t and TlsTransportStatus_t are now in transport_tls_common.h (included above). */

@@ -34,6 +34,6 @@ TlsBackendMode_t at_tls_backend_from_str( const char * s );
  * the runtime backend (at_tls_get_backend()). Caller owns @p pNet and its TlsTransportParams_t.
  */
 TlsTransportStatus_t Https_Connect( NetworkContext_t * pNet, const char * host, uint16_t port,
-                                    size_t rxReserve, uint32_t recvTmoMs, uint32_t sendTmoMs );
+                                    uint32_t recvTmoMs, uint32_t sendTmoMs );
 
 #endif /* TRANSPORT_HTTPS_H */

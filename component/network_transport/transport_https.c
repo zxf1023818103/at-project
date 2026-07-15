@@ -70,15 +70,23 @@ static const char HTTPS_AMAZON_ROOT_CA1[] =
     "rqXRfboQnoZsG4q5WTP468SQvvG5\n"
     "-----END CERTIFICATE-----\n";
 
+/* picotls rxPlain pre-reserve for the server-only download connection. Sized to a full TLS 1.3
+ * record (16 KB plaintext + overhead) so rxPlain is allocated ONCE, up front, while the heap is
+ * least fragmented — S3 streams 16 KB records, and a mid-download rxPlain realloc that big fails
+ * on a fragmented no-PSRAM heap (picotls -> PTLS_ERROR_NO_MEMORY 513). This briefly OOM'd the
+ * handshake back when the AWS MQTT TLS was still up during the download; the OTA HTTP-takeover now
+ * tears MQTT down first (aws_iot_suspend_for_ota), leaving ~185 KB free, so the full reserve fits. */
+#define HTTPS_RX_RESERVE   16640u
+
 TlsTransportStatus_t Https_Connect( NetworkContext_t * pNet, const char * host, uint16_t port,
-                                    size_t rxReserve, uint32_t recvTmoMs, uint32_t sendTmoMs )
+                                    uint32_t recvTmoMs, uint32_t sendTmoMs )
 {
     NetworkCredentials_t creds;
 
     memset( &creds, 0, sizeof( creds ) );
     creds.pRootCa       = ( const uint8_t * ) HTTPS_AMAZON_ROOT_CA1;
     creds.rootCaSize    = sizeof( HTTPS_AMAZON_ROOT_CA1 );   /* incl. NUL, as mbedTLS PEM wants */
-    creds.rxReserveSize = rxReserve;
+    creds.rxReserveSize = HTTPS_RX_RESERVE;
     creds.backendMode   = s_tls_backend;                     /* runtime-selected, shared with AWS MQTT */
 
     return TLS_FreeRTOS_Connect( pNet, host, port, &creds, recvTmoMs, sendTmoMs );

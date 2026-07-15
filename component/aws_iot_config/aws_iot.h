@@ -57,6 +57,12 @@ int aws_is_provisioned(void);
 /* Register the shared `aws` console command (aws_cli.c). */
 void aws_cli_register(void);
 
+/* Tear down the MQTT-Agent session (hard barrier) so an ota_http HTTPS OTA download gets the full
+ * heap - the AWS OTA HTTP-takeover (ota_app.c) calls this before ota_http_start on heap-tight targets
+ * where the MQTT + ota_http TLS sessions can't coexist. The device reboots after the download and the
+ * new image reconnects MQTT to ack the job, so MQTT isn't needed during it. See aws_iot_demo.c. */
+void aws_iot_suspend_for_ota(void);
+
 #ifdef __cplusplus
 }
 #endif

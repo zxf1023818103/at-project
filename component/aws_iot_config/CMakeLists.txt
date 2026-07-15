@@ -100,6 +100,15 @@ if(AT_ENABLE_AWS_OTA)
                                      # .bss vs the EC-only 512 is affordable on a clean ~49 KB handshake heap
                                      # (the earlier build-3 OOM at 32 KB was a degraded post-OTA/churn state).
     )
+    # bl602 (~35 KB free at the MQTT handshake) cannot hold a SECOND concurrent TLS 1.3 session (the
+    # ota_http HTTPS download to S3) on top of the AWS MQTT session — enabling the HTTP data plane also
+    # pulls coreHTTP + a 2nd transport + the ~5.6 KB OTA event buffer into .bss, which alone starves the
+    # MQTT handshake (observed: ptls_handshake 513 / PTLS_ERROR_NO_MEMORY, AWS never connects). So bl602
+    # downloads OTA file blocks over the shared MQTT/CBOR data plane (single TLS, reused from telemetry).
+    # bl616 / AmebaD have the heap for the 2nd TLS and keep the default HTTP-takeover data plane (=1).
+    if(BOUFFALO_CHIP STREQUAL "bl602")
+        target_compile_definitions(aws_iot PRIVATE OTA_APP_ENABLE_HTTP=0)
+    endif()
     # AWS_CERT_MAX sizes the base64-decode scratch (s_der in aws_provision.c), reused for cert/CA/key.
     # 1536 holds the largest credential DER: an RSA-2048 key ~1192 B (> RSA cert ~861 B / CA ~837 B / EC
     # key ~138 B). Needed to base64-decode an RSA client key during `aws key`; kept equal to AWS_KEY_MAX.

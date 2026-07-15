@@ -472,6 +472,10 @@ static void prvHttpCloseConn( void )
 /* Forward decl (defined with the other MQTT helpers, ~prvOtaMqttPublish). */
 static void prvPublishJobSucceeded( const char * jobName );
 
+/* aws_iot_demo.c: tear down the MQTT-Agent session (frees its TLS) so the ota_http HTTPS download
+ * below gets the full heap. Always linked in an AWSOTA image (implies AWS). See aws_iot.h. */
+extern void aws_iot_suspend_for_ota( void );
+
 /* OtaHttpInterface_t.init. Instead of driving the library's ranged-GET data plane, HAND OFF the full
  * presigned S3 URL (from the job doc) to the ota_http engine: one GET, streams to the inactive slot,
  * reboots on success. Cross-platform (this shared ota_app.c is built on amebad/bl616/bl602) and needs
@@ -517,6 +521,12 @@ static OtaHttpStatus_t prvOtaHttpInit( char * pUrl )
     s_http_takeover = 1;
     OTA_APP_LOG( "http-takeover: handing presigned URL to ota_http (job '%s')",
                  ( jobName != NULL ) ? jobName : "?" );
+    /* Free the MQTT-Agent TLS session first so the ota_http HTTPS handshake gets the full heap
+     * (the two TLS 1.3 sessions can't coexist on a no-PSRAM target). Hard barrier: returns only once
+     * the AWS agent has actually disconnected. We run in the OTA agent task, not the MQTT agent task,
+     * so this cannot deadlock. The device reboots on a successful download; the new image reconnects
+     * MQTT and acks this job SUCCEEDED on the second sighting (above). */
+    aws_iot_suspend_for_ota();
     ota_http_start( pUrl );
     return OtaHttpSuccess;
 }

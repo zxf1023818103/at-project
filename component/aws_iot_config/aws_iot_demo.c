@@ -155,6 +155,13 @@ static char                    s_topic_cmd[96];
 static volatile int            s_connected = 0;   /* set by the agent task once MQTT is up */
 static volatile int            s_otaStarted = 0;
 
+/* OTA-download teardown handshake (aws_iot_suspend_for_ota): when the AWS OTA job hands off to the
+ * ota_http engine, the MQTT-Agent session is torn down so the ota_http HTTPS download (a 2nd, heap-
+ * hungry TLS 1.3 handshake) gets the full heap. s_ota_teardown asks the agent task to stop its
+ * reconnect loop; s_aws_torn_down is set once its TLS session is actually freed (the barrier). */
+static volatile int            s_ota_teardown = 0;
+static volatile int            s_aws_torn_down = 0;
+
 /* ----------------------------------------------------------------- time ----- */
 static uint32_t prvGetTimeMs(void)
 {
@@ -402,6 +409,17 @@ static void aws_agent_task(void *param)
         bool sessionPresent = false;
         MQTTStatus_t loopStatus;
 
+        /* OTA download in progress: the TLS session was already freed at the bottom of the previous
+         * iteration (post-CommandLoop disconnect). Signal the barrier and park - do NOT reconnect;
+         * the device reboots into the new image after the ota_http download completes. */
+        if (s_ota_teardown) {
+            s_aws_torn_down = 1;
+            log_info("[AWS] agent parked for OTA download (TLS freed, free heap %u)",
+                     (unsigned)xPortGetFreeHeapSize());
+            vTaskSuspend(NULL);
+            continue;   /* if ever resumed, re-evaluate */
+        }
+
         BackoffAlgorithm_InitializeParams(&backoff, AWS_BACKOFF_BASE_MS,
                                           AWS_BACKOFF_MAX_MS, AWS_BACKOFF_MAX_TRIES);
 
@@ -439,7 +457,9 @@ static void aws_agent_task(void *param)
         /* Loop returned: connection is down. Tear down + reconnect. */
         s_connected = 0;
         log_info("[AWS] command loop exited (%d) - disconnecting", (int)loopStatus);
-        if (s_otaStarted) {
+        /* Skip the OTA suspend/resume dance during a deliberate OTA teardown - the OTA library is
+         * already parked (ota_http took over) and we are about to reboot into the new image. */
+        if (s_otaStarted && !s_ota_teardown) {
             ota_app_on_mqtt_disconnected();   /* OTA_Suspend -> reconnect OTA_Resume's (re-subscribes) */
         }
         TLS_FreeRTOS_Disconnect(&s_net);
@@ -574,6 +594,36 @@ static void aws_telemetry_task(void *param)
 
         vTaskDelay(pdMS_TO_TICKS(AWS_TELEMETRY_PERIOD_MS));
     }
+}
+
+/* Tear down the MQTT-Agent session so the ota_http HTTPS download (a 2nd TLS 1.3 session, whose
+ * cert-verify handshake peaks at ~80 KB) gets the full heap. Called from the AWS OTA HTTP-takeover
+ * (ota_app.c, running in the OTA agent task - NOT the MQTT agent task, so no deadlock) right before
+ * ota_http_start. On heap-tight targets (no-PSRAM bl616) the MQTT + ota_http TLS sessions can't
+ * coexist; since the device reboots after the download and the new image reconnects MQTT to ack the
+ * job SUCCEEDED, MQTT is not needed during the download. Hard barrier: returns only once the agent
+ * task has actually freed its TLS session. */
+void aws_iot_suspend_for_ota(void)
+{
+    MQTTAgentCommandInfo_t cmdInfo = { 0 };
+    uint32_t waited = 0;
+
+    if (s_aws_torn_down) {
+        return;
+    }
+    s_ota_teardown = 1;   /* agent task: exit reconnect loop; telemetry idles once s_connected drops */
+
+    /* Post a terminate command; MQTTAgent_CommandLoop returns, the agent task then disconnects TLS
+     * (freeing the picotls context + buffers) and parks, setting s_aws_torn_down. */
+    cmdInfo.blockTimeMs = 1000;
+    (void)MQTTAgent_Terminate(&s_agent, &cmdInfo);
+
+    while (!s_aws_torn_down && waited < 12000) {
+        vTaskDelay(pdMS_TO_TICKS(50));
+        waited += 50;
+    }
+    log_info("[AWS] suspended for OTA download (torn_down=%d after %u ms, free heap %u)",
+             (int)s_aws_torn_down, (unsigned)waited, (unsigned)xPortGetFreeHeapSize());
 }
 
 void aws_iot_demo_start(void)
