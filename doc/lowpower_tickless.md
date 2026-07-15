@@ -1,4 +1,20 @@
-# Low-power WiFi retention + DTIM wake (bl616/BL618 & AmebaD/RTL8721D)
+# Low-power modes: WiFi-retention `tickless` + deep-sleep `dsleep`
+
+The firmware exposes **two** low-power console commands with opposite trade-offs:
+
+| Command | Sleep depth | WiFi | Wakes on | On wake | Platforms |
+|---|---|---|---|---|---|
+| **`tickless <dtim>`** | retention (stays associated) | **kept** | DTIM beacon (downlink/uplink) | resume in place | bl616, AmebaD |
+| **`dsleep [uart] [rtc <s>]`** | full deep sleep | **dropped** | UART-RX edge and/or RTC timer | reboot (bl602/bl616) · resume (AmebaD) | bl602, bl616, AmebaD |
+
+Use **`tickless`** for a connected device that must still receive MQTT/telemetry while saving power;
+use **`dsleep`** for the lowest power when connectivity is not needed and you only need to wake on a
+console byte or after a timeout. The `tickless` half is documented first; **`dsleep` is the last
+section**.
+
+---
+
+## `tickless` — WiFi retention + DTIM wake (bl616/BL618 & AmebaD/RTL8721D)
 
 Both platforms can put the device into deep sleep **while staying associated to the AP**, waking on
 DTIM beacons to service downlink traffic (e.g. an AWS IoT MQTT publish) and periodic uplink
@@ -124,3 +140,77 @@ the "long DTIM → dropped" risk).
   PS station and delivers it at the next DTIM → the device wakes, the MQTT agent processes it, and
   it logs `[AWS] RX publish topic=bw20/<mac>/cmd payload=…`. Verified 4/4 on both bl616 and AmebaD.
   `<mac>` = the module BLE MAC (lower-case hex), printed at boot as `device (BLE MAC / Thing)`.
+
+---
+
+# `dsleep` — full deep sleep with UART + RTC wake (bl602 / bl616 / AmebaD)
+
+Unlike `tickless` (stays connected), **`dsleep` powers the chip down and loses WiFi**, waking only on
+the configured source(s). One command, same syntax on all three actively-tested platforms:
+
+```
+dsleep rtc <seconds>        # wake after N seconds
+dsleep uart                 # wake on console/UART-RX activity
+dsleep uart rtc <seconds>   # arm both — wake on whichever fires first
+```
+
+A no-wake-source invocation (`dsleep` alone) is rejected. It needs no low-power build flag (bare PDS
+needs no `lp_fw`); the command is registered in every image.
+
+## Quick reference — the wake mode is per-platform
+
+| | bl602 | bl616 / BL618 | AmebaD / RTL8721D |
+|---|---|---|---|
+| Sleep mode | PDS deep sleep | PDS15 deep sleep | LP **retention** (SleepCG) |
+| **On wake** | **reboot** | **reboot** | **resume in place** |
+| UART wake pin | AON **GPIO7** (= log-UART RX) | **GPIO22** (console RX) PDS-GPIO-INT | LOGUART RX IRQ |
+| RTC wake | `cfg.sleepTime` 32k timer | PDS 32k timer | bounded wait |
+| Both together | yes (struct fields) | yes (PDS-INT bits 10+13) | yes (RX or timeout) |
+| HW verified | ✅ rtc + uart | ✅ rtc + uart | ✅ rtc + uart + combined |
+
+## Design — shared command + platform seam
+
+`component/dsleep_config/`: `dsleep_cli.c` (the shared `dsleep` command, order-independent parse) +
+`dsleep.h` seam — `int board_dsleep_enter(bool uart_wake, uint32_t rtc_seconds)`. Each platform
+implements the primitive under a `board_dsleep_port/` (mirrors `flash_cli` + `board_flash_lock.h`).
+On bl602/bl616 `board_dsleep_enter` never returns (reboot on wake); on AmebaD it returns on wake.
+
+## bl602
+`PDS_Mode_Enter(pdsLevel=3)` — reset-on-wake, flash kept alive. `uart` → AON GPIO7 async-falling
+edge; `rtc` → `cfg.sleepTime = 32768 * seconds`. **GPIO7 is the log-UART RX** (IO16 TX / IO7 RX), so
+any byte on the console already produces the wake edge — no extra wiring. Because the wake pin *is*
+the console RX, `dsleep uart` can wake on the command's own line-terminator if it lands mid-entry
+(inherent to "wake on console activity"). Verified: `dsleep rtc 10` sleeps → reboots ~10 s later →
+WiFi reconnects; `dsleep uart` → a console byte (GPIO7) → reboot.
+
+## bl616 / BL618
+`pm_pds_mode_enter(PM_PDS_LEVEL_15, cnt)`. `uart` → GPIO22 PDS-GPIO-INT async-falling edge (mirrors
+`bl616_lp_wakeup.c`); `rtc` → PDS 32k timer (`BL_US_TO_PDS_CNT`). Reuses the PDS primitive proven in
+`project_bl616_boot_crash_flash80m`. The 50 ms TX-drain in `dsleep_cli` consumes the command's `\n`
+before GPIO22 is armed, so it sleeps cleanly through its own terminator. Verified: `dsleep rtc 10` →
+reboot ~10 s; `dsleep uart` → a byte on GPIO22 → reboot.
+
+**Flash bench (rewired 2026-07):** the old CKLink probe (COM22) is gone — now **COM24 = control
+(FTDI: `DtrEnable`→BOOT / `RtsEnable`→reset, active-low)**, **COM3 = data + console @2 M**. Use
+`D:\MCU_Tools\bflb-cklink\bl616_flash_com3.ps1` (the COM22 script's port-swapped copy). When testing
+`dsleep`, hold COM24 in run-state (`DtrEnable=$true` BOOT-low, `RtsEnable=$false` reset-released) —
+closing it floats the lines and can hold the chip in reset.
+
+## AmebaD / RTL8721D — retention, not deep sleep
+AmebaD's SOCPS deep sleep **cannot wake on UART**: in `SOCPS_DeepSleep_RAM` the whole LP domain (incl.
+the LP_UART peripheral) is powered off, the AON REGU wakepin is high-active-only (vs a UART RX line
+that idles high), and `SOCPS_SetWakepin`/`SOCPS_DeepSleep_RAM` are KM0-only (the KM4 console can't arm
+a wakepin). PA25/PA26 and PA12/PA13 all hit the same blockers. So AmebaD `dsleep` uses the **LP
+retention tier** (SleepCG, resume-in-place — the same mechanism `tickless` uses): `pmu_set_sleep_type(SLEEP_CG)`
++ `pmu_release_wakelock(PMU_OS)`, then a bounded wait, then re-acquire. KM4-only.
+
+**★ UART-wake gotcha:** do **not** poll `LOGUART_Readable()` — the console's LOGUART RX ISR drains the
+HW FIFO into a StreamBuffer the instant a byte lands, so a poll always races the ISR and never sees
+the byte (and that ISR must stay enabled — it *is* the SleepCG wake source). Block on the console's
+own `monitor_rx_get()` instead (it reads that ISR-fed stream): a keypress fires the RX IRQ → wakes
+SleepCG → ISR queues the byte → `monitor_rx_get()` returns. Also drain the command's trailing `\n`
+(the CLI engine leaves it in the stream) so `dsleep uart` doesn't self-wake on its terminator.
+Verified: `dsleep rtc 5` → resume ~5 s (uptime continuity proves no reboot); `dsleep uart` → stays in
+SleepCG through its own newline, resumes on the next keypress; `dsleep uart rtc 6` (no keypress) →
+rtc fallback at ~6.2 s. Flash `firmware.bin` with `-Erase` (dual-slot), COM5 flash+console / COM14
+control (see the `tickless` AmebaD flashing gotchas above).
