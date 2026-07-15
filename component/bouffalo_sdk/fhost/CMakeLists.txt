@@ -31,7 +31,6 @@ set(_fhost_libs
     "${CMAKE_CURRENT_SOURCE_DIR}/lib/libwpa_supplicant.a"
     "${CMAKE_CURRENT_SOURCE_DIR}/lib/libmacsw_os_adapter.a"
     "${CMAKE_CURRENT_SOURCE_DIR}/lib/libfhost_config.a"
-    "${CMAKE_CURRENT_SOURCE_DIR}/lib/libutils.a"        # async_event_init/loop/register/post
     "${_macsw}/libmacsw_${BOUFFALO_CHIP}_default.a"
     "${_macsw}/libmacsw_config_${BOUFFALO_CHIP}_default.a")
 foreach(_lib IN LISTS _fhost_libs)
@@ -63,16 +62,26 @@ target_link_libraries(macsw_plat PRIVATE
     bflb_sys                      # bl_lp.h (+ bl616_lp.h)
     freertos_config)              # FreeRTOS.h / task.h
 
+# The async_event bus (async_event_init/loop/register/post — fhost's EV_WIFI event dispatch) is
+# compiled FROM SOURCE (was the prebuilt libutils.a, of which the link only ever pulled these two
+# objects). async_event.c is libc-only; rtos_al.c is the vTaskEnterCritical/vTaskExitCritical lock.
+add_library(async_event STATIC
+    "${AT_ROOT}/platform/bouffalo_sdk/components/utils/async_event/async_event.c"
+    "${AT_ROOT}/platform/bouffalo_sdk/components/utils/async_event/rtos_al.c")
+target_include_directories(async_event PRIVATE
+    "${AT_ROOT}/platform/bouffalo_sdk/components/utils/async_event")  # async_event.h
+target_link_libraries(async_event PRIVATE freertos_config)            # FreeRTOS.h
+
 # Prebuilt-.a integration (same as the old wl80211): the fhost core + wpa_supplicant + os-adapter +
-# config + async_event bus (libutils.a) stay SDK-built .a's — compiling their sources here would drag
-# the whole SDK phy/macsw include chain. macsw_plat (above) is the one compiled from source.
+# config stay SDK-built .a's — compiling their sources here would drag the whole SDK phy/macsw
+# include chain. macsw_plat + async_event (above) are the ones compiled from source.
 add_library(fhost INTERFACE)
 target_include_directories(fhost INTERFACE
     "${_wifi6}/fhost/include"               # fhost_api.h / net_al.h / wifi_mgmr.h / wifi_mgmr_ext.h / fhost.h
     "${_wifi6}/macsw_os_adapter/include"    # rtos_al.h / platform_al.h
     "${AT_ROOT}/platform/bouffalo_sdk/components/wireless/macsw/inc"    # mac_types.h (pulled by wifi_mgmr_ext.h)
     "${AT_ROOT}/platform/bouffalo_sdk/components/utils/async_event")    # async_event.h (EV_WIFI event bus)
-target_link_libraries(fhost INTERFACE ${_fhost_libs} macsw_plat)
+target_link_libraries(fhost INTERFACE ${_fhost_libs} macsw_plat async_event)
 
 # LP_FW=ON (CONFIG_LPAPP): the vendored lp_fw shared-function library. bl_lp_fw_init() (bflb_sys, via
 # shared_func_init) hands the lp_fw its beacon-delay / bcn-check helpers — lpfw_calculate_beacon_delay,
