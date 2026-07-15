@@ -578,6 +578,7 @@ void app_console_register_platform(void)
 {
     bouffalo_monitor_cmds_register();   // reboot
     flash_cli_register();               // shared `flash` lock/unlock/status (component/flash_cli_config)
+    { extern void dsleep_cli_register(void); dsleep_cli_register(); }   // shared `dsleep [uart] [rtc <s>]` (component/dsleep_config)
 #ifdef CONFIG_LPAPP
     { extern void lp_cli_register(void); lp_cli_register(); }   // `lpsleep`: one PDS15 lp_fw sleep cycle (LP_FW=ON)
 #endif
@@ -1427,6 +1428,7 @@ void app_console_register_platform(void)
 {
     amebad_monitor_cmds_register();     /* AmebaD port cmds: reboot / dw / ew / flashdbg / efuse / >> / km0 / km4 */
     flash_cli_register();               /* shared `flash` lock/unlock/status (component/flash_cli_config) */
+    { extern void dsleep_cli_register(void); dsleep_cli_register(); }           /* shared `dsleep [uart] [rtc <s>]` (component/dsleep_config) */
     { extern void wifi_cli_register(void); wifi_cli_register(); }               /* shared `wifi` forget/drop */
     { extern void amebad_wifi_cli_register(void); amebad_wifi_cli_register(); } /* AmebaD-only `iwpriv` */
     { extern void net_cli_register(void); net_cli_register(); }                 /* shared `resolve` / `ip6` */

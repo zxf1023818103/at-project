@@ -257,6 +257,7 @@ add_subdirectory(usrcfg)             # chip-gated: usrcfg_common (+ _lp on KM0 /
 #  ram_heap_init() in component/freertos-kernel_config/ram_heap.c)
 add_subdirectory(monitor_port)       # chip-gated: AmebaD port for the shared console engine (component/monitor_config)
 add_subdirectory(board_flash_port)   # KM4-gated: board_flash_protect/read_status (flash write-protect impl)
+add_subdirectory(board_dsleep_port)  # KM4-gated: board_dsleep_enter (SleepCG retention) for the shared `dsleep` command
 add_subdirectory(80211d_port)        # KM4-gated: 802.11d country auto-detect port (extended-country scan + channel plan)
 add_subdirectory(rtc_time_port)      # KM4-gated: rtc_time_store/seed over the Realtek RTC (shared rtc_time seam)
 add_subdirectory(ota_flash_port)     # KM4-gated: the OTA slot writer (shared ota_flash.h contract)

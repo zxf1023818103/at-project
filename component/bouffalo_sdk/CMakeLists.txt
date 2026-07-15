@@ -167,6 +167,7 @@ add_subdirectory(bflb_nuttx_compat)
 add_subdirectory(monitor_port)        # Bouffalo port for the shared console engine (component/monitor_config)
 add_subdirectory(rtc_time_port)       # Bouffalo port for the shared RTC seam (component/rtc_time_config): bflb_rtc + KV
 add_subdirectory(board_flash_port)    # Bouffalo board_flash_protect for the shared flash write-protect (component/flash_cli_config)
+add_subdirectory(board_dsleep_port)   # Bouffalo board_dsleep_enter (bl616 PDS15 / bl602 PDS) for the shared `dsleep` command (component/dsleep_config)
 add_subdirectory(ota_flash_port)      # BL602 OTA slot writer (component/ota_flash_config) over bflb_flash + pt_table + xz
 add_subdirectory(mbedtls_bench_port)  # RISC-V mcycle timer override for the shared mbedtls_bench (component/mbedtls_bench_config)
 add_subdirectory(bflb_getopt)
@@ -357,6 +358,9 @@ endif()
 # primitive (board_flash_port). main() calls board_flash_lock_fw() + board_flash_log_status() at boot;
 # app_console_register_platform() calls flash_cli_register().
 target_link_libraries(bouffalo_sdk INTERFACE flash_cli board_flash_port)
+# `dsleep` command (dsleep_cli) + the bl616/bl602 board_dsleep_enter primitive (board_dsleep_port);
+# app_console_register_platform() calls dsleep_cli_register(), whose board_dsleep_enter ref pulls the port.
+target_link_libraries(bouffalo_sdk INTERFACE dsleep_cli board_dsleep_port)
 # BL602 OTA slot writer (bflb_flash + pt_table + inline xz) for the shared `ota_http` command.
 target_link_libraries(bouffalo_sdk INTERFACE ota_flash_port)
 

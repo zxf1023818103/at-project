@@ -621,6 +621,8 @@ if(NOT AT_ENABLE_QUIC)
     target_link_libraries(target_img2_km4 PRIVATE sntp_time rtc_time flash_cli
         rtc_time_port      # rtc_time_store/seed over the Realtek RTC (archive; main.cpp's strong rtc_time_seed ref pulls it)
         board_flash_port   # board_flash_protect/read_status (flash_cli's strong refs pull it)
+        dsleep_cli         # the shared `dsleep` command (dsleep_cli_register)
+        board_dsleep_port  # board_dsleep_enter (dsleep_cli's strong ref pulls it)
         80211d 80211d_port)  # 802.11d country auto-detect (main.cpp's dot11d_autodetect_country ref pulls the chain)
     target_sources(target_img2_km4 PRIVATE
         "${AT_ROOT}/component/sntp_time_config/time_selftest.c")

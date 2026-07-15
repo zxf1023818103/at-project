@@ -66,6 +66,7 @@ add_subdirectory(syscall_config)            # newlib retarget OBJECT lib (VFS + 
 add_subdirectory(c-ares_config)             # c-ares async DNS resolver (compiled only when linked / targeted; wired in under CARES=ON)
 add_subdirectory(rxi_log_config)            # rxi log.c (leveled logger) + FreeRTOS-mutex lock via log_set_lock
 add_subdirectory(flash_cli_config)          # cross-platform flash write-protect: `flash` cmd + board_flash_* helpers (after freertos_cli + rxi_log)
+add_subdirectory(dsleep_config)             # cross-platform `dsleep [uart] [rtc <s>]`: deep/low-power sleep + wake, over board_dsleep_enter (board_dsleep_port)
 add_subdirectory(mbedtls_config)            # upstream Mbed TLS v3.6.4 -> mbedcrypto / mbedx509 / mbedtls
 add_subdirectory(corepkcs11_config)         # PKCS#11 software token over mbedcrypto/mbedx509 (PAL consumer-supplied)
 add_subdirectory(pkcs11_selftest_config)    # corePKCS11 token self-test (pkcs11_selftest + `pkcs11` cmd) + the LittleFS POSIX PAL
@@ -159,6 +160,10 @@ if(BOUFFALO_CHIP)
     # command + board_flash_* helpers; the bl602 board_flash_protect primitive is in bouffalo_sdk's
     # board_flash_port. main() calls board_flash_lock_fw() + board_flash_log_status() at boot.
     add_subdirectory(flash_cli_config)
+
+    # Cross-platform `dsleep [uart] [rtc <s>]` deep/low-power sleep + wake (component/dsleep_config);
+    # the bl602/bl616 board_dsleep_enter primitive is in bouffalo_sdk's board_dsleep_port.
+    add_subdirectory(dsleep_config)
 
     # coreSNTP UTC time sync for bl602 (same as AmebaD: date/sntp_update/log timestamps become
     # real UTC). coreSNTP + backoffAlgorithm were NOT-BOUFFALO-only until now. freertos-plus-tcp_config
