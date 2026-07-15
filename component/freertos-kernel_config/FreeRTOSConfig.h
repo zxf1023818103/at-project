@@ -237,7 +237,17 @@ extern int  freertos_ready_to_sleep(void);
 #define configUSE_MALLOC_FAILED_HOOK             1
 #define configUSE_APPLICATION_TASK_TAG           1
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION  1
+/* Tickless idle PDS15 is opt-in via LP_FW=ON (AT_LP_TICKLESS_IDLE from freertos_config_common when
+ * CONFIG_LPAPP). The stock GCC/RISC-V port has no tickless of its own, so the idle task routes
+ * portSUPPRESS_TICKS_AND_SLEEP -> vApplicationSleep (bflb_power_mgmt/tickless.c) via the scaffold
+ * below; that impl is self-contained (compensates the kernel tick with vTaskStepTick) and the mtimer
+ * clock is restored inside bl_lp_fw_enter on wake. Runtime entry is still gated by tickless_enter(). */
+#ifdef AT_LP_TICKLESS_IDLE
+#define configUSE_TICKLESS_IDLE                  1
+#define configEXPECTED_IDLE_TIME_BEFORE_SLEEP    5   /* don't attempt PDS15 for trivially short idles */
+#else
 #define configUSE_TICKLESS_IDLE                  0
+#endif
 #define configUSE_POSIX_ERRNO                    1
 #define configUSE_CO_ROUTINES                    0
 #define configTIMER_TASK_PRIORITY                (configMAX_PRIORITIES - 1)

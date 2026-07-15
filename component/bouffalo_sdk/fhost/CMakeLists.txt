@@ -73,3 +73,32 @@ target_include_directories(fhost INTERFACE
     "${AT_ROOT}/platform/bouffalo_sdk/components/wireless/macsw/inc"    # mac_types.h (pulled by wifi_mgmr_ext.h)
     "${AT_ROOT}/platform/bouffalo_sdk/components/utils/async_event")    # async_event.h (EV_WIFI event bus)
 target_link_libraries(fhost INTERFACE ${_fhost_libs} macsw_plat)
+
+# LP_FW=ON (CONFIG_LPAPP): the vendored lp_fw shared-function library. bl_lp_fw_init() (bflb_sys, via
+# shared_func_init) hands the lp_fw its beacon-delay / bcn-check helpers — lpfw_calculate_beacon_delay,
+# lpfw_beacon_delay_sliding_win_get_average, etc. — which live only here (the default fhost/macsw
+# archives are built without the lp path). Its own refs (bl_lp_* / iot2lp_para / CPU_*) resolve from
+# bflb_sys + the chip std at the umbrella link.
+if(CONFIG_LPAPP)
+    set(_lpfw_priv "${AT_ROOT}/platform/bouffalo_sdk/components/wireless/lpfw_private/liblpfw_private.a")
+    if(NOT EXISTS "${_lpfw_priv}")
+        message(FATAL_ERROR "fhost: CONFIG_LPAPP set but missing ${_lpfw_priv}")
+    endif()
+    target_link_libraries(fhost INTERFACE "${_lpfw_priv}")
+
+    # `lpsleep` console command (lp_cli.c): one on-demand PDS15 deep-sleep cycle. bl_lp_fw_init()
+    # re-seeds iot2lp_para, then bl_lp_fw_enter() enters PDS; board_recovery() recovers on wake.
+    add_library(lp_cli STATIC "${CMAKE_CURRENT_SOURCE_DIR}/lp_cli.c")
+    target_link_libraries(lp_cli PRIVATE
+        bflb_autoconf                     # -include autoconf.h (CFG_* / BL616)
+        bflb_sys                          # bl_lp.h (bl_lp_fw_cfg_t / lpfw_cfg / bl_lp_fw_enter)
+        "${BOUFFALO_CHIP}_std"            # bl616_pds/hbn/aon/pm.h + pm_pds_* / AON_* / HBN_* (bare PDS path)
+        bflb_power_mgmt                   # tickless.h + tickless_enter/exit (`tickless` command)
+        freertos_cli                      # FreeRTOS_CLI.h
+        "${BOUFFALO_CHIP}_board_config")  # board.h (board_recovery)
+    target_link_libraries(fhost INTERFACE lp_cli)
+
+    # app_clock_init() — F32K/RC32K startup bring-up that clocks the HBN RTC so PDS15 self-wakes.
+    # Compiled into bflb_power_mgmt under CONFIG_LPAPP; main.cpp runs it from a post-scheduler task.
+    target_link_libraries(fhost INTERFACE bflb_power_mgmt)
+endif()

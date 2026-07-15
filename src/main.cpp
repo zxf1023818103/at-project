@@ -86,6 +86,23 @@ static void event_cb_wifi_event(platform_event_t *event, void *code2) {
 
 #if defined BL606P || defined BL808 || defined BL616 || defined BL616CL
 extern void wifi_main(void *param);
+#ifdef CONFIG_LPAPP
+extern "C" int bl_lp_init(void);              /* bflb_sys/bl616_lp.c — lp subsystem bring-up (LP_FW=ON) */
+extern "C" int app_clock_init(void);          /* power_mgmt/clock_manager.c — F32K/RC32K bring-up for PDS wake */
+/* HBN_Enable_RTC_Counter() comes from bl616_hbn.h (already visible); pm_rc32k_auto_cal_init() from bl616_pm.h. */
+extern "C" void pm_rc32k_auto_cal_init(void); /* bl616_std — init RC32K auto-cal state (mtimer/rtc counters) */
+
+/* app_clock_init() brings up the 32 kHz clock (RC32K auto-cal + optional xtal32k) that drives the HBN
+ * RTC, so a PDS15 sleep started via `lpsleep` self-wakes on its RTC compare. It BLOCKS on a semaphore
+ * (waits for its cal tasks), so it must run AFTER the scheduler starts — hence a short-lived task, not
+ * an inline call from the pre-scheduler app_platform_boot_init path (which would ecall-yield with no
+ * scheduler and trap). Mirrors wl_lp's f32k_clk_init_task. */
+static void lp_clock_init_task(void *arg) {
+    (void)arg;
+    app_clock_init();
+    vTaskDelete(NULL);
+}
+#endif
 
 static int hal_wifi_start_firmware_task(void) {
     /* WiFi clock ungate + WiFi AHB reset were already done once in board_init (board.c
@@ -103,6 +120,24 @@ static int hal_wifi_start_firmware_task(void) {
      * never wake the FW task -> its MAC bring-up blocks forever (macsw prints "features/mode/dma" then
      * stalls; the whole device idles) and every later wifi_mgmr kmsg hits a NULL command queue. It also
      * uses the correct macsw priority (27) and stack (1324). */
+#ifdef CONFIG_LPAPP
+    /* Low-power WiFi (make ... LP_FW=ON): bring the lp subsystem up BEFORE macsw starts. CONFIG_LPAPP
+     * compiles macsw in power-save mode (__macsw_conf_bl_wifi_ps_enable=1), so its FW task calls the
+     * bl_lp_* hooks (macsw_plat.c) during normal WiFi — they dereference gp_lp_env and
+     * iot2lp_para->wifi_parameter, which are NULL until bl_lp_init() runs (bl_lp_env_init allocates
+     * gp_lp_env; bl_lp_fw_init validates the concatenated lp_fw blob and populates iot2lp_para). Without
+     * this the very first connect faults in bl_lp_get_resume_wifi. */
+    bl_lp_init();
+    /* Prerequisites for the HBN RTC to actually count (wl_lp does these in main() before its f32k task):
+     * start the RTC counter and seed the RC32K auto-cal state. Without HBN_Enable_RTC_Counter() the RTC
+     * stays frozen, so app_clock_init's RC32K calibration reads rtc_us=0 forever (never converges) and a
+     * PDS15 sleep never wakes. Plain register writes — safe here in the pre-scheduler path. */
+    HBN_Enable_RTC_Counter();
+    pm_rc32k_auto_cal_init();
+    /* Bring up the HBN 32 kHz clock for PDS-wake, from a task that runs once the scheduler is live
+     * (app_clock_init blocks — see lp_clock_init_task). Queued here pre-scheduler; runs later. */
+    xTaskCreate(lp_clock_init_task, (char *)"lp_clk", 1024, NULL, 12, NULL);
+#endif
     extern void wifi_task_create(void);
     wifi_task_create();
 
@@ -229,6 +264,12 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
 #if defined BL616 || defined BL616CL
             bl616_conn_event(0);   // wake wifi_port_connect: association failed/dropped
             wifi_service_on_event(WIFI_SVC_EV_DISCONNECT);   // tell wsvc to re-associate
+#ifdef CONFIG_LPAPP
+            /* Safety: if `tickless` armed the idle-PDS15 path, disarm it on WiFi loss. The disconnected
+             * sleep branch has no DTIM wake and PDS15 doesn't wake on UART, so an un-connected auto-sleep
+             * would swallow console/AT input until the RTC backup fires. */
+            { extern int tickless_exit(void); tickless_exit(); }
+#endif
 #endif
             break;
         }
@@ -537,6 +578,9 @@ void app_console_register_platform(void)
 {
     bouffalo_monitor_cmds_register();   // reboot
     flash_cli_register();               // shared `flash` lock/unlock/status (component/flash_cli_config)
+#ifdef CONFIG_LPAPP
+    { extern void lp_cli_register(void); lp_cli_register(); }   // `lpsleep`: one PDS15 lp_fw sleep cycle (LP_FW=ON)
+#endif
 #if defined(AT_PROJECT_AWS)
     // Shared `ota_http <url>` (bflb_flash + pt_table + inline-xz slot writer). Linked on the AWS chips
     // (bl602/bl616/bl616cl): it needs the mbedTLS/picotls TLS transport for https, which - like aws_iot -

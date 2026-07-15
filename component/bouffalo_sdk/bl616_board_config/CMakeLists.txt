@@ -44,6 +44,12 @@ target_compile_definitions(bl616_board_config PUBLIC
     "CONFIG_CONSOLE_UART_BAUDRATE=${CONFIG_CONSOLE_UART_BAUDRATE}"
 )
 
+# LP_FW=ON (CONFIG_LPAPP): board.c's board_recovery() (system/peripheral clock + console re-init after
+# a PDS wake) and its board.h declaration are #ifdef LP_APP. PUBLIC so lp_cli.c (which calls it) sees it.
+if(CONFIG_LPAPP)
+    target_compile_definitions(bl616_board_config PUBLIC LP_APP=1)
+endif()
+
 # board.c / board_gpio.c / board_flash_psram.c #include lhal headers
 # (bflb_uart.h, bflb_gpio.h, bflb_clock.h, …). PUBLIC so consumers that
 # pull in this OBJECT lib also see lhal.

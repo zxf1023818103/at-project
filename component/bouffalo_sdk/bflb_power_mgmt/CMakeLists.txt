@@ -52,10 +52,48 @@ endif()
 
 if(CONFIG_TICKLESS_EXT)
     target_sources(bflb_power_mgmt PRIVATE
-        tickless.c
-        tickless_hook.c
-        rc32k_trim.c
+        tickless.c        # vApplicationSleep (the tickless idle hook) + tickless_enter/exit
+        tickless_hook.c   # tickless_hooks_register/get (NULL-safe if the app never registers)
+        rc32k_trim.c      # empty TU on BL616 (its body is #if BL616CL||BL618DG); kept for parity
     )
+    # tickless.c pulls the macsw/fhost WiFi + lp_fw header chain (wifi_mgmr_ext.h -> mac_types.h ->
+    # macsw.h -> phy.h), the same one macsw_plat/fhost resolve. Mirror those include dirs + the SDK
+    # umbrella libs so the branch compiles and its externs (macswl_ps_* / bl_lp_* / bl_pm_* / lpfw_cfg
+    # / wifi_mgmr_*) resolve at the final image link. bflb_lhal / ${CHIP}_std / bflb_sys / freertos_port
+    # are already PUBLIC-linked below.
+    set(_wifi6 "${AT_ROOT}/platform/bouffalo_sdk/components/wireless/wifi6")
+    target_include_directories(bflb_power_mgmt PRIVATE
+        "${_wifi6}/fhost/include"                                          # wifi_mgmr_ext.h (fhost variant)
+        "${_wifi6}/macsw_os_adapter/include"                               # rtos_al.h / platform_al.h
+        "${AT_ROOT}/platform/bouffalo_sdk/components/wireless/macsw/inc")  # macsw.h / mac_types.h / phy.h
+    target_link_libraries(bflb_power_mgmt PRIVATE
+        bflb_autoconf                 # -include autoconf.h (BL616 / CONFIG_*)
+        bflb_sys                      # bl_lp.h (lpfw_cfg / bl_lp_* / bl_pm_*)
+        "${BOUFFALO_CHIP}_phyrf"      # phy.h / wl_api.h (pulled by macsw.h)
+        freertos_config)              # FreeRTOS.h / task.h
+    # For sleep/abort/wake tracing on HW, add TICKLESS_DEBUG=1 here (prints "[TICKLESS]: ..." from
+    # tickless.c). Left off by default (the per-attempt logs are noisy and would themselves keep the
+    # UART/CPU busy). Confirmed on HW: with `tickless 1` the device deep-sleeps (console goes quiet,
+    # PDS15 does not wake on UART) while STAYING associated to the AP (3+ min uptime, no deauth).
+endif()
+
+# LP_FW=ON (CONFIG_LPAPP), without the full CONFIG_PM_MANAGER: compile ONLY clock_manager.c for
+# app_clock_init() — the F32K / RC32K startup bring-up that clocks the HBN RTC so a PDS15 sleep can
+# self-wake on its RTC compare (wl_lp runs this from main(); without it bl_lp_fw_enter() sleeps but the
+# RTC never counts). The task-based path (CONFIG_CLOCK_SOURCE_EF_PARAM left undefined) uses NONE of the
+# easyflash KV persistence — every ef_*_env_blob call site is under that flag — so there is no easyflash
+# link dependency; only the top-level `#include "easyflash.h"` needs the header on the path. NOTE:
+# app_clock_init() BLOCKS on a semaphore, so it must be called from a task AFTER the scheduler starts
+# (main.cpp spawns lp_clock_init_task), never from the pre-scheduler app_platform_boot_init path.
+if(CONFIG_LPAPP AND NOT CONFIG_PM_MANAGER)
+    target_sources(bflb_power_mgmt PRIVATE clock_manager.c)
+    target_include_directories(bflb_power_mgmt PRIVATE
+        "${AT_ROOT}/platform/bouffalo_sdk/components/fs/littlefs/easyflash_port")  # easyflash.h (header only)
+    target_link_libraries(bflb_power_mgmt PRIVATE
+        bflb_autoconf                 # -include autoconf.h (BL616 / CONFIG_*)
+        bflb_sys                      # bl_lp.h
+        "${BOUFFALO_CHIP}_std"        # HBN_* / AON_* / pm_* 32K-clock HW driver funcs
+        freertos_config)              # FreeRTOS.h / task.h / semphr.h
 endif()
 
 target_include_directories(bflb_power_mgmt PUBLIC

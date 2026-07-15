@@ -137,6 +137,17 @@ ifeq ($(filter $(PSRAM),ON OFF),)
 $(error PSRAM must be 'ON' or 'OFF')
 endif
 
+# LP_FW: concatenate the low-power firmware blob into the FW image (the SDK's
+# CONFIG_POST_BUILDS_CONCAT_WITH_LP_FW post-build). Needed only for a runtime WiFi power-save build:
+# it patches the lp_fw SHA + appends <chip>_lp_fw.bin onto the 'LPFW' placeholder the linked image
+# reserves at its tail. DEFAULT OFF (the driver links the low-power subsystem but the project doesn't
+# run power-save, so the blob isn't required). On this SDK bl616's placeholder is gated off, so LP_FW=ON
+# fails loudly there until the placeholder is enabled; bl616cl carries it.
+LP_FW ?= OFF
+ifeq ($(filter $(LP_FW),ON OFF),)
+$(error LP_FW must be 'ON' or 'OFF')
+endif
+
 # Apache NimBLE host on the on-chip BLE controller (component/bouffalo_sdk/nimble_port). OFF (default,
 # same as AmebaD's AMEBAD_ENABLE_NIMBLE): the base image is WiFi + console + sntp. ON builds a BLE image
 # (advertises `bflb-nimble`, GAP/GATT sample service). proj.conf honors this -D (else defaults OFF).
@@ -202,6 +213,7 @@ $(BUILD_DIR)/CMakeCache.txt: CMakeLists.txt proj.conf
 	    -DAT_CRYPTO_SELFTESTS=$(CRYPTO_SELFTESTS) \
 	    -DAT_ENABLE_MINIMAL=$(MINIMAL) \
 	    -DAT_ENABLE_PSRAM=$(PSRAM) \
+	    -DAT_ENABLE_LP_FW=$(LP_FW) \
 	    -DBOUFFALO_MBEDTLS_HW_GCM=$(HWGCM)
 
 configure: $(BUILD_DIR)/CMakeCache.txt

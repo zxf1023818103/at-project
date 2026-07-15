@@ -55,3 +55,13 @@ target_include_directories(bflb_sys PUBLIC
 # from bl<chip>_std, plus bflb_common.h / bflb_sec_sha.h from lhal (covered
 # transitively through std's PUBLIC link to lhal).
 target_link_libraries(bflb_sys PUBLIC ${BOUFFALO_CHIP}_std)
+
+# LP_FW=ON (CONFIG_LPAPP): make bl_lp_init() also run bl_lp_fw_init() — it validates the concatenated
+# lp_fw blob and loads it to RAM + fully populates iot2lp_para (shared_func_array / wifi_parameter /
+# bcn_delay / rc32k / mtimer). Without this CFG_BL_WIFI_PS_ENABLE gate bl_lp_init() only allocates
+# gp_lp_env. The macro solely toggles that one call in bl616_lp.c (no struct-layout effect). The
+# app-side lp_fw shared functions it pulls (lpfw_calculate_beacon_delay / ...) come from the vendored
+# liblpfw_private.a, which the fhost component links under CONFIG_LPAPP.
+if(CONFIG_LPAPP)
+    target_compile_definitions(bflb_sys PRIVATE CFG_BL_WIFI_PS_ENABLE=1)
+endif()

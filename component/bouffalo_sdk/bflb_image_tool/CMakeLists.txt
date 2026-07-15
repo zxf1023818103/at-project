@@ -95,6 +95,13 @@ function(bflb_add_executable TARGET)
         "${CMAKE_CURRENT_BINARY_DIR}/${_base}.xz.ota"
     )
 
+    # Low-power firmware concat (the SDK's CONFIG_POST_BUILDS_CONCAT_WITH_LP_FW): append the lp_fw
+    # blob onto the FW bin before the whole-flash pack. Off by default; enabled by the CMake var.
+    set(_lpfw_arg "")
+    if(CONFIG_POST_BUILDS_CONCAT_WITH_LP_FW)
+        set(_lpfw_arg --with-lp-fw)
+    endif()
+
     add_custom_command(
         OUTPUT ${_outputs}
         COMMAND "${BFLB_PYTHON}" "${BFLB_ELF_TO_BIN_SCRIPT}"
@@ -104,6 +111,7 @@ function(bflb_add_executable TARGET)
                 --build-dir "${CMAKE_CURRENT_BINARY_DIR}"
                 --elf       "$<TARGET_FILE:${TARGET}>"
                 --objcopy   "${CMAKE_OBJCOPY}"
+                ${_lpfw_arg}
         DEPENDS ${TARGET} "${BFLB_ELF_TO_BIN_SCRIPT}"
         COMMENT "[bflb] ${TARGET}: ELF -> ${_base}_whole_flash_data.bin (chip=${BOUFFALO_CHIP}, board=${_board})"
         VERBATIM

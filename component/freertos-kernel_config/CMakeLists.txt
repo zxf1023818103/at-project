@@ -38,6 +38,15 @@ add_library(freertos_config_common INTERFACE)
 # __FUNCTION__ (non-ISO). Keep it a system include so that does not error.
 target_include_directories(freertos_config_common SYSTEM INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
 
+# Bouffalo LP_FW=ON (CONFIG_LPAPP, set in proj.conf before add_subdirectory(component)): enable the
+# FreeRTOS tickless-idle PDS15 path. freertos_config does NOT link bflb_autoconf, so CONFIG_LPAPP is
+# invisible to FreeRTOSConfig.h from -include autoconf.h; carry it here as AT_LP_TICKLESS_IDLE on the
+# INTERFACE config lib so BOTH the kernel TU and bflb_power_mgmt/tickless.c see the same value (keeps
+# configUSE_TICKLESS_IDLE uniform across TUs). FreeRTOSConfig.h gates configUSE_TICKLESS_IDLE on it.
+if(CONFIG_LPAPP)
+    target_compile_definitions(freertos_config_common INTERFACE AT_LP_TICKLESS_IDLE=1)
+endif()
+
 # ---- (2) portable FreeRTOS extensions = the kernel's `freertos_config` target ----
 add_library(freertos_config STATIC
     freertos_backtrace_ext.c

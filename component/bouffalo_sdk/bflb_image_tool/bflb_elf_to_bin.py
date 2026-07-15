@@ -42,6 +42,10 @@ PLATFORM_SUFFIX = {
 
 BFLB_FW_POST_PROC = TOOLS_DIR / "bflb_tools" / "bflb_fw_post_proc" / f"bflb_fw_post_proc{PLATFORM_SUFFIX}"
 BLFLASH_COMMAND = TOOLS_DIR / "bflb_tools" / "bouffalo_flash_cube" / f"BLFlashCommand{PLATFORM_SUFFIX}"
+# Low-power firmware concat (the SDK's CONFIG_POST_BUILDS_CONCAT_WITH_LP_FW). TOOLS_DIR is
+# component/bouffalo_sdk/bflb_image_tool -> repo root is three parents up.
+LPFW_DIR = TOOLS_DIR.parent.parent.parent / "platform" / "bouffalo_sdk" / "tools" / "lpfw"
+PATCH_LPFW = LPFW_DIR / f"patch_lpfw{PLATFORM_SUFFIX}"
 UNWIND_PY = TOOLS_DIR / "byai" / "unwind_6byte_table.py"
 MULTI_BINS_PY = TOOLS_DIR / "byai" / "multi_bins.py"
 
@@ -104,6 +108,36 @@ def step_post_proc(chip: str, board_cfg: Path, raw_bin: Path) -> None:
         ],
         cwd=raw_bin.parent,
     )
+
+
+def step_patch_lpfw(chip: str, raw_bin: Path) -> None:
+    """Concatenate the low-power (lp_fw) firmware into the FW .bin — the SDK's
+    CONFIG_POST_BUILDS_CONCAT_WITH_LP_FW post-build. patch_lpfw writes the lp_fw SHA-256 and appends
+    <chip>_lp_fw.bin onto the 'LPFW' placeholder the linked image reserves at its tail (from
+    bl<chip>_lp_fw_image.c). Runs on the post-proc'd FW bin, BEFORE the whole-flash pack, so the
+    lp_fw rides into the FW partition. patch_lpfw exits 0 even when it can't find the placeholder (it
+    just prints 'maybe is a merged image ...' and leaves the bin unchanged) — so scan its output and
+    fail loudly, otherwise a silently-unpatched image would ship without the low-power firmware.
+    """
+    lp_fw = LPFW_DIR / "bin" / f"{chip}_lp_fw.bin"
+    if not PATCH_LPFW.exists():
+        raise SystemExit(f"lp_fw: patch_lpfw tool missing at {PATCH_LPFW}")
+    if not lp_fw.exists():
+        raise SystemExit(f"lp_fw: no low-power firmware blob for {chip} at {lp_fw}")
+    result = subprocess.run(
+        [str(PATCH_LPFW), str(raw_bin), str(lp_fw)],
+        check=True, capture_output=True, text=True,
+    )
+    sys.stderr.write(result.stdout)
+    if "maybe is a merged image" in result.stdout:
+        raise SystemExit(
+            f"lp_fw: patch_lpfw found no 'LPFW' placeholder at the tail of {raw_bin.name}. The "
+            f"low-power fw image object ({chip}_lp_fw_image.c) must be linked LAST in the FW image "
+            f"(a dedicated linker section at the end); on this SDK bl616's lp_fw placeholder is gated "
+            f"off (bl616_lp_internal.h '#if (0 && ...)'), so concat is a no-op there. Clean the build "
+            f"(the bin may already be merged) or enable the placeholder before using --with-lp-fw."
+        )
+    print(f"[lp_fw] concatenated {lp_fw.name} ({lp_fw.stat().st_size} B) into {raw_bin.name}", file=sys.stderr)
 
 
 def step_compose_ini(chip: str, name: str, board_cfg: Path, build_dir: Path, lfs_path: Path | None) -> Path:
@@ -197,6 +231,9 @@ def main() -> int:
                         help="Append DWARF CFI section (mirrors CONFIG_BACKTRACE)")
     parser.add_argument("--lfs-bin", type=Path,
                         help="LittleFS image to embed in PSM partition (project/lfs.bin)")
+    parser.add_argument("--with-lp-fw", action="store_true",
+                        help="Concatenate the low-power firmware into the FW bin "
+                             "(the SDK's CONFIG_POST_BUILDS_CONCAT_WITH_LP_FW)")
     parser.add_argument("--objcopy",
                         help="Path to riscv64-unknown-elf-objcopy (defaults to PATH lookup)")
     args = parser.parse_args()
@@ -234,6 +271,8 @@ def main() -> int:
     if args.with_cfi:
         step_append_cfi(elf_target, raw_bin)
     step_post_proc(args.chip, board_cfg, raw_bin)
+    if args.with_lp_fw:
+        step_patch_lpfw(args.chip, raw_bin)
     ini = step_compose_ini(args.chip, args.name, board_cfg, build_dir, args.lfs_bin)
     step_blflash_build(args.chip, ini, build_dir)
     whole = step_fetch_and_pad(args.chip, args.name, build_dir)
