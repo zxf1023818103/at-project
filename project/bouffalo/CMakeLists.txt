@@ -15,6 +15,22 @@ add_compile_options("-fmacro-prefix-map=${AT_ROOT}/src/=")   # __FILE__ basename
 add_subdirectory(${AT_ROOT}/component ${CMAKE_BINARY_DIR}/component)   # universal configs (self) + bouffalo_sdk
 add_subdirectory(${AT_ROOT}/src       ${CMAKE_BINARY_DIR}/src)        # exports AT_USER_SOURCES
 
+# Low-memory network profile for the connect-only images (AWS / MINIMAL), same gate as amebad's
+# app_km4: AT_NET_LOW_MEM shrinks the FreeRTOS-Plus-TCP per-socket stream buffers
+# (FreeRTOSIPConfig.h: RX 4*1460 / TX 2*1460 instead of the 24*1460/24*1460 throughput tier).
+# The throughput tier let ONE TLS socket claim ~70 KB of stream buffer: bl616cl (~85 KB total
+# TLSF heap) couldn't even open the MQTT TLS (prvTCPCreateStream malloc fail -> the socket is
+# force-closed, recv returns ENOMEM/ENOTCONN mid-handshake), and on bl616 the post-takeover S3
+# second-TLS handshake OOMed. bl602/bl702 have their own (tighter still) tier hard-gated by chip
+# macro in the header. iperf/QUIC throughput images keep the big windows.
+if(AT_ENABLE_AWS OR AT_ENABLE_MINIMAL)
+    foreach(_net_tgt freertos_plus_tcp bouffalo_freertos_tcp)
+        if(TARGET ${_net_tgt})
+            target_compile_definitions(${_net_tgt} PRIVATE AT_NET_LOW_MEM)
+        endif()
+    endforeach()
+endif()
+
 bflb_add_executable(at ${AT_USER_SOURCES})
 
 target_include_directories(at PRIVATE
