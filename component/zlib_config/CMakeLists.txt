@@ -35,6 +35,14 @@ set_property(GLOBAL PROPERTY TARGET_SUPPORTS_SHARED_LIBS "${_at_tsl_save}")
 # BIG_ENDIAN`, signedness comparisons, unused vars). Silence on the zlib target only.
 target_compile_options(zlibstatic PRIVATE -w)
 
+# Z_PREFIX: export zlib's API as z_* (zconf.h macro renames). The Bouffalo prebuilt
+# libwpa_supplicant.a ships its OWN 2-arg `crc32(buf,len)` (used by hostapd/neighbor_db) that
+# collides with zlib's 3-arg `crc32(crc,buf,len)`: on bl616cl the link fails with a duplicate
+# definition, and on bl616 it silently resolved hostapd's crc32 to whichever archive got pulled
+# first. PUBLIC so every consumer compiling against zlib.h (minizip, zip_cmd) sees the same
+# renamed symbols.
+target_compile_definitions(zlibstatic PUBLIC Z_PREFIX)
+
 # Umbrella INTERFACE (伞形): consumers link `zlib_config` to get the static lib.
 add_library(zlib_config INTERFACE)
 target_link_libraries(zlib_config INTERFACE zlibstatic)

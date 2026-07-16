@@ -35,7 +35,11 @@ void vApplicationIdleHook( void )
  * Stack overflow hook. Mirrors the SDK port.c behaviour: report the offending
  * task over the log UART and halt.
  */
-void vApplicationStackOverflowHook( TaskHandle_t xTask, char *pcTaskName )
+/* WEAK: the Bouffalo prebuilt libmacsw_os_adapter.a (rtos_al.c) carries its own STRONG
+ * vApplicationStackOverflowHook. Whether the two collide at link depends on fragile archive pull
+ * order (bl616 happened to link, bl616cl errored with a duplicate definition) - yield explicitly.
+ * On chips without a vendor hook (AmebaD, bl602) this weak one is the only definition. */
+__attribute__(( weak )) void vApplicationStackOverflowHook( TaskHandle_t xTask, char *pcTaskName )
 {
 	( void ) xTask;
 
@@ -55,7 +59,7 @@ void vApplicationStackOverflowHook( TaskHandle_t xTask, char *pcTaskName )
  * load into a dead chip; see the bl602 TLS-handshake / iperf-RX OOM history.) Logging is rate-limited
  * so a burst of failures can't itself flood the console (or re-enter via a printf allocation).
  */
-void vApplicationMallocFailedHook( void )
+__attribute__(( weak )) void vApplicationMallocFailedHook( void )   /* weak: same vendor-archive collision class as the overflow hook above */
 {
 	static uint32_t seen = 0;
 	if( ( seen++ & 0x1F ) == 0 )   /* every 32nd failure */

@@ -1,8 +1,8 @@
 /*
- * board_dsleep_bouffalo.c - Bouffalo (BL616 / BL602) impl of board_dsleep_enter() for the shared
- * `dsleep [uart] [rtc <seconds>]` command (component/dsleep_config, dsleep.h). Both chips do a full
- * PDS deep sleep that RESETS the chip on wake; the wake sources are a UART-RX pad edge and/or the
- * PDS 32 kHz timer. The PDS enter API diverges between the two chips, so this is #if-split.
+ * board_dsleep_bouffalo.c - Bouffalo (BL616 / BL616CL / BL602) impl of board_dsleep_enter() for the
+ * shared `dsleep [uart] [rtc <seconds>]` command (component/dsleep_config, dsleep.h). All chips do a
+ * full PDS deep sleep that RESETS the chip on wake; the wake sources are a UART-RX pad edge and/or
+ * the PDS 32 kHz timer. The PDS enter API diverges between the chips, so this is #if-split.
  */
 #include "dsleep.h"
 
@@ -38,6 +38,36 @@ int board_dsleep_enter(bool uart_wake, uint32_t rtc_seconds)
 
     /* rtc_seconds != 0 arms the PDS internal 32 kHz timer (pm_pds_mode_enter OR-sets the timer wake
      * bit when the count is non-zero). GPIO (above) and timer bits are independent -> wake on either. */
+    const uint32_t cnt = rtc_seconds ? (32768u * rtc_seconds) : 0;
+    pm_pds_mode_enter(PM_PDS_LEVEL_15, cnt);
+
+    return -1;   /* not reached: PDS15 wake resets the chip */
+}
+
+#elif defined(BL616CL)
+
+#include "bl616cl_pds.h"   /* per-pad PDS_Set_GPIO_Pad_* + PDS_WAKEUP_BY_* + PDS_GPIO_INT_* */
+#include "bl616cl_hbn.h"   /* HBN_Pin_WakeUp_Mask */
+#include "bl616cl_pm.h"    /* pm_pds_mask_all_wakeup_src / pm_pds_wakeup_src_en / pm_pds_mode_enter */
+
+int board_dsleep_enter(bool uart_wake, uint32_t rtc_seconds)
+{
+    /* Same PDS15 reset-on-wake model as bl616; the PDS GPIO wake API is per-pad here instead of
+     * bl616's per-group SET_x registers. (No AON_Output_Float_LDO15_RF on this chip.) */
+    pm_pds_mask_all_wakeup_src();
+    HBN_Pin_WakeUp_Mask(0xF);
+
+    if (uart_wake) {
+        /* Console RX = GPIO35 (bl616cl_board_config/board.c). Async falling-edge wake on the UART
+         * start bit; the pad keeps its runtime UART pull-up. Validate the pull holds through PDS on
+         * HW - if the line floats add a PDS-domain pull-up here. */
+        const uint8_t rx_pad = 35;
+        PDS_Set_GPIO_Pad_IntClr(rx_pad);
+        PDS_Set_GPIO_Pad_IntMode(rx_pad, PDS_GPIO_INT_ASYNC_FALLING_EDGE);
+        PDS_Set_GPIO_Pad_IntMask(rx_pad, UNMASK);
+        pm_pds_wakeup_src_en(PDS_WAKEUP_BY_PDS_GPIO_INT);
+    }
+
     const uint32_t cnt = rtc_seconds ? (32768u * rtc_seconds) : 0;
     pm_pds_mode_enter(PM_PDS_LEVEL_15, cnt);
 

@@ -265,6 +265,10 @@ static void console_init()
     pm_disable_gpio_keep(GPIO_PIN_35);
 
     bflb_gpio_uart_init(gpio, GPIO_PIN_30, GPIO_UART_FUNC_UART0_TX);
+    /* This bench's bl616cl board wires the console to GPIO34 (proven by GPIO bit-bang
+     * fingerprinting - see the bouffalo-cklink-flash skill), not the bl616cldk default GPIO30.
+     * The UART signal matrix allows both muxes, so keep GPIO30 for stock boards. */
+    bflb_gpio_uart_init(gpio, GPIO_PIN_34, GPIO_UART_FUNC_UART0_TX);
     bflb_gpio_uart_init(gpio, GPIO_PIN_35, GPIO_UART_FUNC_UART0_RX);
 
     struct bflb_uart_config_s cfg = { 0 };
