@@ -1,6 +1,6 @@
 ---
 name: bouffalo-cklink-flash
-description: Flash Bouffalo (BL602/BL616/BL616CL) firmware from WSL, then reset + read the console log + optionally start a GDB server. BL616 flashes ONLY over UART (CKLink is debug-only for the E907 family) — separate COM23 control lines (DTR→BOOT active-low, RTS→reset) + COM22 data @2M, app console @2M (project firmware; a given image may differ), post-flash log captured open-reader-first-then-RTS-reset, driven by bl616_flash_com22.ps1. BL602 has two paths: (A) ★UART ISP flash via COM18 with a synced COM19-RTS reset — RELIABLE when CKLink halt fails; (B) CKLink via the patched bflb-iot-tool. Handles the CKLink "LOAD HELP BIN FAIL" halt-window / two-probe collision trap, the "flash succeeds but reset always fails" trap, the bl616 DTR/RTS polarity + SET-CLOCK-PLL-FAIL(=BOOT-not-held) traps, the two-UART/two-baud splits, and the C-Sky DebugServer + gdb-over-WSL caveats.
+description: Flash Bouffalo (BL602/BL616/BL616CL) firmware from WSL, then reset + read the console log + optionally start a GDB server. BL616 flashes ONLY over UART (CKLink is debug-only for the E907 family) — separate COM23 control lines (DTR→BOOT active-low, RTS→reset) + COM22 data @2M, app console @2M (project firmware; a given image may differ), post-flash log captured open-reader-first-then-RTS-reset, driven by bl616_flash_com22.ps1. BL616CL mirrors the bl616 logic but splits the control lines across two ports (COM23.DTR→BOOT, COM27.RTS→reset, COM27 also = data+console) and MUST use the SDK's BLFlashCommand.exe --chipname bl616cl (DevCube's bl616 table doesn't know its internal flash → BFLB FLASH MATCH TYPE FAIL); driven by bl616cl_flash_com27.ps1; ★its console wire is GPIO34, not the bl616cldk board.c GPIO30 — default images boot silently. BL602 has two paths: (A) ★UART ISP flash via COM18 with a synced COM19-RTS reset — RELIABLE when CKLink halt fails; (B) CKLink via the patched bflb-iot-tool. Handles the CKLink "LOAD HELP BIN FAIL" halt-window / two-probe collision trap, the "flash succeeds but reset always fails" trap, the bl616 DTR/RTS polarity + SET-CLOCK-PLL-FAIL(=BOOT-not-held) traps, the two-UART/two-baud splits, and the C-Sky DebugServer + gdb-over-WSL caveats.
 argument-hint: bl602|bl616|bl616cl [--whole] [--at-port COM18] [--log-port COM19] [--debug]
 allowed-tools: [Bash, Read, Edit]
 ---
@@ -85,6 +85,68 @@ Success = `Load N/N {progress:100}` → `Sha caled by host == by dev` → `Verif
 - **Two VID_42BF probes (bl602 + bl616) collide on the RISC-V DM** — irrelevant to bl616 *UART*
   flashing (COM22/COM23), but if you also debug bl616 over CKLink, disable the bl602 probe first
   (`FACTORYAIOT`, needs one UAC).
+
+## ★ BL616CL — UART ISP flash, COM23 BOOT + COM27 reset/data (VERIFIED 2026-07-16)
+
+Same UART-only ISP logic as bl616 (BOOT high + reset pulse = ISP; BOOT low + reset pulse = run),
+but the bench wiring and the flash tool BOTH differ:
+
+- **COM23.DTR → BOOT** (same active-low mapping as bl616: `DtrEnable=$false` = pin HIGH = ISP).
+- **COM27.RTS → reset** (`RtsEnable=$true` = assert low). **COM27 is ALSO the data UART +
+  console** — bootrom ISP data @2000000, app console @2000000. So unlike bl616 (both control
+  lines on one dedicated port), BOOT and reset live on **different** ports, and the reset line
+  shares a port with the data stream: pulse reset, then **close COM27** so the flash tool can
+  open it, while **COM23 stays open holding BOOT** the whole time. For the post-flash boot +
+  log, one reopened COM27 SerialPort object does both the RTS reset pulse and the log read.
+- **Tool: DevCube's `bflb_iot_tool.exe` DOES NOT WORK** — `--chipname bl616` handshakes fine
+  (reads bootinfo, jedec) but its bl616 flash table doesn't know the bl616cl **internal 4 MB
+  flash (jedec `0x686016`)** → `ErrorCode 003D BFLB FLASH MATCH TYPE FAIL`, and DevCube 1.8.7
+  has no bl616cl chip dir at all. Use the **SDK flash cube** instead, which has native bl616cl
+  support: `platform/bouffalo_sdk/tools/bflb_tools/bouffalo_flash_cube/BLFlashCommand.exe`
+  (+ its `chips/` dir), copied Windows-side to `D:\MCU_Tools\bflb-cklink\bouffalo_flash_cube\`.
+- **Success markers differ from bflb_iot_tool**: `Load N/N [100%]` → `SHA caled by host ==
+  by dev` → `Verification succeeded` → **`All programming completed successfully`**
+  (NOT `[All Success]`).
+
+**One-shot script** `D:\MCU_Tools\bflb-cklink\bl616cl_flash_com27.ps1` (params mirror
+bl616_flash_com3.ps1: `-Fw -Baud -LogBaud -LogSeconds`, plus `-Chip`; default fw =
+`fw_bl616cl\at_bl616cl_whole_flash_data.bin`; log → `bl616cl_bootlog.txt`):
+```
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File D:\MCU_Tools\bflb-cklink\bl616cl_flash_com27.ps1 \
+    -Fw "D:\MCU_Tools\bflb-cklink\fw_bl616cl\helloworld_bl616cl_gpio34.bin"
+```
+Bare tool invocation it runs (raw write @0x0 — works for a whole-flash image or a
+direct-boot FW-at-0x0 image like the SDK helloworld):
+```
+D:\MCU_Tools\bflb-cklink\bouffalo_flash_cube\BLFlashCommand.exe --interface uart --port COM27 \
+  --baudrate 2000000 --chipname bl616cl --flash --write --start 0x0 --file <win-path.bin>
+```
+Helpers: `bl616cl_capture.ps1` (run-state reset + log capture only, no flash) and
+`bl616cl_capture_timeline.ps1` (timestamped hex byte timeline — the bring-up forensics tool).
+
+**Traps (all hit during bring-up):**
+- **★ The console/ISP wire on this board is GPIO34, NOT GPIO30.** `bsp/board/bl616cldk/board.c`
+  puts UART0 console on GPIO30(TX)/GPIO35(RX), but this board's UART header (the same wire the
+  bootrom ISP answers on) is **GPIO34**. Consequence: SDK-default images — including the current
+  project `at_bl616cl` image — **boot fine but print into the void** (zero bytes at every baud;
+  looks exactly like a dead boot). Fix for console visibility: mirror UART0_TX onto GPIO34 in
+  `console_init()` — one line, `bflb_gpio_uart_init(gpio, GPIO_PIN_34, GPIO_UART_FUNC_UART0_TX);`
+  (the uart signal matrix allows both 30 and 34 simultaneously). A verified smoke image with
+  that line baked in lives at `fw_bl616cl\helloworld_bl616cl_gpio34.bin` (prints the helloworld
+  LOG banner @2M). The project image needs the same treatment before its console is visible.
+- **Zero boot log ≠ not booting.** Diagnosis that settled it: staged GPIO pulse-train bit-bang
+  (slow pulses → each falling edge = one `0x00` break byte on the host) at board_init entry and
+  after each init stage proved the image boots all the way to console_init (flash init, the 80M
+  flash-clock switch, and the 40M-xtal system_clock_init ALL pass on bl616cl — the bl616
+  flash-80m boot-hang does NOT reproduce here); then index-encoded pulse counts (pin i pulses
+  i+1 times) fingerprinted the wired pin as GPIO34.
+- **ISP-alive probe**: after BOOT-high + reset pulse, write 64×`0x55` at 2M → bootrom answers
+  `OK`. Cheap way to verify the control lines without running the full tool.
+- **Keep COM23 open** through flash AND log capture (same line-float trap as bl616); the tool
+  opening/closing COM27 pulses its RTS, which is harmless in ISP (BOOT still high → just
+  re-latches ISP) but is why the script re-opens COM27 itself for the run-state reset.
+- `Access denied` on COM23/COM27 = stale PowerShell holding the port — kill it.
+- **Don't touch COM24/COM3** (bl616) or COM18/COM19 (bl602) — separate boards on the same bench.
 
 ## ★ RELIABLE PATH — UART ISP flash of the whole image (COM18) + synced COM19 RTS reset
 
