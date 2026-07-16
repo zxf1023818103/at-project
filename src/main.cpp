@@ -179,7 +179,6 @@ extern "C" {
 #include "async_event.h"      // async_input_event_t / async_register_event_filter / EV_WIFI
 }
 static void bl616_scan_done(void);            // wakes wifi_port_scan  (CODE_WIFI_ON_SCAN_DONE)
-static void bl616_conn_event(int connected);  // wakes wifi_port_connect (CODE_WIFI_ON_CONNECTED/_DISCONNECT)
 static void bl616_wifi_event_cb(async_input_event_t ev, void *priv) {
     (void) priv;
     void wifi_event_handler(uint32_t code, uint32_t code2);   // defined below
@@ -187,8 +186,8 @@ static void bl616_wifi_event_cb(async_input_event_t ev, void *priv) {
 }
 #endif // defined BL616 || defined BL616CL
 
-#if defined BL602 || defined BL702
-static void bl602_conn_event(int connected);      // connect result (CONNECTED/DISCONNECT) -> wifi_port_connect
+#if defined BL602 || defined BL702 || defined BL616 || defined BL616CL
+static void bouffalo_conn_event(int connected);   // connect result (CONNECTED/DISCONNECT) -> wifi_port_connect
 #endif
 
 #if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
@@ -227,20 +226,14 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
             // waits on phy-link (wifi_mgmr_sta_state_get) before sending DHCP, so it
             // is safe to init before association.
             bouffalo_tcp_bringup();
-            // Start the shared WiFi provisioning + reconnect service (same as bl602/amebad): it runs in
-            // its own task (a blocking connect must not run here) reading WIFI_SSID/WIFI_PASSWORD from
-            // env and driving the bl616 wifi_port_* HAL below. bouffalo_tcp_bringup() started the IP task
-            // synchronously; wifi_service_start() only xTaskCreate's -- its first connect runs later.
-            wifi_service_start();
 #endif // defined BL616 || defined BL616CL
-#if defined BL602 || defined BL702
             // Start the shared WiFi provisioning + reconnect service (component/wifi_service_config).
             // It runs in its own task (a blocking connect must not run here: wifi_event_handler runs
-            // with the scheduler suspended and wifi_mgmr_sta_connect() blocks on a semaphore). It reads
-            // WIFI_SSID/WIFI_PASSWORD from env, connects via the cached channel or a scan, and supervises
-            // the link -- driving the bl602 wifi_port_* HAL above. Same service AmebaD uses.
+            // with the scheduler suspended / in the async-event context, and the drivers' connect
+            // calls block). It reads WIFI_SSID/WIFI_PASSWORD from env, connects via the cached
+            // channel or a scan, and supervises the link -- driving the chip's wifi_port_* HAL
+            // below. Same service AmebaD uses.
             wifi_service_start();
-#endif // defined BL602 || defined BL702
             break;
         }
         case CODE_WIFI_ON_SCAN_DONE: {
@@ -256,12 +249,8 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
         }
         case CODE_WIFI_ON_CONNECTED: {
             printf("[APP] [EVT] %s, CODE_WIFI_ON_CONNECTED\n", __func__);
-#if defined BL602 || defined BL702
-            bl602_conn_event(1);   // wake wifi_port_connect: association succeeded
-            wifi_service_on_event(WIFI_SVC_EV_CONNECTED);
-#endif
-#if defined BL616 || defined BL616CL
-            bl616_conn_event(1);   // wake wifi_port_connect: association succeeded
+#if defined BL602 || defined BL702 || defined BL616 || defined BL616CL
+            bouffalo_conn_event(1);   // wake wifi_port_connect: association succeeded
             wifi_service_on_event(WIFI_SVC_EV_CONNECTED);
 #endif
             break;
@@ -278,19 +267,15 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
         }
         case CODE_WIFI_ON_DISCONNECT: {
             printf("[APP] [EVT] %s, CODE_WIFI_ON_DISCONNECT\n", __func__);
-#if defined BL602 || defined BL702
-            bl602_conn_event(0);   // wake wifi_port_connect: association failed/dropped
-            wifi_service_on_event(WIFI_SVC_EV_DISCONNECT);
-#endif
-#if defined BL616 || defined BL616CL
-            bl616_conn_event(0);   // wake wifi_port_connect: association failed/dropped
+#if defined BL602 || defined BL702 || defined BL616 || defined BL616CL
+            bouffalo_conn_event(0);   // wake wifi_port_connect: association failed/dropped
             wifi_service_on_event(WIFI_SVC_EV_DISCONNECT);   // tell wsvc to re-associate
+#endif
 #ifdef CONFIG_LPAPP
             /* Safety: if `tickless` armed the idle-PDS15 path, disarm it on WiFi loss. The disconnected
              * sleep branch has no DTIM wake and PDS15 doesn't wake on UART, so an un-connected auto-sleep
              * would swallow console/AT input until the RTC backup fires. */
             { extern int tickless_exit(void); tickless_exit(); }
-#endif
 #endif
             break;
         }
@@ -409,6 +394,19 @@ static void bflb_net_bootstrap_task(void *arg) {
     vTaskDelete(NULL);
 }
 
+#if defined BL602 || defined BL702 || defined BL616 || defined BL616CL
+// ---- connect-result signal (shared by the bl602/wifi4 and bl616/fhost HAL blocks below): the
+//      drivers' connect calls are async, so wifi_port_connect blocks until the driver's
+//      CODE_WIFI_ON_CONNECTED (ok) / CODE_WIFI_ON_DISCONNECT (fail) event (fed from
+//      wifi_event_handler) wakes it. Notify-before-wait is race-safe (xTaskNotifyGive latches). ----
+static TaskHandle_t s_bouffalo_conn_waiter;
+static volatile int s_bouffalo_conn_ok;
+static void bouffalo_conn_event(int connected) {
+    TaskHandle_t t = s_bouffalo_conn_waiter;
+    if (t != NULL) { s_bouffalo_conn_ok = connected; s_bouffalo_conn_waiter = NULL; xTaskNotifyGive(t); }
+}
+#endif
+
 #if defined BL602 || defined BL702
 // bl602 WiFi HAL (wifi_port.h): the driver mechanics behind the shared wifi_service policy. The
 // connect strategy (env creds, cached-channel direct connect, scan fallback, offline guard,
@@ -421,15 +419,6 @@ static void bl602_scan_done_cb(void *data, void *param) {
     (void)data; (void)param;
     TaskHandle_t t = s_bl602_scan_waiter;
     if (t != NULL) { s_bl602_scan_waiter = NULL; xTaskNotifyGive(t); }
-}
-
-// ---- connect-result signal: wifi_mgmr_sta_connect is async, so block on the driver's
-//      CODE_WIFI_ON_CONNECTED (ok) / CODE_WIFI_ON_DISCONNECT (fail) event (fed from wifi_event_handler). ----
-static TaskHandle_t s_bl602_conn_waiter;
-static volatile int s_bl602_conn_ok;
-static void bl602_conn_event(int connected) {
-    TaskHandle_t t = s_bl602_conn_waiter;
-    if (t != NULL) { s_bl602_conn_ok = connected; s_bl602_conn_waiter = NULL; xTaskNotifyGive(t); }
 }
 
 extern "C" {
@@ -457,15 +446,15 @@ int wifi_port_scan(const char *ssid, uint8_t *chan, int *sec) {
 int wifi_port_connect(const char *ssid, const char *pass, uint8_t chan, int sec) {
     (void)sec;   // wifi4 picks the security from the beacon; nothing to pass through
     dot11d_autodetect_country();   // component/80211d_config: once, when WIFI_COUNTRY is unset (before associating)
-    s_bl602_conn_ok = 0;
-    s_bl602_conn_waiter = xTaskGetCurrentTaskHandle();
+    s_bouffalo_conn_ok = 0;
+    s_bouffalo_conn_waiter = xTaskGetCurrentTaskHandle();
     // A non-zero chan makes the wifi4 connect probe just that one channel for the BSSID.
     wifi_mgmr_sta_connect(NULL, (char *)ssid, (char *)pass, NULL, NULL, 0, chan);
     if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(6000)) == 0) {
-        s_bl602_conn_waiter = NULL;   // timeout -> failure
+        s_bouffalo_conn_waiter = NULL;   // timeout -> failure
         return -1;
     }
-    return s_bl602_conn_ok ? 0 : -1;
+    return s_bouffalo_conn_ok ? 0 : -1;
 }
 void wifi_port_disconnect(void) {
     wifi_mgmr_sta_disconnect();
@@ -493,12 +482,6 @@ static TaskHandle_t s_bl616_scan_waiter;
 static void bl616_scan_done(void) {
     TaskHandle_t t = s_bl616_scan_waiter;
     if (t) { s_bl616_scan_waiter = NULL; xTaskNotifyGive(t); }
-}
-static TaskHandle_t s_bl616_conn_waiter;
-static volatile int s_bl616_conn_ok;
-static void bl616_conn_event(int connected) {
-    TaskHandle_t t = s_bl616_conn_waiter;
-    if (t) { s_bl616_conn_ok = connected; s_bl616_conn_waiter = NULL; xTaskNotifyGive(t); }
 }
 
 /* wifi_mgmr_scan_ap_all() calls this for each AP in the result tree; take the channel of the first
@@ -566,21 +549,21 @@ int wifi_port_connect(const char *ssid, const char *pass, uint8_t chan, int sec)
                                 const char *akm_str, uint8_t pmf_cfg, uint16_t freq1, uint16_t freq2,
                                 uint8_t use_dhcp);
     const char *akm = NULL;   // wifi_sta_connect scans internally -> auto-detects AKM from the beacon
-    s_bl616_conn_ok = 0;
-    s_bl616_conn_waiter = xTaskGetCurrentTaskHandle();
-    if (wifi_sta_connect(ssid, pass, NULL, akm, 0, 0, 0, 0) != 0) { s_bl616_conn_waiter = NULL; return -1; }
-    if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(12000)) == 0) { s_bl616_conn_waiter = NULL; return -1; }
+    s_bouffalo_conn_ok = 0;
+    s_bouffalo_conn_waiter = xTaskGetCurrentTaskHandle();
+    if (wifi_sta_connect(ssid, pass, NULL, akm, 0, 0, 0, 0) != 0) { s_bouffalo_conn_waiter = NULL; return -1; }
+    if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(12000)) == 0) { s_bouffalo_conn_waiter = NULL; return -1; }
     /* Pin the TX rate to legacy 11g 24M (no HT/AMPDU path): the macsw MAC core wedges its
      * TX AC queues under bidirectional TCP on auto rate (internal frame left:N + hal_machw
      * asserts; reproduced with the stock SDK example too). Called HERE (wifi service task)
      * and not in the CONNECTED event callback — that runs in the async-event Timer context
      * where the blocking kmsg round-trip inside wifi_mgmr_rate_config trips configASSERT. */
-    if( s_bl616_conn_ok )
+    if( s_bouffalo_conn_ok )
     {
         struct wifi_mgmr_rate_config rc = { 12 /* WIFI_RC_IDX_24M */, 8 /* WIFI_RC_IDX_6M */ };
         ( void ) wifi_mgmr_rate_config( &rc );
     }
-    return s_bl616_conn_ok ? 0 : -1;        // set by CODE_WIFI_ON_CONNECTED / _DISCONNECT
+    return s_bouffalo_conn_ok ? 0 : -1;        // set by CODE_WIFI_ON_CONNECTED / _DISCONNECT
 }
 
 void wifi_port_disconnect(void) { extern int wifi_sta_disconnect(void); wifi_sta_disconnect(); }   // fhost: wifi_sta_disconnect (not wifi_mgmr_sta_disconnect)
@@ -643,26 +626,8 @@ void app_console_register_platform(void)
 #endif
 }
 
-void app_network_up_start_services(void)
-{
-    // coreSNTP UTC time sync (idempotent). BL602/BL702 reach here from GOT_IP; the other Bouffalo chips
-    // start SNTP from main() instead (they don't post GOT_IP).
-    sntp_sync_start();
-#if defined(AT_PROJECT_AWS)
-    // Auto-start AWS once DHCP is up (bl602/bl616/bl616cl). Idempotent + a no-op until provisioned, so it Just Works
-    // after `aws endpoint/ca/cert/key ...`; the connect loop self-heals until SNTP supplies real UTC
-    // (needed for the mbedTLS server-cert validity check). AWSOTA=ON runs the shared agent+telemetry+OTA
-    // orchestration (aws_iot_demo.c); default runs the lean telemetry-only client (aws_telemetry.c).
-#ifdef AT_PROJECT_AWS_IOT
-    { extern void aws_iot_demo_start(void); aws_iot_demo_start(); }
-#else
-    { extern void aws_telemetry_start(void); aws_telemetry_start(); }
-#endif
-#endif
-#ifdef AT_PROJECT_QUIC
-    { extern void quic_test_start(void); quic_test_start(); }
-#endif
-}
+/* app_network_up_start_services(): shared Bouffalo+AmebaD implementation in the startup skeleton at
+ * the bottom of this file (identical feature gating on both platforms). */
 
 /* app_startup_run() (the shared skeleton, below) calls these in canonical order; the common middle
  * (env/time + console) is in the shared helper. These are the Bouffalo-specific steps. */
@@ -1512,31 +1477,8 @@ void app_console_register_platform(void)
 }
 #endif /* !AT_PROJECT_QUIC */
 
-void app_network_up_start_services(void)
-{
-#ifdef AT_PROJECT_QUIC
-    /* QUIC build: run the ngtcp2 + picotls/mbedTLS TLS1.3 handshake self-test against the WSL QUIC
-     * server instead of the iperf throughput probes (iperf TUs are not linked in this image). */
-    extern void quic_test_start(void);
-    quic_test_start();
-#else
-    /* coreSNTP UTC time-sync (default-on in every non-QUIC image): an async task that fetches UTC and
-     * backs newlib's _gettimeofday (time_base.c), so logs / TLS / OTA see real wall-clock time. */
-    { extern void sntp_sync_start(void); sntp_sync_start(); }
-#if defined(AT_PROJECT_AWS_IOT)
-    /* Full AWS IoT agent (AWSOTA=ON): coreMQTT-Agent + telemetry + OTA over mutual TLS
-     * (endpoint+cert from LittleFS, key from TF-M Protected Storage). */
-    extern void aws_iot_demo_start(void);
-    aws_iot_demo_start();
-#elif defined(AT_PROJECT_AWS)
-    /* Lean AWS image (AWS=ON alone): the telemetry-only client, exactly like bl602's AWS=ON. */
-    extern void aws_telemetry_start(void);
-    aws_telemetry_start();
-#endif
-    /* iperf: manual `iperf server|tx|udp` console command (registered above when linked), same as
-     * bl602 -- no auto-start at network-up. */
-#endif /* AT_PROJECT_QUIC */
-}
+/* app_network_up_start_services(): shared Bouffalo+AmebaD implementation in the startup skeleton at
+ * the bottom of this file (identical feature gating on both platforms). */
 
 /* ---- shared example entry seams (component/app_startup_config): strong AmebaD overrides ----------
  * app_startup_run() (the shared skeleton) calls these in canonical order. Only the parts that differ
@@ -1626,6 +1568,35 @@ __attribute__((weak)) void app_platform_pre_scheduler_services(void) { }
 __attribute__((weak)) void app_console_register_platform(void) { }
 __attribute__((weak)) void app_network_up_start_services(void) { }
 #endif
+
+#if defined(AT_MAIN_BOUFFALO) || defined(AT_MAIN_AMEBAD)
+/* Network-up services, shared by Bouffalo (bl602/bl616/bl616cl) + AmebaD: the feature gating is
+ * identical on both platforms (was two per-platform strong overrides of the weak default above). */
+void app_network_up_start_services(void)
+{
+#ifdef AT_PROJECT_QUIC
+    /* QUIC build: run the ngtcp2 + picotls/mbedTLS TLS1.3 handshake/perf self-test (the console and
+     * iperf TUs are not linked in this image). */
+    { extern void quic_test_start(void); quic_test_start(); }
+#else
+    /* coreSNTP UTC time-sync (default-on in every non-QUIC image, idempotent): an async task that
+     * fetches UTC and backs newlib's _gettimeofday (time_base.c), so logs / the TLS server-cert
+     * validity check / OTA see real wall-clock time. */
+    { extern void sntp_sync_start(void); sntp_sync_start(); }
+#if defined(AT_PROJECT_AWS_IOT)
+    /* Full AWS IoT agent (AWSOTA=ON): coreMQTT-Agent + telemetry + OTA over mutual TLS. Idempotent
+     * + a no-op until provisioned, so it Just Works after `aws endpoint/ca/cert/key ...`; the
+     * connect loop self-heals until SNTP supplies real UTC. */
+    { extern void aws_iot_demo_start(void); aws_iot_demo_start(); }
+#elif defined(AT_PROJECT_AWS)
+    /* Lean AWS image (AWS=ON alone): the telemetry-only client. */
+    { extern void aws_telemetry_start(void); aws_telemetry_start(); }
+#endif
+    /* iperf: manual `iperf server|tx|udp` console command (registered when linked) -- no auto-start
+     * at network-up on any platform. */
+#endif /* AT_PROJECT_QUIC */
+}
+#endif /* AT_MAIN_BOUFFALO || AT_MAIN_AMEBAD */
 
 #ifdef AT_PROJECT_QUIC
 /* Console-less startup for the QUIC self-test image: same platform hooks as app_startup_run() minus the
