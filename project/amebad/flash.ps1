@@ -51,6 +51,7 @@ $ErrorActionPreference = 'Stop'
 # $PSScriptRoot 在 param 默认值里被某些 host 提前展开为空，挪到这里再补默认值。
 $here = $PSScriptRoot
 if (-not $here) { $here = Split-Path -Parent $MyInvocation.MyCommand.Path }
+. "$here/../tools/serial_common.ps1"
 if (-not $Image)   { $Image   = Join-Path $here 'out\Image_All.bin' }
 if (-not $ToolDir) { $ToolDir = Join-Path $here '..\..\platform\ameba-rtos\tools\ameba\MP_ImageTool_1_N' }
 
@@ -174,9 +175,7 @@ Write-Host "flash : $FlashPort @ $Baudrate"
 if (-not $NoUnlock) {
     Write-Host "[unlock] flash unlock on $FlashPort @ $ConsoleBaud (pre-flash; -NoUnlock to skip) ..."
     try {
-        $usp = New-Object System.IO.Ports.SerialPort $FlashPort, $ConsoleBaud, ([System.IO.Ports.Parity]::None), 8, ([System.IO.Ports.StopBits]::One)
-        $usp.ReadTimeout = 400
-        $usp.Open()
+        $usp = Open-Serial $FlashPort $ConsoleBaud 400
         Start-Sleep -Milliseconds 200
         $usp.DiscardInBuffer()
         foreach ($ch in 'flash unlock'.ToCharArray()) { $usp.Write([string]$ch); Start-Sleep -Milliseconds 8 }

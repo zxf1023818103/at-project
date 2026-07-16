@@ -22,6 +22,7 @@ param(
     [string]$ResetPort = ''        # if set, pulse CHIP_EN (RTS) on this boot port to reboot first
 )
 $ErrorActionPreference = 'Stop'
+. "$PSScriptRoot/../tools/serial_common.ps1"
 
 function Reset-Chip([string]$port) {
     Write-Host "[console] reset via $port (CHIP_EN pulse) ..."
@@ -34,7 +35,9 @@ function Reset-Chip([string]$port) {
     } finally { $b.Close(); $b.Dispose() }
 }
 
-function Send-Paced([System.IO.Ports.SerialPort]$sp, [string]$line) {
+# Like the shared Send-Paced, but deliberately does NOT DiscardInBuffer (keeps any log bytes that
+# arrived between commands) and returns nothing.
+function Send-PacedNoDiscard([System.IO.Ports.SerialPort]$sp, [string]$line) {
     # Pace the write (16 B / 6 ms): the device CLI polls the LOGUART, so a full-rate blast at
     # 1.5 Mbps overruns the small RX FIFO and drops chars.
     $bytes = [System.Text.Encoding]::ASCII.GetBytes("$line`r")
@@ -56,9 +59,7 @@ function Read-Raw([System.IO.Ports.SerialPort]$sp, [int]$sec) {
 
 if ($ResetPort) { Reset-Chip $ResetPort }
 
-$sp = New-Object System.IO.Ports.SerialPort $Port, $Baud, ([System.IO.Ports.Parity]::None), 8, ([System.IO.Ports.StopBits]::One)
-$sp.ReadTimeout = 200
-$sp.Open()
+$sp = Open-Serial $Port $Baud 200
 try {
     $sp.DiscardInBuffer()
     if ($Send) {
@@ -67,7 +68,7 @@ try {
             $cmd = $cmd.Trim()
             if (-not $cmd) { continue }
             Write-Host "`n[console] > $cmd"
-            Send-Paced $sp $cmd
+            Send-PacedNoDiscard $sp $cmd
             Read-Raw $sp 3
         }
     }

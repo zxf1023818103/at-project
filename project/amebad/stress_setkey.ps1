@@ -23,22 +23,11 @@ param(
     [int]   $ResultTimeoutSec = 10
 )
 $ErrorActionPreference = 'Stop'
+. "$PSScriptRoot/../tools/serial_common.ps1"
 
 $Key = (Resolve-Path $Key).Path
 $b64 = (Get-Content $Key | Where-Object { $_ -notmatch '^\s*-----' -and $_.Trim() -ne '' }) -join ''
 Write-Host "[stress] key = $Key  ($($b64.Length) base64 chars)  iterations = $N"
-
-function Send-Paced([System.IO.Ports.SerialPort]$sp, [string]$line) {
-    # 16 B / 6 ms: the device CLI polls (or, now, IRQ-buffers) the LOGUART; pacing keeps the small
-    # RX FIFO from overrunning so the base64 body arrives intact.
-    $sp.DiscardInBuffer()
-    $bytes = [System.Text.Encoding]::ASCII.GetBytes("$line`r")
-    for ($i = 0; $i -lt $bytes.Length; $i += 16) {
-        $n = [Math]::Min(16, $bytes.Length - $i)
-        $sp.Write($bytes, $i, $n)
-        Start-Sleep -Milliseconds 6
-    }
-}
 
 # Read raw bytes until the `set key: ... -> OK|FAIL` result appears, or timeout. Raw (not ReadLine)
 # because the app log uses LF-CR and interleaves [AWS] TX telemetry lines.
@@ -53,15 +42,12 @@ function Wait-Result([System.IO.Ports.SerialPort]$sp, [int]$sec) {
     return 'HANG'
 }
 
-$sp = New-Object System.IO.Ports.SerialPort $Port, $Baud, ([System.IO.Ports.Parity]::None), 8, ([System.IO.Ports.StopBits]::One)
-$sp.ReadTimeout = 200
-$sp.WriteTimeout = 3000
-$sp.Open()
+$sp = Open-Serial $Port $Baud 200 3000
 $ok = 0; $fail = 0; $hang = 0
 try {
     $sp.WriteLine(''); Start-Sleep -Milliseconds 300; [void]$sp.ReadExisting()   # nudge a prompt
     for ($i = 1; $i -le $N; $i++) {
-        Send-Paced $sp "set key $b64"
+        [void](Send-Paced $sp "set key $b64")
         $r = Wait-Result $sp $ResultTimeoutSec
         switch ($r) {
             'OK'   { $ok++ }
