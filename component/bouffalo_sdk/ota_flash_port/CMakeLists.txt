@@ -7,6 +7,7 @@ set(_xz_dir "${AT_ROOT}/platform/bouffalo_sdk/components/lzma/xz")
 
 add_library(ota_flash_port STATIC
     ota_flash_bouffalo.c
+    "${AT_ROOT}/component/ota_flash_config/ota_lock.c"   # shared OTA mutual-exclusion lock
     "${_xz_dir}/xz_crc32.c"
     "${_xz_dir}/xz_dec_lzma2.c"
     "${_xz_dir}/xz_dec_stream.c"

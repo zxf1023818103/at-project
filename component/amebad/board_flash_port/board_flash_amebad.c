@@ -26,16 +26,7 @@ int board_flash_protect(board_flash_prot_t mode, u8 *o_sr1b, u8 *o_sr1a, u8 *o_s
 	FLASH_RxCmd(flash_init_para.FLASH_cmd_rd_status, 1, &sr1_cur);
 	FLASH_RxCmd(rdsr2, 1, &sr2_cur);
 
-	if (mode == BOARD_FLASH_UNLOCK) {          /* clear all protection */
-		sr1_new = 0x00;
-		sr2_new = sr2_cur & ~0x40;
-	} else if (mode == BOARD_FLASH_LOCK_ALL) { /* lock the whole chip */
-		sr1_new = 0x1C;
-		sr2_new = sr2_cur & ~0x40;
-	} else {                                   /* lock the firmware region (default) */
-		sr1_new = 0x14;
-		sr2_new = sr2_cur | 0x40;
-	}
+	board_flash_sr_for_mode(mode, sr2_cur, &sr1_new, &sr2_new);   /* shared mode->SR encoding */
 
 	FLASH_SetStatus(flash_init_para.FLASH_cmd_wr_status, 1, &sr1_new);
 	FLASH_SetStatus(wrsr2, 1, &sr2_new);

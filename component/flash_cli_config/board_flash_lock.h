@@ -24,6 +24,23 @@ typedef enum {
     BOARD_FLASH_LOCK_ALL = 2,   /* lock the whole chip                           */
 } board_flash_prot_t;
 
+/* mode -> (SR1, SR2) encoding, byte-identical on both platforms (same W25Q/GD25 BP/CMP layout).
+ * SR2 only has its CMP bit (0x40) driven; the other SR2 bits pass through from `sr2_cur`. */
+static inline void board_flash_sr_for_mode(board_flash_prot_t mode, uint8_t sr2_cur,
+                                           uint8_t *sr1, uint8_t *sr2)
+{
+    if (mode == BOARD_FLASH_UNLOCK) {          /* clear all protection */
+        *sr1 = 0x00;
+        *sr2 = (uint8_t)(sr2_cur & ~0x40);
+    } else if (mode == BOARD_FLASH_LOCK_ALL) { /* lock the whole chip */
+        *sr1 = 0x1C;
+        *sr2 = (uint8_t)(sr2_cur & ~0x40);
+    } else {                                   /* lock the firmware region (default) */
+        *sr1 = 0x14;
+        *sr2 = (uint8_t)(sr2_cur | 0x40);
+    }
+}
+
 /* ---- platform primitives (one implementation per platform) ---------------------------------- */
 
 /* Apply `mode`. Optional out-params (NULL to ignore) report the before/after SR1/SR2 bytes. Returns

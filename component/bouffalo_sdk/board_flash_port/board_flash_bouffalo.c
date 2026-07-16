@@ -175,16 +175,7 @@ int board_flash_protect( board_flash_prot_t mode,
         return 0;
     }
 
-    if( mode == BOARD_FLASH_UNLOCK ) {          /* clear all protection */
-        w1 = 0x00;
-        w2 = ( uint8_t ) ( sr2_cur & ~0x40 );
-    } else if( mode == BOARD_FLASH_LOCK_ALL ) { /* lock the whole chip */
-        w1 = 0x1C;
-        w2 = ( uint8_t ) ( sr2_cur & ~0x40 );
-    } else {                                    /* lock the firmware region (default) */
-        w1 = 0x14;
-        w2 = ( uint8_t ) ( sr2_cur | 0x40 );
-    }
+    board_flash_sr_for_mode( mode, sr2_cur, &w1, &w2 );   /* shared mode->SR encoding */
 
     bl602_sr_txn( 1, w1, w2, &v1, &v2 );        /* write + read back (quiesced) */
 

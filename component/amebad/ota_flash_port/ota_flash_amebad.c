@@ -34,77 +34,13 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-/* ---- OTA mutual exclusion (see ota_flash.h) ------------------------------------------------- */
-static volatile ota_src_t  s_ota_holder = OTA_SRC_NONE;
-static volatile TickType_t s_ota_ble_until;   /* BLE claim self-expiry (abandoned upload) */
-
+/* ---- OTA mutual exclusion: shared ota_lock.c (ota_flash_config) ------------------------------ */
 static void ota_flash_close_session( void );   /* relock the fw region; defined below (with the externs) */
 
-/* Drop a BLE claim that hasn't been refreshed in a while - an upload whose phone disconnected would
- * otherwise hold the lock forever and block a later AWS job. Call inside a critical section. */
-static void ota_lock_expire_stale( void )
+/* ota_lock_release() hook: close a half-open write session (relock). Idempotent. */
+void ota_flash_on_lock_released( void )
 {
-    if( s_ota_holder == OTA_SRC_BLE &&
-        (int32_t)( s_ota_ble_until - xTaskGetTickCount() ) <= 0 )
-    {
-        s_ota_holder = OTA_SRC_NONE;
-    }
-}
-
-int ota_lock_try( ota_src_t src )
-{
-    int rc;
-
-    taskENTER_CRITICAL();
-    ota_lock_expire_stale();
-    if( s_ota_holder == OTA_SRC_NONE || s_ota_holder == src )
-    {
-        s_ota_holder = src;
-        if( src == OTA_SRC_BLE )
-        {
-            s_ota_ble_until = xTaskGetTickCount() + pdMS_TO_TICKS( 5000 );
-        }
-        rc = 0;
-    }
-    else
-    {
-        rc = -1;
-    }
-    taskEXIT_CRITICAL();
-    return rc;
-}
-
-void ota_lock_release( ota_src_t src )
-{
-    int was_holder = 0;
-
-    taskENTER_CRITICAL();
-    if( s_ota_holder == src )
-    {
-        s_ota_holder = OTA_SRC_NONE;
-        was_holder = 1;
-    }
-    taskEXIT_CRITICAL();
-
-    /* Belt-and-braces relock: an OTA that aborted BEFORE ota_flash_finish() (connect fail, bad header,
-     * HTTP parse error, ...) left the write session open. Close it here (outside the critical section -
-     * the SR write must not run scheduler-suspended). Idempotent: a no-op if finish already relocked or
-     * begin never opened a session. */
-    if( was_holder )
-    {
-        ota_flash_close_session();
-    }
-}
-
-ota_src_t ota_lock_holder( void )
-{
-    ota_src_t h;
-
-    taskENTER_CRITICAL();
-    ota_lock_expire_stale();
-    h = s_ota_holder;
-    taskEXIT_CRITICAL();
-    return h;
+    ota_flash_close_session();
 }
 
 /* flash_api.c (component/amebad/mbed, already compiled). flash_t is opaque; the API ignores it. */
@@ -233,6 +169,28 @@ static int flush_pending_sector( ota_ctx_t * c, uint32_t sec_payload_base, uint3
     return flush_sector( sec_base, lo, valid_len );
 }
 
+/* Validate + parse the completed 32-byte OTA header into c (signature / checksum / image_len).
+ * `how` tags the log line with the write path. Returns 0 on success, -1 on a bad header. */
+static int ota_hdr_parse( ota_ctx_t * c, const char * how )
+{
+    if( memcmp( c->hdr + 8, OTA_FILE_SIGN, 4 ) != 0 )
+    {
+        log_error( "[OTA] bad OTA header signature (not '%s')", OTA_FILE_SIGN );
+        return -1;
+    }
+    c->hdr_checksum = rd_le32( c->hdr + 16 );
+    c->image_len    = rd_le32( c->hdr + 20 );
+    if( c->image_len == 0 || c->image_len > SLOT_SIZE )
+    {
+        log_error( "[OTA] bad image length %u", (unsigned) c->image_len );
+        return -1;
+    }
+    c->have_hdr = 1;
+    log_info( "[OTA] image %u bytes, checksum 0x%08x -> %s",
+              (unsigned) c->image_len, (unsigned) c->hdr_checksum, how );
+    return 0;
+}
+
 int ota_flash_feed( ota_ctx_t * c, const uint8_t * d, uint32_t n )
 {
     /* Phase 1: accumulate + validate the 32-byte OTA header. */
@@ -240,24 +198,8 @@ int ota_flash_feed( ota_ctx_t * c, const uint8_t * d, uint32_t n )
     {
         c->hdr[ c->hdr_got++ ] = *d++;
         n--;
-        if( c->hdr_got == OTA_HDR_LEN )
-        {
-            if( memcmp( c->hdr + 8, OTA_FILE_SIGN, 4 ) != 0 )
-            {
-                log_error( "[OTA] bad OTA header signature (not '%s')", OTA_FILE_SIGN );
-                return -1;
-            }
-            c->hdr_checksum = rd_le32( c->hdr + 16 );
-            c->image_len    = rd_le32( c->hdr + 20 );
-            if( c->image_len == 0 || c->image_len > SLOT_SIZE )
-            {
-                log_error( "[OTA] bad image length %u", (unsigned) c->image_len );
-                return -1;
-            }
-            c->have_hdr = 1;
-            log_info( "[OTA] image %u bytes, checksum 0x%08x -> sector write",
-                      (unsigned) c->image_len, (unsigned) c->hdr_checksum );
-        }
+        if( c->hdr_got == OTA_HDR_LEN && ota_hdr_parse( c, "sector write" ) != 0 )
+            return -1;
     }
     if( !c->have_hdr )
         return 0;   /* still in the header */
@@ -420,24 +362,9 @@ int ota_flash_write_at( ota_ctx_t * c, uint32_t off, const uint8_t * d, uint32_t
             c->hdr_got = off + hn;
         off += hn; d += hn; len -= hn;
 
-        if( !c->have_hdr && c->hdr_got >= OTA_HDR_LEN )
-        {
-            if( memcmp( c->hdr + 8, OTA_FILE_SIGN, 4 ) != 0 )
-            {
-                log_error( "[OTA] bad OTA header signature (not '%s')", OTA_FILE_SIGN );
-                return -1;
-            }
-            c->hdr_checksum = rd_le32( c->hdr + 16 );
-            c->image_len    = rd_le32( c->hdr + 20 );
-            if( c->image_len == 0 || c->image_len > SLOT_SIZE )
-            {
-                log_error( "[OTA] bad image length %u", (unsigned) c->image_len );
-                return -1;
-            }
-            c->have_hdr = 1;
-            log_info( "[OTA] image %u bytes, checksum 0x%08x -> random write",
-                      (unsigned) c->image_len, (unsigned) c->hdr_checksum );
-        }
+        if( !c->have_hdr && c->hdr_got >= OTA_HDR_LEN &&
+            ota_hdr_parse( c, "random write" ) != 0 )
+            return -1;
         if( len == 0 )
             return 0;
     }

@@ -34,53 +34,13 @@ extern int bl_sys_reset_por(void);   /* bflb_sys: full power-on reset (resolves 
 #define XZ_DICT_MAX      ( 1u << 15 )        /* 32 KB - matches boot2's xz_dec_init */
 static const uint8_t XZ_MAGIC[ 6 ] = { 0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00 };
 
-/* ---- OTA mutual exclusion (shared ota_flash.h; same policy as the AmebaD port) --------------- */
-static volatile ota_src_t  s_holder = OTA_SRC_NONE;
-static volatile TickType_t s_ble_until;
-
+/* ---- OTA mutual exclusion: shared ota_lock.c (ota_flash_config) ------------------------------ */
 static void ota_flash_close_session( void );   /* relock + free xz; defined below */
 
-static void expire_stale( void )
+/* ota_lock_release() hook: close a half-open write session (relock + free xz). Idempotent. */
+void ota_flash_on_lock_released( void )
 {
-    if( s_holder == OTA_SRC_BLE && ( int32_t ) ( s_ble_until - xTaskGetTickCount() ) <= 0 )
-    {
-        s_holder = OTA_SRC_NONE;
-    }
-}
-
-int ota_lock_try( ota_src_t src )
-{
-    int rc;
-    taskENTER_CRITICAL();
-    expire_stale();
-    if( s_holder == OTA_SRC_NONE || s_holder == src )
-    {
-        s_holder = src;
-        if( src == OTA_SRC_BLE ) { s_ble_until = xTaskGetTickCount() + pdMS_TO_TICKS( 5000 ); }
-        rc = 0;
-    }
-    else { rc = -1; }
-    taskEXIT_CRITICAL();
-    return rc;
-}
-
-void ota_lock_release( ota_src_t src )
-{
-    int was = 0;
-    taskENTER_CRITICAL();
-    if( s_holder == src ) { s_holder = OTA_SRC_NONE; was = 1; }
-    taskEXIT_CRITICAL();
-    if( was ) { ota_flash_close_session(); }   /* belt-and-braces relock on abort (idempotent) */
-}
-
-ota_src_t ota_lock_holder( void )
-{
-    ota_src_t h;
-    taskENTER_CRITICAL();
-    expire_stale();
-    h = s_holder;
-    taskEXIT_CRITICAL();
-    return h;
+    ota_flash_close_session();
 }
 
 /* ---- slot writer state (one OTA at a time) --------------------------------------------------- */

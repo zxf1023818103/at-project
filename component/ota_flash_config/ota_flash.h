@@ -90,11 +90,16 @@ typedef enum
 } ota_src_t;
 
 /* Claim (or refresh, if already held by `src`) the OTA lock. Returns 0 on success, -1 if another
- * source holds it. */
+ * source holds it. (Shared impl: ota_lock.c, compiled into each platform's ota_flash_port.) */
 int       ota_lock_try( ota_src_t src );
 /* Release the lock iff `src` currently holds it. */
 void      ota_lock_release( ota_src_t src );
 /* Current holder (OTA_SRC_NONE if free); expires a stale BLE claim first. */
 ota_src_t ota_lock_holder( void );
+
+/* Port hook, called by ota_lock_release() when the holder lets go: close any half-open write
+ * session (relock the fw region, free decoder state). Runs outside the lock's critical section
+ * (flash SR writes must not run scheduler-suspended); must be idempotent. */
+void ota_flash_on_lock_released( void );
 
 #endif /* OTA_FLASH_H */

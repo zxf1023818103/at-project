@@ -10,7 +10,9 @@ endif()
 
 add_compile_options("-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=")
 
-add_library(ota_flash_port STATIC ota_flash_amebad.c)
+add_library(ota_flash_port STATIC
+    ota_flash_amebad.c
+    "${AT_ROOT}/component/ota_flash_config/ota_lock.c")   # shared OTA mutual-exclusion lock
 
 # ota_flash.h (the shared contract) + board_flash_lock.h (unlock/relock around slot writes) +
 # the SDK flash HAL headers + FreeRTOS (task delays) + at_log.h.
