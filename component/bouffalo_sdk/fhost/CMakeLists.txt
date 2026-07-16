@@ -49,6 +49,19 @@ endforeach()
 # it stays ABI-matched with them.
 add_library(macsw_plat STATIC "${AT_ROOT}/platform/bouffalo_sdk/components/wireless/macsw_plat.c")
 target_compile_definitions(macsw_plat PRIVATE CONFIG_MACSW_SELECT_INCLUDE="macsw_default_config.h")
+if(CONFIG_LPAPP)
+    # LP_FW=ON: unlock the LP_APP-gated body of platform_hook_beacon (macsw's per-beacon weak hook,
+    # macsw_hook_beacon -> platform_hook_beacon). It feeds each received beacon's TSF/RTC timestamp
+    # pair to lpfw_recal_rc32k (RC32K fine-trim) + lpfw_calculate_beacon_delay, which are the ONLY
+    # setters of the 32k_trim_ready / bcn_delay_ready flags that tickless.c's
+    # check_system_ready_for_LowPower gates every PDS15 entry on. Without LP_APP the hook compiles
+    # to a bare `ret` (the vendored prebuilt libmacsw_plat.a had it empty too) and tickless never
+    # sleeps while associated (millions of 32k-abort attempts, `tickless stats`). The SDK's own lp
+    # builds set LP_APP globally (power_mgmt CMakeLists under CONFIG_TICKLESS_ACCURATE); we scope it
+    # to the one TU with LP_APP-gated code. Also switches the hal_macsw_lp_* stubs to their real
+    # gp_lp_env-backed bodies — safe: main.cpp runs bl_lp_init() before wifi_task_create().
+    target_compile_definitions(macsw_plat PRIVATE LP_APP)
+endif()
 # Headers via the SDK/config libs. macsw_plat.c's calls (bflb_rtc_get_time, bl_lp_*, phy/wl_api,
 # FreeRTOS) resolve at the final image link from the bouffalo_sdk umbrella, same as the prebuilt
 # libmacsw_plat.a's unresolved refs did.
@@ -98,6 +111,11 @@ if(CONFIG_LPAPP)
     # `lpsleep` console command (lp_cli.c): one on-demand PDS15 deep-sleep cycle. bl_lp_fw_init()
     # re-seeds iot2lp_para, then bl_lp_fw_enter() enters PDS; board_recovery() recovers on wake.
     add_library(lp_cli STATIC "${CMAKE_CURRENT_SOURCE_DIR}/lp_cli.c")
+    if(AT_ENABLE_NIMBLE)
+        # `tickless stats` — BLE sleep-arbitration counters (bflb_power_mgmt/tickless_ble.c,
+        # only compiled on NIMBLE=ON builds, so the subcommand is gated the same way).
+        target_compile_definitions(lp_cli PRIVATE AT_LP_BLE_STATS=1)
+    endif()
     target_link_libraries(lp_cli PRIVATE
         bflb_autoconf                     # -include autoconf.h (CFG_* / BL616)
         bflb_sys                          # bl_lp.h (bl_lp_fw_cfg_t / lpfw_cfg / bl_lp_fw_enter)

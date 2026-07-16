@@ -76,6 +76,20 @@ static int bflb_console_rx_arm(void)
     bflb_irq_enable(console->irq_num);
     return 1;
 }
+
+/* Re-arm the console RX IRQ after a PDS15 wake (LP_FW tickless): the power-collapse loses the
+ * IRQ-enable + UART int-mask state, while the stream buffer lives in retained RAM. No-op until
+ * the lazy first-getc arm has run. Called from the bl_lp sys-exit callback
+ * (bflb_power_mgmt/lp_recovery.c) AFTER board_recovery() re-inits the UART itself. */
+void bflb_console_rx_reattach(void)
+{
+    if (s_rx_stream == NULL || console == NULL) {
+        return;
+    }
+    bflb_irq_attach(console->irq_num, (irq_callback) bflb_console_rx_isr, NULL);
+    bflb_uart_rxint_mask(console, false);
+    bflb_irq_enable(console->irq_num);
+}
 #endif /* !CONFIG_CONSOLE_WO */
 
 #ifdef CONFIG_CONSOLE_WO

@@ -75,6 +75,15 @@ if(CONFIG_TICKLESS_EXT)
     # tickless.c). Left off by default (the per-attempt logs are noisy and would themselves keep the
     # UART/CPU busy). Confirmed on HW: with `tickless 1` the device deep-sleeps (console goes quiet,
     # PDS15 does not wake on UART) while STAYING associated to the AP (3+ min uptime, no deauth).
+
+    # NIMBLE=ON: BLE controller arbitration on tickless.c's hook seam (the SDK's version lives in
+    # tickless_accurate.c which we can't compile — vendor-kernel + pm_manager deps). Registered from
+    # main.cpp via tickless_ble_hooks_init(); a no-op until btble_controller_init() runs.
+    if(AT_ENABLE_NIMBLE)
+        target_sources(bflb_power_mgmt PRIVATE tickless_ble.c)
+        target_link_libraries(bflb_power_mgmt PRIVATE
+            btblecontroller)          # btble_lib_api.h (btble_controller_sleep/_restore) + prebuilt .a
+    endif()
 endif()
 
 # LP_FW=ON (CONFIG_LPAPP), without the full CONFIG_PM_MANAGER: compile ONLY clock_manager.c for
@@ -86,13 +95,17 @@ endif()
 # app_clock_init() BLOCKS on a semaphore, so it must be called from a task AFTER the scheduler starts
 # (main.cpp spawns lp_clock_init_task), never from the pre-scheduler app_platform_boot_init path.
 if(CONFIG_LPAPP AND NOT CONFIG_PM_MANAGER)
-    target_sources(bflb_power_mgmt PRIVATE clock_manager.c)
+    # lp_recovery.c — the bl_lp sys-exit (post-PDS15-wake) restore callback. The SDK contract for
+    # the minimal tickless.c is that the APP registers this (every lp demo's lp_exit does); without
+    # it the first real resume comes back to a dead board (no clocks/tick/console re-init).
+    target_sources(bflb_power_mgmt PRIVATE clock_manager.c lp_recovery.c)
     target_include_directories(bflb_power_mgmt PRIVATE
         "${AT_ROOT}/platform/bouffalo_sdk/components/fs/littlefs/easyflash_port")  # easyflash.h (header only)
     target_link_libraries(bflb_power_mgmt PRIVATE
         bflb_autoconf                 # -include autoconf.h (BL616 / CONFIG_*)
         bflb_sys                      # bl_lp.h
         "${BOUFFALO_CHIP}_std"        # HBN_* / AON_* / pm_* 32K-clock HW driver funcs
+        "${BOUFFALO_CHIP}_board_config"  # board.h (board_recovery) + board_rf.h (board_rf_ctl)
         freertos_config)              # FreeRTOS.h / task.h / semphr.h
 endif()
 

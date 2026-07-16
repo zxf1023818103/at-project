@@ -29,6 +29,7 @@
 #include <string.h>
 
 #include "FreeRTOS.h"
+#include "timers.h"
 #include "task.h"
 #include "FreeRTOS_CLI.h"
 
@@ -38,6 +39,8 @@
 #include "bl616_aon.h"       /* AON_Output_Float_LDO15_RF */
 #include "bl616_pm.h"        /* pm_pds_mask_all_wakeup_src / pm_pds_mode_enter / PM_PDS_LEVEL_15 */
 #include "tickless.h"        /* tickless_enter / tickless_exit (bflb_power_mgmt) */
+#include "tickless_hook.h"   /* tickless_hooks_register (RTC hard deadline for timed runs) */
+#include "bflb_rtc.h"        /* bflb_rtc_get_time */
 
 /* fhost WiFi power-save enter/exit (void variants); extern-declared to avoid pulling the heavy
  * wifi_mgmr_ext.h -> mac_types.h -> phy.h include chain into this small command TU. */
@@ -108,6 +111,20 @@ static BaseType_t cmd_pdssleep(char *out, size_t outlen, const char *cmd)
  * internal RC32K (higher jitter, ~1200 ppm), and a long DTIM lets the wake-time drift past the lp_fw's
  * ~2 ms compensation cap -> missed beacons / packet loss. Keep DTIM small (raise cautiously while
  * watching for drops). Must be run AFTER WiFi is associated + got IP. */
+static void tickless_exit_timer_cb(TimerHandle_t t)
+{
+    (void)t;
+    tickless_exit();
+    /* Timer-daemon task context (NOT the idle/ints-off sleep path) — printf is safe here. This
+     * print doubles as the resume-alive heartbeat: if a PDS15 resume ever breaks, the timer never
+     * fires and the console stays silent past the deadline. */
+    printf("[TL] auto-exit: attempt=%lu slept=%lu enter_fail=%lu ready=%lu(32k=%lu bcn=%lu ps=%lu) hook=%lu\r\n",
+           (unsigned long)tickless_stats.attempt, (unsigned long)tickless_stats.slept,
+           (unsigned long)tickless_stats.enter_fail, (unsigned long)tickless_stats.abort_ready,
+           (unsigned long)tickless_stats.r_32k, (unsigned long)tickless_stats.r_bcn,
+           (unsigned long)tickless_stats.r_ps, (unsigned long)tickless_stats.abort_hook);
+}
+
 static BaseType_t cmd_tickless(char *out, size_t outlen, const char *cmd)
 {
     BaseType_t len = 0;
@@ -120,6 +137,36 @@ static BaseType_t cmd_tickless(char *out, size_t outlen, const char *cmd)
         return pdFALSE;
     }
 
+    if (arg && (strncmp(arg, "stats", 5) == 0)) {
+        /* Sleep-attempt + BLE arbitration counters (tickless.c / tickless_ble.c). The sleep path
+         * can't printf (idle task, interrupts masked -> console write path faults), so evidence
+         * lands here instead: slept>0 proves real PDS15 cycles happened. */
+        int n = snprintf(out, outlen,
+                         "tickless: attempt=%lu confirm=%lu ready=%lu ringbuf=%lu hook=%lu enter_fail=%lu slept=%lu\r\n"
+                         "  ready why: common=%lu ringbuf=%lu 32k=%lu bcn=%lu event=%lu ps=%lu cfg=%lu\r\n"
+                         "  now: 32k_clock=%d 32k_trim=%d bcn_delay=%d\r\n",
+                         (unsigned long)tickless_stats.attempt, (unsigned long)tickless_stats.abort_confirm,
+                         (unsigned long)tickless_stats.abort_ready, (unsigned long)tickless_stats.abort_ringbuf,
+                         (unsigned long)tickless_stats.abort_hook, (unsigned long)tickless_stats.enter_fail,
+                         (unsigned long)tickless_stats.slept,
+                         (unsigned long)tickless_stats.r_common, (unsigned long)tickless_stats.r_ringbuf,
+                         (unsigned long)tickless_stats.r_32k, (unsigned long)tickless_stats.r_bcn,
+                         (unsigned long)tickless_stats.r_event, (unsigned long)tickless_stats.r_ps,
+                         (unsigned long)tickless_stats.r_cfg,
+                         bl_lp_get_32k_clock_ready(), bl_lp_get_32k_trim_ready(), bl_lp_get_bcn_delay_ready());
+#ifdef AT_LP_BLE_STATS
+        if (n > 0 && (size_t)n < outlen) {
+            snprintf(out + n, outlen - n,
+                     "tickless ble: query=%lu veto=%lu last_ble_rtc=%ld (BLE active => PDS vetoed)\r\n",
+                     (unsigned long)tickless_ble_stats.query, (unsigned long)tickless_ble_stats.veto,
+                     (long)tickless_ble_stats.last_ble_rtc);
+        }
+#else
+        (void)n;
+#endif
+        return pdFALSE;
+    }
+
     int dtim = arg ? atoi(arg) : 1;
     if (dtim < 1) {
         dtim = 1;   /* RC32K: keep DTIM small to bound wake-time drift */
@@ -128,10 +175,32 @@ static BaseType_t cmd_tickless(char *out, size_t outlen, const char *cmd)
     lpfw_cfg.tim_wakeup_en = 1;
     bl_lp_fw_bcn_loss_cfg_dtim_default(lpfw_cfg.dtim_origin);
 
+    /* Optional 2nd arg: auto-exit after N seconds. PDS15 is not woken by the console UART, so a
+     * timed run is the only way to get the console (and `tickless stats`) back without an external
+     * wake — essential for observing the sleep path. */
+    BaseType_t len2 = 0;
+    const char *arg2 = FreeRTOS_CLIGetParameter(cmd, 2, &len2);
+    int secs = arg2 ? atoi(arg2) : 0;
+    if (secs > 0) {
+        static TimerHandle_t exit_timer;
+        if (exit_timer == NULL) {
+            exit_timer = xTimerCreate("tl_exit", 1, pdFALSE, NULL, tickless_exit_timer_cb);
+        }
+        if (exit_timer != NULL) {
+            xTimerChangePeriod(exit_timer, pdMS_TO_TICKS(secs * 1000), 0);
+            xTimerStart(exit_timer, 0);
+        }
+        /* RTC hard deadline: guarantees the timed run ends even if kernel timers misbehave across
+         * PDS15 cycles. Checked inside vApplicationSleep itself (tickless.c) — hook-slot-free, so
+         * it can't interfere with the BLE arbitration hooks. */
+        { extern uint64_t tickless_deadline_rtc; tickless_deadline_rtc = bflb_rtc_get_time(NULL) + (uint64_t)secs * 32768u; }
+    }
+
     int ps = wifi_mgmr_sta_ps_enter();   /* put the WiFi driver into DTIM power-save */
     tickless_enter();                    /* enable_tickless=1: idle task may now enter PDS15 */
 
-    snprintf(out, outlen, "tickless enabled: dtim=%d ps_enter=%d (idle -> PDS15, DTIM wake)\r\n", dtim, ps);
+    snprintf(out, outlen, "tickless enabled: dtim=%d ps_enter=%d auto_exit=%ds (idle -> PDS15, DTIM wake)\r\n",
+             dtim, ps, secs);
     return pdFALSE;
 }
 

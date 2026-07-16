@@ -91,6 +91,12 @@ extern "C" int bl_lp_init(void);              /* bflb_sys/bl616_lp.c — lp subs
 extern "C" int app_clock_init(void);          /* power_mgmt/clock_manager.c — F32K/RC32K bring-up for PDS wake */
 /* HBN_Enable_RTC_Counter() comes from bl616_hbn.h (already visible); pm_rc32k_auto_cal_init() from bl616_pm.h. */
 extern "C" void pm_rc32k_auto_cal_init(void); /* bl616_std — init RC32K auto-cal state (mtimer/rtc counters) */
+extern "C" void lp_recovery_register(void);   /* power_mgmt/lp_recovery.c — post-PDS15-wake board restore */
+extern "C" void hal_pm_ldo11_cfg(uint8_t soc_v, uint8_t rt_v, uint8_t aon_v); /* bl616_std — PDS LDO levels */
+#include "bflb_gpio.h"   /* JTAG pin mux for CKLink low-power debugging (LP builds) */
+#if defined(AT_PROJECT_NIMBLE)
+extern "C" void tickless_ble_hooks_init(void); /* power_mgmt/tickless_ble.c — BLE PDS15 sleep arbitration */
+#endif
 
 /* app_clock_init() brings up the 32 kHz clock (RC32K auto-cal + optional xtal32k) that drives the HBN
  * RTC, so a PDS15 sleep started via `lpsleep` self-wakes on its RTC compare. It BLOCKS on a semaphore
@@ -128,6 +134,15 @@ static int hal_wifi_start_firmware_task(void) {
      * gp_lp_env; bl_lp_fw_init validates the concatenated lp_fw blob and populates iot2lp_para). Without
      * this the very first connect faults in bl_lp_get_resume_wifi. */
     bl_lp_init();
+    /* Post-PDS15-wake board restore (bflb_power_mgmt/lp_recovery.c): the SDK contract for the
+     * minimal tickless.c is that the app registers the bl_lp sys-exit callback (board_recovery +
+     * FreeRTOS tick re-arm + console RX IRQ), like every SDK lp demo's lp_exit. Without it the
+     * first real resume comes back to a dead board. */
+    lp_recovery_register();
+    /* PDS LDO levels for the sleep window (SOC/RT/AON = the SDK lp demos' PM_PDS_LDO_LEVEL_*_DEFAULT
+     * = 10 = 1.00V, no-DCDC board). Every vendor lp demo sets this in main() before any PDS15 sleep;
+     * without it the retention supply during PDS is whatever the ROM left. */
+    hal_pm_ldo11_cfg(10, 10, 10);
     /* Prerequisites for the HBN RTC to actually count (wl_lp does these in main() before its f32k task):
      * start the RTC counter and seed the RC32K auto-cal state. Without HBN_Enable_RTC_Counter() the RTC
      * stays frozen, so app_clock_init's RC32K calibration reads rtc_us=0 forever (never converges) and a
@@ -137,6 +152,12 @@ static int hal_wifi_start_firmware_task(void) {
     /* Bring up the HBN 32 kHz clock for PDS-wake, from a task that runs once the scheduler is live
      * (app_clock_init blocks — see lp_clock_init_task). Queued here pre-scheduler; runs later. */
     xTaskCreate(lp_clock_init_task, (char *)"lp_clk", 1024, NULL, 12, NULL);
+#if defined(AT_PROJECT_NIMBLE)
+    /* BLE tickless arbitration (bflb_power_mgmt/tickless_ble.c): cap each PDS15 sleep at the BLE
+     * controller's next LL event and restore it on wake, so `tickless <dtim>` keeps ADV/connections
+     * alive. Just fills the hook struct — inert until btble_controller_init() runs. */
+    tickless_ble_hooks_init();
+#endif
 #endif
     extern void wifi_task_create(void);
     wifi_task_create();
@@ -650,6 +671,19 @@ void app_network_up_start_services(void)
 void app_platform_boot_init(void)
 {
     board_init();
+#if (defined(BL616) || defined(BL616CL)) && defined(CONFIG_LPAPP)
+    {
+        /* Debug aid (LP builds): mux the CKLink JTAG pins (TMS=IO0 TCK=IO1 TDO=IO14 TDI=IO15)
+         * right after board_init so tickless/PDS issues can be captured live over JTAG (bl616
+         * CKLink is debug-only; these pins are unused on this board). NB: PDS15 loses the GLB
+         * pad mux — re-mux these raw (all four cfg = 0x40401a07) before any post-wake spin. */
+        struct bflb_device_s *jtag_gpio = bflb_device_get_by_name("gpio");
+        bflb_gpio_init(jtag_gpio, GPIO_PIN_0,  GPIO_FUNC_JTAG | GPIO_ALTERNATE | GPIO_FLOAT | GPIO_SMT_EN | GPIO_DRV_1);
+        bflb_gpio_init(jtag_gpio, GPIO_PIN_1,  GPIO_FUNC_JTAG | GPIO_ALTERNATE | GPIO_FLOAT | GPIO_SMT_EN | GPIO_DRV_1);
+        bflb_gpio_init(jtag_gpio, GPIO_PIN_14, GPIO_FUNC_JTAG | GPIO_ALTERNATE | GPIO_FLOAT | GPIO_SMT_EN | GPIO_DRV_1);
+        bflb_gpio_init(jtag_gpio, GPIO_PIN_15, GPIO_FUNC_JTAG | GPIO_ALTERNATE | GPIO_FLOAT | GPIO_SMT_EN | GPIO_DRV_1);
+    }
+#endif
     log_lock_init();   // install the rxi-logger FreeRTOS-mutex lock before any log_* (SDK LOG_*/rfparam)
     // Lock bottom 3 MB of flash against accidental writes; must run after
     // flash driver init (board_init) and before anything that writes flash

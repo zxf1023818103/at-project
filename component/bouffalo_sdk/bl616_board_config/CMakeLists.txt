@@ -28,6 +28,14 @@ if(BL616_BOARD_CONFIG_RF)
         wireless_regdb.c
         wireless_spur.c
     )
+elseif(CONFIG_LPAPP)
+    # LP_FW=ON needs just board_rf_ctl() (board_rf.c, self-contained — no regdb/spur): the
+    # post-PDS15-wake restore callback (bflb_power_mgmt/lp_recovery.c) resets the RF via
+    # BRD_CTL_RF_RESET_DEFAULT + wl_init(), same as every SDK lp demo's lp_exit.
+    target_sources(bl616_board_config PRIVATE board_rf.c)
+    target_link_libraries(bl616_board_config PRIVATE
+        bl616_phyrf     # wl_api.h / wl_init
+        rfparam)        # rfparam_adapter.h (capcode/param-load callbacks)
 endif()
 
 target_include_directories(bl616_board_config PUBLIC
