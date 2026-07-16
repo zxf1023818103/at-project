@@ -46,12 +46,12 @@ else()
 endif()
 
 # Firmware version string for the telemetry `fw` field + the OTA version print (bouffalo Makefile
-# FW_VERSION -> -DAWS_FW_VERSION; amebad stamps the same AT_FW_VERSION via its own set_property).
+# FW_VERSION -> -DAT_FW_VERSION; amebad stamps the same AT_FW_VERSION macro via its own set_property).
 # Unset -> the TU default ("dev", aws_telemetry_common.h).
-if(NOT DEFINED AWS_FW_VERSION OR AWS_FW_VERSION STREQUAL "")
+if(NOT DEFINED AT_FW_VERSION OR AT_FW_VERSION STREQUAL "")
     set(_aws_fw_def "")
 else()
-    set(_aws_fw_def "AT_FW_VERSION=\"${AWS_FW_VERSION}\"")
+    set(_aws_fw_def "AT_FW_VERSION=\"${AT_FW_VERSION}\"")
 endif()
 
 if(AT_ENABLE_AWS_OTA)
@@ -66,15 +66,15 @@ if(AT_ENABLE_AWS_OTA)
     # OTA firmware version-gate build number (ota_app.c appFirmwareVersion .build), from the bl602
     # Makefile APP_BUILD flag; an OTA target must exceed the running build. Falls back to the
     # ota_app.c default (2) when not passed.
-    if(NOT DEFINED AWS_APP_BUILD OR AWS_APP_BUILD STREQUAL "")
-        set(AWS_APP_BUILD 2)
+    if(NOT DEFINED AT_APP_BUILD OR AT_APP_BUILD STREQUAL "")
+        set(AT_APP_BUILD 2)
     endif()
     # bl602 heap is tight (~45 KB free after WiFi+DHCP). AWS_STATIC_TASKS puts the agent + OTA task
     # stacks in .bss so a fragmented heap can't fail their contiguous allocation (the observed
     # xTaskCreate failure). The telemetry publish task is always included — uniform across
     # platforms (no AWS_NO_TELEMETRY carve-outs anymore).
     target_compile_definitions(aws_iot PRIVATE
-        APP_VERSION_BUILD=${AWS_APP_BUILD}   # OTA version gate (bl602 Makefile APP_BUILD; > running build)
+        APP_VERSION_BUILD=${AT_APP_BUILD}   # OTA version gate (bl602 Makefile APP_BUILD; > running build)
         AWS_TLS_RX_RESERVE=0
         AWS_TLS_BACKEND_MODE=0
         AWS_CA_USE_ENV

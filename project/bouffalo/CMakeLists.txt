@@ -36,13 +36,9 @@ target_link_libraries(at PRIVATE bouffalo_sdk)
 if((BOUFFALO_CHIP STREQUAL "bl602" OR BOUFFALO_CHIP STREQUAL "bl616" OR BOUFFALO_CHIP STREQUAL "bl616cl") AND AT_ENABLE_AWS)
     target_sources(at PRIVATE ${OTA_HTTP_SOURCES})
     set_source_files_properties("${AT_ROOT}/component/ota_http_config/urlparse.c" PROPERTIES COMPILE_OPTIONS "-w")
-    target_link_libraries(at PRIVATE ota_http_config corehttp_config)
-    target_include_directories(at PRIVATE
-        "${AT_ROOT}/component/corehttp_config"
-        "${AT_ROOT}/component/corehttp_config/corehttp/source/include"
-        "${AT_ROOT}/component/corehttp_config/corehttp/source/interface"
-        "${AT_ROOT}/component/corehttp_config/corehttp/source/dependency/3rdparty/llhttp/include"
-        "${AT_ROOT}/component/network_transport")   # transport_tls.h
+    # corehttp_config propagates all coreHTTP/llhttp include dirs (incl. the transport-interface
+    # dir upstream keeps on a separate target); network_transport_headers carries transport_tls.h.
+    target_link_libraries(at PRIVATE ota_http_config corehttp_config network_transport_headers)
 endif()
 
 # NimBLE host: main.cpp starts the shared nimble_start() from a boot task under this macro.

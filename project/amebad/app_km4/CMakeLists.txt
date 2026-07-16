@@ -320,7 +320,7 @@ if(AT_ENABLE_MCUMGR)
     target_link_libraries(target_img2_km4 PRIVATE ota_flash_config)   # ota_flash.h for smp_img_ota.c + ota_flash.c
     set_property(SOURCE ${AT_MAIN_SRC}
                  APPEND PROPERTY COMPILE_DEFINITIONS AT_PROJECT_MCUMGR
-                 "AMEBAD_MCUMGR_FW_VERSION=\"${AMEBAD_FW_VERSION}\"")
+                 "AMEBAD_MCUMGR_FW_VERSION=\"${AT_FW_VERSION}\"")
     if(NOT AMEBAD_ENABLE_AWS_IOT)
         target_link_libraries(target_img2_km4 PRIVATE ota_flash_port)
     endif()
@@ -478,13 +478,9 @@ if(AMEBAD_ENABLE_AWS_IOT)
     set_source_files_properties("${AT_ROOT}/component/ota_http_config/urlparse.c"
         PROPERTIES COMPILE_OPTIONS "-w")                          # vendored 3rd-party: silence its warnings
     # Shared ota_http command (component/ota_http_config): urlparse.h + coreHTTP/llhttp/transport_tls/
-    # ota_flash.h include+link deps. coreHTTP (request builder + bundled llhttp parser) for ota_http.c.
+    # ota_flash.h include+link deps. coreHTTP (request builder + bundled llhttp parser) for ota_http.c;
+    # corehttp_config propagates all coreHTTP/llhttp include dirs (incl. the transport-interface dir).
     target_link_libraries(target_img2_km4 PRIVATE ota_http_config corehttp_config ota_flash_port)
-    target_include_directories(target_img2_km4 PRIVATE
-        "${AT_ROOT}/component/corehttp_config"
-        "${AT_ROOT}/component/corehttp_config/corehttp/source/include"
-        "${AT_ROOT}/component/corehttp_config/corehttp/source/interface"
-        "${AT_ROOT}/component/corehttp_config/corehttp/source/dependency/3rdparty/llhttp/include")
     if(AMEBAD_ENABLE_AWS_OTA)
         # coreMQTT-Agent (thread-safe wrapper that lets the telemetry + OTA tasks share one MQTT
         # connection) + the AWS IoT OTA Agent. Both are one-directional: coremqtt_agent calls
@@ -551,9 +547,9 @@ if(AMEBAD_ENABLE_AWS_IOT)
     endif()
     # OTA test/version stamp: the firmware version string printed at task start + published in
     # telemetry. Override per build: `make AWS=ON FW_VERSION=ota-B` (threaded to
-    # -DAMEBAD_FW_VERSION by project/amebad/Makefile). Lets a bank-swapping OTA be verified by the
+    # -DAT_FW_VERSION by project/amebad/Makefile). Lets a bank-swapping OTA be verified by the
     # running version string.
-    set(AMEBAD_FW_VERSION "ota-A" CACHE STRING "Firmware version string stamped into the AWS image")
+    set(AT_FW_VERSION "ota-A" CACHE STRING "Firmware version string stamped into the AWS image")
     # NOTE: aws_iot_demo.c + ota_app.c were moved to component/ (shared). The set_property SOURCE must
     # match the ACTUAL compiled path (the target_sources above use ${AT_ROOT}/component/...), NOT the
     # stale ${CMAKE_CURRENT_SOURCE_DIR}/ (app_km4/) path -- otherwise the define is a silent no-op and
@@ -561,14 +557,14 @@ if(AMEBAD_ENABLE_AWS_IOT)
     # OtaErrSameFirmwareVersion, and pinned the version string to the "0.9.2-ota" default).
     set_property(SOURCE "${AT_ROOT}/component/aws_iot_config/aws_iot_demo.c"
                         "${AT_ROOT}/component/aws_iot_config/aws_telemetry.c"
-                 APPEND PROPERTY COMPILE_DEFINITIONS "AT_FW_VERSION=\"${AMEBAD_FW_VERSION}\"")
+                 APPEND PROPERTY COMPILE_DEFINITIONS "AT_FW_VERSION=\"${AT_FW_VERSION}\"")
     if(AMEBAD_ENABLE_AWS_OTA)
         # OTA self-test version (appFirmwareVersion build number, ota_app.c). The OTA library commits
         # the new image only if its version is HIGHER than the running one, so an OTA TARGET build must
-        # bump this above the running image. Override: `make AWSOTA=ON APP_BUILD=2` (-> -DAMEBAD_APP_BUILD).
-        set(AMEBAD_APP_BUILD "1" CACHE STRING "appFirmwareVersion build number for the OTA self-test")
+        # bump this above the running image. Override: `make AWSOTA=ON APP_BUILD=2` (-> -DAT_APP_BUILD).
+        set(AT_APP_BUILD "1" CACHE STRING "appFirmwareVersion build number for the OTA self-test")
         set_property(SOURCE "${AT_ROOT}/component/aws_ota_config/ota_app.c"
-                     APPEND PROPERTY COMPILE_DEFINITIONS "APP_VERSION_BUILD=${AMEBAD_APP_BUILD}")
+                     APPEND PROPERTY COMPILE_DEFINITIONS "APP_VERSION_BUILD=${AT_APP_BUILD}")
     endif()
     # AWS is a connect-and-run image: strip the boot diagnostics like MINIMAL — iperf / LFS
     # self-test / ROM-mbedTLS KAT and the TF-M HW-crypto KAT/GCM throughput bench (~40 s before
