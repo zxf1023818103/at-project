@@ -475,8 +475,11 @@ if(AMEBAD_ENABLE_AWS_IOT)
     endif()
     set_source_files_properties("${AT_ROOT}/component/amebad/mbed/efuse_api.c"
         PROPERTIES COMPILE_OPTIONS "-w")
+    # basename-only __FILE__ in the rxi log (feedback_log_basename_prefix_map); -w: vendored urlparse.
+    set_source_files_properties("${AT_ROOT}/component/ota_http_config/ota_http.c"
+        PROPERTIES COMPILE_OPTIONS "-fmacro-prefix-map=${AT_ROOT}/component/ota_http_config/=")
     set_source_files_properties("${AT_ROOT}/component/ota_http_config/urlparse.c"
-        PROPERTIES COMPILE_OPTIONS "-w")                          # vendored 3rd-party: silence its warnings
+        PROPERTIES COMPILE_OPTIONS "-w;-fmacro-prefix-map=${AT_ROOT}/component/ota_http_config/=")
     # Shared ota_http command (component/ota_http_config): urlparse.h + coreHTTP/llhttp/transport_tls/
     # ota_flash.h include+link deps. coreHTTP (request builder + bundled llhttp parser) for ota_http.c;
     # corehttp_config propagates all coreHTTP/llhttp include dirs (incl. the transport-interface dir).

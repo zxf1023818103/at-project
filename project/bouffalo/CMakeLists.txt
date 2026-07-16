@@ -35,7 +35,11 @@ target_link_libraries(at PRIVATE bouffalo_sdk)
 # main.cpp gates ota_http_register() on the matching AT_PROJECT_AWS. ota_flash_port (no TLS) rides on.
 if((BOUFFALO_CHIP STREQUAL "bl602" OR BOUFFALO_CHIP STREQUAL "bl616" OR BOUFFALO_CHIP STREQUAL "bl616cl") AND AT_ENABLE_AWS)
     target_sources(at PRIVATE ${OTA_HTTP_SOURCES})
-    set_source_files_properties("${AT_ROOT}/component/ota_http_config/urlparse.c" PROPERTIES COMPILE_OPTIONS "-w")
+    # basename-only __FILE__ in the rxi log (feedback_log_basename_prefix_map); -w: vendored urlparse.
+    set_source_files_properties("${AT_ROOT}/component/ota_http_config/ota_http.c" PROPERTIES
+        COMPILE_OPTIONS "-fmacro-prefix-map=${AT_ROOT}/component/ota_http_config/=")
+    set_source_files_properties("${AT_ROOT}/component/ota_http_config/urlparse.c" PROPERTIES
+        COMPILE_OPTIONS "-w;-fmacro-prefix-map=${AT_ROOT}/component/ota_http_config/=")
     # corehttp_config propagates all coreHTTP/llhttp include dirs (incl. the transport-interface
     # dir upstream keeps on a separate target); network_transport_headers carries transport_tls.h.
     target_link_libraries(at PRIVATE ota_http_config corehttp_config network_transport_headers)
