@@ -17,4 +17,12 @@ void ota_http_register( void );
  * reboots the device on a successful update and just logs+exits on failure (no reboot). */
 void ota_http_start( const char * url );
 
+/* Optional one-shot failure hook, fired (from the worker task, or synchronously from
+ * ota_http_start on a task-create failure) when the download does NOT end in the success-reboot.
+ * The AWS HTTP-takeover path (ota_app.c) uses it to clear its re-download guard and reboot back
+ * into a clean MQTT session - by takeover time the MQTT agent has been torn down and a failed
+ * download would otherwise leave the device wedged. Cleared after firing; the console command
+ * path never sets it (a manual ota_http failure just logs). */
+void ota_http_set_fail_hook( void ( * hook )( void ) );
+
 #endif /* OTA_HTTP_H */

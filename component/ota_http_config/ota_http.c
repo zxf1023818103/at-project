@@ -197,6 +197,8 @@ static int cb_complete( llhttp_t * p )
     return 0;
 }
 
+static void ota_http_fire_fail_hook( void );   /* one-shot failure hook (defined with ota_http_start) */
+
 /* ---- the OTA worker -------------------------------------------------------------------------- */
 static void ota_http_task( void * param )
 {
@@ -370,6 +372,7 @@ out:
     ota_lock_release( OTA_SRC_HTTP );
     log_error( "[OTA] update FAILED" );
     vPortFree( url );
+    ota_http_fire_fail_hook();
     vTaskDelete( NULL );
 }
 
@@ -378,6 +381,27 @@ out:
  * and by the AWS OTA path (ota_app.c prvOtaHttpInit hands off the job-doc presigned URL here). The
  * worker streams OTA_All.bin to the inactive slot and reboots on success; on failure it just logs
  * and exits (no reboot). Non-blocking: returns once the 12 KB task is created. */
+
+/* One-shot failure hook (see ota_http.h). Consumed before firing so a hook that reboots (the AWS
+ * takeover) or re-arms can't double-fire. */
+static void ( * s_fail_hook )( void );
+
+void ota_http_set_fail_hook( void ( * hook )( void ) )
+{
+    s_fail_hook = hook;
+}
+
+static void ota_http_fire_fail_hook( void )
+{
+    void ( * hook )( void ) = s_fail_hook;
+
+    s_fail_hook = NULL;
+    if( hook != NULL )
+    {
+        hook();
+    }
+}
+
 void ota_http_start( const char * url )
 {
     size_t len;
@@ -392,6 +416,7 @@ void ota_http_start( const char * url )
     if( copy == NULL )
     {
         log_error( "[OTA] ota_http_start: out of memory" );
+        ota_http_fire_fail_hook();
         return;
     }
     memcpy( copy, url, len + 1 );
@@ -402,6 +427,7 @@ void ota_http_start( const char * url )
     {
         vPortFree( copy );
         log_error( "[OTA] ota_http_start: failed to create task" );
+        ota_http_fire_fail_hook();
     }
 }
 

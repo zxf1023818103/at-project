@@ -485,6 +485,20 @@ extern void aws_iot_suspend_for_ota( void );
  * stays IN_PROGRESS. So we persist the job id (LFS env) on the first sighting; ota_http reboots only on
  * success, so seeing the SAME job id again (next boot) means it already applied -> mark the execution
  * SUCCEEDED and stop (no re-download). */
+/* ota_http failure hook for the takeover path (runs in the ota_http worker task, or synchronously
+ * from ota_http_start if the worker never launched). By now aws_iot_suspend_for_ota() has torn the
+ * MQTT agent down and the OTA library's own data plane is parked, so there is no in-place recovery:
+ * clear the re-download guard (else the next sighting of this job is a false "already applied ->
+ * SUCCEEDED") and reboot into a clean session; AWS re-notifies the still-IN_PROGRESS job and the
+ * download retries for real. */
+static void prvOtaHttpTakeoverFailed( void )
+{
+    OTA_APP_LOG( "http-takeover: download FAILED - clearing job guard + rebooting for a clean retry" );
+    ( void ) unsetenv( "ota_http_job" );
+    vTaskDelay( pdMS_TO_TICKS( 500 ) );   /* let the log line drain */
+    ota_flash_reboot();                   /* does not return */
+}
+
 static OtaHttpStatus_t prvOtaHttpInit( char * pUrl )
 {
     const char * jobName;
@@ -527,6 +541,11 @@ static OtaHttpStatus_t prvOtaHttpInit( char * pUrl )
      * so this cannot deadlock. The device reboots on a successful download; the new image reconnects
      * MQTT and acks this job SUCCEEDED on the second sighting (above). */
     aws_iot_suspend_for_ota();
+    /* If the download fails instead of ending in the success-reboot, the device is otherwise wedged:
+     * MQTT is torn down, the library's data plane is parked (s_http_takeover), and the persisted job
+     * id would make the NEXT sighting a false "already applied -> SUCCEEDED". Clear the guard and
+     * reboot back into a clean session; the re-notified job then retries the download for real. */
+    ota_http_set_fail_hook( prvOtaHttpTakeoverFailed );
     ota_http_start( pUrl );
     return OtaHttpSuccess;
 }
