@@ -124,6 +124,31 @@ D:\MCU_Tools\bflb-cklink\bouffalo_flash_cube\BLFlashCommand.exe --interface uart
 Helpers: `bl616cl_capture.ps1` (run-state reset + log capture only, no flash) and
 `bl616cl_capture_timeline.ps1` (timestamped hex byte timeline — the bring-up forensics tool).
 
+**★ CH340 driver wedge (COM27) — recovery WITHOUT UAC/replug (verified 2026-07-16):** the CH340
+can enter a half-dead state where the device still enumerates (Status=OK) but `SerialPort.Open`
+fails with error 22 / OSError(22), and while dying it emits only a PREFIX of the byte stream then
+stops — which looks exactly like "boot output deterministically stops at line X". (This faked a
+"firmware boot hang" for a whole debugging session: the same bit-identical image booted fine once
+the port was recovered — treat any "console stops mid-boot at a fixed byte count" on this port as
+a suspected CH340 wedge FIRST, and cross-check with a different truncation point or AWS-side
+connect logs before blaming the firmware.) Recovery: one raw
+`CreateFile('\\.\COM27', GENERIC_READ|GENERIC_WRITE, 0, 0, OPEN_EXISTING, 0, 0)` open+close
+(e.g. via ctypes/PInvoke) clears the driver wedge; a normal `SerialPort.Open` works right after.
+
+**★ CH340 terminal decay + the BOOT/RTS trap chain (2026-07-16 late):** this particular CH340
+eventually degraded to hardware-level death: every @2M boot burst killed the USB device outright
+at ~4-5 KB received (varying cut points 3872..5078 B = not a firmware death point), re-enumeration
+took ~8 min, then stopped coming back at all (raw-CreateFile recovery does NOT help a physical
+drop) — needs a replug / different cable+port. Two live traps while working around it, now baked
+into `bl616cl_session.ps1` / `bl616cl_probe.ps1` / `bl616cl_bigbuf.ps1`:
+- ANY COM27 open/close glitches RTS -> resets the chip; and if COM23 is closed, BOOT floats high
+  -> that reset drops the board into ISP (0x55 handshake answers `OK`) where it "boots silently".
+  Rule: START A BACKGROUND COM23 HOLDER (DTR=true, BOOT low) before touching COM27, keep it for
+  the whole session; before declaring "no boot output", probe ISP with 0x55 first.
+- With the CH340 dead/unplugged its RTS level is uncontrolled — the board may be held in reset or
+  power-glitched, so "board never joins the network" while the CH340 is dead does NOT indict the
+  firmware. Re-verify after replacing the cable.
+
 **Traps (all hit during bring-up):**
 - **★ The console/ISP wire on this board is GPIO34, NOT GPIO30.** `bsp/board/bl616cldk/board.c`
   puts UART0 console on GPIO30(TX)/GPIO35(RX), but this board's UART header (the same wire the
