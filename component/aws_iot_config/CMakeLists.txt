@@ -101,8 +101,10 @@ if(AT_ENABLE_AWS_OTA)
     # pulls coreHTTP + a 2nd transport + the ~5.6 KB OTA event buffer into .bss, which alone starves the
     # MQTT handshake (observed: ptls_handshake 513 / PTLS_ERROR_NO_MEMORY, AWS never connects). So bl602
     # downloads OTA file blocks over the shared MQTT/CBOR data plane (single TLS, reused from telemetry).
+    # bl616cl is in the same class: ~82 KB TOTAL TLSF heap (bl616 needed ~165 KB free for the S3
+    # handshake even after the MQTT teardown), so its post-takeover 2nd TLS can never fit either.
     # bl616 / AmebaD have the heap for the 2nd TLS and keep the default HTTP-takeover data plane (=1).
-    if(BOUFFALO_CHIP STREQUAL "bl602")
+    if(BOUFFALO_CHIP STREQUAL "bl602" OR BOUFFALO_CHIP STREQUAL "bl616cl")
         target_compile_definitions(aws_iot PRIVATE OTA_APP_ENABLE_HTTP=0)
     endif()
     # AWS_CERT_MAX sizes the base64-decode scratch (s_der in aws_provision.c), reused for cert/CA/key.
