@@ -30,6 +30,8 @@
  */
 
 /* Include header that defines log levels. */
+#include <stdlib.h>   /* getenv — GCC 14 (bl618dg toolchain) errors on the implicit decl */
+
 #include "logging_levels.h"
 
 /* FreeRTOS includes. */

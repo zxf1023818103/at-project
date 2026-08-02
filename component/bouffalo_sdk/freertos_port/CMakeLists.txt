@@ -22,6 +22,14 @@ target_link_libraries(freertos_port FreeRTOS)
 if("${BOUFFALO_CHIP}" STREQUAL "bl602")
     set(_mtime_base    "0x0200BFF8UL")
     set(_mtimecmp_base "0x02004000UL")
+elseif("${BOUFFALO_CHIP}" STREQUAL "bl618dg")
+    # B0 silicon is a Nuclei-900 core: its SysTimer is at 0x18030000, NOT the
+    # T-Head CLINT at 0xE0000000 the other Bouffalo RISC-V chips use. With the
+    # wrong base, vPortSetupTimerInterrupt takes a Load access fault (mtval
+    # 0xe000bff8-ish) before the scheduler starts. Mirrors the SDK's
+    # components/os/freertos/CMakeLists.txt bl618dg (non-a0) branch.
+    set(_mtime_base    "0x18030000UL")
+    set(_mtimecmp_base "0x18030008UL")
 else()
     # bl616, bl616cl
     set(_mtime_base    "0xE000BFF8UL")

@@ -17,6 +17,8 @@
 #include "board_flash_lock.h"
 
 #include <stdint.h>
+#include <stdio.h>      /* printf — GCC 14 (bl618dg's Zephyr toolchain) rejects
+                         * the implicit declaration that older GCCs allowed. */
 
 /* Place the quiesced transaction in TCM (the linker collects *(.tcm_code.*): bl602_flash.ld on bl602,
  * the generated bl616 linker.ld's itcm section on bl616). noinline

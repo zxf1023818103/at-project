@@ -7,6 +7,7 @@
 #   make -C project bl602        # bouffalo BL602    (auto-builds lfs.bin first)
 #   make -C project bl616        # bouffalo BL616
 #   make -C project bl616cl      # bouffalo BL616CL
+#   make -C project bl618dg      # bouffalo BL618DG (dual-core AP+NP)
 #   make -C project amebad       # Ameba D (RTL8721D / RTL8710C)
 #   make -C project amebadplus   # Ameba Dplus (RTL8711Dx)
 #   make -C project amebagreen2  # Ameba Green2 (RTL8711F)
@@ -27,7 +28,7 @@ LFS_BUILD_DIR := .lfs_build
 
 RESOURCE_FILES := $(shell find resource -type f 2>/dev/null)
 
-.PHONY: all lfs_image bl602 bl616 bl616cl amebad amebadplus amebagreen2 clean
+.PHONY: all lfs_image bl602 bl616 bl616cl bl618dg amebad amebadplus amebagreen2 clean
 
 all: bl602 bl616 bl616cl amebad amebadplus amebagreen2
 
@@ -62,6 +63,12 @@ bl616: lfs.bin
 bl616cl: lfs.bin
 	$(MAKE) -C bouffalo CHIP=bl616cl BOARD=bl616cldk
 	$(call bflb_embed_lfs,bl616cl)
+
+# BL618DG is dual-core: its own makefile builds the NP image, appends it into the
+# AP image, and packs the flashable whole image (build/bl618dg_ap/). It does not
+# go through project/bouffalo (that tree is single-core by construction).
+bl618dg:
+	$(MAKE) -C bl618dg
 
 amebad: lfs.bin
 	$(MAKE) -C amebad

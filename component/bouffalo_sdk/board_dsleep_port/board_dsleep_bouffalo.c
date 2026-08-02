@@ -110,6 +110,22 @@ int board_dsleep_enter(bool uart_wake, uint32_t rtc_seconds)
     return -1;   /* not reached at pdsLevel 3: wake resets the chip */
 }
 
+#elif defined(BL618DG)
+
+#include <stdio.h>
+
+/* NOT PORTED YET. bl618dg is dual-core (AP + NP): a PDS entry has to agree with
+ * the other core, so it is not a copy of the bl616/bl616cl single-core sequence
+ * and must be brought up + verified on HW before it can be trusted. Fail loudly
+ * at runtime rather than silently doing nothing (or worse, half-sleeping). */
+int board_dsleep_enter(bool uart_wake, uint32_t rtc_seconds)
+{
+    (void)uart_wake;
+    (void)rtc_seconds;
+    printf("dsleep: not supported on bl618dg yet (dual-core PDS entry unported)\r\n");
+    return -1;
+}
+
 #else
-#error "board_dsleep_bouffalo.c: unexpected Bouffalo chip (expected BL616 or BL602)"
+#error "board_dsleep_bouffalo.c: unexpected Bouffalo chip (expected BL602/BL616/BL616CL/BL618DG)"
 #endif

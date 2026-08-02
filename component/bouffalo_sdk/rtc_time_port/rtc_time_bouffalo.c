@@ -20,6 +20,10 @@
 #include "rtc_time.h"
 #include "syscalls.h"       /* amebad_set_unix_time (time_base.c) */
 #include "bflb_core.h"      /* bflb_device_get_by_name / struct bflb_device_s */
+#include "bflb_clock.h"     /* bflb_clk_get_peripheral_clock — used by the
+                             * BFLB_RTC_*2* macros below but not included by
+                             * bflb_rtc.h itself; GCC 14 (the Zephyr toolchain
+                             * bl618dg builds with) makes that a hard error. */
 #include "bflb_rtc.h"       /* bflb_rtc_get_time + BFLB_RTC_TIME2SEC */
 #include "at_log.h"         /* rxi log: log_info (the single project logger) */
 

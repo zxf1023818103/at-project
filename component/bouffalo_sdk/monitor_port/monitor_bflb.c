@@ -71,7 +71,10 @@ int monitor_after_command( void )
  * that would wipe the flag. Field layout per bl616_hbn.h; values per OpenOCD's bl616 support. */
 #define BL616_HBN_RSV2         ( *( volatile uint32_t * ) 0x2000F108u )
 #define BL616_BOOT_SEL_ISP     0x44000000u
-extern int GLB_SW_System_Reset( void );   /* bl616_glb.c (resolves at image link) */
+/* Reset via bl_sys_reset_por (GLB software power-on reset): it fully resets the clock/PLL
+ * domains so the boot ROM's ISP brings its PLL up from a clean state ("SET CLOCK PLL FAIL"
+ * otherwise, HW-caught when entering ISP from a running-WiFi clock tree), while HBN_RSV2
+ * lives in the always-on domain and survives it. */
 #endif
 
 static BaseType_t cmd_reboot( char *out, size_t outlen, const char *cmd )
@@ -85,7 +88,7 @@ static BaseType_t cmd_reboot( char *out, size_t outlen, const char *cmd )
         snprintf( out, outlen, "rebooting into UART ISP (bootrom download mode) ...\r\n" );
         vTaskDelay( pdMS_TO_TICKS( 50 ) );
         BL616_HBN_RSV2 = BL616_BOOT_SEL_ISP;
-        GLB_SW_System_Reset();
+        bl_sys_reset_por();
         return pdFALSE;                  /* not reached */
 #else
         /* bl602's boot ROM has no user_boot_sel — ISP entry is BOOT-pin-only on that chip. */

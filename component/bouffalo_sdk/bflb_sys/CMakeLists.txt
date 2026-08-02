@@ -3,7 +3,7 @@
 # tracking, etc.).
 #
 # Extracted from bouffalo_sdk/drivers/sys. The chip-conditional branches for
-# bl702/bl702l/bl618dg have been dropped (only bl602/bl616/bl616cl carried
+# bl702/bl702l have been dropped (only bl602/bl616/bl616cl/bl618dg carried
 # over per the pruning policy).
 
 if("${BOUFFALO_CHIP}" STREQUAL "bl602")
@@ -41,6 +41,23 @@ elseif("${BOUFFALO_CHIP}" STREQUAL "bl616cl")
         bl616cl/bl616cl_psram_recovery.c
         bl616cl/bl616cl_xip_recovery.c
         bl616cl/bl616cl_32k_trim.c
+    )
+elseif("${BOUFFALO_CHIP}" STREQUAL "bl618dg")
+    # AP and NP build the identical set (verified against an SDK dualcore build).
+    # Note bl618dg has no *_ext_dcdc.c / *_psram_recovery.c counterpart.
+    add_library(bflb_sys STATIC
+        bl618dg/bl618dg_sys.c
+        bl_lp_callback.c
+        bl_lp_bcn.c
+        bl_pm_wifi.c
+        bl_lp_fw_image.c
+        bl618dg/bl618dg_lp.c
+        bl618dg/bl618dg_lp_callback.c
+        bl618dg/bl618dg_lp_wakeup.c
+        bl618dg/bl618dg_lp_bcn_tbl.c
+        bl618dg/bl618dg_app_pds_recovery.c
+        bl618dg/bl618dg_xip_recovery.c
+        bl618dg/bl618dg_32k_trim.c
     )
 else()
     message(FATAL_ERROR "bflb_sys: unsupported BOUFFALO_CHIP '${BOUFFALO_CHIP}'")

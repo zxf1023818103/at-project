@@ -109,6 +109,31 @@ elseif("${BOUFFALO_CHIP}" STREQUAL "bl616cl")
         src/bflb_sec_gmac.c
         src/bflb_touch_v2.c
     )
+elseif("${BOUFFALO_CHIP}" STREQUAL "bl618dg")
+    target_sources(bflb_lhal PRIVATE
+        src/bflb_clock.c
+        src/bflb_reset.c
+        src/bflb_adc_v3.c
+        src/bflb_dac.c
+        src/bflb_emac_v2.c
+        src/bflb_ir.c
+        src/bflb_mjpeg.c
+        src/bflb_pwm_v2.c
+        src/bflb_cam.c
+        src/bflb_i2s.c
+        src/bflb_dbi.c
+        src/bflb_wo.c
+        src/bflb_sdio3.c
+        src/bflb_sdh.c
+        src/bflb_ipc.c
+        src/bflb_canfd.c
+        src/bflb_dpi.c
+        src/bflb_sec_gmac.c
+        src/bflb_touch_v2.c
+        src/bflb_auadc.c
+        src/bflb_audac.c
+        src/bflb_multi_core_sync.c
+    )
 endif()
 
 if(CONFIG_CHERRYUSB AND NOT ("${BOUFFALO_CHIP}" STREQUAL "bl602"))
@@ -124,7 +149,14 @@ target_include_directories(bflb_lhal PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src/flash"
 )
 
-if(NOT ("${BOUFFALO_CHIP}" STREQUAL "bl602"))
+# bl618dg B0 is a Nuclei-900 core, not a T-Head one: it uses the n900 CMSIS-style
+# headers and must NOT build the T-Head rv_hart/rv_pmp sources or link the XuanTie
+# csi_dsp library (which is ilp32f — it cannot link into an ilp32d image at all).
+if("${BOUFFALO_CHIP}" STREQUAL "bl618dg")
+    target_include_directories(bflb_lhal PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/arch/risc-v/n900/Core/Include"
+    )
+elseif(NOT ("${BOUFFALO_CHIP}" STREQUAL "bl602"))
     target_sources(bflb_lhal PRIVATE
         include/arch/risc-v/t-head/rv_hart.c
         include/arch/risc-v/t-head/rv_pmp.c
@@ -184,10 +216,18 @@ unset(_ver_x)
 unset(_ver_y)
 unset(_ver_z)
 
-# Prebuilt PKA static library for the active chip.
+# Prebuilt PKA static library for the active chip. bl618dg ships a per-silicon
+# split and only the B0 build is vendored (the plain libpka_bl618dg.a is the
+# ilp32f A-series one, which cannot link into a B0 image).
+if("${BOUFFALO_CHIP}" STREQUAL "bl618dg")
+    set(_pka_lib "libpka_bl618dg_b0.a")
+else()
+    set(_pka_lib "libpka_${BOUFFALO_CHIP}.a")
+endif()
 target_link_libraries(bflb_lhal PUBLIC
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/pka/libpka_${BOUFFALO_CHIP}.a"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/pka/${_pka_lib}"
 )
+unset(_pka_lib)
 
 # Multimedia / PEC_V2 only available on bl616cl in this pruned tree.
 if("${BOUFFALO_CHIP}" STREQUAL "bl616cl")
@@ -203,7 +243,9 @@ endif()
 
 # ROM API patch — bl616cl boots into a vendor ROM that overlays parts of the
 # HAL; the patch source restores the symbols at runtime.
-if("${BOUFFALO_CHIP}" STREQUAL "bl616cl")
+# bl618dg: only the AP core boots through the ROM API (the SDK forces it off for NP/LP).
+if(("${BOUFFALO_CHIP}" STREQUAL "bl616cl") OR
+   ("${BOUFFALO_CHIP}" STREQUAL "bl618dg" AND "${BOUFFALO_CPU_ID}" STREQUAL "ap"))
     target_compile_definitions(bflb_lhal PUBLIC CONFIG_LHAL_ROMAPI)
     target_sources(bflb_lhal PRIVATE config/${BOUFFALO_CHIP}/bflb_lhal_romapi_patch.c)
 endif()

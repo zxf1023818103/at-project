@@ -140,6 +140,30 @@ def step_patch_lpfw(chip: str, raw_bin: Path) -> None:
     print(f"[lp_fw] concatenated {lp_fw.name} ({lp_fw.stat().st_size} B) into {raw_bin.name}", file=sys.stderr)
 
 
+def step_append_np(raw_bin: Path, np_bin: Path) -> None:
+    """Append the NP-core image into the AP-core FW .bin — the SDK's
+    CONFIG_DUALCORE_NP_IMAGE post-build (bflb_flash.cmake), which runs
+    byai/multi_bins.py to add an 'NP' descriptor + payload at 0x400 alignment.
+
+    BL618DG only. Must run AFTER step_post_proc (the header/CRC the post-proc
+    writes covers the AP image) and BEFORE the whole-flash pack, so the NP
+    payload rides inside the FW partition. A BL618DG AP image without its NP
+    payload does not boot, so a missing file is fatal rather than skipped.
+    """
+    if not np_bin.is_file():
+        raise SystemExit(f"dualcore: NP image not found at {np_bin} (build app_np first)")
+    if not MULTI_BINS_PY.exists():
+        raise SystemExit(f"dualcore: multi_bins.py missing at {MULTI_BINS_PY}")
+    before = raw_bin.stat().st_size
+    subprocess.run(
+        [sys.executable, str(MULTI_BINS_PY), str(raw_bin),
+         "--append", "NP", str(np_bin), "--output", str(raw_bin), "--align", "0x400"],
+        check=True,
+    )
+    print(f"[dualcore] appended {np_bin.name} ({np_bin.stat().st_size} B) into "
+          f"{raw_bin.name} ({before} -> {raw_bin.stat().st_size} B)", file=sys.stderr)
+
+
 def step_compose_ini(chip: str, name: str, board_cfg: Path, build_dir: Path, lfs_path: Path | None) -> Path:
     """Compose flash_prog_cfg.ini under build_dir, reading partition_cfg_*.toml.
 
@@ -218,7 +242,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Standalone ELF -> whole_flash_data.bin (no SDK dependency).",
     )
-    parser.add_argument("--chip", required=True, choices=["bl602", "bl616", "bl616cl"])
+    parser.add_argument("--chip", required=True, choices=["bl602", "bl616", "bl616cl", "bl618dg"])
     parser.add_argument("--board", required=True,
                         help="Board name; expects tool/board_configs/<board>/ to exist")
     parser.add_argument("--build-dir", type=Path, required=True,
@@ -227,6 +251,9 @@ def main() -> int:
                         help=f"Output basename; produces <name>_<chip>.bin etc. (default: {DEFAULT_NAME})")
     parser.add_argument("--elf", type=Path,
                         help="ELF input; defaults to <build-dir>/build_out/<name>_<chip>.elf")
+    parser.add_argument("--append-np", type=Path,
+                        help="BL618DG only: NP-core .bin to append into the AP image "
+                             "(the SDK's CONFIG_DUALCORE_NP_IMAGE post-build)")
     parser.add_argument("--with-cfi", action="store_true",
                         help="Append DWARF CFI section (mirrors CONFIG_BACKTRACE)")
     parser.add_argument("--lfs-bin", type=Path,
@@ -273,6 +300,8 @@ def main() -> int:
     step_post_proc(args.chip, board_cfg, raw_bin)
     if args.with_lp_fw:
         step_patch_lpfw(args.chip, raw_bin)
+    if args.append_np:
+        step_append_np(raw_bin, args.append_np)
     ini = step_compose_ini(args.chip, args.name, board_cfg, build_dir, args.lfs_bin)
     step_blflash_build(args.chip, ini, build_dir)
     whole = step_fetch_and_pad(args.chip, args.name, build_dir)

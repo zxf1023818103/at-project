@@ -11,7 +11,8 @@
 # ble1m10s1bredr0 profile, bl616cl the m2s1 profile.
 
 if(NOT ("${BOUFFALO_CHIP}" STREQUAL "bl616" OR
-        "${BOUFFALO_CHIP}" STREQUAL "bl616cl"))
+        "${BOUFFALO_CHIP}" STREQUAL "bl616cl" OR
+        "${BOUFFALO_CHIP}" STREQUAL "bl618dg"))
     message(FATAL_ERROR
         "btblecontroller: only bl616 / bl616cl supported "
         "(BL618DG .a's pruned).")
@@ -36,7 +37,7 @@ target_compile_definitions(btblecontroller INTERFACE
     CONFIG_BLE_USING_DYNAMIC_RAM=0
 )
 
-if("${BOUFFALO_CHIP}" STREQUAL "bl616")
+if("${BOUFFALO_CHIP}" STREQUAL "bl616" OR "${BOUFFALO_CHIP}" STREQUAL "bl618dg")
     if(NOT DEFINED CONFIG_BTBLECONTROLLER_LIB)
         set(CONFIG_BTBLECONTROLLER_LIB "ble1m10s1bredr0")
     endif()

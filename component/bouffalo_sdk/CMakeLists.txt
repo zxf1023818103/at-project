@@ -211,7 +211,8 @@ endif()
 # platform/bouffalo_sdk/components/wireless/wifi6/ (prebuilt libfhost_bl616_*.a,
 # different TX architecture, same wifi_mgmr_* API). fhost wiring: TODO (step 2).
 if(CONFIG_WIFI6 AND ("${BOUFFALO_CHIP}" STREQUAL "bl616" OR
-                    "${BOUFFALO_CHIP}" STREQUAL "bl616cl"))
+                    "${BOUFFALO_CHIP}" STREQUAL "bl616cl" OR
+                    "${BOUFFALO_CHIP}" STREQUAL "bl618dg"))
     add_subdirectory(fhost)
 endif()
 
@@ -229,7 +230,8 @@ if(CONFIG_BLUETOOTH)
     if("${BOUFFALO_CHIP}" STREQUAL "bl602")
         add_subdirectory(blecontroller)
     elseif("${BOUFFALO_CHIP}" STREQUAL "bl616" OR
-           "${BOUFFALO_CHIP}" STREQUAL "bl616cl")
+           "${BOUFFALO_CHIP}" STREQUAL "bl616cl" OR
+           "${BOUFFALO_CHIP}" STREQUAL "bl618dg")
         add_subdirectory(btblecontroller)
     else()
         message(FATAL_ERROR
@@ -314,7 +316,8 @@ if(CONFIG_WIFI4 AND "${BOUFFALO_CHIP}" STREQUAL "bl602")
 endif()
 
 if(CONFIG_WIFI6 AND ("${BOUFFALO_CHIP}" STREQUAL "bl616" OR
-                    "${BOUFFALO_CHIP}" STREQUAL "bl616cl"))
+                    "${BOUFFALO_CHIP}" STREQUAL "bl616cl" OR
+                    "${BOUFFALO_CHIP}" STREQUAL "bl618dg"))
     target_link_libraries(bouffalo_sdk INTERFACE fhost)
 endif()
 
@@ -401,7 +404,8 @@ target_link_libraries(bouffalo_sdk INTERFACE net_cli)
 # -> a leaner image (no aws_iot / coreMQTT / TLS transport / ota_http), e.g. a pure NIMBLE/MCUMGR BLE-DFU
 # image. AT_PROJECT_AWS gates the `aws` CLI + telemetry auto-start (and, mirroring AmebaD, the `ota_http`
 # command, which rides the same TLS transport) in src/main.cpp.
-if(("${BOUFFALO_CHIP}" STREQUAL "bl602" OR "${BOUFFALO_CHIP}" STREQUAL "bl616" OR "${BOUFFALO_CHIP}" STREQUAL "bl616cl") AND AT_ENABLE_AWS)
+if(("${BOUFFALO_CHIP}" STREQUAL "bl602" OR "${BOUFFALO_CHIP}" STREQUAL "bl616" OR "${BOUFFALO_CHIP}" STREQUAL "bl616cl"
+    OR "${BOUFFALO_CHIP}" STREQUAL "bl618dg") AND AT_ENABLE_AWS)
     target_link_libraries(bouffalo_sdk INTERFACE aws_iot)
     target_compile_definitions(bouffalo_sdk INTERFACE AT_PROJECT_AWS)
     # AWS credential provisioning pastes a ~1.6 KB base64 body as ONE `aws cert/key/ca <b64>` CLI

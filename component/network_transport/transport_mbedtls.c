@@ -768,6 +768,12 @@ static TlsTransportStatus_t initMbedtls( mbedtls_entropy_context * pEntropyConte
     int32_t mbedtlsError = 0;
 
     #if defined( MBEDTLS_THREADING_ALT )
+        /* Supplied by the application TU that owns the mbedTLS threading shim
+         * (aws_iot_config/aws_telemetry.c or aws_iot_demo.c). Declared here
+         * because no shared header exposes it and GCC 14 (the bl618dg
+         * toolchain) rejects the implicit declaration older GCCs allowed. */
+        extern void mbedtls_platform_threading_init( void );
+
         /* Set the mutex functions for mbed TLS thread safety. */
         mbedtls_platform_threading_init();
     #endif

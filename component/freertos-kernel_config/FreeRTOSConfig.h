@@ -220,6 +220,14 @@ extern int  freertos_ready_to_sleep(void);
 #if defined(BL602) || defined(BL702) || defined(BL702L)
 #define configMTIME_BASE_ADDRESS    (0x02000000UL + 0xBFF8UL)
 #define configMTIMECMP_BASE_ADDRESS (0x02000000UL + 0x4000UL)
+#elif defined(BL618DG)
+/* B0 silicon is a Nuclei-900 core: its SysTimer lives at 0x18030000, NOT the
+ * T-Head CLINT at 0xE0000000 the other Bouffalo RISC-V chips use. Reading the
+ * wrong base faults in vPortSetupTimerInterrupt (Load access fault, mtval
+ * 0xe000bff8-ish) before the scheduler ever starts. Values mirror the SDK's
+ * components/os/freertos/CMakeLists.txt bl618dg (non-a0) branch. */
+#define configMTIME_BASE_ADDRESS    (0x18030000UL)
+#define configMTIMECMP_BASE_ADDRESS (0x18030008UL)
 #else
 #define configMTIME_BASE_ADDRESS    (0xE0000000UL + 0xBFF8UL)
 #define configMTIMECMP_BASE_ADDRESS (0xE0000000UL + 0x4000UL)

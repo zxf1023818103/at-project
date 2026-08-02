@@ -27,6 +27,15 @@
 add_library(syscall_config OBJECT newlib_syscalls.c env.c time_base.c
             bsd_socket.c)    # BSD-sockets/POSIX-net layer over FreeRTOS-Plus-TCP (socket/select/getaddrinfo/...)
 
+# picolibc leaves stdin/stdout/stderr for the application to define (newlib
+# supplies them itself), so a toolchain whose libc is picolibc needs this bridge
+# or every link fails with "undefined reference to `stdout'". Set by the triple
+# toolchain file; today only bl618dg's riscv64-zephyr-elf, which is mandatory
+# there because that chip's wireless libs are GCC-14 slim-LTO bytecode.
+if(AT_LIBC_PICOLIBC)
+    target_sources(syscall_config PRIVATE picolibc_stdio.c)
+endif()
+
 # pthread_shim.c — the pthread slice iperf3 needs, over FreeRTOS tasks/mutexes. Its
 # handle cast (*m = (pthread_mutex_t)(uintptr_t)sem) assumes newlib makes pthread_mutex_t
 # an integer handle — true on AmebaD's ARM newlib, but Bouffalo's t-head newlib makes it

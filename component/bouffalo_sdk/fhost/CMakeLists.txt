@@ -1,4 +1,4 @@
-# fhost — the Bouffalo wifi6 (full-host) WiFi driver for BL616/BL616CL, replacing wl80211.
+# fhost — the Bouffalo wifi6 (full-host) WiFi driver for BL616/BL616CL/BL618DG, replacing wl80211.
 #
 # Under sustained TCP/OTA load the old wl80211/macsw prebuilt stack TX-stalls and hard-asserts in
 # hal_machw_abs_timer_handler (unfixable in source; see the project_bl616_aws_ota memory). fhost is
@@ -17,8 +17,9 @@
 #
 # These .a's have circular inter-dependencies; they resolve in bouffalo_sdk's final --start-group.
 
-if(NOT ("${BOUFFALO_CHIP}" STREQUAL "bl616" OR "${BOUFFALO_CHIP}" STREQUAL "bl616cl"))
-    message(FATAL_ERROR "fhost: only bl616 / bl616cl supported")
+if(NOT ("${BOUFFALO_CHIP}" STREQUAL "bl616" OR "${BOUFFALO_CHIP}" STREQUAL "bl616cl"
+        OR "${BOUFFALO_CHIP}" STREQUAL "bl618dg"))
+    message(FATAL_ERROR "fhost: only bl616 / bl616cl / bl618dg supported")
 endif()
 
 set(_wifi6 "${AT_ROOT}/platform/bouffalo_sdk/components/wireless/wifi6")
@@ -251,7 +252,16 @@ target_include_directories(wpa_supplicant PRIVATE
 # Third-party code under our stricter warning set; the SDK also suppresses per-warning.
 # -Os: the SDK builds wpa at -Os; at the project's -O3 the image grows ~60 KB past the FW
 # partition. Management-plane code — size over speed.
-target_compile_options(wpa_supplicant PRIVATE -w -Os)
+# -w silences warnings, but GCC 14 (the Zephyr SDK toolchain bl618dg must use)
+# PROMOTES several long-standing C warnings to hard errors — implicit function
+# declarations, int<->pointer conversions, incompatible pointer types. Upstream
+# wpa_supplicant trips all three, and it is vendored source we do not patch, so
+# demote them back to warnings. Harmless on the GCC 10 toolchain (the flags are
+# accepted and those diagnostics are warnings there anyway).
+target_compile_options(wpa_supplicant PRIVATE -w -Os
+    -Wno-error=implicit-function-declaration
+    -Wno-error=int-conversion
+    -Wno-error=incompatible-pointer-types)
 target_link_libraries(wpa_supplicant PRIVATE
     bflb_autoconf                 # forced -include autoconf.h (BL616[CL] / CONFIG_*)
     "${BOUFFALO_CHIP}_phyrf"      # phy.h (pulled by macsw.h)

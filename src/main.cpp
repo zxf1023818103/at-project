@@ -22,7 +22,7 @@
 // Bouffalo compile: Bouffalo's STRONG hook overrides are in THIS same TU (folded in below), so a weak
 // default beside them would be a duplicate definition. AmebaD/Ameba-newer keep the weak defaults (their
 // strong overrides, if any, are in a different TU -> normal weak/strong link resolution).
-#if defined(BL602) || defined(BL702) || defined(BL606P) || defined(BL808) || defined(BL616) || defined(BL616CL)
+#if defined(BL602) || defined(BL702) || defined(BL606P) || defined(BL808) || defined(BL616) || defined(BL616CL) || defined(BL618DG)
 #define AT_MAIN_BOUFFALO 1
 #endif
 // Same for AmebaD now that its body is folded in below (was its own TU, component/amebad/app_port).
@@ -84,7 +84,7 @@ static void event_cb_wifi_event(platform_event_t *event, void *code2) {
 }
 #endif // defined BL602 || defined BL702
 
-#if defined BL606P || defined BL808 || defined BL616 || defined BL616CL
+#if defined BL606P || defined BL808 || defined BL616 || defined BL616CL || defined BL618DG
 extern void wifi_main(void *param);
 #ifdef CONFIG_LPAPP
 extern "C" int bl_lp_init(void);              /* bflb_sys/bl616_lp.c — lp subsystem bring-up (LP_FW=ON) */
@@ -164,9 +164,9 @@ static int hal_wifi_start_firmware_task(void) {
 
     return 0;
 }
-#endif // defined BL606P || defined BL808 || defined BL616 || defined BL616CL
+#endif // defined BL606P || defined BL808 || defined BL616 || defined BL616CL || defined BL618DG
 
-#if defined BL616 || defined BL616CL
+#if defined BL616 || defined BL616CL || defined BL618DG
 // FreeRTOS-Plus-TCP bring-up (component/bouffalo_sdk/freertos_tcp_port): register the
 // STA interface + DHCP endpoint + start the IP task. Called once the WiFi driver is up.
 extern "C" void bouffalo_tcp_bringup(void);
@@ -184,13 +184,13 @@ static void bl616_wifi_event_cb(async_input_event_t ev, void *priv) {
     void wifi_event_handler(uint32_t code, uint32_t code2);   // defined below
     wifi_event_handler((uint32_t) ev->code, (uint32_t) ev->value);
 }
-#endif // defined BL616 || defined BL616CL
+#endif // defined BL616 || defined BL616CL || defined BL618DG
 
-#if defined BL602 || defined BL702 || defined BL616 || defined BL616CL
+#if defined BL602 || defined BL702 || defined BL616 || defined BL616CL || defined BL618DG
 static void bouffalo_conn_event(int connected);   // connect result (CONNECTED/DISCONNECT) -> wifi_port_connect
 #endif
 
-#if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
+#if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL || defined BL618DG
 void wifi_event_handler(uint32_t code, uint32_t code2) {
     (void) code2;
     switch (code) {
@@ -208,25 +208,28 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
 #if defined BL606P || defined BL808
             (void)cc;
 #endif
-#if defined BL616 || defined BL616CL
+#if defined BL616 || defined BL616CL || defined BL618DG
             // fhost bootstrap: fhost_init() (from on_tcpip_init_done) fires INIT_DONE; the wifi_mgmr
             // task is started HERE in response (mirrors examples/wifi/sta/wifi_tcp/main.c's
             // wifi_event_handler), which then dispatches MGMR_DONE. Country code is applied later from
             // wifi_port_scan() (MAC guaranteed ready), same as before.
-            { extern void wifi_mgmr_task_start(void); wifi_mgmr_task_start(); }
+            // Declared in wifi_mgmr.h (returns int) — do NOT re-declare it here:
+            // on bl618dg that header is in scope and a `void` redeclaration is a
+            // hard C++ error ("conflicting declaration").
+            (void)wifi_mgmr_task_start();
             (void)cc;
-#endif // defined BL616 || defined BL616CL
+#endif // defined BL616 || defined BL616CL || defined BL618DG
             break;
         }
         case CODE_WIFI_ON_MGMR_DONE: {
             printf("[APP] [EVT] %s, CODE_WIFI_ON_MGMR_DONE\n", __func__);
-#if defined BL616 || defined BL616CL
+#if defined BL616 || defined BL616CL || defined BL618DG
             // Bring up FreeRTOS-Plus-TCP now (driver is up, MAC is valid): register
             // the STA interface + DHCP endpoint + start the IP task. The stack then
             // waits on phy-link (wifi_mgmr_sta_state_get) before sending DHCP, so it
             // is safe to init before association.
             bouffalo_tcp_bringup();
-#endif // defined BL616 || defined BL616CL
+#endif // defined BL616 || defined BL616CL || defined BL618DG
             // Start the shared WiFi provisioning + reconnect service (component/wifi_service_config).
             // It runs in its own task (a blocking connect must not run here: wifi_event_handler runs
             // with the scheduler suspended / in the async-event context, and the drivers' connect
@@ -238,7 +241,7 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
         }
         case CODE_WIFI_ON_SCAN_DONE: {
             printf("[APP] [EVT] %s, CODE_WIFI_ON_SCAN_DONE\n", __func__);
-#if defined BL616 || defined BL616CL
+#if defined BL616 || defined BL616CL || defined BL618DG
             bl616_scan_done();   // wake wifi_port_scan: results are ready
 #endif
             break;
@@ -249,7 +252,7 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
         }
         case CODE_WIFI_ON_CONNECTED: {
             printf("[APP] [EVT] %s, CODE_WIFI_ON_CONNECTED\n", __func__);
-#if defined BL602 || defined BL702 || defined BL616 || defined BL616CL
+#if defined BL602 || defined BL702 || defined BL616 || defined BL616CL || defined BL618DG
             bouffalo_conn_event(1);   // wake wifi_port_connect: association succeeded
             wifi_service_on_event(WIFI_SVC_EV_CONNECTED);
 #endif
@@ -267,7 +270,7 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
         }
         case CODE_WIFI_ON_DISCONNECT: {
             printf("[APP] [EVT] %s, CODE_WIFI_ON_DISCONNECT\n", __func__);
-#if defined BL602 || defined BL702 || defined BL616 || defined BL616CL
+#if defined BL602 || defined BL702 || defined BL616 || defined BL616CL || defined BL618DG
             bouffalo_conn_event(0);   // wake wifi_port_connect: association failed/dropped
             wifi_service_on_event(WIFI_SVC_EV_DISCONNECT);   // tell wsvc to re-associate
 #endif
@@ -301,7 +304,7 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
     }
 }
 
-#if defined BL602 || defined BL702 || defined BL616 || defined BL616CL
+#if defined BL602 || defined BL702 || defined BL616 || defined BL616CL || defined BL618DG
 /* Network-up trigger, unified with AmebaD: the FreeRTOS+TCP IP task fires eNetworkUp when DHCP
  * completes (bl602_tcp_bringup / bouffalo_tcp_bringup -> at_netif_bringup -> FreeRTOS_IPInit_Multi).
  * This is the single network-up cue -- it replaces the SDK's CODE_WIFI_ON_GOT_IP -> app_on_network_up().
@@ -355,14 +358,14 @@ static void on_tcpip_init_done(void *arg) {
     // nothing processes and block forever on the event-group ACK.
     wifi_task_create();
 #endif // defined BL602 || defined BL702
-#if defined BL616 || defined BL616CL
+#if defined BL616 || defined BL616CL || defined BL618DG
     // fhost bootstrap (mirrors examples/wifi/sta/wifi_tcp/main.c's wifi_start_firmware_task):
     // fhost_init() brings up the wifi6 full-host stack on the wifi_main task (created pre-scheduler in
     // hal_wifi_start_firmware_task via wifi_task_create) and fans out CODE_WIFI_ON_INIT_DONE to the app
     // handler (registered just below via async_register_event_filter). The INIT_DONE handler then calls
     // wifi_mgmr_task_start() -> MGMR_DONE. Replaces the old wl80211_init()+wifi_mgmr_init() pair.
     { extern int fhost_init(void); fhost_init(); }
-#endif // defined BL616 || defined BL616CL
+#endif // defined BL616 || defined BL616CL || defined BL618DG
 }
 
 #if defined(AT_PROJECT_NIMBLE)
@@ -394,7 +397,7 @@ static void bflb_net_bootstrap_task(void *arg) {
     vTaskDelete(NULL);
 }
 
-#if defined BL602 || defined BL702 || defined BL616 || defined BL616CL
+#if defined BL602 || defined BL702 || defined BL616 || defined BL616CL || defined BL618DG
 // ---- connect-result signal (shared by the bl602/wifi4 and bl616/fhost HAL blocks below): the
 //      drivers' connect calls are async, so wifi_port_connect blocks until the driver's
 //      CODE_WIFI_ON_CONNECTED (ok) / CODE_WIFI_ON_DISCONNECT (fail) event (fed from
@@ -476,7 +479,7 @@ const char *wifi_port_sec_to_str(int sec) { (void)sec; return ""; }
 // (routed through bl616_wifi_event_cb -> wifi_event_handler) wake these blocking calls, which run in
 // the wifi_service task. Notify-before-wait is race-safe (xTaskNotifyGive latches).
 // ===================================================================================
-#if defined BL616 || defined BL616CL
+#if defined BL616 || defined BL616CL || defined BL618DG
 
 static TaskHandle_t s_bl616_scan_waiter;
 static void bl616_scan_done(void) {
@@ -486,15 +489,28 @@ static void bl616_scan_done(void) {
 
 /* wifi_mgmr_scan_ap_all() calls this for each AP in the result tree; take the channel of the first
  * exact-SSID match. */
-struct bl616_scan_ctx { const char *ssid; int found; uint8_t chan; };
+struct bl616_scan_ctx { const char *ssid; int found; uint8_t chan; int seen; };
 static void bl616_scan_match_cb(void *env, void *arg, wifi_mgmr_scan_item_t *it) {
     (void)arg;
     struct bl616_scan_ctx *c = (struct bl616_scan_ctx *)env;
+    c->seen++;
     if (!c->found && it->ssid_len == (int)strlen(c->ssid) &&
         memcmp(c->ssid, it->ssid, (size_t)it->ssid_len) == 0) {
         c->found = 1;
         c->chan  = it->channel;
+        printf("[SCAN] match '%.*s': ch=%u auth=%u cipher=%u rssi=%d\r\n",
+               (int)it->ssid_len, it->ssid, (unsigned)it->channel,
+               (unsigned)it->auth, (unsigned)it->cipher, (int)it->rssi);
     }
+}
+
+/* Diagnostic for the "not found in scan" case: without it a missing AP and a
+ * deaf receiver look identical in the log. Lists what the scan DID see. */
+static void bl616_scan_dump_cb(void *env, void *arg, wifi_mgmr_scan_item_t *it) {
+    (void)env; (void)arg;
+    printf("[SCAN]   ch=%-3u rssi=%-4d auth=%u cipher=%u %.*s\r\n",
+           (unsigned)it->channel, (int)it->rssi, (unsigned)it->auth,
+           (unsigned)it->cipher, (int)it->ssid_len, it->ssid);
 }
 
 extern "C" {
@@ -523,16 +539,22 @@ int wifi_port_scan(const char *ssid, uint8_t *chan, int *sec) {
     }
     wifi_mgmr_scan_params_t p;
     memset(&p, 0, sizeof(p));
-    size_t n = strlen(ssid);
-    if (n > MGMR_SSID_LEN) n = MGMR_SSID_LEN;
-    p.ssid_length = (uint8_t)n;
-    memcpy(p.ssid_array, ssid, n);          // directed active scan (passive stays 0)
+    /* UNDIRECTED active scan (ssid_length stays 0 = scan everything), then match
+     * in the result tree. A directed scan is faster, but it makes "AP absent"
+     * and "receiver deaf" indistinguishable — both yield an empty result — and
+     * re-scanning undirected afterwards is rejected (rc=-1) while the first scan
+     * is still retiring. Scanning everything once gives both the match and a
+     * usable diagnostic. Mirrors the SDK's own wifiprov_bl616.c (all-zero params). */
     s_bl616_scan_waiter = xTaskGetCurrentTaskHandle();
     if (wifi_mgmr_sta_scan(&p) != 0) { s_bl616_scan_waiter = NULL; return -1; }
     (void)ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(4000));   // woken by CODE_WIFI_ON_SCAN_DONE
-    struct bl616_scan_ctx ctx = { ssid, 0, 0 };
+    struct bl616_scan_ctx ctx = { ssid, 0, 0, 0 };
     wifi_mgmr_scan_ap_all(&ctx, NULL, bl616_scan_match_cb);
-    if (!ctx.found) return -1;              // SSID not present
+    printf("[SCAN] saw %d AP(s), '%s' %s\r\n", ctx.seen, ssid, ctx.found ? "FOUND" : "absent");
+    if (!ctx.found) {
+        wifi_mgmr_scan_ap_all(NULL, NULL, bl616_scan_dump_cb);   // list what IS on the air
+        return -1;                          // SSID not present
+    }
     if (chan) *chan = ctx.chan;
     if (sec)  *sec  = -1;                   // wl80211 derives security from the beacon (no cache)
     return 0;
@@ -549,6 +571,12 @@ int wifi_port_connect(const char *ssid, const char *pass, uint8_t chan, int sec)
                                 const char *akm_str, uint8_t pmf_cfg, uint16_t freq1, uint16_t freq2,
                                 uint8_t use_dhcp);
     const char *akm = NULL;   // wifi_sta_connect scans internally -> auto-detects AKM from the beacon
+    /* pmf_cfg=0. NOTE for WPA3/SAE (not working on this port yet): SAE additionally needs
+     * pmf_cfg=1, since WPA3 mandates protected management frames. But that alone does not
+     * help — the supplicant's BSS list is never populated here (its driver never receives
+     * CFGMACSW_SCAN_RESULT_EVENT), so a WPA3 AP loops SCANNING -> DISCONNECTED either way.
+     * WPA2 is unaffected: the driver associates directly, the supplicant only runs the
+     * 4-way. Passing the scanned channel as freq1 was tried too and changed nothing. */
     s_bouffalo_conn_ok = 0;
     s_bouffalo_conn_waiter = xTaskGetCurrentTaskHandle();
     if (wifi_sta_connect(ssid, pass, NULL, akm, 0, 0, 0, 0) != 0) { s_bouffalo_conn_waiter = NULL; return -1; }
@@ -572,7 +600,7 @@ int          wifi_port_sec_from_str(const char *s) { (void)s;   return -1; }
 const char * wifi_port_sec_to_str(int sec)         { (void)sec; return ""; }
 
 }  // extern "C"
-#endif // defined BL616 || defined BL616CL
+#endif // defined BL616 || defined BL616CL || defined BL618DG
 
 /* ---- shared-startup platform seams: strong overrides for the Bouffalo platform -------------------
  * Strong overrides of the weak no-ops below. We're inside the outer `extern "C"` block, so these keep
@@ -607,7 +635,7 @@ void app_console_register_platform(void)
     // (WiFi-connect only, like amebad). Everything else keeps it.
     iperf_cli_register();               // iperf [server|tx|udp] throughput test
 #endif
-#if defined BL602 || defined BL702 || defined BL616 || defined BL616CL
+#if defined BL602 || defined BL702 || defined BL616 || defined BL616CL || defined BL618DG
     // The shared wifi_service `wifi` (forget/drop/status): every platform with a wifi_port_* HAL
     // (bl602/bl616/amebad) registers it.
     { extern void wifi_cli_register(void); wifi_cli_register(); }
@@ -636,7 +664,7 @@ void app_console_register_platform(void)
 void app_platform_boot_init(void)
 {
     board_init();
-#if (defined(BL616) || defined(BL616CL)) && defined(CONFIG_LPAPP)
+#if (defined(BL616) || defined(BL616CL) || defined(BL618DG)) && defined(CONFIG_LPAPP)
     {
         /* Debug aid (LP builds): mux the CKLink JTAG pins (TMS=IO0 TCK=IO1 TDO=IO14 TDI=IO15)
          * right after board_init so tickless/PDS issues can be captured live over JTAG (bl616
@@ -656,7 +684,7 @@ void app_platform_boot_init(void)
     // cross-platform helper (component/flash_cli_config, over board_flash_protect
     // in bouffalo_sdk/board_flash_port) replaces the old at::lockFirmwareFlash;
     // board_flash_log_status() prints the resulting lock state at boot.
-#if !defined(BL616) && !defined(BL616CL)
+#if !defined(BL616) && !defined(BL616CL) && !defined(BL618DG)
     board_flash_lock_fw();
 #endif
     // BL616/BL616CL: skip the boot-time WRITE lock -- keep the firmware region unlocked for now
@@ -665,19 +693,19 @@ void app_platform_boot_init(void)
     // WRSR/RDSR no longer races the XIP continuous-read here -- that race previously hung the boot
     // in Clock_Peripheral_Clock_Get and left a CMP-inverted, brick-for-reflash status register.
     board_flash_log_status();   // SR1/SR2 diag print (read path is XIP-quiesced on every chip)
-#if defined BL606P || defined BL808 || defined BL616 || defined BL616CL
+#if defined BL606P || defined BL808 || defined BL616 || defined BL616CL || defined BL618DG
     hal_wifi_start_firmware_task();
-#endif // defined BL606P || defined BL808 || defined BL616 || defined BL616CL
+#endif // defined BL606P || defined BL808 || defined BL616 || defined BL616CL || defined BL618DG
 #if defined BL602 || defined BL702
     // Register the app WiFi-event handler with the wifi4 adapter's direct dispatcher (no async queue).
     // wifi_mgmr also registers its internal handler; platform_post_event fans out to both.
     platform_register_event(EV_WIFI, event_cb_wifi_event, NULL);
 #endif // defined BL602 || defined BL702
-#if defined BL616 || defined BL616CL
+#if defined BL616 || defined BL616CL || defined BL618DG
     // Register the app handler on the async EV_WIFI bus BEFORE fhost_init() (on_tcpip_init_done)
     // dispatches INIT_DONE/MGMR_DONE. (fhost + wifi_mgmr also register their own EV_WIFI filters.)
     async_register_event_filter(EV_WIFI, bl616_wifi_event_cb, NULL);
-#endif // defined BL616 || defined BL616CL
+#endif // defined BL616 || defined BL616CL || defined BL618DG
     if (0 != rfparam_init(0, NULL, 0))
         printf("rfparam_init() failed\n");   // non-fatal: keep booting so the console still comes up
     bflb_mtd_init();
@@ -731,7 +759,7 @@ void app_pre_example(void) {
 
 } // extern "C"
 
-#if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
+#if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL || defined BL618DG
 namespace std {
 
 void __throw_bad_function_call() { my_assert("__throw_bad_function_call" == nullptr); }
@@ -1698,8 +1726,18 @@ void app_startup_run(void)
 // AmebaD + Bouffalo own main(); Ameba-newer's SDK provides main() (its port exports app_pre_example
 // instead), so gate on the capability flag AT_SDK_OWNS_MAIN -- not a chip macro.
 #ifndef AT_SDK_OWNS_MAIN
+// Declared in component/syscall_config/syscalls.h; declared here directly to
+// keep main.cpp's include surface unchanged across platforms.
+extern "C" void at_libc_early_init( void );
+
 extern "C" int main(void)
 {
+    // Must be first: on a picolibc toolchain (bl618dg) this installs the thread
+    // pointer + TLS block that libc's errno / _localtime_buf live in. No-op
+    // (weak) on the newlib platforms. This startup has no .init_array, so it
+    // cannot be a constructor — it has to be an explicit call.
+    at_libc_early_init();
+
 #ifdef AT_PROJECT_QUIC
     app_startup_run_headless();   // console-less self-test image (layout-sensitive)
 #else

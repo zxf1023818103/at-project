@@ -1,6 +1,10 @@
 /build/
 /test/bouffalo_toolchain/build/
 /toolchain/
+# Zephyr SDK riscv64-zephyr-elf (BL618DG B0 / Nuclei-900). 1.1 GB, and upstream
+# ships release tarballs only — so unlike platform/toolchain_gcc_t-head_linux it
+# can't be a submodule. Install via scripts/install_zephyr_riscv_toolchain.sh.
+/platform/toolchain_gcc_zephyr_linux/
 /.venv-tfm/
 
 # Realtek NDA / confidential docs (datasheets, ANs, MP guides, pinmux — local reference only,

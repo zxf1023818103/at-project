@@ -24,7 +24,7 @@ extern "C" {
 // Bouffalo has switched its network stack to FreeRTOS-Plus-TCP; the lwIP headers
 // no longer exist there. The ameba platforms still run lwIP, so keep the include
 // for them. (The Bouffalo chip set: BL602/BL702/BL606P/BL808/BL616/BL616CL.)
-#if !defined(BL602) && !defined(BL702) && !defined(BL606P) && !defined(BL808) && !defined(BL616) && !defined(BL616CL)
+#if !defined(BL602) && !defined(BL702) && !defined(BL606P) && !defined(BL808) && !defined(BL616) && !defined(BL616CL) && !defined(BL618DG)
 #include <lwip/tcpip.h>
 #endif
 
@@ -35,7 +35,7 @@ extern "C" {
 #include <wifi_fast_connect.h>
 #endif // defined CONFIG_PLATFORM_AMEBALITE || defined CONFIG_PLATFORM_AMEBASMART || defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2
 
-#if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
+#if defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL || defined BL618DG
 // KV/NV is now POSIX env (setenv/getenv, persisted to /KV littlefs files by
 // component/syscall_config/env.c) — same as AmebaD. The Bouffalo-specific
 // lfs_easyflash (<easyflash.h>) was removed; these two hooks replace easyflash_init.
@@ -58,7 +58,7 @@ extern "C" {
     void crt_bundle_cli_register(void);         // `crt_bundle` Mozilla CA root bundle command (component/esp_crt_bundle_config)
     void pkcs11_cli_register(void);             // `pkcs11` corePKCS11 token self-test command (component/pkcs11_selftest_config)
 }
-#endif // defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL
+#endif // defined BL602 || defined BL702 || defined BL606P || defined BL808 || defined BL616 || defined BL616CL || defined BL618DG
 
 #if defined BL602 || defined BL702
 // (async_event.h removed: WiFi events dispatch directly via the wifi4 adapter's platform_post_event;
@@ -75,11 +75,13 @@ extern "C" {
 #endif
 #endif // defined BL602 || defined BL702
 
-#if defined BL606P || defined BL808 || defined BL616 || defined BL616CL
+#if defined BL606P || defined BL808 || defined BL616 || defined BL616CL || defined BL618DG
 #include <wifi_mgmr.h>
 #include <bl_fw_api.h>
 #include <bflb_irq.h>
-#if defined BL616CL
+#if defined BL618DG
+#include <bl618dg_glb.h>
+#elif defined BL616CL
 #include <bl616cl_glb.h>
 #else
 #include <bl616_glb.h>
@@ -88,7 +90,7 @@ extern "C" {
 #include <board.h>
 #include <bflb_mtd.h>
 #include <btble_lib_api.h>
-#endif // defined BL606P || defined BL808 || defined BL616 || defined BL616CL
+#endif // defined BL606P || defined BL808 || defined BL616 || defined BL616CL || defined BL618DG
 
 }  // extern "C"
 

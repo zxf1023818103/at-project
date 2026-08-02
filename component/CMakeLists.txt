@@ -85,7 +85,7 @@ endif()  # NOT BOUFFALO_CHIP
 add_subdirectory(lfs_image)
 
 # =====================================================================
-# Platform: Bouffalo Lab BL602 / BL616 / BL616CL
+# Platform: Bouffalo Lab BL602 / BL616 / BL616CL / BL618DG
 # =====================================================================
 #
 #   bouffalo_sdk         the Bouffalo Lab SDK extraction (HAL + chip-std
@@ -109,13 +109,13 @@ if(BOUFFALO_CHIP)
     # not overwrite an existing value, so this is a no-op when the
     # toolchain file has already set it.
     set(BOUFFALO_CHIP "${BOUFFALO_CHIP}" CACHE STRING
-        "Bouffalo target chip — required (bl602 | bl616 | bl616cl)")
+        "Bouffalo target chip — required (bl602 | bl616 | bl616cl | bl618dg)")
     set_property(CACHE BOUFFALO_CHIP PROPERTY STRINGS
-        bl602 bl616 bl616cl)
-    if(NOT BOUFFALO_CHIP MATCHES "^(bl602|bl616|bl616cl)$")
+        bl602 bl616 bl616cl bl618dg)
+    if(NOT BOUFFALO_CHIP MATCHES "^(bl602|bl616|bl616cl|bl618dg)$")
         message(FATAL_ERROR
             "BOUFFALO_CHIP='${BOUFFALO_CHIP}' is not a supported chip. "
-            "Expected one of: bl602, bl616, bl616cl.")
+            "Expected one of: bl602, bl616, bl616cl, bl618dg.")
     endif()
 
     # ASM is an SDK concern (startup code, FreeRTOS port asm, vendor archive

@@ -1,0 +1,116 @@
+[pt_table]
+#partition table is 4K in size
+address0 = 0xE000
+address1 = 0xF000
+# If version is 2, It will use dynamic mode.
+version = 2
+
+# Layout reworked for at-project (was the SDK default):
+#   Boot2   0x000000 +0x00E000
+#   FW0     0x010000 +0x178000   (OTA slot0)   -> ends 0x188000
+#   FW0     0x188000 +0x178000   (OTA slot1)   -> ends 0x300000
+#   PSM     0x300000 +0x0F0000   (LittleFS)    -> ends 0x3F0000
+#   KEY     0x3F1000 / DATA 0x3F3000 / factory 0x3F8000
+#
+# Why: component/bouffalo_sdk/lfs_port/vfs_lfs_mount.c mounts LittleFS at the
+# fixed raw offset 0x300000 on every Bouffalo board (matching bl602dk/bl616dk/
+# bl616cldk, whose PSM starts there). The SDK's bl618dg default put PSM at
+# 0x3E9000 with only 32 KB, so LFS landed inside the `mfg` partition and
+# formatted over it ("Corrupted dir pair ... mount OK" at boot). PSM is 960 KB
+# (0xF0000) — the exact geometry the lfs-image-preconfig tooling produces — and
+# stops below KEY at 0x3F1000.
+#
+# The SDK's `mfg` and `media` entries are dropped: the reworked OTA slot1 and
+# PSM now occupy that space, at-project builds neither, and bflb_boot2.c only
+# consumes "mfg" opportunistically (it skips the entry when absent). This also
+# matches bl616dk/bl616cldk, whose tables carry Boot2/FW/PSM only.
+
+[[pt_entry]]
+type = 16
+name = "Boot2"
+device = 0
+address0 = 0
+size0 = 0xE000
+address1 = 0
+size1 = 0
+# compressed image must set len,normal image can left it to 0
+len = 0
+# If header is 1, it will add the header.
+header = 1
+# If header is 1 and security is 1, It will be encrypted.
+security = 1
+
+[[pt_entry]]
+type = 0
+name = "FW0"
+device = 0
+address0 = 0x10000
+size0 = 0x178000
+address1 = 0x188000
+size1 = 0x178000
+# compressed image must set len,normal image can left it to 0
+len = 0
+# If header is 1, it will add the header.
+header = 1
+# If header is 1 and security is 1, It will be encrypted.
+security= 1
+
+[[pt_entry]]
+type = 3
+name = "PSM"
+device = 0
+address0 = 0x300000
+size0 = 0xF0000
+address1 = 0
+size1 = 0
+# compressed image must set len,normal image can left it to 0
+len = 0
+# If header is 1, it will add the header.
+header = 0
+# If header is 1 and security is 1, It will be encrypted.
+security= 0
+
+[[pt_entry]]
+type = 4
+name = "KEY"
+device = 0
+address0 = 0x3F1000
+size0 = 0x2000
+address1 = 0
+size1 = 0
+# compressed image must set len,normal image can left it to 0
+len = 0
+# If header is 1, it will add the header.
+header = 0
+# If header is 1 and security is 1, It will be encrypted.
+security= 0
+
+[[pt_entry]]
+type = 5
+name = "DATA"
+device = 0
+address0 = 0x3F3000
+size0 = 0x5000
+address1 = 0
+size1 = 0
+# compressed image must set len,normal image can left it to 0
+len = 0
+# If header is 1, it will add the header.
+header = 0
+# If header is 1 and security is 1, It will be encrypted.
+security = 0
+
+[[pt_entry]]
+type = 6
+name = "factory"
+device = 0
+address0 = 0x3F8000
+size0 = 0x8000
+address1 = 0
+size1 = 0
+# compressed image must set len,normal image can left it to 0
+len = 0
+# If header is 1, it will add the header.
+header = 0
+# If header is 1 and security is 1, It will be encrypted.
+security= 0

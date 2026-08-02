@@ -404,6 +404,13 @@ static const vfs_ops_t *slot_ops(const vfs_slot_t *s)
  * console_lpuart.c registers it) lives there; this file only routes the fds.
  * See console_loguart.c (default backend) / console_lpuart.c (override). */
 
+/* Earliest-possible libc bring-up hook, called from main() before anything else.
+ * Empty on newlib (nothing to do); the picolibc build overrides it with a strong
+ * definition in picolibc_stdio.c that sets up the thread pointer / TLS block. */
+__attribute__((weak)) void at_libc_early_init(void)
+{
+}
+
 int _open(const char *path, int flags, int mode)
 {
     lfs_t *lfs;
