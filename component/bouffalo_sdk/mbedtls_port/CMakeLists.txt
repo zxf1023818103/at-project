@@ -22,13 +22,20 @@ target_compile_definitions(mbedtls_cfg INTERFACE
 # HACC/PKA hardware crypto ALTs. EXPERIMENT: disabled on bl618dg to test whether the
 # shared Sec_Eng engine corrupts the WPA supplicant's 4-way MIC once the AWS/mbedTLS
 # stack also starts using it.
+# ECP/PKA stays on everywhere: it accelerates TLS public-key math only, which the
+# WPA supplicant does not touch on WPA2.
+target_compile_definitions(mbedtls_cfg INTERFACE MBEDTLS_ECP_ALT)
+
+# SHA/AES ALTs are the ones the WPA supplicant shares with TLS (PBKDF2-HMAC-SHA1 for
+# the PMK, AES for CCMP). On bl618dg, once the AWS/mbedTLS stack also drives the one
+# Sec_Eng engine, the 4-way MIC comes out wrong and the AP reports WRONG_KEY — so run
+# those in software here. See the bl616 HW-AES bus-contention bug for the same class.
 if(NOT "${BOUFFALO_CHIP}" STREQUAL "bl618dg")
     target_compile_definitions(mbedtls_cfg INTERFACE
         MBEDTLS_SHA1_ALT
         MBEDTLS_SHA256_ALT
         MBEDTLS_SHA512_ALT
-        MBEDTLS_AES_ALT
-        MBEDTLS_ECP_ALT)
+        MBEDTLS_AES_ALT)
 endif()
 target_include_directories(mbedtls_cfg SYSTEM INTERFACE
     "${CMAKE_CURRENT_SOURCE_DIR}")                 # timing_alt.h / aes_alt.h / sha*_alt.h / ecp_alt.h / gcm_alt.h
@@ -52,23 +59,25 @@ endif()
 add_library(mbedtls_port STATIC
     alt_timing.c
     entropy_poll_alt.c
-    mbedtls_platform_alt.c)
+    mbedtls_platform_alt.c
+    bignum.c)   # upstream bignum fork (the mbedtls_mpi_* API) — NOT a HW ALT, always needed
 
 # HACC/PKA ALT implementations — must be compiled only when the matching
 # MBEDTLS_*_ALT macros above are defined (they reach into upstream's *_alt.h
 # context structs, which upstream only emits under those macros).
+target_sources(mbedtls_port PRIVATE
+    ecp_alt.c
+    ecp_curves_alt.c
+    bignum_alt.c     # PKA mbedtls_mpi_exp_mod
+    bignum_ext.c
+    gcm_alt.c)       # self-guarded by MBEDTLS_GCM_ALT
+
 if(NOT "${BOUFFALO_CHIP}" STREQUAL "bl618dg")
     target_sources(mbedtls_port PRIVATE
         aes_alt.c
         sha1_alt.c
         sha256_alt.c
-        sha512_alt.c
-        ecp_alt.c
-        ecp_curves_alt.c
-        bignum.c
-        bignum_alt.c
-        bignum_ext.c
-        gcm_alt.c)
+        sha512_alt.c)
 endif()   # HW AES-GCM (self-guarded by MBEDTLS_GCM_ALT; inert unless BOUFFALO_MBEDTLS_HW_GCM)
 # Own dir (*_alt.h) + PUBLIC-borrow mbedcrypto's INTERFACE includes (mbedtls/*) and PRIVATE-borrow
 # its SOURCE_DIR for the upstream-private headers our forks reach into (common.h, ecp_invasive.h,

@@ -7,8 +7,8 @@ version = 2
 
 # Layout reworked for at-project (was the SDK default):
 #   Boot2   0x000000 +0x00E000
-#   FW0     0x010000 +0x178000   (OTA slot0)   -> ends 0x188000
-#   FW0     0x188000 +0x178000   (OTA slot1)   -> ends 0x300000
+#   FW      0x010000 +0x178000   (OTA slot0)   -> ends 0x188000
+#   FW      0x188000 +0x178000   (OTA slot1)   -> ends 0x300000
 #   PSM     0x300000 +0x0F0000   (LittleFS)    -> ends 0x3F0000
 #   KEY     0x3F1000 / DATA 0x3F3000 / factory 0x3F8000
 #
@@ -19,6 +19,10 @@ version = 2
 # formatted over it ("Corrupted dir pair ... mount OK" at boot). PSM is 960 KB
 # (0xF0000) — the exact geometry the lfs-image-preconfig tooling produces — and
 # stops below KEY at 0x3F1000.
+#
+# Named "FW" (not the SDK's "FW0"): ota_flash_bouffalo.c looks the slot pair up by
+# that exact name (pt_table_get_active_entries_by_name "FW"), same as bl602/bl616/
+# bl616cl. With "FW0" the OTA path fails at "no FW partition entry".
 #
 # The SDK's `mfg` and `media` entries are dropped: the reworked OTA slot1 and
 # PSM now occupy that space, at-project builds neither, and bflb_boot2.c only
@@ -42,7 +46,7 @@ security = 1
 
 [[pt_entry]]
 type = 0
-name = "FW0"
+name = "FW"
 device = 0
 address0 = 0x10000
 size0 = 0x178000

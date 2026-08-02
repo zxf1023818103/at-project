@@ -31,6 +31,14 @@ BOARD ?= bl618dgdk
 # platforms. Only affects the AP core (the NP image has no network stack).
 AWS   ?= OFF
 
+# PSRAM heap (on-die on BL618DG). Opt-in: board_psram_x8_init() does real detection.
+PSRAM ?= OFF
+
+# Firmware version stamp, surfaced in the AWS telemetry payload ("fw":...) — this is
+# how an OTA is confirmed to have taken effect. Build the update with a different
+# value, e.g. `make AWS=ON FW_VERSION=ota-B`.
+FW_VERSION ?= ota-A
+
 TC_AP := $(REPO)/cmake/bl618dg-ap-toolchain.cmake
 TC_NP := $(REPO)/cmake/bl618dg-np-toolchain.cmake
 
@@ -67,6 +75,8 @@ app_np:
 app_ap:
 	$(CMAKE) -S $(REPO)/project/bl618dg/app_ap -B $(BUILD_AP) -G "$(GENERATOR)" \
 	    -DAT_ENABLE_AWS=$(AWS) \
+	    -DAT_ENABLE_PSRAM=$(PSRAM) \
+	    -DAT_FW_VERSION=$(FW_VERSION) \
 	    $$([ -f $(BUILD_AP)/CMakeCache.txt ] || echo -DCMAKE_TOOLCHAIN_FILE=$(TC_AP))
 	$(CMAKE) --build $(BUILD_AP) --target app_ap_bin
 

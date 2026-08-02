@@ -41,6 +41,16 @@ set(CONFIG_BTBLECONTROLLER_LIB ble1m10s1bredr0)
 # driven by project/bl618dg/Makefile's AWS= flag. Same contract as project/bouffalo.
 option(AT_ENABLE_AWS "Build the AWS IoT telemetry client" OFF)
 
+# PSRAM: register on-die PSRAM as a heap (MM_HEAP_PSRAM_0; pvPortMalloc uses
+# MM_FLAG_HEAP_ANY so it falls back there once OCRAM/WRAM are full).
+# ★ The bl618dgdk board on this bench has NO PSRAM: with PSRAM=ON it stops at boot with
+#   "This chip has no psram, please disable CONFIG_PSRAM" (board_psram_x8_init detects
+#   it for real). Keep OFF unless the die actually carries PSRAM.
+option(AT_ENABLE_PSRAM "Register on-die PSRAM as heap" OFF)
+if(AT_ENABLE_PSRAM)
+    set(CONFIG_PSRAM y)
+endif()
+
 add_compile_options("-fmacro-prefix-map=${AT_ROOT}/src/=")   # __FILE__ basename, same as project/bouffalo
 add_subdirectory(${AT_ROOT}/component ${CMAKE_BINARY_DIR}/component)
 add_subdirectory(${AT_ROOT}/src       ${CMAKE_BINARY_DIR}/src)   # exports AT_USER_SOURCES
