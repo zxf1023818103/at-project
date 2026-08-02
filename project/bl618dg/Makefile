@@ -29,7 +29,14 @@ BOARD ?= bl618dgdk
 # AWS IoT telemetry client (coreMQTT + TLS). OFF by default; `make AWS=ON` builds
 # the `aws` console command + the telemetry task, same flag name as the other
 # platforms. Only affects the AP core (the NP image has no network stack).
-AWS   ?= OFF
+AWS    ?= OFF
+# AWSOTA=ON builds the full AWS IoT agent (coreMQTT-Agent + FreeRTOS OTA v3.3.0) and
+# implies AWS=ON. The OTA job's payload is fetched over the MQTT data plane or a
+# presigned HTTPS URL, depending on what the job specifies.
+AWSOTA ?= OFF
+ifeq ($(AWSOTA),ON)
+AWS := ON
+endif
 
 # PSRAM heap (on-die on BL618DG). Opt-in: board_psram_x8_init() does real detection.
 PSRAM ?= OFF
@@ -75,6 +82,7 @@ app_np:
 app_ap:
 	$(CMAKE) -S $(REPO)/project/bl618dg/app_ap -B $(BUILD_AP) -G "$(GENERATOR)" \
 	    -DAT_ENABLE_AWS=$(AWS) \
+	    -DAT_ENABLE_AWS_OTA=$(AWSOTA) \
 	    -DAT_ENABLE_PSRAM=$(PSRAM) \
 	    -DAT_FW_VERSION=$(FW_VERSION) \
 	    $$([ -f $(BUILD_AP)/CMakeCache.txt ] || echo -DCMAKE_TOOLCHAIN_FILE=$(TC_AP))

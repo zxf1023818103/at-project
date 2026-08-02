@@ -80,7 +80,7 @@
  *     download. REQUIRES RSIP=OFF: read-back == plaintext == the signed image (the bench/AWS default,
  *     project/amebad/Makefile RSIP?=OFF). On an RSIP=ON board the inactive-slot read-back is
  *     wrong-keystream garbage, so this path must not be used there. */
-#if defined(BL602) || defined(BL702) || defined(BL616) || defined(BL616CL)
+#if defined(BL602) || defined(BL702) || defined(BL616) || defined(BL616CL) || defined(BL618DG)
 #define OTA_PAL_READBACK_VERIFY            ( 0 )   /* Bouffalo: streaming in-order */
 #else
 #define OTA_PAL_READBACK_VERIFY            ( 1 )   /* AmebaD: random-write + read-back (RSIP=OFF) */

@@ -41,6 +41,13 @@ set(CONFIG_BTBLECONTROLLER_LIB ble1m10s1bredr0)
 # driven by project/bl618dg/Makefile's AWS= flag. Same contract as project/bouffalo.
 option(AT_ENABLE_AWS "Build the AWS IoT telemetry client" OFF)
 
+# AWSOTA: the coreMQTT-Agent + FreeRTOS-OTA variant (aws_iot_demo.c) instead of the
+# lean telemetry-only client. Implies AT_ENABLE_AWS.
+option(AT_ENABLE_AWS_OTA "Build the AWS IoT OTA agent" OFF)
+if(AT_ENABLE_AWS_OTA)
+    set(AT_ENABLE_AWS ON)
+endif()
+
 # PSRAM: register on-die PSRAM as a heap (MM_HEAP_PSRAM_0; pvPortMalloc uses
 # MM_FLAG_HEAP_ANY so it falls back there once OCRAM/WRAM are full).
 # ★ The bl618dgdk board on this bench has NO PSRAM: with PSRAM=ON it stops at boot with
