@@ -142,7 +142,16 @@ void ota_app_poll_job( void )
 static uint8_t s_updateFilePath[ 256 ];
 static uint8_t s_certFilePath[ 256 ];
 static uint8_t s_streamName[ 64 ];
-static uint8_t s_fileBitmap[ OTA_MAX_BLOCK_BITMAP_SIZE ]; /* 128 */
+/* NOT OTA_MAX_BLOCK_BITMAP_SIZE (128). requestFileBlock_Mqtt() sizes the bitmap it sends from
+ * the file itself -- bitmapLen = ceil(fileSize / blockSize / 8) -- and never clamps it to that
+ * constant, so with 1 KB blocks any image over 1 MB makes the library read PAST this array and
+ * publish whatever .bss follows it as the tail of the request bitmap. The first 1024 blocks
+ * (the part backed by real bitmap) download fine; past that AWS sees garbage request bits and
+ * answers on .../rejected/cbor instead of .../data/cbor, the agent stalls in
+ * WaitingForFileBlock and the job eventually aborts. Sized for the largest OTA slot we ship
+ * (2 MB = 2048 blocks); the library's own pMsg[OTA_REQUEST_MSG_MAX_SIZE] still holds the CBOR. */
+#define AT_OTA_BLOCK_BITMAP_SIZE    256U
+static uint8_t s_fileBitmap[ AT_OTA_BLOCK_BITMAP_SIZE ];
 #ifdef AWS_STATIC_TASKS
 /* Heap-tight (bl602): the decode buffer is only used AFTER the MQTT connect, so heap-allocate it in
  * ota_app_init() (post-handshake) instead of reserving OTA_FILE_BLOCK_SIZE of .bss that would shrink
