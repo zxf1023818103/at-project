@@ -5,8 +5,10 @@
 # language and the linker.
 #
 # BOUFFALO_RISCV_TRIPLE selects which cross toolchain to load:
-#   riscv64-unknown-elf  (default) T-Head Xuantie GCC — bl602/bl616/bl616cl
-#   riscv64-zephyr-elf             Zephyr SDK GCC     — bl618dg B0 (Nuclei-900)
+#   riscv64-unknown-elf  (default) T-Head Xuantie GCC 10.2 — bl602/bl616/bl616cl
+#   riscv64-nuclei-elf             Nuclei GCC 14.2.1      — bl618dg B0 (Nuclei-900)
+# Both use the riscv64-unknown-elf- binary prefix and are distinguished only by
+# directory — see cmake/riscv64-nuclei-elf.cmake.
 
 if(NOT BOUFFALO_RISCV_TRIPLE)
     set(BOUFFALO_RISCV_TRIPLE "riscv64-unknown-elf")

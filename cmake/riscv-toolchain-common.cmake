@@ -18,10 +18,16 @@
 #   3. the in-repo platform/<_riscv_toolchain_stem><host>/ directory
 #   4. PATH (assume the compiler is already discoverable)
 
-if(NOT DEFINED _riscv_tool_prefix OR NOT DEFINED _riscv_toolchain_stem)
+if(NOT DEFINED _riscv_tool_prefix)
     message(FATAL_ERROR
         "riscv-toolchain-common.cmake: include it from a triple-specific "
-        "toolchain file that sets _riscv_tool_prefix and _riscv_toolchain_stem.")
+        "toolchain file that sets _riscv_tool_prefix.")
+endif()
+if(NOT DEFINED _riscv_toolchain_stem AND NOT DEFINED _riscv_toolchain_reldir)
+    message(FATAL_ERROR
+        "riscv-toolchain-common.cmake: set either _riscv_toolchain_stem "
+        "(platform/<stem><host>/) or _riscv_toolchain_reldir (a path relative "
+        "to the repo root, e.g. toolchain/<name>/).")
 endif()
 
 if(NOT DEFINED BOUFFALO_TOOLCHAIN_ROOT AND DEFINED ENV{BOUFFALO_TOOLCHAIN_ROOT})
@@ -40,7 +46,15 @@ if(NOT DEFINED BOUFFALO_TOOLCHAIN_ROOT)
     else()
         set(_host_tag "linux")
     endif()
-    set(_candidate "${_self_dir}/../platform/${_riscv_toolchain_stem}${_host_tag}")
+    # Two in-repo layouts. Host-suffixed under platform/ (the T-Head submodule's
+    # convention, <stem><host>), or a plain versioned directory under toolchain/
+    # (where the AmebaD ASDK already lives) for vendor tarballs that are neither
+    # submodules nor host-tagged.
+    if(DEFINED _riscv_toolchain_reldir)
+        set(_candidate "${_self_dir}/../${_riscv_toolchain_reldir}")
+    else()
+        set(_candidate "${_self_dir}/../platform/${_riscv_toolchain_stem}${_host_tag}")
+    endif()
     if(EXISTS "${_candidate}")
         get_filename_component(BOUFFALO_TOOLCHAIN_ROOT "${_candidate}" ABSOLUTE)
     endif()

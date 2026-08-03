@@ -12,15 +12,18 @@
 # Silicon: B0 = the mass-production part (Bouffalo-confirmed), Nuclei-900 core:
 # ilp32d, no xtheade, no P extension.
 #
-# Toolchain: riscv64-zephyr-elf (Zephyr SDK GCC 14) — REQUIRED, not a preference.
-# Bouffalo builds BL618DG's wireless libs with it AND with slim LTO: macsw,
-# macsw_config and wl80211 contain ONLY GCC-14 LTO bytecode (.text is 0 bytes),
-# so the in-repo T-Head GCC 10.2 cannot consume them at all
-# ("bytecode stream ... generated with LTO version 14.0 instead of 9.0", and
-# -fno-lto cannot help because there is no machine code to fall back to).
-# Consequence: this toolchain's libc is picolibc, not newlib — see the bl618dg
-# picolibc stdio bridge in component/syscall_config.
-# Install: scripts/install_zephyr_riscv_toolchain.sh
+# Toolchain: riscv64-nuclei-elf (Nuclei GCC 14.2.1 + newlib). GCC **14** is a
+# hard requirement, not a preference: Bouffalo builds BL618DG's wireless libs
+# with slim LTO, so macsw, macsw_config and wl80211 contain ONLY GCC-14 LTO
+# bytecode (.text is 0 bytes) and the in-repo T-Head GCC 10.2 cannot consume
+# them at all ("bytecode stream ... generated with LTO version 14.0 instead of
+# 9.0"; -fno-lto cannot help because there is no machine code to fall back to).
+# Install: scripts/install_nuclei_riscv_toolchain.sh
+#
+# This replaces the Zephyr SDK, which met the GCC-14 bar but shipped picolibc —
+# that needed a bridge TU in component/syscall_config for stdio, POSIX syscall
+# naming and tp-register TLS. Nuclei's newlib matches every other platform here
+# and brings nano.specs back.
 #
 # NOTE the SDK's b0 branch deliberately passes NO -mtune (only a0 does), so
 # BOUFFALO_MTUNE stays empty here.
@@ -30,6 +33,6 @@ set(BOUFFALO_CPU_ID        "ap"                        CACHE STRING "BL618DG cor
 set(BOUFFALO_MARCH         "rv32imafdc_zicsr_zifencei" CACHE STRING "RISC-V -march"        FORCE)
 set(BOUFFALO_MABI          "ilp32d"                    CACHE STRING "RISC-V -mabi"         FORCE)
 set(BOUFFALO_MTUNE         ""                          CACHE STRING "RISC-V -mtune"        FORCE)
-set(BOUFFALO_RISCV_TRIPLE  "riscv64-zephyr-elf"        CACHE STRING "RISC-V cross triple"  FORCE)
+set(BOUFFALO_RISCV_TRIPLE  "riscv64-nuclei-elf"        CACHE STRING "RISC-V cross triple"  FORCE)
 
 include(${CMAKE_CURRENT_LIST_DIR}/bouffalo-toolchain-common.cmake)

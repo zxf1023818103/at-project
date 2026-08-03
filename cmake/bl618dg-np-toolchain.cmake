@@ -13,6 +13,6 @@ set(BOUFFALO_CPU_ID        "np"                        CACHE STRING "BL618DG cor
 set(BOUFFALO_MARCH         "rv32imafdc_zicsr_zifencei" CACHE STRING "RISC-V -march"        FORCE)
 set(BOUFFALO_MABI          "ilp32d"                    CACHE STRING "RISC-V -mabi"         FORCE)
 set(BOUFFALO_MTUNE         ""                          CACHE STRING "RISC-V -mtune"        FORCE)
-set(BOUFFALO_RISCV_TRIPLE  "riscv64-zephyr-elf"        CACHE STRING "RISC-V cross triple"  FORCE)
+set(BOUFFALO_RISCV_TRIPLE  "riscv64-nuclei-elf"        CACHE STRING "RISC-V cross triple"  FORCE)
 
 include(${CMAKE_CURRENT_LIST_DIR}/bouffalo-toolchain-common.cmake)

@@ -28,7 +28,17 @@ set(_fhost_core "${CMAKE_CURRENT_SOURCE_DIR}/lib/libfhost_${BOUFFALO_CHIP}_defau
 # The macsw MAC-SW core (mac_vif_*/hal_machw_*/interrupt0_handler/macsw_mac_time_init) that fhost sits
 # on — from the SDK platform tree (shared with the old wl80211; fhost drives it via a different TX
 # process). Referenced in place (not copied); it is the CONFIG_MACSW_SELECT=default variant.
-set(_macsw "${_wifi6}/../macsw/lib")
+if(BOUFFALO_CHIP STREQUAL "bl618dg")
+    # bl618dg's vendor macsw archives are slim LTO with **zstd-compressed**
+    # bytecode. The Nuclei GCC this chip builds with only reads zlib-compressed
+    # LTO ("lto1: fatal error: compiler does not support ZSTD LTO compression"),
+    # so it cannot link the SDK copies at all. scripts/delto_bl618dg_wireless.sh
+    # pre-runs the LTO stage with the Zephyr SDK and commits ordinary
+    # machine-code archives here; those link with any RISC-V toolchain.
+    set(_macsw "${AT_ROOT}/component/bouffalo_sdk/bl618dg_wireless/lib")
+else()
+    set(_macsw "${_wifi6}/../macsw/lib")
+endif()
 set(_fhost_libs
     "${_fhost_core}"
     "${_macsw}/libmacsw_${BOUFFALO_CHIP}_default.a"
@@ -85,6 +95,11 @@ target_link_libraries(macsw_plat PRIVATE
 # fhost_config — fhost_config_buffer.c materializes the TX/RX queue + buffer sizing from the
 # CONFIG_* macros (bflb_autoconf), which is exactly why it must be built per-project.
 add_library(fhost_config STATIC "${_wifi6}/fhost_config/fhost_config_buffer.c")
+if(BOUFFALO_CHIP STREQUAL "bl618dg")
+    # The bl618dg prebuilts are compiled against picolibc and call its
+    # __assert_no_args(); we link newlib. See picolibc_compat.c.
+    target_sources(fhost_config PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/picolibc_compat.c")
+endif()
 target_include_directories(fhost_config PRIVATE
     "${_wifi6}/fhost/include"
     "${_wifi6}/macsw_os_adapter/include"

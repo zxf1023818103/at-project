@@ -644,5 +644,16 @@ SECTIONS
 
     /DISCARD/ : {
         *(.riscv.attributes)
+
+        /* macsw carries a 1 MB LA (logic-analyzer) capture buffer in its own
+         * ALLOC+LOAD section named LARAM. This chip has 287 KB of RAM, so it
+         * was never actually placed: the vendor archives used to be slim-LTO
+         * and, with nothing referencing it, LTO dropped the whole section.
+         * Since scripts/delto_bl618dg_wireless.sh pre-resolves that LTO with
+         * --whole-archive, the section survives into the archive and -- being
+         * unnamed here -- would land in the default .data output, blowing the
+         * RAM region to 407%. Drop it explicitly. If anything ever does
+         * reference it the link fails loudly rather than silently overflowing. */
+        *(LARAM)
     }
 }

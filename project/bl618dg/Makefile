@@ -60,10 +60,12 @@ TC_NP := $(REPO)/cmake/bl618dg-np-toolchain.cmake
 BUILD_AP := $(REPO)/build/bl618dg_ap
 BUILD_NP := $(REPO)/build/bl618dg_np
 
-# Pick the riscv toolchain bundled with the Bouffalo SDK submodule. B0 is a
-# Nuclei-900 core but builds with this T-Head GCC as plain rv32imafdc/ilp32d —
-# see cmake/bl618dg-ap-toolchain.cmake for why (keeps newlib, not picolibc).
-TOOLCHAIN_BIN := $(realpath $(AT_PROJECT_ROOT)/platform/toolchain_gcc_t-head_linux/bin)
+# Nuclei GCC 14.2.1 + newlib. GCC 14 is mandatory here (the vendor wireless libs
+# are slim-LTO GCC-14 bytecode) — see cmake/bl618dg-ap-toolchain.cmake. Note the
+# binary prefix is riscv64-unknown-elf-, identical to the T-Head GCC, so this
+# must stay an absolute path: putting the wrong one first on PATH silently picks
+# a compiler that cannot read those archives.
+TOOLCHAIN_BIN := $(realpath $(AT_PROJECT_ROOT)/toolchain/nuclei_riscv_newlibc_2025.10/bin)
 export PATH := $(TOOLCHAIN_BIN):$(PATH)
 
 GENERATOR ?= Ninja
