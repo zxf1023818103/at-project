@@ -14,14 +14,37 @@
 #include "task.h"
 #include "FreeRTOS_IP.h"
 #include "FreeRTOS_Sockets.h"
+#include "iperf.h"
+
+#include <stdlib.h>   /* getenv */
 
 
-#define IPERF_SERVER_IP   FreeRTOS_inet_addr_quick( 192, 168, 137, 1 )   /* WSL host */
+#define IPERF_SERVER_IP_DEFAULT   FreeRTOS_inet_addr_quick( 192, 168, 137, 1 )   /* WSL host, mirrored mode */
 #define IPERF_PORT        5001
 #define IPERF_SECONDS     15
 #define IPERF_TXBUF       8192   /* big chunks per send -> fewer calls, fuller window */
 
 static uint8_t ucTxBuf[ IPERF_TXBUF ];
+
+/* See iperf.h. Env first so the target follows the bench without a rebuild — the
+ * built-in default is a WSL-mirrored-mode address that only matches one setup. */
+uint32_t iperf_target_ip( void )
+{
+    const char * pcHost = getenv( "IPERF_HOST" );
+
+    if( ( pcHost != NULL ) && ( pcHost[ 0 ] != '\0' ) )
+    {
+        uint32_t ulIp = FreeRTOS_inet_addr( pcHost );
+
+        if( ulIp != 0UL )
+        {
+            return ulIp;
+        }
+        log_error( "[iperf] IPERF_HOST='%s' is not a dotted quad; using the default", pcHost );
+    }
+
+    return IPERF_SERVER_IP_DEFAULT;
+}
 
 static void prvIperfClientTask( void *pvParameters )
 {
@@ -59,9 +82,13 @@ static void prvIperfClientTask( void *pvParameters )
     ( void ) memset( &xServer, 0, sizeof( xServer ) );
     xServer.sin_family = FREERTOS_AF_INET;
     xServer.sin_port = FreeRTOS_htons( IPERF_PORT );
-    xServer.sin_addr = IPERF_SERVER_IP;
+    xServer.sin_addr = iperf_target_ip();
 
-    log_info( "[iperf] connecting to 192.168.137.1:%d ...", IPERF_PORT );
+    {
+        char cAddr[ 16 ];
+        FreeRTOS_inet_ntoa( xServer.sin_addr, cAddr );
+        log_info( "[iperf] connecting to %s:%d ...", cAddr, IPERF_PORT );
+    }
     if( FreeRTOS_connect( xSock, &xServer, sizeof( xServer ) ) != 0 )
     {
         log_error( "[iperf] connect FAILED" );

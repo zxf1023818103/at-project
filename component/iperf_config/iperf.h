@@ -7,16 +7,23 @@
 #ifndef IPERF_H
 #define IPERF_H
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 void iperf_server_start( void );       /* TCP RX sink, device-as-server :5001 (host: iperf -c <ip>) */
-void iperf_client_start( void );       /* TCP TX, device -> host (built-in target IP) */
+void iperf_client_start( void );       /* TCP TX, device -> host (target from iperf_target_ip) */
 void iperf_udp_server_start( void );   /* UDP RX sink :5001 */
 void iperf_udp_client_start( void );   /* UDP TX, device -> host */
 
-/* Register the `iperf [server|tx|udp|udptx]` console command. */
+/* Target host for the TX (upload) probes, as a FreeRTOS+TCP network-order address.
+ * Resolved from the IPERF_HOST env var (dotted quad) so the bench host can change
+ * without a rebuild; falls back to the built-in default when unset/unparsable. */
+uint32_t iperf_target_ip( void );
+
+/* Register the `iperf [server|tx [ip]|udp|udptx [ip]]` console command. */
 void iperf_cli_register( void );
 
 #ifdef __cplusplus

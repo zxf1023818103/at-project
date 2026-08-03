@@ -20,3 +20,6 @@ target_link_libraries(iperf PUBLIC
     freertos_cli
     rxi_log
 )
+# syscalls.h for env_save(): `iperf tx <ip>` persists the target in IPERF_HOST so the
+# next run needs no argument. getenv/setenv themselves come from libc.
+target_link_libraries(iperf PRIVATE syscall_config)

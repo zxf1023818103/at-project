@@ -24,9 +24,10 @@
 #include "task.h"
 #include "FreeRTOS_IP.h"
 #include "FreeRTOS_Sockets.h"
+#include "iperf.h"
 
 
-#define IPERF_SERVER_IP   FreeRTOS_inet_addr_quick( 192, 168, 137, 1 )   /* WSL host */
+
 #define IPERF_PORT        5001
 #define IPERF_SECONDS     15
 #define IPERF_UDP_DGRAM   1470   /* iperf2 default UDP payload; <1472 so 1 frame, no IP frag */
@@ -68,7 +69,7 @@ static void prvIperfUdpClientTask( void *pvParameters )
     ( void ) memset( &xServer, 0, sizeof( xServer ) );
     xServer.sin_family = FREERTOS_AF_INET;
     xServer.sin_port = FreeRTOS_htons( IPERF_PORT );
-    xServer.sin_addr = IPERF_SERVER_IP;
+    xServer.sin_addr = iperf_target_ip();
 
     log_info( "[iperf-udp] blasting 192.168.2.73:%d for %ds (dgram %d)...",
                 IPERF_PORT, IPERF_SECONDS, IPERF_UDP_DGRAM );
