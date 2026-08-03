@@ -29,7 +29,8 @@ endif()
 # Chip -> controller target (INTERFACE lib carrying the prebuilt .a + hci_onchip.h).
 if("${BOUFFALO_CHIP}" STREQUAL "bl602")
     set(_ctrl blecontroller)
-elseif("${BOUFFALO_CHIP}" STREQUAL "bl616" OR "${BOUFFALO_CHIP}" STREQUAL "bl616cl")
+elseif("${BOUFFALO_CHIP}" STREQUAL "bl616" OR "${BOUFFALO_CHIP}" STREQUAL "bl616cl" OR
+       "${BOUFFALO_CHIP}" STREQUAL "bl618dg")
     set(_ctrl btblecontroller)
 else()
     message(FATAL_ERROR "nimble_port: unsupported BOUFFALO_CHIP '${BOUFFALO_CHIP}'")
@@ -143,4 +144,9 @@ target_link_libraries(nimble PUBLIC
 # (bl602_<mac> / HOSTNAME); NIMBLE_DEV_NAME stays the built-in "at-nimble" empty-hostname fallback.
 
 # Vendored upstream — silence its warnings (-w last overrides the global -Werror).
-target_compile_options(nimble PRIVATE -w)
+# -w silences the vendored NimBLE warnings; GCC 14 (bl618dg) additionally PROMOTES
+# implicit-function-declaration to a hard error, and upstream npl_os_freertos.c calls
+# vPortEnterCritical() with no declaration in scope -- demote it back to a warning and
+# supply the symbols in nimble_riscv_compat.c.
+target_compile_options(nimble PRIVATE -w -Wno-error=implicit-function-declaration)
+target_sources(nimble PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/nimble_riscv_compat.c")

@@ -38,6 +38,11 @@ ifeq ($(AWSOTA),ON)
 AWS := ON
 endif
 
+# NimBLE host over the on-chip BLE controller (ble1m10s1bredr0 profile, same as bl616).
+# OFF by default; `make NIMBLE=ON` adds the host + the `bletp` throughput command, and
+# main.cpp starts nimble_start() from a boot task. Coexists with WiFi.
+NIMBLE ?= OFF
+
 # PSRAM heap (on-die on BL618DG). Opt-in: board_psram_x8_init() does real detection.
 PSRAM ?= OFF
 
@@ -97,6 +102,7 @@ app_np:
 
 app_ap:
 	$(CMAKE) -S $(REPO)/project/bl618dg/app_ap -B $(BUILD_AP) -G "$(GENERATOR)" \
+	    -DAT_ENABLE_NIMBLE=$(NIMBLE) \
 	    -DAT_ENABLE_AWS=$(AWS) \
 	    -DAT_ENABLE_AWS_OTA=$(AWSOTA) \
 	    -DAT_ENABLE_PSRAM=$(PSRAM) \

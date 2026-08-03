@@ -29,6 +29,9 @@
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
 #include "store/ram/ble_store_ram.h"
+/* Upstream's ble_store_ram.h declares read/write/delete but not the init entry point,
+ * even though ble_store_ram.c defines it. GCC 14 rejects the implicit declaration. */
+int ble_store_ram_init(void);
 #include "ble_throughput.h"
 
 extern void amebad_nimble_sm_crypto_selftest(void); /* mbedtls_sm_glue.c: SM crypto KAT */

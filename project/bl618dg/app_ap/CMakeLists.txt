@@ -37,6 +37,12 @@ set(BL618DG_BOARD_CONFIG_RF ON)
 set(CONFIG_BLUETOOTH y)
 set(CONFIG_BTBLECONTROLLER_LIB ble1m10s1bredr0)
 
+# NimBLE host on the on-chip controller: main.cpp starts the shared nimble_start()
+# from a boot task under AT_PROJECT_NIMBLE. component/bouffalo_sdk already routes
+# bl618dg to btblecontroller + nimble_port; this is the project-level switch, driven
+# by project/bl618dg/Makefile's NIMBLE= flag. Same contract as project/bouffalo.
+option(AT_ENABLE_NIMBLE "Build the NimBLE host" OFF)
+
 # AWS IoT telemetry client (aws_iot_config): -DAT_ENABLE_AWS=ON at configure time,
 # driven by project/bl618dg/Makefile's AWS= flag. Same contract as project/bouffalo.
 option(AT_ENABLE_AWS "Build the AWS IoT telemetry client" OFF)
@@ -68,6 +74,12 @@ add_subdirectory(${AT_ROOT}/src       ${CMAKE_BINARY_DIR}/src)   # exports AT_US
 # own tiny main.c.
 bflb_add_executable(app_ap BOARD bl618dgdk ${AT_USER_SOURCES})
 target_link_libraries(app_ap PRIVATE bouffalo_sdk)
+
+# NimBLE: src/main.cpp spawns nimble_start() under this macro. The host lib itself is
+# pulled in by component/bouffalo_sdk (nimble_port) once AT_ENABLE_NIMBLE is set.
+if(AT_ENABLE_NIMBLE)
+    target_compile_definitions(app_ap PRIVATE AT_PROJECT_NIMBLE)
+endif()
 
 # `ota_http <url>` rides the same TLS transport as the AWS stack, so it is linked
 # together with it — main.cpp gates ota_http_register() on the matching
