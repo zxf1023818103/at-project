@@ -46,6 +46,14 @@ PSRAM ?= OFF
 # value, e.g. `make AWS=ON FW_VERSION=ota-B`.
 FW_VERSION ?= ota-A
 
+# appFirmwareVersion build number (ota_app.c), consumed by component/aws_iot_config. The OTA
+# library commits a new image only if its version is strictly HIGHER than the running one, so an
+# OTA *target* build must bump this above whatever the device is running -- otherwise the download
+# succeeds, the new image boots, and self-test then rejects it with OtaErrSameFirmwareVersion and
+# rolls back. FW_VERSION is only a display string and does NOT gate this; they must be bumped
+# together. Same knob as project/{bouffalo,amebad}/Makefile's APP_BUILD.
+APP_BUILD ?= 1
+
 TC_AP := $(REPO)/cmake/bl618dg-ap-toolchain.cmake
 TC_NP := $(REPO)/cmake/bl618dg-np-toolchain.cmake
 
@@ -85,6 +93,7 @@ app_ap:
 	    -DAT_ENABLE_AWS_OTA=$(AWSOTA) \
 	    -DAT_ENABLE_PSRAM=$(PSRAM) \
 	    -DAT_FW_VERSION=$(FW_VERSION) \
+	    -DAT_APP_BUILD=$(APP_BUILD) \
 	    $$([ -f $(BUILD_AP)/CMakeCache.txt ] || echo -DCMAKE_TOOLCHAIN_FILE=$(TC_AP))
 	$(CMAKE) --build $(BUILD_AP) --target app_ap_bin
 
