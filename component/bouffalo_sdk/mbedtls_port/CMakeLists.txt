@@ -22,8 +22,9 @@ target_compile_definitions(mbedtls_cfg INTERFACE
 # HACC/PKA hardware crypto ALTs. EXPERIMENT: disabled on bl618dg to test whether the
 # shared Sec_Eng engine corrupts the WPA supplicant's 4-way MIC once the AWS/mbedTLS
 # stack also starts using it.
-# ECP/PKA stays on everywhere: it accelerates TLS public-key math only, which the
-# WPA supplicant does not touch on WPA2.
+# ECP/PKA stays on everywhere: it accelerates TLS public-key math, and WPA3/SAE (which is
+# all elliptic-curve math) works over it too once crypto_ec_point_mul() is given a working
+# f_rng -- see the RNG fix in crypto_mbedtls.c.
 target_compile_definitions(mbedtls_cfg INTERFACE MBEDTLS_ECP_ALT)
 
 # SHA/AES ALTs are the ones the WPA supplicant shares with TLS (PBKDF2-HMAC-SHA1 for

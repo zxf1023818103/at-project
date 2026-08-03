@@ -571,15 +571,16 @@ int wifi_port_connect(const char *ssid, const char *pass, uint8_t chan, int sec)
                                 const char *akm_str, uint8_t pmf_cfg, uint16_t freq1, uint16_t freq2,
                                 uint8_t use_dhcp);
     const char *akm = NULL;   // wifi_sta_connect scans internally -> auto-detects AKM from the beacon
-    /* pmf_cfg=0. NOTE for WPA3/SAE (not working on this port yet): SAE additionally needs
-     * pmf_cfg=1, since WPA3 mandates protected management frames. But that alone does not
-     * help — the supplicant's BSS list is never populated here (its driver never receives
-     * CFGMACSW_SCAN_RESULT_EVENT), so a WPA3 AP loops SCANNING -> DISCONNECTED either way.
-     * WPA2 is unaffected: the driver associates directly, the supplicant only runs the
-     * 4-way. Passing the scanned channel as freq1 was tried too and changed nothing. */
+    /* pmf_cfg maps straight onto the supplicant's `ieee80211w` (enum mfp_options: 0=disabled,
+     * 1=optional, 2=required). It MUST NOT be 0: WPA3 mandates protected management frames, so
+     * an SAE AP advertises MFPR and wpa_supplicant's BSS match rejects it outright when the
+     * network has ieee80211w=0 — the symptom is CTRL-EVENT-BSS-ADDED immediately followed by
+     * CTRL-EVENT-NETWORK-NOT-FOUND ("SSID error, scan no bssid and channel"), i.e. the BSS was
+     * seen and then discarded. 1 (optional) is the value that works for both: a WPA2 AP that
+     * does not ask for MFP is unaffected, a WPA3 AP gets MFPC=1 and satisfies its MFPR. */
     s_bouffalo_conn_ok = 0;
     s_bouffalo_conn_waiter = xTaskGetCurrentTaskHandle();
-    if (wifi_sta_connect(ssid, pass, NULL, akm, 0, 0, 0, 0) != 0) { s_bouffalo_conn_waiter = NULL; return -1; }
+    if (wifi_sta_connect(ssid, pass, NULL, akm, 1, 0, 0, 0) != 0) { s_bouffalo_conn_waiter = NULL; return -1; }
     if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(12000)) == 0) { s_bouffalo_conn_waiter = NULL; return -1; }
     /* Pin the TX rate to legacy 11g 24M (no HT/AMPDU path): the macsw MAC core wedges its
      * TX AC queues under bidirectional TCP on auto rate (internal frame left:N + hal_machw
