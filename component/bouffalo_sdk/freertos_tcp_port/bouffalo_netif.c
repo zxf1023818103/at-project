@@ -30,6 +30,7 @@
 #include "bflb_sec_trng.h"   /* bflb_trng_readlen — HW TRNG for the DHCP xid / TCP ISN */
 
 #include "net_al.h"          /* net_al_* / net_if_* / net_buf_tx_* contract + NET_AL_TX_HEADROOM */
+#include "net_al_ext.h"      /* net_al_ext_{get,set}_vif_ip contract — keeps our stubs ABI-correct */
 #include "mm.h"              /* kmalloc(MM_FLAG_HEAP_WRAM_0) — MAC-DMA-reachable WRAM heap */
 
 /* fhost internal allocator (DMA-capable per fhost's own usage) + the TX submit + wifi_mgmr link
@@ -276,20 +277,34 @@ void            net_if_down_cb( net_al_if_t net_if ) { ( void ) net_if; }
 /* fhost_to_net_if is provided by libfhost (fhost.c) — do not redefine here. */
 
 /* ===== DHCP / IP — FreeRTOS+TCP owns DHCP; these are no-ops/stubs =========== */
-void net_al_dhcpd_start( net_al_if_t net_if ) { ( void ) net_if; }
-void net_al_dhcpd_stop( net_al_if_t net_if )  { ( void ) net_if; }
-int  net_al_ext_dhcp_connect( net_al_if_t net_if )    { ( void ) net_if; return 0; }
-int  net_al_ext_dhcp_disconnect( net_al_if_t net_if ) { ( void ) net_if; return 0; }
-int  net_al_ext_get_vif_ip( net_al_if_t net_if, uint32_t * ip, uint32_t * mask, uint32_t * gw )
+int  net_al_dhcpd_start( net_al_if_t net_if, int start, int limit )
 {
-    ( void ) net_if; if( ip ) *ip = 0; if( mask ) *mask = 0; if( gw ) *gw = 0; return 0;
+    ( void ) net_if; ( void ) start; ( void ) limit; return 0;
 }
-int  net_al_ext_set_vif_ip( net_al_if_t net_if, uint32_t ip, uint32_t mask, uint32_t gw )
+int  net_al_dhcpd_stop( net_al_if_t net_if )  { ( void ) net_if; return 0; }
+int  net_al_ext_dhcp_connect( int is_api, uint32_t to_ms ) { ( void ) is_api; ( void ) to_ms; return 0; }
+void net_al_ext_dhcp_disconnect( void ) { }
+/* Signature MUST match net_al_ext.h -- the prebuilt fhost calls these, and it passes
+ * (int fvif_idx, struct net_al_ext_ip_addr_cfg *cfg), i.e. only a0/a1. The old 4-argument
+ * form here read a2/a3 as well, which are whatever the previous call left behind: with the
+ * right timing (associate, reboot, associate again) a2 came in as 4 and the store faulted
+ * with "Store/AMO access fault, mtval=00000004". FreeRTOS+TCP owns L3, so both stay stubs;
+ * get just reports "nothing configured". */
+int  net_al_ext_get_vif_ip( int fvif_idx, struct net_al_ext_ip_addr_cfg * cfg )
 {
-    ( void ) net_if; ( void ) ip; ( void ) mask; ( void ) gw; return 0;
+    ( void ) fvif_idx;
+    if( cfg != NULL )
+    {
+        ( void ) memset( cfg, 0, sizeof( *cfg ) );
+    }
+    return 0;
 }
-void net_al_link_set( net_al_if_t net_if, int up ) { ( void ) net_if; ( void ) up; }
-void net_al_set_ipv6_enable( net_al_if_t net_if, int en ) { ( void ) net_if; ( void ) en; }
+int  net_al_ext_set_vif_ip( int fvif_idx, struct net_al_ext_ip_addr_cfg * cfg )
+{
+    ( void ) fvif_idx; ( void ) cfg; return 0;
+}
+int  net_al_link_set( net_al_if_t net_if ) { ( void ) net_if; return 0; }
+int  net_al_set_ipv6_enable( int enable ) { ( void ) enable; return 0; }
 
 /* ===== net_init + L2 (EAPOL) socket API ====================================
  * fhost/supplicant use these for the WPA handshake. FreeRTOS+TCP owns L3; net_init just marks the
