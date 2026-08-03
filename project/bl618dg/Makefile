@@ -54,6 +54,12 @@ FW_VERSION ?= ota-A
 # together. Same knob as project/{bouffalo,amebad}/Makefile's APP_BUILD.
 APP_BUILD ?= 1
 
+# Prebuilt LittleFS image packed into the PSM partition. Without it the whole-flash
+# image carries no filesystem at all, so every flash wipes the AWS credentials
+# (aws_ca/cert/key.der) and the device comes up with an unformatted LFS. Set
+# LFS_BIN= (empty) to build an image that leaves PSM untouched.
+LFS_BIN ?= $(REPO)/project/lfs.bin
+
 TC_AP := $(REPO)/cmake/bl618dg-ap-toolchain.cmake
 TC_NP := $(REPO)/cmake/bl618dg-np-toolchain.cmake
 
@@ -110,7 +116,8 @@ image: app_np app_ap
 	    --chip $(CHIP) --board $(BOARD) --name app_ap \
 	    --build-dir $(BUILD_AP) --elf $(BUILD_AP)/app_ap_$(CHIP).elf \
 	    --objcopy $(TOOLCHAIN_BIN)/riscv64-unknown-elf-objcopy \
-	    --append-np $(NP_BIN)
+	    --append-np $(NP_BIN) \
+	    $(if $(LFS_BIN),--lfs-bin $(LFS_BIN),)
 	@md5sum $(WHOLE)
 	@echo "flashable image: $(WHOLE)"
 
