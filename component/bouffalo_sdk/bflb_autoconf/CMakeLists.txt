@@ -52,6 +52,9 @@ endforeach()
 if(DEFINED BOUFFALO_CHIP)
     string(TOUPPER "${BOUFFALO_CHIP}" _chip_uc)
     file(APPEND "${_autoconf_h_new}" "#define ${_chip_uc} 1\n")
+    # ...and as a string, so code shared across chips (hostname / BLE advert name)
+    # can name the chip it was built for instead of hardcoding one of them.
+    file(APPEND "${_autoconf_h_new}" "#define BOUFFALO_CHIP_NAME \"${BOUFFALO_CHIP}\"\n")
 endif()
 
 if(DEFINED CPU_ID AND NOT "${CPU_ID}" STREQUAL "")

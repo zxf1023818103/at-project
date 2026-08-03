@@ -30,7 +30,9 @@ target_link_libraries(bouffalo_freertos_tcp PUBLIC
 )
 
 # bflb_lhal carries bflb_sec_trng.h (the HW TRNG the RNG hooks use), both chips.
-target_link_libraries(bouffalo_freertos_tcp PRIVATE bflb_lhal)
+# bflb_autoconf force-includes autoconf.h, which defines BOUFFALO_CHIP_NAME —
+# at_netif_platform_name() reports that instead of a hardcoded chip.
+target_link_libraries(bouffalo_freertos_tcp PRIVATE bflb_lhal bflb_autoconf)
 
 # fhost net_al bridge headers (net_al.h / fhost_api.h / wifi_mgmr.h) — the bl616 netif bridge
 # (bouffalo_netif.c) is being rewritten against fhost's net_al interface (step 3). The fhost

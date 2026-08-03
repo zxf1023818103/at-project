@@ -521,7 +521,9 @@ void at_netif_bt_mac( uint8_t mac[ 6 ] )
     }
 }
 
-const char * at_netif_platform_name( void ) { return "bl616"; }
+/* Shared by bl616 / bl616cl / bl618dg — name the chip actually built for, else every
+ * one of them would announce itself as "bl616" over DHCP/mDNS and in the BLE advert. */
+const char * at_netif_platform_name( void ) { return BOUFFALO_CHIP_NAME; }
 
 static const char * prvHostname( void ) { return at_netif_hostname(); }
 

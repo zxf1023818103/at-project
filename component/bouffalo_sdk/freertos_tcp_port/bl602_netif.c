@@ -73,7 +73,7 @@ static BaseType_t prvGetRandom( uint32_t * out )
     return ( bflb_trng_readlen( ( uint8_t * ) out, sizeof( *out ) ) == 0 ) ? pdTRUE : pdFALSE;
 }
 
-const char * at_netif_platform_name( void ) { return "bl602"; }
+const char * at_netif_platform_name( void ) { return BOUFFALO_CHIP_NAME; }
 
 static const char * prvHostname( void )
 {
