@@ -256,6 +256,15 @@ void wifi_event_handler(uint32_t code, uint32_t code2) {
             bouffalo_conn_event(1);   // wake wifi_port_connect: association succeeded
             wifi_service_on_event(WIFI_SVC_EV_CONNECTED);
 #endif
+#if defined BL616 || defined BL616CL || defined BL618DG
+            // Restart DHCP now that the link is genuinely up. bouffalo_tcp_bringup() runs back at
+            // MGMR_DONE (before association), so the IP task has been retransmitting DISCOVERs into
+            // a down link ever since, doubling its retry period each time. Without this kick the
+            // lease lands whenever that free-running backoff next fires -- measured on bl618dg at
+            // 18.3 s, a flat ~9.3 s after association, twice in a row. bl602 already does the
+            // equivalent from its driver connect indication (bl_rx.c -> bl602_tcp_kick).
+            { extern void at_netif_kick(void); at_netif_kick(); }
+#endif
             break;
         }
         case CODE_WIFI_ON_PRE_GOT_IP: {
@@ -560,9 +569,24 @@ int wifi_port_scan(const char *ssid, uint8_t *chan, int *sec) {
     return 0;
 }
 
+/* 802.11 channel -> centre frequency in MHz, for wifi_sta_connect's freq1 (0 = unknown -> the
+ * driver scans every channel). Mirrors wl80211.h's _channel_to_freq, inlined here because the
+ * fhost/wifi6 chips don't pull in that header. */
+static uint16_t bl616_chan_to_freq(uint8_t chan) {
+    if (chan >= 1  && chan <= 13)  return (uint16_t)(2407 + chan * 5);
+    if (chan == 14)                return 2484;
+    if (chan >= 36 && chan <= 177) return (uint16_t)(5000 + chan * 5);
+    return 0;
+}
+
 int wifi_port_connect(const char *ssid, const char *pass, uint8_t chan, int sec) {
-    (void)chan; (void)sec;                  // freq1=0 -> driver does its own directed scan+connect;
-                                            // security is beacon-derived
+    (void)sec;                              // security is beacon-derived
+    /* Pin the driver's internal scan to the one channel we already know the AP is on (cached
+     * WIFI_CHANNEL, or the one the preceding scan just found). Passing freq1=0 makes it sweep
+     * every regulatory channel instead -- measured at 5.9 s on bl618dg, the single largest slice
+     * of boot-to-associated. A stale cache just fails the connect, and wifi_service then clears
+     * WIFI_CHANNEL and retries with a full scan. */
+    uint16_t freq1 = bl616_chan_to_freq(chan);
     // Use fhost's convenience connector (same one the SDK CLI `wifi_sta_connect` uses); it assembles the
     // wifi_mgmr_sta_connect_params_t (ssid/key + lengths, akm) correctly. AKM: WPA2 = "RSN" (the valid
     // set is WPA/RSN/SAE). use_dhcp=0 -- FreeRTOS+TCP owns DHCP (use_dhcp=1 arms the driver's ~15s
@@ -580,7 +604,7 @@ int wifi_port_connect(const char *ssid, const char *pass, uint8_t chan, int sec)
      * does not ask for MFP is unaffected, a WPA3 AP gets MFPC=1 and satisfies its MFPR. */
     s_bouffalo_conn_ok = 0;
     s_bouffalo_conn_waiter = xTaskGetCurrentTaskHandle();
-    if (wifi_sta_connect(ssid, pass, NULL, akm, 1, 0, 0, 0) != 0) { s_bouffalo_conn_waiter = NULL; return -1; }
+    if (wifi_sta_connect(ssid, pass, NULL, akm, 1, freq1, 0, 0) != 0) { s_bouffalo_conn_waiter = NULL; return -1; }
     if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(12000)) == 0) { s_bouffalo_conn_waiter = NULL; return -1; }
     /* Pin the TX rate to legacy 11g 24M (no HT/AMPDU path): the macsw MAC core wedges its
      * TX AC queues under bidirectional TCP on auto rate (internal frame left:N + hal_machw

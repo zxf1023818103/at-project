@@ -56,6 +56,7 @@ static SemaphoreHandle_t s_sntp_lock;          /* serializes sntp_sync_once (tas
 /* NTP server from DHCP option 42 (FreeRTOS_DHCP.c at-project patch); network byte order, 0 = none. */
 extern uint32_t ulDHCPNtpServerAddress;
 static TaskHandle_t      s_selftest_task;
+static TaskHandle_t      s_sntp_task;           /* woken by sntp_sync_start() on network-up (backoff reset) */
 static volatile int      s_first_sync_done;
 
 /* ---- coreSNTP callbacks --------------------------------------------------------------- */
@@ -315,19 +316,27 @@ static void sntp_task( void * arg )
     {
         int rc = sntp_sync_once();
 
+        /* Both waits are interruptible by the network-up kick (sntp_sync_start on an already-running
+         * client): it cuts the sleep short AND resets the backoff, so a round that failed only
+         * because the network wasn't up yet doesn't leave the client parked for the full cap. */
         if( rc == 0 )
         {
             /* synced: reset the backoff so the next outage starts from the base, re-sync in ~1h */
             BackoffAlgorithm_InitializeParams( &backoff, SNTP_BACKOFF_BASE_MS, SNTP_BACKOFF_MAX_MS,
                                                BACKOFF_ALGORITHM_RETRY_FOREVER );
-            vTaskDelay( pdMS_TO_TICKS( SNTP_RESYNC_PERIOD_MS ) );
+            ( void ) ulTaskNotifyTake( pdTRUE, pdMS_TO_TICKS( SNTP_RESYNC_PERIOD_MS ) );
         }
         else
         {
             uint16_t delay_ms = SNTP_BACKOFF_MAX_MS;
             ( void ) BackoffAlgorithm_GetNextBackoff( &backoff, ( uint32_t ) rand(), &delay_ms );
             log_error( "[SNTP] round failed (%d); retry in %ums (exp backoff)", rc, ( unsigned ) delay_ms );
-            vTaskDelay( pdMS_TO_TICKS( delay_ms ) );
+            if( ulTaskNotifyTake( pdTRUE, pdMS_TO_TICKS( delay_ms ) ) != 0U )
+            {
+                log_info( "[SNTP] network up -> retrying now (backoff reset)" );
+                BackoffAlgorithm_InitializeParams( &backoff, SNTP_BACKOFF_BASE_MS, SNTP_BACKOFF_MAX_MS,
+                                                   BACKOFF_ALGORITHM_RETRY_FOREVER );
+            }
         }
     }
 }
@@ -353,7 +362,19 @@ void sntp_sync_start( void )
      * leaked another 4 KB sntp task (caught in `tasks`: two "sntp" entries after one kick reconnect). */
     static int s_started = 0;
     if( s_started )
+    {
+        /* Already running -> this call is the network-up cue. Wake the task out of its retry
+         * backoff and reset it. Platforms that start SNTP before the network exists (bl616/cl,
+         * bl618dg: no CODE_WIFI_ON_GOT_IP, so it starts pre-scheduler) otherwise burn every
+         * pre-network round on a failure and grow the backoff to its 32 s cap - measured on
+         * bl618dg, DHCP completed at 18.3 s but the task was parked in a 10-20 s sleep and only
+         * synced at 29-43 s. Waking it here syncs within a round-trip of network-up. */
+        if( s_sntp_task != NULL )
+        {
+            xTaskNotifyGive( s_sntp_task );
+        }
         return;
+    }
     s_started = 1;
 
     /* The [TIME]/[DST] newlib date-time self-test demo (time_selftest_run via sntp_selftest_task)
@@ -365,7 +386,7 @@ void sntp_sync_start( void )
     /* 1024 words (4 KB): the task only does a DNS lookup + a 48-byte SNTP round + set_time in a
      * loop - 4096 (16 KB) was ~5x over. */
     if( xTaskCreate( sntp_task, "sntp", 1024, NULL,
-                     tskIDLE_PRIORITY + 2, NULL ) != pdPASS )
+                     tskIDLE_PRIORITY + 2, &s_sntp_task ) != pdPASS )
     {
         log_error( "[SNTP] xTaskCreate(sntp) FAILED" );
     }
