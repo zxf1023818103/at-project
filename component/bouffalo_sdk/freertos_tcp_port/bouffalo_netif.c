@@ -30,7 +30,6 @@
 #include "bflb_sec_trng.h"   /* bflb_trng_readlen — HW TRNG for the DHCP xid / TCP ISN */
 
 #include "net_al.h"          /* net_al_* / net_if_* / net_buf_tx_* contract + NET_AL_TX_HEADROOM */
-#include "net_al_ext.h"      /* net_al_ext_{get,set}_vif_ip contract — keeps our stubs ABI-correct */
 #include "mm.h"              /* kmalloc(MM_FLAG_HEAP_WRAM_0) — MAC-DMA-reachable WRAM heap */
 
 /* fhost internal allocator (DMA-capable per fhost's own usage) + the TX submit + wifi_mgmr link
@@ -277,34 +276,32 @@ void            net_if_down_cb( net_al_if_t net_if ) { ( void ) net_if; }
 /* fhost_to_net_if is provided by libfhost (fhost.c) — do not redefine here. */
 
 /* ===== DHCP / IP — FreeRTOS+TCP owns DHCP; these are no-ops/stubs =========== */
-int  net_al_dhcpd_start( net_al_if_t net_if, int start, int limit )
+void net_al_dhcpd_start( net_al_if_t net_if ) { ( void ) net_if; }
+void net_al_dhcpd_stop( net_al_if_t net_if )  { ( void ) net_if; }
+int  net_al_ext_dhcp_connect( net_al_if_t net_if )    { ( void ) net_if; return -1; }   /* SDK stub returns -1 */
+int  net_al_ext_dhcp_disconnect( net_al_if_t net_if ) { ( void ) net_if; return 0; }
+/* net_al_ext.h declares this as (int fvif_idx, struct net_al_ext_ip_addr_cfg *cfg) and the
+ * prebuilt fhost calls it that way -- only a0/a1 are set. The previous 4-pointer form here
+ * dereferenced a2/a3 as well, i.e. whatever the last call left in those registers: after
+ * "associate, reset, associate again" a2 arrived as 4 and the store faulted with
+ * "Store/AMO access fault, mtval=00000004" (the NULL guards did not help, 4 is not NULL).
+ * FreeRTOS+TCP owns L3 so this stays a stub -- it just must not touch a2/a3. cfg is void*
+ * to avoid pulling in net_al_ext.h, whose other declarations disagree with the working
+ * stubs below (they are wrong too, but harmless: none of them dereference anything). */
+int  net_al_ext_get_vif_ip( int fvif_idx, void * cfg )
 {
-    ( void ) net_if; ( void ) start; ( void ) limit; return 0;
+    /* MUST return -1 ("no IP configured"), like the SDK's own stub in
+     * wifi6_lwip_adapter/net_al_ext.c. Returning 0 tells fhost the query succeeded, so it
+     * reads the untouched cfg as a valid address and never starts DHCP -- the device then
+     * associates fine but never reaches "network UP". */
+    ( void ) fvif_idx; ( void ) cfg; return -1;
 }
-int  net_al_dhcpd_stop( net_al_if_t net_if )  { ( void ) net_if; return 0; }
-int  net_al_ext_dhcp_connect( int is_api, uint32_t to_ms ) { ( void ) is_api; ( void ) to_ms; return 0; }
-void net_al_ext_dhcp_disconnect( void ) { }
-/* Signature MUST match net_al_ext.h -- the prebuilt fhost calls these, and it passes
- * (int fvif_idx, struct net_al_ext_ip_addr_cfg *cfg), i.e. only a0/a1. The old 4-argument
- * form here read a2/a3 as well, which are whatever the previous call left behind: with the
- * right timing (associate, reboot, associate again) a2 came in as 4 and the store faulted
- * with "Store/AMO access fault, mtval=00000004". FreeRTOS+TCP owns L3, so both stay stubs;
- * get just reports "nothing configured". */
-int  net_al_ext_get_vif_ip( int fvif_idx, struct net_al_ext_ip_addr_cfg * cfg )
+int  net_al_ext_set_vif_ip( net_al_if_t net_if, uint32_t ip, uint32_t mask, uint32_t gw )
 {
-    ( void ) fvif_idx;
-    if( cfg != NULL )
-    {
-        ( void ) memset( cfg, 0, sizeof( *cfg ) );
-    }
-    return 0;
+    ( void ) net_if; ( void ) ip; ( void ) mask; ( void ) gw; return 0;
 }
-int  net_al_ext_set_vif_ip( int fvif_idx, struct net_al_ext_ip_addr_cfg * cfg )
-{
-    ( void ) fvif_idx; ( void ) cfg; return 0;
-}
-int  net_al_link_set( net_al_if_t net_if ) { ( void ) net_if; return 0; }
-int  net_al_set_ipv6_enable( int enable ) { ( void ) enable; return 0; }
+void net_al_link_set( net_al_if_t net_if, int up ) { ( void ) net_if; ( void ) up; }
+void net_al_set_ipv6_enable( net_al_if_t net_if, int en ) { ( void ) net_if; ( void ) en; }
 
 /* ===== net_init + L2 (EAPOL) socket API ====================================
  * fhost/supplicant use these for the WPA handshake. FreeRTOS+TCP owns L3; net_init just marks the
