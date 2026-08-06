@@ -99,14 +99,40 @@ AP has not asked for a new authentication, and it still holds a valid PMKSA for 
   A2=de:2c:6e:61:f4:c2` is correct, and `WPA: Sending EAPOL-Key 2/4` is reached every time.
 - **Not the PMK cache.** Enabling `CONFIG_PMK_CACHE_IN_MGMR` (so `wpa_sm_set_pmk()` populates
   `wifi_mgmr_pmk_cache_entry_update()`) changes nothing — the driver still re-runs SAE.
-- **Not recoverable from the application layer.** After the failure, retrying within the same boot
-  never succeeds (observed to 138 s). Only a chip reset recovers, which suggests the driver itself
-  is left in a state the connect path cannot clear. Note also that calling `wifi_sta_disconnect()`
+- **Not recoverable from the application layer.** See the next section — the receive path is dead
+  after the failure, so no retry policy can work. Note also that calling `wifi_sta_disconnect()`
   while not associated leaves the driver unresponsive to subsequent `wifi_sta_connect()` calls —
   every later attempt then times out after 12 s with no log output at all.
 
+## Secondary defect: the receive path is dead afterwards
+
+This is arguably the more serious half of the bug. Once the 4-way handshake has timed out, the
+driver can no longer **scan**: `wifi_mgmr_sta_scan()` completes but the result tree does not contain
+the AP we are 5 m away from and were talking to seconds earlier at -50 dBm.
+
+Measured over a 5-minute window with an exponential backoff (1 s base, 60 s cap, full jitter), retry
+intervals of ~17 s, ~40 s, ~60 s, ~89 s, ~89 s — every single attempt:
+
+```
+[WSVC] ATTest cached ch=149 -> direct connect (no scan)
+        ... 12 s timeout, no association ...
+[WSVC] cached ch=149 failed -> clear cache + scan
+[WSVC] ATTest not found in scan            <- AP is present and strong, but invisible to the scan
+```
+
+TX still works (association requests do go out — the AP logs them). Only a chip reset restores the
+receive path; the device never recovers on its own, no matter how long it waits.
+
+For reference, the AmebaD (Realtek) driver exhibits the *same* post-comeback symptom — "the
+driver's comeback assoc succeeds but leaves the RX path dead (no DHCP OFFER, no RA; TX still
+works)" — which suggests this is a common failure mode in how the status-30 comeback path is
+handled, rather than something specific to one vendor's MAC.
+
 ## Requested fix
 
-On receiving an Association Response with status code 30 and an Association Comeback Time, wait for
-the comeback interval and re-send the Association Request, without tearing down the authentication
-state or re-running SAE.
+1. On receiving an Association Response with status code 30 and an Association Comeback Time, wait
+   for the comeback interval and re-send the Association Request, without tearing down the
+   authentication state or re-running SAE.
+2. Independently of (1): make the failure recoverable. Whatever state the aborted 4-way handshake
+   leaves the receive path in, a subsequent scan should not be blind — today the only way out is a
+   chip reset.
