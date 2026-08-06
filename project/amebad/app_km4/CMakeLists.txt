@@ -246,6 +246,21 @@ option(AMEBAD_ENABLE_NIMBLE "Build the NimBLE host image (LE/GATT/Mesh/coex on a
 # by the Makefile). Adds the mcumgr core + the smp_bt transport + the img/os platform impls.
 option(AT_ENABLE_MCUMGR "Build mcumgr SMP-over-BLE DFU (implies NIMBLE)" OFF)
 
+# EAP-TLS supplicant (`make EAP=ON`): link the prebuilt EAP peer core (amebad_eap =
+# lib_eap.a) + the source glue/adapter (amebad_eap_glue, bound to upstream Mbed TLS
+# 3.6 -- see component/amebad/wpa_supplicant/CMakeLists.txt). Reproduces the customer
+# (Kontakt.io) WPA2-Enterprise EAP-TLS association path. AT_PROJECT_EAP drives
+# platform_opts.h's CONFIG_ENABLE_TLS=1 (-> CONFIG_ENABLE_EAP + client-cert verify)
+# and gates the `eap` console command in main.cpp.
+option(AMEBAD_ENABLE_EAP "Build the WPA2-Enterprise EAP-TLS supplicant" OFF)
+# The EAP peer core lib_eap.a (amebad_eap) joins the link group here; the SOURCE glue
+# + adapter + `eap` command are compiled into the image lower down (after the target
+# exists), mirroring the AMEBAD_ENABLE_WPS block.
+set(_eap_grp "")
+if(AMEBAD_ENABLE_EAP)
+    set(_eap_grp ",amebad_eap")
+endif()
+
 # The console (FreeRTOS-Plus-CLI over the LOGUART) is now the DEFAULT, built by
 # component/amebad/monitor (amebad_monitor + amebad_monitor_common, in _diag_grp below) and
 # started unconditionally by main.c (except the QUIC image). freertos_cli — the FreeRTOS-Plus-CLI
@@ -683,6 +698,51 @@ if(AMEBAD_ENABLE_WPS)
         "-fmacro-prefix-map=${AT_ROOT}/component/amebad/wpa_supplicant/wpa_supplicant/=")
 endif()
 
+# WPA2-Enterprise EAP-TLS supplicant (make EAP=ON). Mirrors the WPS block above: the
+# EAP peer core is lib_eap.a (amebad_eap, in _eap_grp), and its SDK glue + TLS adapter
+# are compiled INTO the image so they see platform_opts.h + the image includes.
+#   wifi_eap_config.c  eap_start()/certs/eap_cert_setup (public EAP config glue)
+#   tls_polarssl.c     the wpa `tls.h` TLS API, bound here to upstream Mbed TLS 3.6
+#                      (mbedtls_config -> MBEDTLS_VERSION_NUMBER>=0x03010000 branch:
+#                      net_sockets.h + ssl_misc.h). ONE mbedTLS in the image.
+#   eap_cli.c          the `eap` console command (set certs + eap_start("tls"))
+# AT_PROJECT_EAP -> platform_opts.h CONFIG_ENABLE_TLS=1 (=> CONFIG_ENABLE_EAP +
+# ENABLE_EAP_SSL_VERIFY_CLIENT); also set on amebad_wifi so wifi_conf.c's
+# get_eap_phase() 4-way-skip gating compiles in, and on main.cpp for the command.
+if(AMEBAD_ENABLE_EAP)
+    target_sources(target_img2_km4 PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/eap_cli.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/eap_shim.c"
+        "${AT_ROOT}/component/amebad/wpa_supplicant/wpa_supplicant/wifi_eap_config.c"
+        "${AT_ROOT}/component/amebad/wpa_supplicant/src/crypto/tls_polarssl.c")
+    target_link_libraries(target_img2_km4 PRIVATE amebad_wpa_supplicant mbedtls_config)
+    target_include_directories(target_img2_km4 PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/eap_shim"                 # empty lwip/netif.h (no lwIP in a FreeRTOS+TCP build)
+        "${AT_ROOT}/component/amebad/wpa_supplicant/src"
+        "${AT_ROOT}/component/mbedtls_config/mbedtls/library"   # ssl_misc.h (mbedTLS-private)
+        "${AT_ROOT}/platform/ameba-rtos-d/component/common/drivers/wlan/realtek/src/osdep")
+    # tls_polarssl.c's >=3.1 branch pokes mbedTLS ssl/ecp internals (ctx->state/handshake/
+    # conf, session master, transform, ciphersuite) to extract the EAP MSK. In Mbed TLS 3.x
+    # those fields are MBEDTLS_PRIVATE(); MBEDTLS_ALLOW_PRIVATE_ACCESS makes the macro expand
+    # to the bare name so the adapter compiles against the project's 3.6 (ABI-identical).
+    target_compile_definitions(target_img2_km4 PRIVATE
+        AMEBAD_ENABLE_EAP AT_PROJECT_EAP CONFIG_USE_MBEDTLS=1 CONFIG_USE_POLARSSL=0
+        MBEDTLS_ALLOW_PRIVATE_ACCESS)
+    # TLS 1.3 EAP-TLS test: only a TF-M image (AMEBAD_TFM_BOOT) has the boot PSA bring-up
+    # that TLS 1.3's psa_crypto_init() needs, so let EAP offer 1.3 only there.
+    if(AMEBAD_TFM_BOOT)
+        set_property(SOURCE "${AT_ROOT}/component/amebad/wpa_supplicant/src/crypto/tls_polarssl.c"
+                     APPEND PROPERTY COMPILE_DEFINITIONS AT_EAP_TLS13)
+    endif()
+    target_compile_definitions(amebad_wifi PRIVATE AT_PROJECT_EAP)
+    # tls_polarssl.c + wifi_eap_config.c are vendored SDK code: silence their warnings
+    # and shorten __FILE__ like the WPS glue.
+    set_source_files_properties(
+        "${AT_ROOT}/component/amebad/wpa_supplicant/wpa_supplicant/wifi_eap_config.c"
+        "${AT_ROOT}/component/amebad/wpa_supplicant/src/crypto/tls_polarssl.c"
+        PROPERTIES COMPILE_OPTIONS "-w")
+endif()
+
 # DEBUG eFuse provisioning aids (make EFUSE_DEBUG=ON, never ship): the `efuse_burn` console command
 # + the boot-time dump of all eFuse keys + MACs (tfm_psa_selftest.c, gated on AMEBAD_EFUSE_DEBUG).
 # The burn command needs the TF-M secure world (EFUSE_WRITE IOCTL).
@@ -773,7 +833,7 @@ target_link_libraries(target_img2_km4 PRIVATE
     # EXCLUDE_FROM_ALL lib CMake would otherwise sink it past -lc/-lgcc and leave
     # those undefined. amebad_mbed (flash_api) is lfs_port's backend. (The upstream
     # mbedcrypto/mbedx509 + picotls/ngtcp2 crypto join per-feature via the _grp vars.)
-    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,freertos_plus_tcp,freertos_plus_tcp_port,amebad_wlan,amebad_wps,lfs_port,amebad_mbed,lfs_config,littlefs,rxi_log${_diag_grp}${_hci_grp}${_quic_grp}${_pk11_grp}${_bench_grp}${_aws_grp}${_mz_grp}${_hash_grp}${_cares_grp}>"
+    "$<LINK_GROUP:cross_refs,FreeRTOS,amebad_osdep,amebad_ram_hp,amebad_ram_common,amebad_usrcfg_common,amebad_usrcfg_hp,amebad_pmc_hp,amebad_wifi,amebad_wlan_glue,amebad_freertos_tcp,freertos_plus_tcp,freertos_plus_tcp_port,amebad_wlan,amebad_wps,lfs_port,amebad_mbed,lfs_config,littlefs,rxi_log${_diag_grp}${_hci_grp}${_quic_grp}${_pk11_grp}${_bench_grp}${_aws_grp}${_mz_grp}${_hash_grp}${_cares_grp}${_eap_grp}>"
     m
     stdc++
     c

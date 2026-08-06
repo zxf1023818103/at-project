@@ -10,7 +10,7 @@
 #include "utils/common.h"
 #include "tls.h"
 
-#define DEBUG_LEVEL   0 // For debug: 5
+#define DEBUG_LEVEL   0 // For debug: 5   [at-eap: keep 0; concise [at-eap] step prints instead of the byte-dump flood]
 
 extern int max_buf_bio_size;
 
@@ -439,8 +439,7 @@ struct wpabuf * tls_connection_handshake(void *tls_ctx,
 				break;
 			// handshake got error
 			else{
-				//wpa_printf(MSG_INFO, "TLS: connection handshake failed, ret: %d", ret);
-				printf("\nTLS: connection handshake failed, ret: %d\n", ret);
+				printf("\nTLS: handshake failed state=%d ret=-0x%04x\n", (int)ssl->state, (unsigned)(-ret));
 				ErrorCnt = 1;
 				return NULL;
 			}
@@ -958,6 +957,25 @@ struct tls_connection * tls_connection_init(void *tls_ctx)
 	mbedtls_ssl_conf_authmode(tls_context->conf, MBEDTLS_SSL_VERIFY_NONE);
 	mbedtls_ssl_conf_rng(tls_context->conf, my_random, NULL);
 
+	/* Force TLS 1.2 (at-eap): mbedtls_ssl_config_defaults(PRESET_DEFAULT) on 3.6.4
+	 * enables TLS 1.3, whose ClientHello path (ssl_tls13_generic.c) calls
+	 * psa_crypto_init() -> fails (-0x0090) in this non-AWS image where nothing seeds
+	 * PSA. EAP-TLS's wpa keyblock/MSK derivation is a TLS-1.2 construct anyway, the
+	 * RADIUS server is TLS-1.2, and the customer runs mbedTLS 2.4 (TLS 1.2) - so pin
+	 * both bounds to 1.2 and skip the 1.3 machinery entirely. */
+#if defined(MBEDTLS_VERSION_NUMBER) && (MBEDTLS_VERSION_NUMBER>=0x03010000)
+#if defined(AT_EAP_TLS13)
+	/* TLS 1.3 test build (make EAP=ON TFM=ON): offer up to 1.3. TLS 1.3's ClientHello
+	 * path needs psa_crypto_init() to succeed, which a TF-M image's boot PSA bring-up
+	 * provides (a plain EAP image returned -0x0090). min stays 1.2 so the server picks. */
+	mbedtls_ssl_conf_min_tls_version(tls_context->conf, MBEDTLS_SSL_VERSION_TLS1_2);
+	mbedtls_ssl_conf_max_tls_version(tls_context->conf, MBEDTLS_SSL_VERSION_TLS1_3);
+#else
+	mbedtls_ssl_conf_min_tls_version(tls_context->conf, MBEDTLS_SSL_VERSION_TLS1_2);
+	mbedtls_ssl_conf_max_tls_version(tls_context->conf, MBEDTLS_SSL_VERSION_TLS1_2);
+#endif
+#endif
+
 #if defined(MBED_TLS_DEBUG_ENABLE) && (MBED_TLS_DEBUG_ENABLE == 1)
 	mbedtls_ssl_conf_dbg(tls_context->conf, mbedtls_debug, NULL);
 	// mbedtls_ssl_conf_min_version(tls_context->conf, MBEDTLS_SSL_MINOR_VERSION_3, MBEDTLS_SSL_MINOR_VERSION_3);
@@ -1116,10 +1134,28 @@ int tls_connection_prf(void *tls_ctx, struct tls_connection *conn,
 	
 	//wpa_printf(MSG_DEBUG, "TLS: tls_connection_prf");
 	mbedtls_ssl_context *ssl = (( struct eap_tls *)tls_ctx)->ssl;
-	mbedtls_ssl_session *session = ssl->session;
 
 	int ret = 1;
 	unsigned char *rnd;
+
+#if defined(MBEDTLS_VERSION_NUMBER) && (MBEDTLS_VERSION_NUMBER>=0x03010000) && defined(MBEDTLS_SSL_KEYING_MATERIAL_EXPORT)
+	/* TLS 1.3 EAP-TLS (RFC 9190): the MSK/EMSK come from the TLS exporter, NOT the
+	 * 1.2 master-secret PRF (there is no master secret in 1.3). lib_eap.a always calls
+	 * this with the 1.2 label ("client EAP encryption"); override it here with the
+	 * RFC 9190 label + Type-Code(0x0D) context. out = MSK[0..63] || EMSK[64..127]. */
+	if (ssl->tls_version == MBEDTLS_SSL_VERSION_TLS1_3) {
+		static const unsigned char eap_tls_type_code[1] = { 0x0D };   /* EAP-TLS */
+		const char *rfc9190_label = "EXPORTER_EAP_TLS_Key_Material";
+		int r = mbedtls_ssl_export_keying_material(ssl, out, out_len,
+				rfc9190_label, os_strlen(rfc9190_label),
+				eap_tls_type_code, sizeof(eap_tls_type_code), 1 /*use_context*/);
+		if (r != 0)
+			printf("\n[at-eap] tls1.3 export_keying_material failed -0x%04x\n", (unsigned)(-r));
+		return (r == 0) ? 0 : 1;   /* wpa: 0 = success */
+	}
+#endif
+
+	mbedtls_ssl_session *session = ssl->session;
 
 	rnd = (unsigned char *)os_zalloc(64);
 	if(!rnd){
@@ -1292,8 +1328,6 @@ struct wpabuf * tls_connection_handshake(void *tls_ctx,
 
 	while( ssl->state != MBEDTLS_SSL_HANDSHAKE_OVER )
 	{
-		wpa_printf(MSG_INFO, "TLS: connection handshake, state: %d", ssl->state);
-		//printf("\nTLS: connection handshake, state: %d\n", ssl->state);
 #if defined(MBEDTLS_PSA_CRYPTO_C) && defined(MBEDTLS_VERSION_NUMBER) && (MBEDTLS_VERSION_NUMBER>=0x03040000)
 		psa_crypto_init();
 #endif
@@ -1328,8 +1362,7 @@ struct wpabuf * tls_connection_handshake(void *tls_ctx,
 				break;
 			// handshake got error
 			else{
-				//wpa_printf(MSG_INFO, "TLS: connection handshake failed, ret: %d", ret);
-				printf("\nTLS: connection handshake failed, ret: %d\n", ret);
+				printf("\nTLS: handshake failed state=%d ret=-0x%04x\n", (int)ssl->state, (unsigned)(-ret));
 				ErrorCnt = 1;
 				return NULL;
 			}

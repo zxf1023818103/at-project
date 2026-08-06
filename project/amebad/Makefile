@@ -57,6 +57,7 @@ ROMKAT     ?= OFF          # ON -> ROM mbedTLS 2.4.0 / HW-crypto self-tests (no 
 # matching bl602 -- iperf's ~16 KB .bss is reclaimed for the AWS TLS handshake heap there).
 # CARES (common_flags.mk, default ON): resolve DNS via c-ares (select event loop) instead of the FreeRTOS+TCP resolver (AWS/SNTP/OTA)
 WPS        ?= OFF          # ON -> `wps` console command (WPS PBC/PIN connect test; compiles wifi_wps_config.c, links lib_wps.a)
+EAP        ?= OFF          # ON -> `eap` console command (WPA2-Enterprise EAP-TLS connect; compiles wifi_eap_config.c + tls_polarssl.c bound to upstream Mbed TLS 3.6, links lib_eap.a) -- reproduces the Kontakt.io EAP-TLS handshake path
 TFM        ?= OFF          # ON -> build + boot in-tree TF-M SPE (app_km4 becomes the NS side)
 # TLS_BACKEND (common_flags.mk, default picotls): AWS IoT + S3 are TLS 1.3, picotls = ~112 KB smaller
 # flash + ~24 KB less runtime heap than fallback on this platform. `fallback` (co-link picotls/TLS1.3
@@ -148,7 +149,7 @@ _KM4 := -DAMEBAD_ENABLE_NIMBLE=$(NIMBLE) -DAT_ENABLE_MCUMGR=$(MCUMGR) -DAMEBAD_E
         -DAT_TLS_HEAP_TRACE=$(TLS_HEAP_TRACE) \
         -DAMEBAD_MBEDTLS_HW_GCM=$(HWGCM) -DAMEBAD_TFM_BOOT=$(TFM) -DAMEBAD_TFM_STORAGE=$(STORAGE) \
         -DAT_VFS_SELFTEST=$(VFSTEST) -DAMEBAD_CPP_SELFTEST=$(CPPTEST) -DAMEBAD_SBOOT=$(SBOOT) \
-        -DAMEBAD_ENABLE_WPS=$(WPS)
+        -DAMEBAD_ENABLE_WPS=$(WPS) -DAMEBAD_ENABLE_EAP=$(EAP)
 
 bootloader_km0:
 	cd $(REPO) && cmake -S project/amebad/bootloader_km0 -B build/bootloader_km0 $(_COMMON) \

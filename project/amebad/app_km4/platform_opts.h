@@ -477,7 +477,15 @@
 
 // on/off specified eap method
 #define CONFIG_ENABLE_PEAP	0
+// EAP-TLS supplicant, gated by the `EAP=ON` build flag (-DAT_PROJECT_EAP). Kept
+// OFF by default so normal images do not link lib_eap.a / the tls_polarssl.c
+// adapter. Enabling it reproduces the customer (Kontakt.io) EAP-TLS handshake
+// path (the step=13 / -0x7180 INVALID_MAC that fails the association).
+#ifdef AT_PROJECT_EAP
+#define CONFIG_ENABLE_TLS	1
+#else
 #define CONFIG_ENABLE_TLS	0
+#endif
 #define CONFIG_ENABLE_TTLS	0
 #define CONFIG_ENABLE_FAST	0
 

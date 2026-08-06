@@ -1509,6 +1509,9 @@ void app_console_register_platform(void)
 #ifdef AMEBAD_ENABLE_WPS
     { extern void wps_cli_register(void); wps_cli_register(); }     /* WPS (PBC/PIN) connect test */
 #endif
+#ifdef AMEBAD_ENABLE_EAP
+    { extern void eap_cli_register(void); eap_cli_register(); }     /* WPA2-Enterprise EAP-TLS connect (Kontakt.io repro) */
+#endif
 #if defined(AMEBAD_EFUSE_DEBUG) && defined(AMEBAD_TFM_STORAGE)
     { extern void efuse_burn_cli_register(void); efuse_burn_cli_register(); } /* DEBUG eFuse burn (provisioning) */
 #endif
