@@ -104,29 +104,34 @@ AP has not asked for a new authentication, and it still holds a valid PMKSA for 
   while not associated leaves the driver unresponsive to subsequent `wifi_sta_connect()` calls —
   every later attempt then times out after 12 s with no log output at all.
 
-## Secondary defect: the receive path is dead afterwards
+## Secondary defect: no association succeeds again until the chip is reset
 
-This is arguably the more serious half of the bug. Once the 4-way handshake has timed out, the
-driver can no longer **scan**: `wifi_mgmr_sta_scan()` completes but the result tree does not contain
-the AP we are 5 m away from and were talking to seconds earlier at -50 dBm.
+This is arguably the more serious half of the bug. Once the 4-way handshake has timed out, **every**
+subsequent association attempt fails for the rest of the boot, and the device never recovers on its
+own.
 
-Measured over a 5-minute window with an exponential backoff (1 s base, 60 s cap, full jitter), retry
-intervals of ~17 s, ~40 s, ~60 s, ~89 s, ~89 s — every single attempt:
+Scanning still works — it is specifically the association path that is stuck. A typical post-failure
+attempt, with the AP 5 m away:
 
 ```
-[WSVC] ATTest cached ch=149 -> direct connect (no scan)
-        ... 12 s timeout, no association ...
-[WSVC] cached ch=149 failed -> clear cache + scan
-[WSVC] ATTest not found in scan            <- AP is present and strong, but invisible to the scan
+[SCAN] match 'ATTest': ch=149 auth=6 cipher=2 rssi=-33      <- found, very strong
+[SCAN] saw 10 AP(s), 'ATTest' FOUND
+[WSVC] ATTest found ch=149 sec=-1 -> connect
+start connecting ...
+        (driver-internal CODE_WIFI_ON_SCAN_DONE, and then nothing at all)
+        ... ~9 s later the connect call fails, with no authentication activity logged ...
 ```
 
-TX still works (association requests do go out — the AP logs them). Only a chip reset restores the
-receive path; the device never recovers on its own, no matter how long it waits.
+There is no SAE exchange, no Authentication frame, no Association Response — the attempt produces no
+over-the-air activity we can see at all, and no `CODE_WIFI_ON_CONNECTED` / `_DISCONNECT` event.
 
-For reference, the AmebaD (Realtek) driver exhibits the *same* post-comeback symptom — "the
-driver's comeback assoc succeeds but leaves the RX path dead (no DHCP OFFER, no RA; TX still
-works)" — which suggests this is a common failure mode in how the status-30 comeback path is
-handled, rather than something specific to one vendor's MAC.
+Measured over a 5-minute window with an exponential backoff (1 s base, 60 s cap, full jitter) giving
+retry intervals of ~17 s, ~40 s, ~60 s, ~89 s, ~89 s: the AP was located by the scan on most of
+those attempts, and not one association succeeded. Only a chip reset recovers.
+
+For reference, the AmebaD (Realtek) driver has a related post-comeback symptom — "the driver's
+comeback assoc succeeds but leaves the RX path dead (no DHCP OFFER, no RA; TX still works)" — which
+suggests the status-30 comeback path is broadly under-tested rather than one vendor's mistake.
 
 ## Requested fix
 
@@ -134,5 +139,5 @@ handled, rather than something specific to one vendor's MAC.
    for the comeback interval and re-send the Association Request, without tearing down the
    authentication state or re-running SAE.
 2. Independently of (1): make the failure recoverable. Whatever state the aborted 4-way handshake
-   leaves the receive path in, a subsequent scan should not be blind — today the only way out is a
-   chip reset.
+   leaves behind, a later `wifi_sta_connect()` should be able to start a fresh authentication —
+   today it silently does nothing and the only way out is a chip reset.
