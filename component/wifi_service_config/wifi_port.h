@@ -45,6 +45,12 @@ void wifi_port_disconnect( void );
 int          wifi_port_sec_from_str( const char * s );
 const char * wifi_port_sec_to_str( int sec );
 
+/* Full system reset. Does not return. wifi_service calls this to recover from a WiFi driver that
+ * can no longer associate (see WSVC_ASSOC_FAILS_BEFORE_RESET), so it must take the whole chip down
+ * -- resetting just the WiFi block is not enough. Deliberately part of the HAL rather than a weak
+ * stub: a platform that forgets it should fail to link, not silently lose the recovery. */
+void wifi_port_reset_chip( void );
+
 #ifdef __cplusplus
 }
 #endif

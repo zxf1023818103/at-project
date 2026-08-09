@@ -473,6 +473,8 @@ void wifi_port_disconnect(void) {
 }
 int wifi_port_sec_from_str(const char *s) { (void)s; return -1; }   // wifi4 auto-detects security
 const char *wifi_port_sec_to_str(int sec) { (void)sec; return ""; }
+// POR, the same reset the OTA path uses (declared locally as ota_flash_bouffalo.c does).
+void wifi_port_reset_chip(void) { extern int bl_sys_reset_por(void); (void)bl_sys_reset_por(); for (;;) {} }
 
 /* aws_get_mac moved to the shared component/aws_iot_config/aws_mac.c (BT MAC via
  * at_netif_bt_mac) — one Thing-name identity on every platform. */
@@ -623,6 +625,14 @@ void wifi_port_disconnect(void) { extern int wifi_sta_disconnect(void); wifi_sta
 
 int          wifi_port_sec_from_str(const char *s) { (void)s;   return -1; }
 const char * wifi_port_sec_to_str(int sec)         { (void)sec; return ""; }
+/* Recovery from the association wedge documented in doc/bouffalo_assoc_comeback_sae_bug.md --
+ * these are the chips it affects. POR, the same reset the OTA path uses. */
+void         wifi_port_reset_chip(void)
+{
+    extern int bl_sys_reset_por(void);
+    ( void ) bl_sys_reset_por();
+    for( ;; ) {}
+}
 
 }  // extern "C"
 #endif // defined BL616 || defined BL616CL || defined BL618DG
@@ -1155,6 +1165,8 @@ void wifi_port_autoreconnect_disable( void ) { }               /* RTK driver-onl
 void wifi_port_disconnect( void ) { wifi_disconnect(); }
 int  wifi_port_sec_from_str( const char *s ) { return (int) wifi_sec_from_str( s ); }
 const char *wifi_port_sec_to_str( int sec ) { return wifi_sec_to_str( (rtw_security_t) sec ); }
+/* WDG full-system reset, as ota_flash_amebad.c uses -- takes the WiFi driver down with it. */
+void wifi_port_reset_chip( void ) { extern void sys_reset( void ); sys_reset(); for( ;; ) {} }
 
 int wifi_port_scan( const char *ssid, uint8_t *chan, int *sec )
 {
