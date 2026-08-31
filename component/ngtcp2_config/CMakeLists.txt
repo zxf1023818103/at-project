@@ -46,7 +46,7 @@ target_compile_definitions(ngtcp2_static PUBLIC
     NGTCP2_AF_INET=2              # sa_family values for the generic sockaddr
     NGTCP2_AF_INET6=10            # (Linux convention; only stored/compared internally)
 )
-target_compile_options(ngtcp2_static PRIVATE -w)   # vendor sources: silence warnings
+target_compile_options(ngtcp2_static PRIVATE -w -Wno-error=implicit-function-declaration -Wno-error=implicit-int)   # vendor sources: silence warnings
 
 # ---- crypto helper bound to picotls/mbedTLS (crypto/shared.c + crypto/picotls) ----
 # picotls binding over picotls's mbedTLS/PSA backend (component/picotls_config). The PRIVATE
@@ -68,7 +68,7 @@ target_include_directories(ngtcp2_crypto_picotls PRIVATE
 # flat cross_refs LINK_GROUP lists picotls_core/picotls_mbedtls as members, and routing
 # through the INTERFACE would make CMake see a group<->umbrella dependency cycle.
 target_link_libraries(ngtcp2_crypto_picotls PUBLIC ngtcp2_static picotls_mbedtls picotls_core)
-target_compile_options(ngtcp2_crypto_picotls PRIVATE -w)
+target_compile_options(ngtcp2_crypto_picotls PRIVATE -w -Wno-error=implicit-function-declaration -Wno-error=implicit-int)
 
 # ---- aggregate target: link this to pull the whole QUIC dependency chain ----
 # ngtcp2_crypto_picotls PUBLIC-links ngtcp2_static + picotls, so the interface transitively

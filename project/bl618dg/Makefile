@@ -46,6 +46,15 @@ NIMBLE ?= OFF
 # PSRAM heap (on-die on BL618DG). Opt-in: board_psram_x8_init() does real detection.
 PSRAM ?= OFF
 
+# QUIC client self-test (ngtcp2 + picotls/mbedTLS TLS 1.3, component/quic_selftest_config),
+# the same cross-platform stack bl616/AmebaD use. OFF (default). ON links ngtcp2 + quic_selftest
+# on the AP core and runs the handshake/perf self-test on network-up (console-less image). The
+# TLS 1.3 handshake peaks ~44 KB, so pair with PSRAM=ON on this PSRAM die.
+QUIC ?= OFF
+ifeq ($(filter $(QUIC),ON OFF),)
+$(error QUIC must be 'ON' or 'OFF')
+endif
+
 # Firmware version stamp, surfaced in the AWS telemetry payload ("fw":...) — this is
 # how an OTA is confirmed to have taken effect. Build the update with a different
 # value, e.g. `make AWS=ON FW_VERSION=ota-B`.
@@ -106,6 +115,7 @@ app_ap:
 	    -DAT_ENABLE_AWS=$(AWS) \
 	    -DAT_ENABLE_AWS_OTA=$(AWSOTA) \
 	    -DAT_ENABLE_PSRAM=$(PSRAM) \
+	    -DAT_ENABLE_QUIC=$(QUIC) \
 	    -DAT_FW_VERSION=$(FW_VERSION) \
 	    -DAT_APP_BUILD=$(APP_BUILD) \
 	    $$([ -f $(BUILD_AP)/CMakeCache.txt ] || echo -DCMAKE_TOOLCHAIN_FILE=$(TC_AP))
