@@ -64,6 +64,12 @@ Platform SDKs are managed as git submodules under `platform/`. Run `git submodul
     NP → the full register drivers (SDK force-sets `CONFIG_ROMAPI=n` for NP).
   - Both cores expand the same `bl618dg_common.ld.in`, which splits one physical RAM via
     `CPU_AP`/`CPU_NP` + `CONFIG_{RAM,WRAM}_FOR_AP_SIZE` — so those sizes must agree across cores.
+- Ethernet: **two** RMII MACs (`EMAC_V2_0/1`, a Synopsys DWMAC-style IP driven by
+  `bflb_emac_v2.c` — not the bl616 `bflb_emac.c`), 10/100 only, full pin map + PHY support +
+  porting traps from bl616: `doc/bl618dg_emac.md`
+- Pin mux / pad conflicts (per-peripheral pin lists, the periodic mux rules, ★boot straps —
+  GPIO33 = BOOT, UART ISP = GPIO11/12, USB ISP = GPIO40/41 — and the three-way fight between
+  external flash / SD host / SDIO device over the same two pad groups): `doc/bl618dg_pinmux.md`
 
 ### Realtek Ameba D (RTL8721D / RTL8710C)
 - SDK: `platform/ameba-rtos-d` (driver-only, dual-core: KM0 LP + KM4 HP)
