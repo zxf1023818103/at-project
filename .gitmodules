@@ -94,7 +94,8 @@
 	url = https://github.com/aws/Jobs-for-AWS-IoT-embedded-sdk.git
 [submodule "component/ota_config/ota"]
 	path = component/ota_config/ota
-	url = https://github.com/aws/ota-for-aws-iot-embedded-sdk.git
+	url = https://github.com/zxf1023818103/ota-for-aws-iot-embedded-sdk.git
+	branch = at-project
 [submodule "component/corejson_config/corejson"]
 	path = component/corejson_config/corejson
 	url = https://github.com/FreeRTOS/coreJSON.git
