@@ -29,14 +29,24 @@ Platform SDKs are managed as git submodules under `platform/`. Run `git submodul
 | CPU_MODEL | Core | `-march` | ABI | Toolchain | phyrf lib |
 |---|---|---|---|---|---|
 | `a0` (A-series) | T-Head e907 | `rv32imafcpzpsfoperand_xtheade` | `ilp32f` | `toolchain_gcc_t-head_linux` | `libbl618dg_phyrf.a` |
-| **`b0` (mass production)** | **Nuclei-900** | `rv32imafdc_zicsr_zifencei` | `ilp32d` | **`toolchain_gcc_zephyr_linux`** | `libbl618dg_phyrf_b0.a` |
+| **`b0` (mass production)** | **Nuclei-900** | `rv32imafdc_zicsr_zifencei` | `ilp32d` | **`toolchain/nuclei_riscv_newlibc_*`** | `libbl618dg_phyrf_b0.a` |
 
 - **Bouffalo confirmed volume shipments are the Nuclei-900 (`b0`) part** — build `CPU_MODEL=b0`
   (also `project.build`'s default). Verified booting on HW 2026-08-01.
-- Toolchain: `scripts/install_zephyr_riscv_toolchain.sh` fetches Zephyr SDK `riscv64-zephyr-elf`
-  (gitignored, 1.1 GB — release tarballs only, so it can't be a submodule like the T-Head one).
-  The bundled T-Head GCC 10.2 **cannot** build b0 (rejects the `zifencei` extension). The SDK's
-  b0 branch doesn't pass `-mtune`, so Nuclei's `-mtune=nuclei-900-series` is not needed.
+- Toolchain: `scripts/install_nuclei_riscv_toolchain.sh` fetches the **Nuclei GCC 14.2.1 +
+  newlib** prebuilt into `toolchain/nuclei_riscv_newlibc_2025.10/` (gitignored, 3.7 GB — release
+  tarballs only, so it can't be a submodule like the T-Head one); `cmake/riscv64-nuclei-elf.cmake`
+  finds it by that path, so nothing needs to go on PATH. The bundled T-Head GCC 10.2 **cannot**
+  build b0 (rejects the `zifencei` extension), and GCC 14 is a hard bar anyway — the vendor
+  wireless archives are slim-LTO GCC-14 bytecode. ★ Its binary prefix is `riscv64-unknown-elf-`,
+  the **same as the T-Head GCC**; the two are told apart purely by directory, never by PATH order.
+  This replaced the Zephyr SDK (commit `c0e4ff1`) to get newlib instead of picolibc — same C
+  library as every other platform here, and `nano.specs` back. The Zephyr SDK
+  (`scripts/install_zephyr_riscv_toolchain.sh`) is now needed **only** to re-run
+  `scripts/delto_bl618dg_wireless.sh`, i.e. when the vendor libs are updated: Nuclei's GCC reads
+  zlib LTO only while the vendor bytecode is zstd-compressed, so the de-LTO'd archives are
+  committed and ordinary builds need Nuclei alone. See the
+  `reference_bl618dg_nuclei_toolchain_zstd_lto` memory.
 - **Both cores must be built.** `tools/make/dualcore.mk`: build NP first, then AP with
   `CONFIG_DUALCORE_NP_IMAGE=<np.bin>` which **embeds the NP image into the AP image**. A lone AP
   image does not boot. Reference build:

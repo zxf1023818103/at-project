@@ -1,9 +1,15 @@
 /build/
 /test/bouffalo_toolchain/build/
+# Cross toolchains, all installed out-of-band: the AmebaD ASDK (asdk-*/) and the
+# Nuclei RISC-V GCC 14 + newlib that BL618DG B0 builds with
+# (nuclei_riscv_newlibc_<version>/, 3.7 GB, via
+# scripts/install_nuclei_riscv_toolchain.sh). Upstream ships release tarballs
+# only, so unlike platform/toolchain_gcc_t-head_linux neither can be a submodule.
 /toolchain/
-# Zephyr SDK riscv64-zephyr-elf (BL618DG B0 / Nuclei-900). 1.1 GB, and upstream
-# ships release tarballs only — so unlike platform/toolchain_gcc_t-head_linux it
-# can't be a submodule. Install via scripts/install_zephyr_riscv_toolchain.sh.
+# Zephyr SDK riscv64-zephyr-elf. 1.1 GB. No longer used to build anything — it is
+# needed only to re-run scripts/delto_bl618dg_wireless.sh (Nuclei's GCC reads
+# zlib LTO only, the vendor bytecode is zstd), so install it via
+# scripts/install_zephyr_riscv_toolchain.sh just when the vendor libs change.
 /platform/toolchain_gcc_zephyr_linux/
 /.venv-tfm/
 
