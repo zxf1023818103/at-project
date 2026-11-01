@@ -23,3 +23,23 @@
 /doc/realtek_an/*.doc
 project/amebad/app_km4/aws_iot_creds.h
 __pycache__/
+
+# BL618DG validation and local build artifacts
+/project/**/build/
+/project/bouffalo/build_*/
+/project/.lfs_build/
+/project/lfs.bin
+/component/bouffalo_sdk/bflb_image_tool/bflb_tools/bouffalo_flash_cube/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+.venv/
+.venv-*/
+venv/
+*.py[cod]
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db

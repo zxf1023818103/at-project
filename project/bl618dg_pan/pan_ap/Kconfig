@@ -1,0 +1,26 @@
+mainmenu "BL618DG PAN and coexistence"
+source "$BL_SDK_BASE/Kconfig"
+config PAN_HOST
+    bool "Bluedroid PAN host"
+    default y
+config PAN_COEX
+    bool "Official Wi-Fi and Bluetooth coexistence"
+    depends on PAN_HOST
+    default n
+config PAN_WIFI_ONLY
+    bool "Wi-Fi-only validation with FreeRTOS+TCP"
+    depends on !PAN_HOST
+    default n
+config PAN_RF_DIAG
+    bool "Isolated RF initialization diagnostics"
+    depends on PAN_WIFI_ONLY
+    default n
+config PAN_COEX_COMBO
+    bool "Combo RF coexistence validation"
+    depends on PAN_COEX
+    default n
+
+config PAN_SPP
+    bool "Standalone SPP throughput validation"
+    depends on PAN_HOST && !PAN_COEX
+    default n

@@ -1,0 +1,9 @@
+/build/
+
+# Optional in-tree AP/NP build directories
+/pan_ap/build/
+/pan_np/build/
+
+# Default output from the Windows SPP runner
+/spp-result.json
+/*.log

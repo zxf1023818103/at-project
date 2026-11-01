@@ -113,3 +113,9 @@
 	path = component/mcumgr_config/mcumgr
 	url = https://github.com/zxf1023818103/mynewt-mcumgr.git
 	branch = at-project
+[submodule "platform/bouffalo_sdk_bl618dg"]
+	path = platform/bouffalo_sdk_bl618dg
+	url = https://github.com/bouffalolab/bouffalo_sdk.git
+[submodule "component/bluedroid_config/esp-idf"]
+	path = component/bluedroid_config/esp-idf
+	url = https://github.com/espressif/esp-idf.git
