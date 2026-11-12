@@ -18,6 +18,10 @@ static void wifi_event(async_input_event_t event, void *unused)
 {
     (void)unused;
     printf("[wifi] event=%u\r\n", event->code);
+#ifdef CONFIG_PAN_SOFT_AP
+    extern void ap_test_wifi_event(unsigned);
+    ap_test_wifi_event(event->code);
+#endif
     if (event->code == CODE_WIFI_ON_INIT_DONE) wifi_mgmr_task_start();
     else if (event->code == CODE_WIFI_ON_MGMR_DONE) wifi_ready = true;
     else if (event->code == CODE_WIFI_ON_SCAN_DONE) wifi_mgmr_sta_scanlist();

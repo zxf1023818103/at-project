@@ -17,7 +17,14 @@ static uint32_t network_random(void)
     configASSERT(bflb_trng_readlen((uint8_t *)&value, sizeof(value)) == 0);
     return value;
 }
-const char *pcApplicationHostnameHook(void) { return "bl618dg"; }
+const char *pcApplicationHostnameHook(void)
+{
+#if defined(BL616)
+    return "bl616";
+#else
+    return "bl618dg";
+#endif
+}
 BaseType_t xApplicationGetRandomNumber(uint32_t *value)
 { *value = network_random(); return pdTRUE; }
 uint32_t ulApplicationGetNextSequenceNumber(uint32_t source, uint16_t source_port,

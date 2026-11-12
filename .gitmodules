@@ -119,3 +119,6 @@
 [submodule "component/bluedroid_config/esp-idf"]
 	path = component/bluedroid_config/esp-idf
 	url = https://github.com/espressif/esp-idf.git
+[submodule "component/lvgl_config/lvgl"]
+	path = component/lvgl_config/lvgl
+	url = https://github.com/lvgl/lvgl.git

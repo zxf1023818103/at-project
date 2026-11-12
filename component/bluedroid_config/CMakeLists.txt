@@ -1,10 +1,18 @@
 set(IDF_ROOT "${CMAKE_CURRENT_LIST_DIR}/esp-idf")
 set(CONFIG_BT_BLUEDROID_ENABLED ON)
+if(CONFIG_PAN_BLUEDROID_COC)
+    set(CONFIG_BT_BLE_L2CAP_COC_ENABLED ON)
+endif()
 add_subdirectory(${IDF_ROOT}/components/bt/host/bluedroid ${CMAKE_CURRENT_BINARY_DIR}/upstream)
 # Keep the upstream source manifest, omitting optional profile implementations
 # which this PAN image does not configure (some have ESP VFS dependencies).
-list(FILTER bluedroid_host_srcs EXCLUDE REGEX "/bta/(ar|av|gatt|hf_ag|hf_client|hd|hh|jv|pba|opp|sdp)/")
-list(FILTER bluedroid_host_srcs EXCLUDE REGEX "/btc/profile/std/(a2dp|avrc|gatt|hf_ag|hf_client|hid|spp|sdp|l2cap|pbap|opp)/")
+if(CONFIG_PAN_GATT_BR OR CONFIG_PAN_GATT_LE OR CONFIG_PAN_BLUEDROID_COC)
+    set(omit_gatt "")
+else()
+    set(omit_gatt "gatt|")
+endif()
+list(FILTER bluedroid_host_srcs EXCLUDE REGEX "/bta/(ar|av|${omit_gatt}hf_ag|hf_client|hd|hh|jv|pba|opp|sdp)/")
+list(FILTER bluedroid_host_srcs EXCLUDE REGEX "/btc/profile/std/(a2dp|avrc|${omit_gatt}hf_ag|hf_client|hid|spp|sdp|l2cap|pbap|opp)/")
 list(FILTER bluedroid_host_srcs EXCLUDE REGEX "/api/esp_(a2dp|avrc|hidd|hidh|hf_|spp|sdp|l2cap|pbac|opp)")
 if(CONFIG_PAN_SPP)
     # Direct stack-level SPP server; the ESP VFS/JV wrapper is not needed.
@@ -34,4 +42,12 @@ target_include_directories(bluedroid_config PUBLIC
 if(TARGET freertos_plus_tcp)
     add_library(bluedroid_pan_tcp STATIC EXCLUDE_FROM_ALL pan_freertos_tcp.c)
     target_link_libraries(bluedroid_pan_tcp PUBLIC bluedroid_config freertos_plus_tcp)
+endif()
+
+if(CONFIG_PAN_GATT_BR OR CONFIG_PAN_GATT_LE)
+    target_sources(bluedroid_config PRIVATE gatt_control.c)
+endif()
+
+if(CONFIG_PAN_BLUEDROID_COC)
+    target_sources(bluedroid_config PRIVATE ble_coc_bench.c)
 endif()

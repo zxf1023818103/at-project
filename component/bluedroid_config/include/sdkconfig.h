@@ -20,3 +20,25 @@
 #define CONFIG_BT_PRF_TASK_PRIORITY 3
 #define CONFIG_BT_PRF_TASK_STACK_SIZE 2048
 #define CONFIG_BT_PRF_TASK_CORE_ID 0
+
+#if defined(CONFIG_PAN_GATT_BR) || defined(CONFIG_PAN_GATT_LE) || defined(CONFIG_PAN_BLUEDROID_COC)
+/* This upstream host gates GATT initialization on BLE_ENABLED, including
+ * its Classic ATT implementation. The fixture selects one service bearer. */
+#define CONFIG_BT_BLE_ENABLED 1
+#define CONFIG_BT_GATTS_ENABLE 1
+#define CONFIG_BT_BLE_VENDOR_HCI_EN 1
+#define CLASSIC_BT_GATT_INCLUDED TRUE
+#endif
+
+#if defined(CONFIG_PAN_GATT_LE) || defined(CONFIG_PAN_BLUEDROID_COC)
+#define CONFIG_BT_BLE_42_FEATURES_SUPPORTED 1
+#define CONFIG_BT_BLE_42_ADV_EN 1
+#define CONFIG_BT_BLE_50_FEATURES_SUPPORTED 1
+#endif
+
+#ifdef CONFIG_PAN_BLUEDROID_COC
+#define CONFIG_BT_BLE_L2CAP_COC_ENABLED 1
+#define CONFIG_BT_BLE_L2CAP_COC_MAX_CHAN 1
+#define CONFIG_BT_BLE_L2CAP_COC_MPS 247
+#define CONFIG_BT_BLE_L2CAP_COC_INIT_CREDITS 24
+#endif

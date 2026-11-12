@@ -4,6 +4,30 @@
 #include "freertos/FreeRTOS.h"
 #include "esp_bluedroid_hci.h"
 #include "hci_onchip.h"
+#if defined(CONFIG_PAN_GATT_BR) || defined(CONFIG_PAN_GATT_LE)
+#include "bflb_mtimer.h"
+static uint16_t timing_rx_handle;
+static volatile uint32_t timing_arrival;
+static volatile bool timing_pending;
+static uint32_t timing_count, timing_submit_sum, timing_submit_max, timing_done_sum, timing_done_max;
+void bluedroid_bouffalo_gatt_timing_reset(unsigned short rx_handle)
+{
+    taskENTER_CRITICAL();
+    timing_rx_handle = rx_handle; timing_pending = false;
+    timing_count = timing_submit_sum = timing_submit_max = timing_done_sum = timing_done_max = 0;
+    taskEXIT_CRITICAL();
+}
+void bluedroid_bouffalo_gatt_timing_report(void)
+{
+    taskENTER_CRITICAL();
+    uint32_t count=timing_count, submit=timing_submit_sum, submit_max=timing_submit_max;
+    uint32_t done=timing_done_sum, done_max=timing_done_max;
+    taskEXIT_CRITICAL();
+    printf("[gatt-br-hci-time] count=%lu rx_to_submit_avg_us=%lu max_us=%lu rx_to_done_avg_us=%lu max_us=%lu\r\n",
+           (unsigned long)count, (unsigned long)(count ? submit/count : 0), (unsigned long)submit_max,
+           (unsigned long)(count ? done/count : 0), (unsigned long)done_max);
+}
+#endif
 
 /* The transport owns only queued TX copies. Host/controller HCI credit
  * accounting remains in Bluedroid and the controller, respectively. */
@@ -14,14 +38,41 @@ static esp_bluedroid_hci_driver_callbacks_t host_callbacks;
 
 void bluedroid_bouffalo_use_combo_rf(void)
 {
+#if defined(BL618DG)
     /* Matches the vendor's current BL618DG btble_cli bring-up. The older SDK
      * example omits this call even though its PhyRF archive already exports it. */
     extern void cmd_set_btble_combo(int argc, char **argv);
     cmd_set_btble_combo(0, NULL);
+#endif
 }
 
 
+bool bluedroid_bouffalo_classic_available(void)
+{
+#if defined(BL616)
+    extern int btble_bt_isEnabled(void);
+    return btble_bt_isEnabled() != 0;
+#else
+    return true;
+#endif
+}
+
 static uint16_t le16(const uint8_t *p) { return p[0] | (uint16_t)p[1] << 8; }
+#if defined(CONFIG_PAN_GATT_BR) || defined(CONFIG_PAN_GATT_LE)
+/* Control PDUs only: never log each bulk notification or Write Command. */
+static void trace_att_control(const char *direction, const uint8_t *p, uint16_t length)
+{
+    if (length < 10 || (le16(p+1)&0x3000)==0x1000) return;
+    uint16_t cid=le16(p+7);
+    uint8_t op=p[9];
+    if ((cid!=4 && cid<0x40) || op==0x1b || op==0x52 || op>0x23) return;
+    printf("[att-control] ms=%lu %s cid=%04x op=%02x len=%u data=",
+           (unsigned long)(bflb_mtimer_get_time_us()/1000),direction,cid,op,le16(p+5));
+    for (unsigned i=9; i<length && i<25; ++i) printf("%02x",p[i]);
+    printf("\r\n");
+}
+#endif
+
 
 static void receive_packet(uint8_t type, uint16_t id, uint8_t *param, uint8_t size)
 {
@@ -65,11 +116,34 @@ static void receive_packet(uint8_t type, uint16_t id, uint8_t *param, uint8_t si
         packet[2] = size;
         memcpy(packet + 3, param, size);
         length = size + 3;
+#ifdef CONFIG_PAN_GATT_LE
+        if (type == BT_HCI_LE_EVT && size) {
+            if (param[0] == 0x0c && size >= 6)
+                printf("[gatt-le-hci] PHY status=%u tx=%u rx=%u\r\n",param[1],param[4],param[5]);
+            else if (param[0] == 0x07 && size >= 11)
+                printf("[gatt-le-hci] DLE tx_octets=%u tx_time=%u rx_octets=%u rx_time=%u\r\n",le16(param+3),le16(param+5),le16(param+7),le16(param+9));
+            else if (param[0] == 0x03 && size >= 10)
+                printf("[gatt-le-hci] UPDATE status=%u interval=%u latency=%u timeout=%u\r\n",param[1],le16(param+4),le16(param+6),le16(param+8));
+            else if (param[0] == 0x01 && size >= 19)
+                printf("[gatt-le-hci] CONNECT status=%u interval=%u latency=%u timeout=%u\r\n",param[1],le16(param+12),le16(param+14),le16(param+16));
+            else if (param[0] == 0x0a && size >= 31)
+                printf("[gatt-le-hci] CONNECT status=%u interval=%u latency=%u timeout=%u\r\n",param[1],le16(param+24),le16(param+26),le16(param+28));
+        }
+#endif
         break;
     case BT_HCI_ACL_DATA:
         packet[0] = 2;
         length = bt_onchiphci_handle_rx_acl(param, packet + 1) + 1;
         configASSERT(length <= HCI_PACKET_MAX);
+#if defined(CONFIG_PAN_GATT_BR) || defined(CONFIG_PAN_GATT_LE)
+        trace_att_control("RX",packet,length);
+#endif
+#if defined(CONFIG_PAN_GATT_BR) || defined(CONFIG_PAN_GATT_LE)
+        if (length >= 13 && (le16(packet+1)&0x3000)==0x2000 && packet[9]==0x12 && le16(packet+10)==timing_rx_handle) {
+            timing_arrival = (uint32_t)bflb_mtimer_get_time_us();
+            timing_pending = true;
+        }
+#endif
 #if CONFIG_PAN_HCI_TRACE
         printf("[hci] rx ACL handle_flags=%04x length=%u", le16(packet + 1), length - 5);
         if ((packet[2] & 0x30) != 0x10 && length >= 11)
@@ -121,7 +195,26 @@ static void transmit_worker(void *unused)
             printf("\r\n");
 #endif
         }
+#if defined(CONFIG_PAN_GATT_BR) || defined(CONFIG_PAN_GATT_LE)
+        bool timed_response = type==BT_HCI_ACL_DATA && tx->length>=10 &&
+                              (le16(p+1)&0x3000)!=0x1000 && p[9]==0x13 && timing_pending;
+        uint32_t arrival=timing_arrival;
+        uint32_t submit=timed_response ? (uint32_t)bflb_mtimer_get_time_us()-arrival : 0;
+        if (timed_response) timing_pending=false;
+#endif
+#if defined(CONFIG_PAN_GATT_BR) || defined(CONFIG_PAN_GATT_LE)
+        if (type==BT_HCI_ACL_DATA) trace_att_control("TX",p,tx->length);
+#endif
         int result = bt_onchiphci_send(type, destination, &packet);
+#if defined(CONFIG_PAN_GATT_BR) || defined(CONFIG_PAN_GATT_LE)
+        if (timed_response) {
+            uint32_t done=(uint32_t)bflb_mtimer_get_time_us()-arrival;
+            timing_count++;
+            timing_submit_sum+=submit; timing_done_sum+=done;
+            if(submit>timing_submit_max) timing_submit_max=submit;
+            if(done>timing_done_max) timing_done_max=done;
+        }
+#endif
         if (result) printf("[bluedroid] controller send error=%d\r\n", result);
         configASSERT(result == 0);
         free(tx);

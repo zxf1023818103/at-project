@@ -6,6 +6,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "shell.h"
+#include "bluedroid_bouffalo.h"
 #include "stack/btu.h"
 #include "stack/port_api.h"
 #include "stack/sdp_api.h"
@@ -57,7 +58,7 @@ static void serve(void)
     proto[1].protocol_uuid = UUID_PROTOCOL_RFCOMM;
     proto[1].num_params = 1;
     proto[1].params[0] = 1;
-    const char name[] = "BL618DG SPP throughput";
+    const char name[] = BLUEDROID_BOARD_NAME " SPP throughput";
     bool ok = rec && SDP_AddServiceClassIdList(rec, 1, &service)
         && SDP_AddProtocolList(rec, 2, proto)
         && SDP_AddProfileDescriptorList(rec, service, 0x0102)

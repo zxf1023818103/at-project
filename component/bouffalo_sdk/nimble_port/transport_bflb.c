@@ -126,12 +126,16 @@ bflb_hci_rx_cb(uint8_t pkt_type, uint16_t src_id, uint8_t *param, uint8_t param_
         /* Controller hands raw ACL; bt_onchiphci_handle_rx_acl() formats a full
          * HCI ACL packet ([handle+flags, len, data]) and returns its length.
          * Serialized in the controller task, so a static staging buffer is safe. */
+#if defined(BL618DG) && defined(AT_NIMBLE_COC)
+        static uint8_t acl_tmp[2048];
+#else
         static uint8_t acl_tmp[4 + 512];
+#endif
         struct os_mbuf *om;
         uint16_t n;
 
         n = (uint16_t)bt_onchiphci_handle_rx_acl(param, acl_tmp);
-        if (n == 0) {
+        if (n == 0 || n > sizeof(acl_tmp)) {
             return;
         }
         om = ble_transport_alloc_acl_from_ll();

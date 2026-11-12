@@ -25,7 +25,7 @@ static void load_task(void *argument)
     const char *name = job->slot ? "wl1" : "pan0";
     Socket_t sock = FreeRTOS_socket(FREERTOS_AF_INET, FREERTOS_SOCK_STREAM, FREERTOS_IPPROTO_TCP);
     uint8_t *data = malloc(1460);
-    uint32_t total = 0;
+    uint32_t total = 0, bad_bytes = 0;
     unsigned stalls = 0;
     BaseType_t error = 0;
     TickType_t started = 0, elapsed = 0;
@@ -60,7 +60,10 @@ static void load_task(void *argument)
     while ((elapsed = xTaskGetTickCount() - started) < pdMS_TO_TICKS(job->seconds * 1000)) {
         BaseType_t count = job->receive ? FreeRTOS_recv(sock, data, 1460, 0) :
                                          FreeRTOS_send(sock, data, 1460, 0);
-        if (count > 0) total += count;
+        if (count > 0) {
+            if (job->receive) for (BaseType_t i = 0; i < count; ++i) bad_bytes += data[i] != 0x5a;
+            total += count;
+        }
         else if (count == -pdFREERTOS_ERRNO_EWOULDBLOCK || count == 0 ||
                  (!job->receive && count == -pdFREERTOS_ERRNO_ENOSPC)) {
             /* A bounded idle wait counts toward the requested duration. */
@@ -69,6 +72,20 @@ static void load_task(void *argument)
         } else { error = count; break; }
     }
     elapsed = xTaskGetTickCount() - started;
+    if (job->receive) {
+        /* Receiver receipt excludes the phone's queued-but-undelivered bytes. */
+        char receipt[80];
+        int receipt_size = snprintf(receipt, sizeof(receipt), "RESULT %lu %lu %lu\n",
+                                   (unsigned long)total,
+                                   (unsigned long)elapsed * 1000 / configTICK_RATE_HZ,
+                                   (unsigned long)bad_bytes);
+        size_t sent = 0;
+        while (sent < (size_t)receipt_size) {
+            BaseType_t n = FreeRTOS_send(sock, receipt + sent, receipt_size - sent, 0);
+            if (n <= 0) break;
+            sent += n;
+        }
+    }
     FreeRTOS_shutdown(sock, FREERTOS_SHUT_RDWR);
     /* Allow queued TX data/FIN to drain before releasing the socket. */
     TickType_t drain = xTaskGetTickCount();
@@ -79,9 +96,9 @@ done:
     if (sock != FREERTOS_INVALID_SOCKET) FreeRTOS_closesocket(sock);
     unsigned long ms = (unsigned long)elapsed * 1000 / configTICK_RATE_HZ;
     unsigned long kbps = ms ? (uint64_t)total * 8 / ms : 0;
-    printf("[load] END %s %s bytes=%lu ms=%lu kbps=%lu stalls=%u error=%ld heap=%u\r\n",
+    printf("[load] END %s %s bytes=%lu ms=%lu kbps=%lu stalls=%u error=%ld bad_bytes=%lu heap=%u\r\n",
            name, job->receive ? "RX" : "TX", (unsigned long)total, ms, kbps,
-           stalls, (long)error, (unsigned)kfree_size(0));
+           stalls, (long)error, (unsigned long)bad_bytes, (unsigned)kfree_size(0));
     free(data);
     busy[job->slot] = false;
     free(job);

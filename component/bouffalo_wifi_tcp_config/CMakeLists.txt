@@ -1,5 +1,8 @@
 sdk_generate_library()
 sdk_library_add_sources(net_al_tcp.c)
+if(CONFIG_PAN_SOFT_AP)
+    sdk_library_add_sources(dhcp_server.c)
+endif()
 sdk_add_include_directories(.)
 # Headers are needed while the SDK's Wi-Fi targets are configured, before the
 # application adds the FreeRTOS+TCP library itself.

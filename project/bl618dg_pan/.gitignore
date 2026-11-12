@@ -1,4 +1,5 @@
 /build/
+/build_*/
 
 # Optional in-tree AP/NP build directories
 /pan_ap/build/

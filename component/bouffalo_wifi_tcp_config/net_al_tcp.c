@@ -33,7 +33,7 @@ struct wifi_interface {
 /* TX descriptors are opaque to FHOST; DMA payload and headroom live in WRAM. */
 struct wifi_tx {
     uint16_t length;
-    uint16_t reserved;
+    uint16_t split; /* RX forwarding ABI requires separate Ethernet/payload segments. */
     uint8_t headroom[NET_AL_TX_HEADROOM];
     uint8_t data[];
 };
@@ -43,6 +43,14 @@ static bool ip_started;
 static unsigned rx_packets, tx_packets, rx_drops, tx_drops;
 static SemaphoreHandle_t l2_lock, l2_done;
 static bool l2_ack;
+static bool exposed(struct wifi_interface *wifi)
+{
+#ifdef CONFIG_PAN_SOFT_AP
+    return wifi==&interfaces[MGMR_VIF_AP];
+#else
+    return wifi==&interfaces[MGMR_VIF_STA];
+#endif
+}
 extern int fhost_tx_start(net_al_if_t, net_al_tx_t, cb_fhost_tx, void *);
 extern int fhost_tx_req_do(net_al_if_t, net_al_tx_t, int, void *, void *, void *, int);
 extern void fhost_rx_buf_push(void *);
@@ -92,15 +100,20 @@ int net_if_add(net_al_if_t *out, const uint8_t *mac, const uint32_t *ip,
     wifi->interface.pfInitialise = initialise;
     wifi->interface.pfOutput = output;
     wifi->interface.pfGetPhyLinkStatus = link_status;
-    /* FHOST needs both opaque VIF handles, but this port exposes STA only.
+    /* FHOST needs both opaque VIF handles; expose only the selected role.
      * A dormant AP endpoint with 0.0.0.0/0 would match every off-subnet
      * destination in FreeRTOS+TCP's route lookup, shadowing the STA gateway. */
-    if (index == MGMR_VIF_STA) {
+    if (exposed(wifi)) {
         FreeRTOS_AddNetworkInterface(&wifi->interface);
         const uint8_t zero[4] = {0};
+#ifdef CONFIG_PAN_SOFT_AP
+        const uint8_t address[4]={192,168,77,1}, netmask[4]={255,255,255,0};
+        FreeRTOS_FillEndPoint(&wifi->interface,&wifi->endpoint,address,netmask,zero,zero,mac);
+#else
         const uint8_t host_mask[4] = {255, 255, 255, 255};
         FreeRTOS_FillEndPoint(&wifi->interface, &wifi->endpoint, zero, host_mask, zero, zero, mac);
         wifi->endpoint.bits.bWantDHCP = pdTRUE;
+#endif
     }
     *out = wifi;
     ++interface_count;
@@ -135,7 +148,7 @@ void net_if_down_cb(net_al_if_t net_if)
 {
     struct wifi_interface *wifi = net_if;
     wifi->up = false;
-    if (ip_started && wifi == &interfaces[MGMR_VIF_STA]) FreeRTOS_NetworkDown(&wifi->interface);
+    if (ip_started && exposed(wifi)) FreeRTOS_NetworkDown(&wifi->interface);
 }
 void net_al_input(net_al_rx_t buffer, void *payload, net_al_if_t net_if,
                   uint16_t length, uint8_t offset, uint8_t skip, net_buf_free_fn free_fn)
@@ -185,9 +198,15 @@ void *net_buf_tx_info(net_al_tx_t *buffer, uint16_t *length, int *segments,
     struct wifi_tx *tx = (struct wifi_tx *)buffer;
     configASSERT(*segments >= 1);
     *length = tx->length;
-    *segments = 1;
+    unsigned count=tx->split ? 2 : 1;
+    configASSERT(*segments >= (int)count);
+    *segments = count;
     addresses[0] = (uint32_t)tx->data;
-    lengths[0] = tx->length;
+    lengths[0] = tx->split ? tx->split : tx->length;
+    if(tx->split) {
+        addresses[1]=(uint32_t)(tx->data+tx->split);
+        lengths[1]=tx->length-tx->split;
+    }
     /* Match FHOST ABI: signed displacement from payload back to headroom. */
     if (headroom) *headroom = (uint32_t)(tx->headroom - tx->data);
     return tx->headroom;
@@ -202,9 +221,12 @@ void net_al_tx_do_sta_del(uint8_t sta_id, release_buf_cb release_buf)
 void net_al_tx_init(void) {}
 void net_al_rx_resend(bool forward, void *buffer, void *payload, int length, int offset, int header)
 {
-    (void)header;
-    struct wifi_tx *tx = length > 0 ? net_buf_tx_alloc_fill((uint8_t *)payload + offset, length) : NULL;
-    if (tx) fhost_rx_do_resend_req(buffer, tx, forward);
+    struct wifi_tx *tx = header>=14 && header<length ?
+        net_buf_tx_alloc_fill((uint8_t *)payload + offset, length) : NULL;
+    if (tx) {
+        tx->split=header;
+        fhost_rx_do_resend_req(buffer, tx, forward);
+    }
     else if (!forward) fhost_rx_buf_push(buffer);
 }
 static void l2_complete(uint32_t frame_id, bool acknowledged, void *arg)
@@ -255,10 +277,10 @@ uint16_t net_ip_chksum(const void *data, int length)
 }
 int net_al_link_set(net_al_if_t net_if)
 {
-    if (net_if != &interfaces[MGMR_VIF_STA]) return -1;
+    if (!exposed(net_if)) return -1;
     struct wifi_interface *wifi = net_if;
     wifi->up = true;
-    if (ip_started && wifi == &interfaces[MGMR_VIF_STA]) FreeRTOS_NetworkDown(&wifi->interface);
+    if (ip_started && exposed(wifi)) FreeRTOS_NetworkDown(&wifi->interface);
     return 0;
 }
 int net_al_ext_dhcp_connect_vif(int index, int api, uint32_t timeout)
@@ -276,7 +298,8 @@ int net_al_ext_get_vif_ip(int index, struct net_al_ext_ip_addr_cfg *cfg)
 {
     if (index < 0 || index >= interface_count || !cfg) return -1;
     NetworkEndPoint_t *endpoint = &interfaces[index].endpoint;
-    memset(cfg, 0, sizeof(*cfg)); cfg->mode = IP_ADDR_DHCP_CLIENT;
+    memset(cfg, 0, sizeof(*cfg));
+    cfg->mode = index==MGMR_VIF_AP ? IP_ADDR_STATIC_IPV4 : IP_ADDR_DHCP_CLIENT;
     cfg->ipv4.addr = endpoint->ipv4_settings.ulIPAddress;
     cfg->ipv4.mask = endpoint->ipv4_settings.ulNetMask;
     cfg->ipv4.gw = endpoint->ipv4_settings.ulGatewayAddress;
@@ -285,13 +308,38 @@ int net_al_ext_get_vif_ip(int index, struct net_al_ext_ip_addr_cfg *cfg)
 }
 int net_al_ext_set_vif_ip(int index, struct net_al_ext_ip_addr_cfg *cfg)
 {
+#ifdef CONFIG_PAN_SOFT_AP
+    if(cfg && index==MGMR_VIF_AP && cfg->mode==IP_ADDR_STATIC_IPV4) {
+        /* Fixed isolated test subnet, registered before IPInit. */
+        if(cfg->ipv4.addr!=FreeRTOS_inet_addr("192.168.77.1") ||
+           cfg->ipv4.mask!=FreeRTOS_inet_addr("255.255.255.0")) return -1;
+        return net_al_link_set(&interfaces[index]);
+    }
+#endif
     if (!cfg || index != MGMR_VIF_STA || cfg->mode != IP_ADDR_DHCP_CLIENT) return -1;
     return net_al_ext_dhcp_connect_vif(index, 1, cfg->dhcp.to_ms);
 }
-/* This initial adapter exposes STA/DHCP only. Unsupported features fail. */
+/* DHCP server support is restricted to the opt-in SoftAP test image. */
 int net_al_dhcpd_start(net_al_if_t interface, int start, int limit)
-{ (void)interface; (void)start; (void)limit; return -1; }
-int net_al_dhcpd_stop(net_al_if_t interface) { (void)interface; return -1; }
+{
+#ifdef CONFIG_PAN_SOFT_AP
+    extern int wifi_test_dhcp_start(int,int);
+    if(interface!=&interfaces[MGMR_VIF_AP]) return -1;
+    return wifi_test_dhcp_start(start,limit);
+#else
+    (void)interface; (void)start; (void)limit; return -1;
+#endif
+}
+int net_al_dhcpd_stop(net_al_if_t interface)
+{
+#ifdef CONFIG_PAN_SOFT_AP
+    extern void wifi_test_dhcp_stop(void);
+    if(interface!=&interfaces[MGMR_VIF_AP]) return -1;
+    wifi_test_dhcp_stop();return 0;
+#else
+    (void)interface; return -1;
+#endif
+}
 int net_al_set_ipv6_enable(int enable) { return enable ? -1 : 0; }
 void bouffalo_wifi_tcp_network_event(eIPCallbackEvent_t event, NetworkEndPoint_t *endpoint)
 {
@@ -309,7 +357,7 @@ void bouffalo_wifi_tcp_status(void)
 {
     printf("[wifi] interfaces=%u rx=%u tx=%u rx_drop=%u tx_drop=%u\r\n", interface_count, rx_packets, tx_packets, rx_drops, tx_drops);
     for (unsigned i = 0; i < interface_count; ++i) {
-        if (i != MGMR_VIF_STA) continue;
+        if (!exposed(&interfaces[i])) continue;
         char ip[16], gateway[16], dns[16];
         NetworkEndPoint_t *endpoint = &interfaces[i].endpoint;
         FreeRTOS_inet_ntoa(endpoint->ipv4_settings.ulIPAddress, ip);

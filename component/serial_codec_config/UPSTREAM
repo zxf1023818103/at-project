@@ -1,0 +1,5 @@
+zstd v1.5.7 https://github.com/facebook/zstd f8745da6ff1ad1e7bab384bd1f9d742439278e99
+Copied lib/common, lib/compress, public headers, LICENSE and COPYING.
+LZ4 v1.10.0 https://github.com/lz4/lz4 ebb370ca83af193212df4dcbadcc5d87bc0de2f0
+Copied lib/lz4.c, lib/lz4.h and lib/LICENSE.
+Upstream sources are unmodified.

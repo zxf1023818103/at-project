@@ -20,7 +20,17 @@
 #define MYNEWT_VAL_BLE_TRANSPORT_LL__custom   (1)
 
 /* ---- features ---- */
+#ifdef AT_NIMBLE_COC
+#define MYNEWT_VAL_BLE_MESH                    (0)
+#define MYNEWT_VAL_BLE_L2CAP_COC_MAX_NUM        (1)
+#define MYNEWT_VAL_BLE_L2CAP_COC_MPS            (247)
+#define MYNEWT_VAL_BLE_L2CAP_COC_SDU_BUFF_COUNT (1)
+#elif defined(AT_NIMBLE_GATT)
+#define MYNEWT_VAL_BLE_MESH                    (0)
+#define MYNEWT_VAL_BLE_ATT_PREFERRED_MTU       (517)
+#else
 #define MYNEWT_VAL_BLE_MESH                    (1)   /* BLE Mesh on */
+#endif
 #define MYNEWT_VAL_BLE_SM_LEGACY               (1)   /* SM legacy pairing */
 #define MYNEWT_VAL_BLE_SM_SC                   (1)   /* SM LE Secure Connections (uses tinycrypt) */
 
@@ -41,8 +51,12 @@
                                                           * bletp RX flood -> hci_h4 alloc returned NULL and
                                                           * hci_h4_sm_rx NULL-deref'd (secure fault). 16 sustains it. */
 #define MYNEWT_VAL_BLE_ATT_SVR_MAX_PREP_ENTRIES    (4)   /* was 64; no long/prepared writes (~1.3 KB) */
+#if defined(AT_NIMBLE_COC) || defined(AT_NIMBLE_GATT)
+#define MYNEWT_VAL_MSYS_1_BLOCK_COUNT              (64)
+#else
 #define MYNEWT_VAL_MSYS_1_BLOCK_COUNT              (24)  /* was 10; the bletp notification blast needs mbuf headroom
                                                           * on both the TX (notify) and RX (reassembly) paths */
+#endif
 
 #endif /* H_ATPROJECT_NIMBLE_SYSCFG_ */
 

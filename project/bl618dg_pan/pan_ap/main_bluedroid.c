@@ -22,16 +22,21 @@
 #include "bflb_gpio.h"
 #endif
 
+#if defined(CONFIG_PAN_GATT_BR) || defined(CONFIG_PAN_GATT_LE)
+extern void gatt_br_load_init(void);
+#endif
+
 #ifdef CONFIG_PAN_SPP
 extern void spp_load_init(void);
 #endif
 
-#ifndef CONFIG_PAN_SPP
+#if !defined(CONFIG_PAN_SPP) && !defined(CONFIG_PAN_GATT_BR) && !defined(CONFIG_PAN_GATT_LE)
 static uint16_t connected_handle = ESP_PAN_INVALID_HANDLE;
 static bool pan_ready;
 #endif
 extern void shell_init_with_task(struct bflb_device_s *uart);
 
+#ifndef CONFIG_PAN_GATT_LE
 static void gap_event(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
 {
     if (event == ESP_BT_GAP_AUTH_CMPL_EVT)
@@ -46,7 +51,9 @@ static void gap_event(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
         printf("[pan] GAP event=%u\r\n", event);
 }
 
-#ifndef CONFIG_PAN_SPP
+#endif
+
+#if !defined(CONFIG_PAN_SPP) && !defined(CONFIG_PAN_GATT_BR) && !defined(CONFIG_PAN_GATT_LE)
 static void pan_event(esp_pan_cb_event_t event, esp_pan_cb_param_t *param)
 {
     bluedroid_pan_tcp_event(event, param);
@@ -81,13 +88,22 @@ static void start_host(void *unused)
     #else
     configASSERT(rfparam_init(0, NULL, 0) == 0);
     bluedroid_bouffalo_use_combo_rf();
+    #ifdef BL618DG
     struct bflb_device_s *gpio = bflb_device_get_by_name("gpio");
     bflb_gpio_set(gpio, GPIO_PIN_16);
     bflb_gpio_init(gpio, GPIO_PIN_16, GPIO_FUNC_GPIO | GPIO_OUTPUT | GPIO_PULLUP | GPIO_SMT_EN);
     bflb_gpio_set(gpio, GPIO_PIN_16);
     printf("[pan] BT-only: GPIO16 HIGH\r\n");
     #endif
+    #endif
     btble_controller_init(configMAX_PRIORITIES - 1);
+#ifndef CONFIG_PAN_GATT_LE
+    if (!bluedroid_bouffalo_classic_available()) {
+        printf("[bt] " BLUEDROID_BOARD_NAME " controller reports BR/EDR disabled; PAN/SPP unavailable\r\n");
+        vTaskDelete(NULL);
+        return;
+    }
+#endif
     configASSERT(bluedroid_bouffalo_hci_attach() == ESP_OK);
     printf("[pan] Bluedroid init\r\n");
     esp_err_t status = esp_bluedroid_init();
@@ -95,23 +111,33 @@ static void start_host(void *unused)
     if (!status) status = esp_bluedroid_enable();
     printf("[pan] enable=%d heap=%u\r\n", status, (unsigned)xPortGetFreeHeapSize());
     if (!status) {
-#ifndef CONFIG_PAN_SPP
+        const uint8_t *address = esp_bt_dev_get_address();
+        printf("[bt] address=%02x:%02x:%02x:%02x:%02x:%02x\r\n",
+               address[0], address[1], address[2], address[3], address[4], address[5]);
+#if !defined(CONFIG_PAN_SPP) && !defined(CONFIG_PAN_GATT_BR) && !defined(CONFIG_PAN_GATT_LE)
         configASSERT(bluedroid_pan_tcp_register(esp_bt_dev_get_address()));
         configASSERT(FreeRTOS_IPInit_Multi() == pdPASS);
         #ifdef CONFIG_PAN_COEX
         bouffalo_wifi_tcp_started();
         #endif
 #endif
+#ifndef CONFIG_PAN_GATT_LE
         esp_bt_gap_register_callback(gap_event);
-#ifndef CONFIG_PAN_SPP
+#if !defined(CONFIG_PAN_SPP) && !defined(CONFIG_PAN_GATT_BR) && !defined(CONFIG_PAN_GATT_LE)
         esp_pan_register_callback(pan_event);
 #endif
-        esp_bt_gap_set_device_name("BL618DG-PAN");
+        esp_bt_gap_set_device_name(BLUEDROID_BOARD_NAME "-PAN");
         esp_bt_io_cap_t capability = ESP_BT_IO_CAP_NONE;
         esp_bt_gap_set_security_param(ESP_BT_SP_IOCAP_MODE, &capability, sizeof(capability));
         esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
-#ifdef CONFIG_PAN_SPP
-        esp_bt_gap_set_device_name("BL618DG-SPP");
+#endif
+#if defined(CONFIG_PAN_GATT_LE)
+        gatt_br_load_init();
+#elif defined(CONFIG_PAN_GATT_BR)
+        esp_bt_gap_set_device_name(BLUEDROID_BOARD_NAME "-GATT-BR");
+        gatt_br_load_init();
+#elif defined(CONFIG_PAN_SPP)
+        esp_bt_gap_set_device_name(BLUEDROID_BOARD_NAME "-SPP");
         spp_load_init();
 #else
         esp_pan_cfg_t cfg = ESP_PAN_DEFAULT_CONFIG();
@@ -127,10 +153,14 @@ int main(void)
     board_init();
     shell_init();
     shell_init_with_task(bflb_device_get_by_name("uart0"));
-#ifdef CONFIG_PAN_SPP
-    printf("[spp] BL618DG B0 Bluedroid SPP-only\r\n");
+#if defined(CONFIG_PAN_GATT_LE)
+    printf("[gatt-le] " BLUEDROID_BOARD_NAME " GATT over BLE validation\r\n");
+#elif defined(CONFIG_PAN_GATT_BR)
+    printf("[gatt-br] " BLUEDROID_BOARD_NAME " GATT over BR/EDR validation\r\n");
+#elif defined(CONFIG_PAN_SPP)
+    printf("[spp] " BLUEDROID_BOARD_NAME " Bluedroid SPP-only\r\n");
 #else
-    printf("[pan] BL618DG B0 Bluedroid PANU\r\n");
+    printf("[pan] " BLUEDROID_BOARD_NAME " Bluedroid PANU\r\n");
 #endif
     /* Match the vendor startup worker; FHOST/WPA must run during bring-up. */
     configASSERT(xTaskCreate(start_host, "pan_start", 2048, NULL,
@@ -139,7 +169,7 @@ int main(void)
     for (;;) {}
 }
 
-#ifndef CONFIG_PAN_SPP
+#if !defined(CONFIG_PAN_SPP) && !defined(CONFIG_PAN_GATT_BR) && !defined(CONFIG_PAN_GATT_LE)
 static int pan_connect(int argc, char **argv)
 {
     if (!pan_ready || argc != 2) { printf("usage: pan_connect XX:XX:XX:XX:XX:XX\r\n"); return -1; }

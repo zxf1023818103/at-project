@@ -1,5 +1,6 @@
 param([ValidateSet('tx','rx')][string]$Mode='tx', [ValidateRange(1,285)][int]$Seconds=30,
- [string]$Address='B4E8423CB52B', [string]$Log='spp-result.json', [switch]$Reset)
+ [string]$DataPort='COM15', [string]$ControlPort='COM23',
+ [string]$Address='B4E8423CB52B', [string]$Log='spp-result.json', [switch]$Reset, [switch]$NoControlPort)
 $ErrorActionPreference='Stop'
 Add-Type -TypeDefinition @'
 using System;
@@ -22,12 +23,14 @@ public sealed class SppEndpoint : EndPoint {
  public override EndPoint Create(SocketAddress s) {return this;}
 }
 public class SppMeasure {
- public static string Run(ulong address,string mode,int seconds,bool reset) {
-  var uart=new SerialPort("COM15",2000000); var ctl=new SerialPort("COM23",115200);
+ public static string Run(ulong address,string mode,int seconds,bool reset,string dataPort,string controlPort) {
+  var uart=new SerialPort(dataPort,2000000); SerialPort ctl=String.IsNullOrEmpty(controlPort)?null:new SerialPort(controlPort,115200);
   Socket sock=null; long count=0,bad=0; double elapsed=0; string log="";
   try {
-   ctl.DtrEnable=true; ctl.RtsEnable=false; ctl.Open(); uart.Open();
-   if(reset) {ctl.RtsEnable=true;Thread.Sleep(1500);ctl.RtsEnable=false;Thread.Sleep(5000);}
+   uart.ReadBufferSize=65536;
+   if(ctl!=null){ctl.DtrEnable=true; ctl.RtsEnable=false; ctl.Open();}
+   uart.Open();
+   if(reset) {if(ctl!=null){ctl.RtsEnable=true;Thread.Sleep(1500);ctl.RtsEnable=false;}else{uart.Write("\r\nreboot\r\n");}Thread.Sleep(5000);}
    log+=uart.ReadExisting();
    sock=new Socket((AddressFamily)32,SocketType.Stream,(ProtocolType)3);
    sock.ReceiveTimeout=1000; sock.SendTimeout=3000;
@@ -64,11 +67,12 @@ public class SppMeasure {
    Console.WriteLine(log);
    return "{\"mode\":\""+mode+"\",\"bytes\":"+count+",\"elapsed_s\":"+elapsed.ToString("F6",System.Globalization.CultureInfo.InvariantCulture)+",\"mbps\":"+(count*8.0/elapsed/1000000).ToString("F6",System.Globalization.CultureInfo.InvariantCulture)+",\"bad_bytes\":"+bad+",\"uart_b64\":\""+Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(log))+"\"}";
   } catch(Exception) {Console.WriteLine(log);throw;}
-  finally {if(sock!=null)sock.Dispose();uart.Dispose();ctl.Dispose();}
+  finally {if(sock!=null)sock.Dispose();uart.Dispose();if(ctl!=null)ctl.Dispose();}
  }
 }
 '@
-$result=[SppMeasure]::Run([Convert]::ToUInt64(($Address -replace '[:-]',''),16),$Mode,$Seconds,$Reset.IsPresent)
+if($NoControlPort){$ControlPort=""}
+$result=[SppMeasure]::Run([Convert]::ToUInt64(($Address -replace '[:-]',''),16),$Mode,$Seconds,$Reset.IsPresent,$DataPort,$ControlPort)
 $record=$result | ConvertFrom-Json
 $uart=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($record.uart_b64))
 $match=[regex]::Match($uart,'RESULT mode=(tx|rx) bytes=(\d+) elapsed_ms=(\d+) bad=(\d+) blocked=(\d+) errors=(\d+) connected=(\d+)(?: rx_span_ms=(\d+))?')

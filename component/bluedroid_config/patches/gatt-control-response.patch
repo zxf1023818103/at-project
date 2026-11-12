@@ -1,0 +1,31 @@
+diff --git a/components/bt/host/bluedroid/stack/gatt/att_protocol.c b/components/bt/host/bluedroid/stack/gatt/att_protocol.c
+index abcd806..66af603 100644
+--- a/components/bt/host/bluedroid/stack/gatt/att_protocol.c
++++ b/components/bt/host/bluedroid/stack/gatt/att_protocol.c
+@@ -430,7 +430,12 @@ tGATT_STATUS attp_send_msg_to_l2cap(tGATT_TCB *p_tcb, BT_HDR *p_toL2CAP)
+          * up-front, release the buffer here and surface it as GATT_BUSY so that
+          * callers go through their failure path instead. */
+         if (L2CA_CheckIsCongest(L2CAP_ATT_CID, p_tcb->peer_bda)) {
++            #if defined(CONFIG_PAN_GATT_BR) || defined(CONFIG_PAN_GATT_LE)
++            GATT_TRACE_WARNING("ATT fixed channel congested, drop opcode=0x%02x len=%u",
++                *((UINT8 *)(p_toL2CAP + 1) + p_toL2CAP->offset),p_toL2CAP->len);
++#else
+             GATT_TRACE_WARNING("ATT fixed channel already congested, drop PDU");
++#endif
+             osi_free(p_toL2CAP);
+             return GATT_BUSY;
+         }
+@@ -573,6 +578,13 @@ tGATT_STATUS attp_send_sr_msg (tGATT_TCB *p_tcb, BT_HDR *p_msg)
+     if (p_tcb != NULL) {
+         if (p_msg != NULL) {
+             p_msg->offset = L2CAP_MIN_OFFSET;
++#if defined(CONFIG_PAN_GATT_BR) || defined(CONFIG_PAN_GATT_LE)
++            UINT8 op=*((UINT8 *)(p_msg+1)+p_msg->offset);
++            if ((op&1) && op!=GATT_HANDLE_VALUE_NOTIF && op!=GATT_HANDLE_VALUE_IND) {
++                extern tGATT_STATUS bluedroid_gatt_control_send(tGATT_TCB *, BT_HDR *);
++                cmd_sent=bluedroid_gatt_control_send(p_tcb,p_msg);
++            } else
++#endif
+             cmd_sent = attp_send_msg_to_l2cap (p_tcb, p_msg);
+         }
+     }

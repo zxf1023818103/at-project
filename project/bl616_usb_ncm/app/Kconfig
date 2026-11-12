@@ -1,0 +1,14 @@
+mainmenu "BL616 USB CDC-NCM validation"
+source "$BL_SDK_BASE/Kconfig"
+
+config USB_NCM_FULL_SPEED_ONLY
+    bool "Force USB Full-Speed for NCM diagnostics"
+    default n
+    help
+      Disable High-Speed negotiation to compare enumeration behavior.
+
+config USB_NCM_ENUM_DEBUG
+    bool "Log USB control transfers for NCM diagnostics"
+    default n
+    help
+      Enable CherryUSB debug logs, including EP0 setup requests.

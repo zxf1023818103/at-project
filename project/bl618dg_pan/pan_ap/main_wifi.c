@@ -10,23 +10,32 @@
 #include "shell.h"
 extern void shell_init_with_task(struct bflb_device_s *uart);
 extern void cmd_set_btble_combo(int argc, char **argv);
+#ifdef CONFIG_PAN_SOFT_AP
+extern void ap_test_init(void);
+#endif
 
 static void start_wifi(void *unused)
 {
     (void)unused;
     bflb_mtd_init();
+    #ifdef BL618DG
     struct bflb_device_s *gpio = bflb_device_get_by_name("gpio");
     bflb_gpio_reset(gpio, GPIO_PIN_16);
     bflb_gpio_init(gpio, GPIO_PIN_16, GPIO_FUNC_GPIO | GPIO_OUTPUT | GPIO_PULLDOWN | GPIO_SMT_EN);
     bflb_gpio_reset(gpio, GPIO_PIN_16);
     printf("[wifi] Wi-Fi only; GPIO16 LOW; Bluetooth disabled\r\n");
     cmd_set_btble_combo(0, NULL);
+    #endif
     configASSERT(rfparam_init(0, NULL, 0) == 0);
     printf("[wifi] RF calibration complete\r\n");
     pan_coex_start_wifi();
     configASSERT(FreeRTOS_IPInit_Multi() == pdPASS);
     bouffalo_wifi_tcp_started();
+#ifdef CONFIG_PAN_SOFT_AP
+    ap_test_init();
+#else
     printf("[wifi] FreeRTOS+TCP ready; use wifi_scan / wifi_connect\r\n");
+#endif
     vTaskDelete(NULL);
 }
 int main(void)

@@ -32,7 +32,13 @@
 /* Upstream's ble_store_ram.h declares read/write/delete but not the init entry point,
  * even though ble_store_ram.c defines it. GCC 14 rejects the implicit declaration. */
 int ble_store_ram_init(void);
+#ifdef AT_NIMBLE_COC
+#include "ble_coc.h"
+#elif defined(AT_NIMBLE_GATT)
+#include "ble_gatt_bench.h"
+#else
 #include "ble_throughput.h"
+#endif
 
 extern void amebad_nimble_sm_crypto_selftest(void); /* mbedtls_sm_glue.c: SM crypto KAT */
 
@@ -60,8 +66,14 @@ __attribute__((weak)) void nimble_platform_transport_stop_rx(void) { }
 __attribute__((weak)) void nimble_platform_store_init(void) { ble_store_ram_init(); }
 __attribute__((weak)) const char *nimble_platform_device_name(void)
 {
+#ifdef AT_NIMBLE_COC
+    return "BL618DG-CoC";
+#elif defined(AT_NIMBLE_GATT)
+    return "BL618DG-GATT-NB";
+#else
     const char *n = at_netif_hostname();
     return (n != NULL && n[0] != '\0') ? n : NIMBLE_DEV_NAME;
+#endif
 }
 
 /* Sample 128-bit service 0x59462f12-9543-9999-12c8-58b459a2712d with one
@@ -123,7 +135,13 @@ static int
 nimble_gap_event(struct ble_gap_event *event, void *arg)
 {
     (void)arg;
+#ifdef AT_NIMBLE_COC
+    ble_coc_gap_event(event);
+#elif defined(AT_NIMBLE_GATT)
+    ble_gatt_bench_event(event);
+#else
     ble_tp_peripheral_event(event);   /* throughput test: start/stop the notify blast on subscribe */
+#endif
     switch (event->type) {
     case BLE_GAP_EVENT_CONNECT:
         printf("[NimBLE] connect %s (handle %d)\n\r",
@@ -158,20 +176,38 @@ nimble_advertise(void)
     const char *name;
     int rc;
 
+#ifdef AT_NIMBLE_COC
+    static const ble_uuid128_t coc_marker=BLE_UUID128_INIT(0xf0,0x92,0xcd,0xb3,0xaf,0x91,0xf4,0xba,0x38,0x4e,0xb3,0x97,0x00,0x10,0xf0,0xb1);
+#elif defined(AT_NIMBLE_GATT)
+    static const ble_uuid128_t coc_marker=BLE_UUID128_INIT(0xf0,0x92,0xcd,0xb3,0xaf,0x91,0xf4,0xba,0x38,0x4e,0xb3,0x97,0x00,0x20,0xf0,0xb1);
+#else
     static const ble_uuid16_t tp_marker = BLE_UUID16_INIT(BLE_TP_ADV_UUID16);
+#endif
 
     memset(&fields, 0, sizeof fields);
     fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
     fields.tx_pwr_lvl_is_present = 1;
     fields.tx_pwr_lvl = BLE_HS_ADV_TX_PWR_LVL_AUTO;
     /* 16-bit marker so a `bletp central` peer can find us (see ble_throughput.h). */
+#if defined(AT_NIMBLE_COC) || defined(AT_NIMBLE_GATT)
+    fields.uuids128=(ble_uuid128_t *)&coc_marker;
+    fields.num_uuids128=1;fields.uuids128_is_complete=1;
+#else
     fields.uuids16 = (ble_uuid16_t *)&tp_marker;
     fields.num_uuids16 = 1;
     fields.uuids16_is_complete = 1;
+#endif
     name = ble_svc_gap_device_name();
+#if defined(AT_NIMBLE_COC) || defined(AT_NIMBLE_GATT)
+    struct ble_hs_adv_fields scan_rsp={0};
+    scan_rsp.name=(uint8_t *)name;scan_rsp.name_len=strlen(name);scan_rsp.name_is_complete=1;
+    rc=ble_gap_adv_rsp_set_fields(&scan_rsp);
+    if(rc) {printf("[CoC] scan response rc=%d\r\n",rc);return;}
+#else
     fields.name = (uint8_t *)name;
     fields.name_len = strlen(name);
     fields.name_is_complete = 1;
+#endif
 
     rc = ble_gap_adv_set_fields(&fields);
     if (rc != 0) {
@@ -208,6 +244,23 @@ nimble_on_sync(void)
         printf("[NimBLE] infer_auto rc=%d\n\r", rc);
         return;
     }
+#if defined(AT_NIMBLE_COC) || defined(AT_NIMBLE_GATT)
+    /* Keep the CoC fixture separate from Bluedroid's public identity so iOS
+     * cannot reuse the other host's GATT handle cache after reflashing. */
+    uint8_t fixture_addr[6];
+    rc=ble_hs_id_copy_addr(BLE_ADDR_PUBLIC,fixture_addr,NULL);
+    if(!rc) {
+        #ifdef AT_NIMBLE_GATT
+        fixture_addr[0]^=1; /* separate GATT and CoC handle caches */
+#endif
+        fixture_addr[5]|=0xc0; /* static random, derived from factory identity */
+        rc=ble_hs_id_set_rnd(fixture_addr);
+    }
+    if(rc) {printf("[CoC] random identity failed=%d\r\n",rc);return;}
+    own_addr_type=BLE_OWN_ADDR_RANDOM;
+    printf("[CoC] static random=%02x:%02x:%02x:%02x:%02x:%02x\r\n",
+           fixture_addr[5],fixture_addr[4],fixture_addr[3],fixture_addr[2],fixture_addr[1],fixture_addr[0]);
+#endif
     printf("[NimBLE] host synced - controller ready\n\r");
     nimble_advertise();
 }
@@ -234,7 +287,9 @@ nimble_start(void)
     const char *devname;
 
     /* 0. verify the mbedTLS-backed SM crypto (AES + AES-CMAC + ECDH P-256) before the host runs */
+#ifndef AT_NIMBLE_COC_STANDALONE
     amebad_nimble_sm_crypto_selftest();
+#endif
 
     /* 1. controller bring-up (platform hook). AmebaD: bt_dtm_bringup over our HCI.
      *    Bouffalo: no-op — its on-chip controller comes up in ble_transport_ll_init(). */
@@ -260,7 +315,13 @@ nimble_start(void)
     if (rc != 0) {
         printf("[NimBLE] gatt svc register rc=%d\n\r", rc);
     }
+#ifdef AT_NIMBLE_COC
+    rc = ble_coc_init();
+#elif defined(AT_NIMBLE_GATT)
+    rc = ble_gatt_bench_init();
+#else
     rc = ble_tp_gatt_register();          /* throughput-test NOTIFY service */
+#endif
     if (rc != 0) {
         printf("[NimBLE] tp svc register rc=%d\n\r", rc);
     }

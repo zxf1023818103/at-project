@@ -1,0 +1,14 @@
+CherryUSB https://github.com/cherry-embedded/CherryUSB
+Commit: 1cf7193676584a0c2bbfa53bf88b13b65a063130
+Files: class/cdc/usbd_cdc_ncm.c, class/cdc/usbd_cdc_ncm.h, class/cdc/usb_cdc.h
+License: Apache-2.0 (upstream/LICENSE)
+Core/OSAL/BL616 and BL618DG controllers are supplied by the pinned Bouffalo SDK.
+Local changes: enable alternate-setting state outside the lwIP integration;
+notify the FreeRTOS+TCP bridge on activation/reset/disconnect.
+CDC data interfaces advertise protocol 1 (NCM NTB), required by UsbNcm.sys.
+Unused lwIP-only sequence fields are conditional; ncm_tcp.h supplies byte-order
+helpers absent in the SDK's older usb_util.h.
+Send media/speed notifications on alternate 1 activation (Windows does not
+require a packet-filter request), and protect the in-flight notification buffer.
+Send SPEED_CHANGE before NETWORK_CONNECTION(up): Windows UsbNcm's adapter
+caches link rates and publishes them to NetAdapterCx when link-up is notified.

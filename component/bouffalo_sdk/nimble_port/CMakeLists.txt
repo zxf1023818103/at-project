@@ -27,7 +27,9 @@ if(NOT EXISTS "${_nb}/nimble/host/src/ble_hs.c")
 endif()
 
 # Chip -> controller target (INTERFACE lib carrying the prebuilt .a + hci_onchip.h).
-if("${BOUFFALO_CHIP}" STREQUAL "bl602")
+if(AT_NIMBLE_COC_STANDALONE)
+    set(_ctrl sdk_intf_lib)
+elseif("${BOUFFALO_CHIP}" STREQUAL "bl602")
     set(_ctrl blecontroller)
 elseif("${BOUFFALO_CHIP}" STREQUAL "bl616" OR "${BOUFFALO_CHIP}" STREQUAL "bl616cl" OR
        "${BOUFFALO_CHIP}" STREQUAL "bl618dg")
@@ -60,6 +62,7 @@ file(GLOB _nb_src
 # SM crypto on mbedTLS, not tinycrypt: drop the tinycrypt AES block + micro-ecc
 # P-256; tc_aes_encrypt / uECC_* come from component/nimble_config/mbedtls_sm_glue.c.
 # cmac_mode.c / utils.c / aes_decrypt.c stay (CMAC rides on our tc_aes_encrypt).
+if(NOT AT_NIMBLE_COC_STANDALONE)
 list(REMOVE_ITEM _nb_src
     "${_nb}/ext/tinycrypt/src/aes_encrypt.c"
     "${_nb}/ext/tinycrypt/src/ecc.c"
@@ -67,6 +70,7 @@ list(REMOVE_ITEM _nb_src
     "${_nb}/ext/tinycrypt/src/ecc_dsa.c"
     "${_nb}/ext/tinycrypt/src/ecc_platform_specific.c"
 )
+endif()
 
 # Drop mesh CLI/shell/example-model helpers (need <console/console.h> + the Mynewt shell).
 list(REMOVE_ITEM _nb_src
@@ -84,18 +88,27 @@ list(REMOVE_ITEM _nb_src
     "${_nb}/porting/nimble/src/os_cputime_pwr2.c"
 )
 
+set(_nb_app_extra
+    "${AT_ROOT}/component/nimble_config/mbedtls_sm_glue.c"
+    "${AT_ROOT}/component/nimble_config/ble_throughput.c")
+if(AT_NIMBLE_COC_STANDALONE)
+    # The isolated SDK image has no shared mbedTLS/CLI target. Use upstream
+    # tinycrypt and the same existing transport/NPL, without legacy demo CLI.
+    set(_nb_app_extra "")
+endif()
 add_library(nimble STATIC EXCLUDE_FROM_ALL
     ${_nb_src}
     "${CMAKE_CURRENT_SOURCE_DIR}/transport_bflb.c"              # structured on-chip HCI transport (LL side)
     "${AT_ROOT}/component/nimble_config/nimble_app.c"           # SHARED nimble_start() — GAP/GATT sample + host task
-    "${AT_ROOT}/component/nimble_config/mbedtls_sm_glue.c"      # SM AES/AES-CMAC/ECDH P-256 over mbedTLS
-    "${AT_ROOT}/component/nimble_config/ble_throughput.c"       # SHARED BLE throughput test (central/peripheral) + `bletp`
+    ${_nb_app_extra}
 )
 
 # ble_throughput.c's `bletp` command needs <FreeRTOS_CLI.h> (include-only; FreeRTOS_CLI.c is
 # already in the image via the console). Same genex-include pattern as the mbedTLS headers.
-target_include_directories(nimble SYSTEM PRIVATE
-    "$<TARGET_PROPERTY:freertos_cli,INTERFACE_INCLUDE_DIRECTORIES>")
+if(NOT AT_NIMBLE_COC_STANDALONE)
+    target_include_directories(nimble SYSTEM PRIVATE
+        "$<TARGET_PROPERTY:freertos_cli,INTERFACE_INCLUDE_DIRECTORIES>")
+endif()
 
 # Config + header surface (our syscfg.h FIRST, then the upstream NimBLE includes),
 # replicated from component/nimble_config's CMakeLists (we don't link that lib).
@@ -130,6 +143,10 @@ target_include_directories(nimble SYSTEM PUBLIC
 # incl. the mbedtls_cfg user config) and mbedtls_config (the FreeRTOS
 # threading-alt impl: mbedtls_threading_freertos_init). Real link edges so CMake
 # orders `nimble` before the mbedtls archives at final link.
+if(AT_NIMBLE_COC_STANDALONE)
+    target_link_libraries(nimble PUBLIC sdk_intf_lib)
+    target_compile_definitions(nimble PRIVATE AT_NIMBLE_COC_STANDALONE)
+else()
 target_link_libraries(nimble PUBLIC
     freertos_kernel
     freertos_config
@@ -139,6 +156,7 @@ target_link_libraries(nimble PUBLIC
     mbedcrypto
     mbedtls_config
 )
+endif()
 
 # The default BLE advert name comes from the shared nimble_app.c weak hook = the network hostname
 # (bl602_<mac> / HOSTNAME); NIMBLE_DEV_NAME stays the built-in "at-nimble" empty-hostname fallback.
@@ -150,3 +168,16 @@ target_link_libraries(nimble PUBLIC
 # supply the symbols in nimble_riscv_compat.c.
 target_compile_options(nimble PRIVATE -w -Wno-error=implicit-function-declaration)
 target_sources(nimble PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/nimble_riscv_compat.c")
+
+if(AT_ENABLE_NIMBLE_COC)
+    # Fixture-local credit/window adapter; leave upstream and other ports unchanged.
+    target_include_directories(nimble PRIVATE "${_nb}/nimble/host/src")
+    target_compile_definitions(nimble PUBLIC AT_NIMBLE_COC)
+    target_sources(nimble PRIVATE "${AT_ROOT}/component/nimble_config/ble_coc.c")
+endif()
+
+if(AT_ENABLE_NIMBLE_GATT)
+    target_include_directories(nimble PRIVATE "${_nb}/nimble/host/src")
+    target_compile_definitions(nimble PUBLIC AT_NIMBLE_GATT)
+    target_sources(nimble PRIVATE "${AT_ROOT}/component/nimble_config/ble_gatt_bench.c")
+endif()

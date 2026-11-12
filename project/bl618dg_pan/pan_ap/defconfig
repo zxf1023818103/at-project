@@ -1,8 +1,10 @@
 CONFIG_FREERTOS =y
 CONFIG_SHELL =y
 CONFIG_BFLB_LOG =n
+ifeq ($(CHIP),bl618dg)
 CONFIG_RAM_FOR_AP_SIZE =0x50000
 CONFIG_WRAM_FOR_AP_SIZE =0x50000
+endif
 ifneq ($(filter y,$(CONFIG_PAN_RF_DIAG)),)
 CONFIG_BLUETOOTH =y
 else ifeq ($(CONFIG_PAN_WIFI_ONLY),y)
@@ -28,5 +30,7 @@ CONFIG_MBEDTLS =y
 CONFIG_POSIX =y
 endif
 # Official BL618DG coexistence runs the radio stacks on AP without starting NP.
+ifeq ($(CHIP),bl618dg)
 CONFIG_DUALCORE_DISABLE =y
+endif
 CONFIG_ROMAPI =n

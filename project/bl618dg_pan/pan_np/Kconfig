@@ -15,6 +15,10 @@ config PAN_RF_DIAG
     bool "Isolated RF initialization diagnostics"
     depends on PAN_WIFI_ONLY
     default n
+config PAN_SOFT_AP
+    bool "Isolated SoftAP stability validation"
+    depends on PAN_WIFI_ONLY && !PAN_RF_DIAG
+    default n
 config PAN_COEX_COMBO
     bool "Combo RF coexistence validation"
     depends on PAN_COEX
@@ -22,4 +26,29 @@ config PAN_COEX_COMBO
 config PAN_SPP
     bool "Standalone SPP throughput validation"
     depends on PAN_HOST && !PAN_COEX
+    default n
+
+config PAN_HCI_TRACE
+    bool "HCI initialization diagnostics"
+    default n
+
+config PAN_GATT_BR
+    bool "GATT over BR/EDR validation"
+    depends on PAN_HOST && !PAN_SPP && !PAN_COEX
+    default n
+
+config PAN_GATT_LE
+    bool
+    default n
+
+config PAN_NIMBLE_COC
+    bool "NimBLE LE CoC standalone validation"
+    default n
+
+config PAN_BLUEDROID_COC
+    bool "Bluedroid LE CoC standalone validation"
+    default n
+
+config PAN_NIMBLE_GATT
+    bool "NimBLE GATT BLE standalone validation"
     default n
