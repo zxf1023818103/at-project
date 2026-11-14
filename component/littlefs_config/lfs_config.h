@@ -59,9 +59,9 @@ struct lfs_diskio {
 };
 
 /*
- * Mount the shared singleton over `io` at the unified LFS region. A blank or
- * corrupt medium (e.g. a firmware-only image flashed without lfs.bin) is formatted
- * once and re-mounted, so the caller always gets a usable filesystem. Idempotent:
+ * Mount the shared singleton over `io` at the unified LFS region. Only a fully erased
+ * medium is formatted once and re-mounted. A corrupt nonblank region or I/O error
+ * is preserved and returns NULL. First mount must run during serialized startup. Idempotent:
  * a second call without unmount returns the same instance. Returns a pointer to the
  * mounted instance (a single static lfs_t), or NULL on a hard flash/format error.
  */

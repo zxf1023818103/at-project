@@ -9,7 +9,7 @@
 #include "btble_lib_api.h"
 #include "bluedroid_bouffalo.h"
 #include "esp_bt_main.h"
-extern void bluedroid_coc_bench_init(void);
+#include "ble_coc_bluedroid.h"
 
 static void start(void *unused)
 {
@@ -32,7 +32,7 @@ static void start(void *unused)
     if (!rc) rc = esp_bluedroid_enable();
     if (rc) goto failed;
     printf("[CoC-BD] Bluedroid enabled heap=%u\r\n", (unsigned)xPortGetFreeHeapSize());
-    bluedroid_coc_bench_init();
+    ble_coc_bluedroid_init();
     vTaskDelete(NULL);
     return;
 failed:

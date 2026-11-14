@@ -8,6 +8,8 @@
 #   make -C project bl616        # bouffalo BL616
 #   make -C project bl616cl      # bouffalo BL616CL
 #   make -C project bl618dg      # bouffalo BL618DG (dual-core AP+NP)
+#   make -C project tl3238       # TL3238 FreeRTOS + NimBLE + mcumgr
+#   make -C project tl3238_bootloader # vendor BLE + Telink OTA size comparison (build only)
 #   make -C project amebad       # Ameba D (RTL8721D / RTL8710C)
 #   make -C project amebadplus   # Ameba Dplus (RTL8711Dx)
 #   make -C project amebagreen2  # Ameba Green2 (RTL8711F)
@@ -28,7 +30,7 @@ LFS_BUILD_DIR := .lfs_build
 
 RESOURCE_FILES := $(shell find resource -type f 2>/dev/null)
 
-.PHONY: all lfs_image bl602 bl616 bl616cl bl618dg amebad amebadplus amebagreen2 clean
+.PHONY: all lfs_image bl602 bl616 bl616cl bl618dg tl3238 tl3238_bootloader amebad amebadplus amebagreen2 clean
 
 all: bl602 bl616 bl616cl amebad amebadplus amebagreen2
 
@@ -69,6 +71,12 @@ bl616cl: lfs.bin
 # go through project/bouffalo (that tree is single-core by construction).
 bl618dg:
 	$(MAKE) -C bl618dg
+
+tl3238:
+	$(MAKE) -C tl3238
+
+tl3238_bootloader:
+	$(MAKE) -C tl3238_bootloader
 
 amebad: lfs.bin
 	$(MAKE) -C amebad

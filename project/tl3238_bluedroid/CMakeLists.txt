@@ -1,0 +1,35 @@
+cmake_minimum_required(VERSION 3.20)
+set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_LIST_DIR}/../../cmake/tl3238-toolchain.cmake" CACHE FILEPATH "Cross compiler")
+project(tl3238_bluedroid LANGUAGES C ASM)
+set(CMAKE_C_STANDARD 99)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+get_filename_component(AT_ROOT "../.." ABSOLUTE)
+set(TL3238_ENABLE_BLE ON)
+set(TL3238_ENABLE_CS OFF)
+add_compile_options(-Os)
+add_subdirectory("${AT_ROOT}/component/telink_sdk_config" telink_sdk)
+add_library(freertos_config INTERFACE)
+target_include_directories(freertos_config INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/config")
+target_link_libraries(freertos_config INTERFACE telink_sdk_headers)
+add_subdirectory("${AT_ROOT}/component/telink_sdk_config/freertos_port" freertos_port)
+set(FREERTOS_PORT A_CUSTOM_PORT CACHE STRING "TL3238 port" FORCE)
+set(FREERTOS_HEAP 5 CACHE STRING "FreeRTOS multi-region heap" FORCE)
+add_subdirectory("${AT_ROOT}/component/freertos-kernel_config/freertos-kernel" freertos_kernel)
+add_library(FreeRTOS ALIAS freertos_kernel)
+add_subdirectory("${AT_ROOT}/component/freertos-cli_config" freertos_cli)
+add_subdirectory("${AT_ROOT}/component/telink_sdk_config/bluedroid_port" bluedroid_port)
+add_executable(tl3238_bluedroid ../tl3238/main.c ../tl3238/console.c
+    ../tl3238/cli_commands.c ble_app.c)
+set_target_properties(tl3238_bluedroid PROPERTIES SUFFIX ".elf")
+target_compile_definitions(tl3238_bluedroid PRIVATE TL3238_TASK_SNAPSHOT_COUNT=16)
+target_compile_options(tl3238_bluedroid PRIVATE -Wall -Wextra -Werror)
+target_include_directories(tl3238_bluedroid PRIVATE ../tl3238)
+target_link_libraries(tl3238_bluedroid PRIVATE telink_sdk freertos-cli_config bluedroid_config)
+target_link_options(tl3238_bluedroid PRIVATE "-T${TL3238_LINKER_SCRIPT}"
+    "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/tl3238_bluedroid.map"
+    "-Wl,--defsym=FLASH_SIZE=0x70000")
+set_property(TARGET tl3238_bluedroid APPEND PROPERTY LINK_DEPENDS "${TL3238_LINKER_SCRIPT}")
+add_custom_command(TARGET tl3238_bluedroid POST_BUILD
+    COMMAND "${CMAKE_OBJCOPY}" -O binary "$<TARGET_FILE:tl3238_bluedroid>"
+        "${CMAKE_CURRENT_BINARY_DIR}/tl3238_bluedroid.bin"
+    COMMAND "${CMAKE_SIZE}" "$<TARGET_FILE:tl3238_bluedroid>" VERBATIM)

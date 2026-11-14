@@ -52,7 +52,6 @@ file(GLOB _nb_src
     "${_nb}/nimble/host/services/ias/src/*.c"
     "${_nb}/nimble/host/services/lls/src/*.c"
     "${_nb}/nimble/host/services/tps/src/*.c"
-    "${_nb}/nimble/host/store/ram/src/*.c"            # in-RAM bond store (bflb bring-up)
     "${_nb}/nimble/transport/src/*.c"
     "${_nb}/nimble/transport/common/hci_h4/src/*.c"   # H4 helpers (linked; bflb transport is structured, unused)
     "${_nb}/nimble/host/mesh/src/*.c"                 # BLE Mesh
@@ -170,10 +169,15 @@ target_compile_options(nimble PRIVATE -w -Wno-error=implicit-function-declaratio
 target_sources(nimble PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/nimble_riscv_compat.c")
 
 if(AT_ENABLE_NIMBLE_COC)
-    # Fixture-local credit/window adapter; leave upstream and other ports unchanged.
+    if(NOT TARGET ble_coc_nimble)
+        add_subdirectory("${AT_ROOT}/component/ble_coc_config" ble_coc_config)
+    endif()
     target_include_directories(nimble PRIVATE "${_nb}/nimble/host/src")
     target_compile_definitions(nimble PUBLIC AT_NIMBLE_COC)
-    target_sources(nimble PRIVATE "${AT_ROOT}/component/nimble_config/ble_coc.c")
+    # Keep the existing BL618DG benchmark's window and SDU cap.
+    target_compile_definitions(nimble PRIVATE BLE_COC_RX_BUFFERS=8
+        BLE_COC_TX_QUEUE_LIMIT=8 BLE_COC_TX_SDU_MAX=1024 BLE_COC_MSYS_RESERVE=12)
+    target_link_libraries(nimble PRIVATE ble_coc_nimble)
 endif()
 
 if(AT_ENABLE_NIMBLE_GATT)
@@ -181,3 +185,12 @@ if(AT_ENABLE_NIMBLE_GATT)
     target_compile_definitions(nimble PUBLIC AT_NIMBLE_GATT)
     target_sources(nimble PRIVATE "${AT_ROOT}/component/nimble_config/ble_gatt_bench.c")
 endif()
+
+# All platforms share the BLS3 format, legacy importer and atomic LFS writer.
+if(NOT TARGET ble_store_lfs)
+    add_subdirectory("${AT_ROOT}/component/ble_store_config" ble_store)
+endif()
+target_sources(nimble PRIVATE "${AT_ROOT}/component/nimble_config/store/ble_store_littlefs.c")
+target_include_directories(nimble PUBLIC "${AT_ROOT}/component/nimble_config/store")
+target_link_libraries(nimble PRIVATE ble_store_lfs lfs_port)
+target_sources(nimble PRIVATE "${AT_ROOT}/component/nimble_config/ble_store_lfs.c")

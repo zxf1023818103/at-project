@@ -1,0 +1,3 @@
+#define MBEDTLS_SHA256_C
+#define MBEDTLS_AES_C
+#define MBEDTLS_AES_ROM_TABLES

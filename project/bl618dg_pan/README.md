@@ -600,6 +600,14 @@ test image to its compiled channel-36 default.
 
 ## NimBLE LE L2CAP CoC
 
+The benchmark now consumes the shared
+[`component/ble_coc_config`](../../component/ble_coc_config/README.md) protocol
+and NimBLE backend. The Bluedroid mode below consumes the same protocol and
+the shared Bluedroid backend. Chip/controller bring-up stays in this project;
+the existing UUIDs, names, credits and TX window/SDU settings are retained.
+The recorded phone measurements below predate this extraction; the refactored
+NimBLE and Bluedroid images have been rebuilt, without a new phone throughput run.
+
 This opt-in BL618DG fixture reuses `component/bouffalo_sdk/nimble_port`
 (the existing structured on-chip HCI transport and FreeRTOS NPL) and
 `component/nimble_config/nimble` 1.9.0. It does not introduce another host port

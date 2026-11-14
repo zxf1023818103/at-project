@@ -94,13 +94,24 @@ smp_chr_access(uint16_t conn, uint16_t attr, struct ble_gatt_access_ctxt *ctxt, 
         s_rx_len = 0;                       /* malformed / too large -> drop and resync */
         return BLE_ATT_ERR_INSUFFICIENT_RES;
     }
-    os_mbuf_copydata(ctxt->om, 0, n, s_rx + s_rx_len);
+    if (os_mbuf_copydata(ctxt->om, 0, n, s_rx + s_rx_len) != 0) {
+        s_rx_len = 0;
+        return BLE_ATT_ERR_UNLIKELY;
+    }
     s_rx_len += n;
 
     /* Process every complete SMP packet that has fully arrived. */
     while (s_rx_len >= MGMT_HDR_SIZE) {
         uint16_t plen = (uint16_t) ((s_rx[2] << 8) | s_rx[3]);   /* nh_len, network order */
         size_t total = (size_t) MGMT_HDR_SIZE + plen;
+
+        /* Reject an impossible advertised length as soon as its header arrives.
+         * Otherwise one malformed header poisons all following requests until
+         * the reassembly buffer fills or the client disconnects. */
+        if (total > sizeof s_rx || total > mcumgr_smp_max_packet()) {
+            s_rx_len = 0;
+            return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+        }
 
         if (s_rx_len < total) {
             break;                          /* more fragments coming */
@@ -116,7 +127,7 @@ static const struct ble_gatt_svc_def smp_svcs[] = {
     {
         .type = BLE_GATT_SVC_TYPE_PRIMARY,
         .uuid = &smp_svc_uuid.u,
-        .characteristics = (struct ble_gatt_chr_def[]){
+        .characteristics = (const struct ble_gatt_chr_def[]){
             {
                 .uuid = &smp_chr_uuid.u,
                 .access_cb = smp_chr_access,

@@ -1,0 +1,47 @@
+# Standalone SDK projects already own a PSM LittleFS mount through lfs_kv.
+# Export that SAME instance for the portable Hosts; never mount raw 0x300000
+# (the SDK fixture has a different PSM partition). Keep SDK source untouched.
+if(NOT TARGET liblittlefs)
+    message(FATAL_ERROR "Bluetooth persistence requires CONFIG_LITTLEFS")
+endif()
+add_library(littlefs ALIAS liblittlefs)
+add_library(lfs_port INTERFACE)
+target_link_libraries(lfs_port INTERFACE liblittlefs sdk_intf_lib)
+set(_kv "${BL_SDK_BASE}/components/fs/littlefs/lfs_kv/lfs_kv.c")
+set(_mount "${BL_SDK_BASE}/components/fs/littlefs/port/lfs_xip_flash.c")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_kv}" "${_mount}")
+file(READ "${_kv}" _source)
+string(REPLACE "static lfs_t *lfs = NULL;"
+    "static lfs_t *lfs = NULL;\nstatic int kv_initialized, kv_init_failed;" _source "${_source}")
+string(FIND "${_source}" "lfs_kv_init(void)" _start)
+string(FIND "${_source}" "static void lfs_kv_lock(void)" _end)
+if(_start EQUAL -1 OR _end LESS _start)
+    message(FATAL_ERROR "Review SDK LittleFS singleton overlay")
+endif()
+string(SUBSTRING "${_source}" 0 ${_start} _prefix)
+math(EXPR _length "${_end}-${_start}")
+string(SUBSTRING "${_source}" ${_start} ${_length} _init)
+string(SUBSTRING "${_source}" ${_end} -1 _suffix)
+string(REPLACE "    struct lfs_info stat;"
+    "    if (kv_initialized) return LFS_KV_OK;\n    if (kv_init_failed) return LFS_KV_ERR_INIT_FAILED;\n    kv_init_failed=1;\n    struct lfs_info stat;" _init "${_init}")
+# Mark only the two successful exits in the original init routine.
+string(REPLACE "            return LFS_KV_OK;" "            kv_initialized=1; return LFS_KV_OK;" _init "${_init}")
+string(REPLACE "    return LFS_KV_OK;\n}" "    kv_initialized=1; return LFS_KV_OK;\n}" _init "${_init}")
+set(_source "${_prefix}${_init}${_suffix}\nlfs_t *vfs_lfs_mount(void)\n{\n    return lfs_kv_init()==LFS_KV_OK ? lfs : NULL;\n}\n")
+file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/lfs_kv_shared.c" CONTENT "${_source}" @ONLY)
+file(READ "${_mount}" _source)
+set(_marker "    // reformat if we can't mount the filesystem")
+string(FIND "${_source}" "${_marker}" _found)
+if(_found EQUAL -1)
+    message(FATAL_ERROR "Review SDK LittleFS blank-only format guard")
+endif()
+string(REPLACE "${_marker}"
+    "    if (ret && (ret != LFS_ERR_CORRUPT || lfs_region_is_blank(cfg) != 1)) {\n        errno = -ret; return NULL;\n    }\n${_marker}" _source "${_source}")
+set(_source "#include \"lfs_blank.h\"\n${_source}")
+file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/lfs_xip_shared.c" CONTENT "${_source}" @ONLY)
+get_target_property(_sources liblittlefs SOURCES)
+list(FILTER _sources EXCLUDE REGEX "/(lfs_kv|lfs_xip_flash)[.]c$")
+set_property(TARGET liblittlefs PROPERTY SOURCES "${_sources}")
+target_sources(liblittlefs PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/lfs_kv_shared.c"
+    "${CMAKE_CURRENT_BINARY_DIR}/lfs_xip_shared.c")
+target_include_directories(liblittlefs PRIVATE "${CMAKE_CURRENT_LIST_DIR}/../../ble_store_config")

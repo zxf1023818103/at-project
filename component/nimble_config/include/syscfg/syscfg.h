@@ -33,6 +33,18 @@
 #endif
 #define MYNEWT_VAL_BLE_SM_LEGACY               (1)   /* SM legacy pairing */
 #define MYNEWT_VAL_BLE_SM_SC                   (1)   /* SM LE Secure Connections (uses tinycrypt) */
+#define MYNEWT_VAL_BLE_SM_BONDING              (1)   /* Shared LFS store on every platform. */
+#define MYNEWT_VAL_BLE_SM_OUR_KEY_DIST         (3)   /* Encryption + identity keys. */
+#define MYNEWT_VAL_BLE_SM_THEIR_KEY_DIST       (3)
+#ifndef BLE_BOND_MAX_BONDS
+#define BLE_BOND_MAX_BONDS 4
+#endif
+#ifndef BLE_BOND_MAX_CCCDS
+#define BLE_BOND_MAX_CCCDS 16
+#endif
+#define MYNEWT_VAL_BLE_STORE_MAX_BONDS BLE_BOND_MAX_BONDS
+#define MYNEWT_VAL_BLE_STORE_MAX_CCCDS BLE_BOND_MAX_CCCDS
+
 
 /* not a host/linux simulator */
 #define MYNEWT_VAL_BSP_SIMULATED               (0)

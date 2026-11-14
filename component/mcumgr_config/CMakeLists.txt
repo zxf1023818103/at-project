@@ -14,6 +14,25 @@
 
 set(_m "${CMAKE_CURRENT_SOURCE_DIR}/mcumgr")
 
+# Keep cborattr's decode errors when advancing to the next item. TinyCBOR v7
+# also accepts a text buffer filled exactly to capacity without a trailing NUL;
+# mcumgr's string consumers require that terminator. Patch a build-local copy
+# so the vendored submodule stays untouched.
+file(READ "${_m}/cborattr/src/cborattr.c" _cborattr)
+set(_advance "        err = cbor_value_advance(&cur_value);")
+set(_text_copy "err |= cbor_value_copy_text_string(&cur_value, lptr,\n                                                   &len, NULL);")
+foreach(_expected IN ITEMS "${_advance}" "${_text_copy}")
+    string(FIND "${_cborattr}" "${_expected}" _found)
+    if(_found EQUAL -1)
+        message(FATAL_ERROR "mcumgr cborattr changed; review the TinyCBOR compatibility fixes")
+    endif()
+endforeach()
+string(REPLACE "${_advance}" "        err |= cbor_value_advance(&cur_value);" _cborattr "${_cborattr}")
+string(REPLACE "${_text_copy}"
+    "${_text_copy}\n                if (len >= cursor->len) {\n                    err |= CborErrorDataTooLarge;\n                }"
+    _cborattr "${_cborattr}")
+file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/cborattr.c" CONTENT "${_cborattr}" @ONLY)
+
 # mcumgr's sources include "tinycbor/cbor.h", but this project's tinycbor exposes headers as
 # "cbor.h" (its src/ is on the include path). Bridge the prefix with a symlink inc/tinycbor ->
 # tinycbor/src so the submodule includes stay unpatched. (cbor_buf_reader.h is NOT in tinycbor src;
@@ -34,7 +53,7 @@ add_library(mcumgr STATIC EXCLUDE_FROM_ALL
     "${_m}/cmd/os_mgmt/src/stubs.c"
     "${_m}/cmd/fs_mgmt/src/fs_mgmt.c"
     "${_m}/cmd/fs_mgmt/src/stubs.c"
-    "${_m}/cborattr/src/cborattr.c"
+    "${CMAKE_CURRENT_BINARY_DIR}/cborattr.c"
     "${_m}/util/src/mcumgr_util.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/mcumgr_compat.c"
 )

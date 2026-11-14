@@ -1,0 +1,35 @@
+diff --git a/nimble/include/nimble/hci_common.h b/nimble/include/nimble/hci_common.h
+--- a/nimble/include/nimble/hci_common.h
++++ b/nimble/include/nimble/hci_common.h
+@@ -1179,6 +1179,7 @@ struct ble_hci_le_cs_rd_loc_supp_cap_rp {
+     uint16_t optional_t_fcs_times_supported;
+     uint16_t optional_t_pm_times_supported;
+     uint8_t t_sw_time_supported;
++    uint8_t optional_tx_snr_capability;
+ } __attribute__((packed));
+ 
+ #define BLE_HCI_OCF_LE_CS_RD_REM_SUPP_CAP                (0x008A)
+@@ -1208,6 +1209,7 @@ struct ble_hci_le_cs_wr_cached_rem_supp_cap_cp {
+     uint16_t optional_t_fcs_times_supported;
+     uint16_t optional_t_pm_times_supported;
+     uint8_t t_sw_time_supported;
++    uint8_t optional_tx_snr_capability;
+ } __attribute__((packed));
+ struct ble_hci_le_cs_wr_cached_rem_supp_cap_rp {
+     uint16_t conn_handle;
+@@ -2231,6 +2233,7 @@ struct ble_hci_ev_le_subev_cs_rd_rem_supp_cap_complete {
+     uint16_t optional_t_fcs_times_supported;
+     uint16_t optional_t_pm_times_supported;
+     uint8_t t_sw_time_supported;
++    uint8_t optional_tx_snr_capability;
+ } __attribute__((packed));
+ 
+ #define BLE_HCI_LE_SUBEV_CS_RD_REM_FAE_COMPLETE        (0x2D)
+@@ -2291,6 +2294,7 @@ struct ble_hci_ev_le_subev_cs_proc_enable_complete {
+     uint16_t event_interval;
+     uint16_t procedure_interval;
+     uint16_t procedure_count;
++    uint16_t max_procedure_len;
+ } __attribute__((packed));
+ 
+ #define BLE_HCI_LE_SUBEV_CS_SUBEVENT_RESULT            (0x31)

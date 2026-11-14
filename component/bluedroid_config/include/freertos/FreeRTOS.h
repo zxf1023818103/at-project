@@ -21,6 +21,8 @@ static inline void pan_yield_from_isr(void) { portYIELD_FROM_ISR(pdTRUE); }
 #define portYIELD_FROM_ISR(...) pan_yield_from_isr()
 #define xPortInIsrContext xPortIsInsideInterrupt
 #define xPortGetCoreID() 0
+#ifndef tskNO_AFFINITY
 #define tskNO_AFFINITY (-1)
+#endif
 BaseType_t xTaskCreatePinnedToCore(TaskFunction_t fn, const char *name, uint32_t bytes,
                                  void *arg, UBaseType_t priority, TaskHandle_t *out, int core);

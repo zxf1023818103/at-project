@@ -14,7 +14,7 @@
  * names to the mcumgr_cbor_* wrappers below (a function-like macro can't be used: it would also
  * mangle v7 cbor.h's own 5-arg declaration).
  *
- * SMP buffers are flat (not os_mbuf): one static request + one static response buffer, single
+ * SMP buffers are flat (not os_mbuf): one request + one static response buffer, single
  * connection, processed on the NimBLE host task (single-threaded), so the static encoder-base
  * stash is safe.
  */
@@ -65,7 +65,10 @@ size_t    mcumgr_cbor_bytes_written(const CborEncoder *enc);
 /*
  * Transport entry point. The smp_bt transport reassembles one full SMP request packet, then
  * calls this; `tx` is invoked once per response packet (the transport fragments it into BLE
- * notifications). Returns an MGMT_ERR_[...] code.
+ * notifications). Returns an MGMT_ERR_[...] code. Processing is synchronous and
+ * not reentrant. With MCUMGR_SMP_BORROW_REQUEST=1, the request is read directly;
+ * the caller must keep its bytes valid and unchanged through the final tx callback
+ * and until this call returns. The default keeps a private request copy.
  */
 typedef int (*mcumgr_tx_fn)(void *arg, const uint8_t *data, size_t len);
 int    mcumgr_smp_process(const uint8_t *req, size_t req_len, mcumgr_tx_fn tx, void *arg);

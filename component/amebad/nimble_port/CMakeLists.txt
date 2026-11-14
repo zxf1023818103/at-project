@@ -43,7 +43,6 @@ file(GLOB _nb_src
     "${_nb}/nimble/host/services/ias/src/*.c"
     "${_nb}/nimble/host/services/lls/src/*.c"
     "${_nb}/nimble/host/services/tps/src/*.c"
-    "${_nb}/nimble/host/store/ram/src/*.c"
     "${_nb}/nimble/transport/src/*.c"
     "${_nb}/nimble/transport/common/hci_h4/src/*.c"   # H4 framing state machine (custom transport uses it)
     "${_nb}/nimble/host/mesh/src/*.c"        # BLE Mesh

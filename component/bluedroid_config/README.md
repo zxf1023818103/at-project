@@ -13,7 +13,8 @@ Pinned sources:
 
 `bouffalo_hci.c` adapts asynchronous controller command/event/ACL traffic;
 `esp_compat.c` implements the required FreeRTOS, timer, logging and hardware RNG
-interfaces. `nvs_easyflash.c` persists bonding blobs through EasyFlash/LittleFS.
+interfaces. `nvs_lfs.c` persists bonding/configuration through the platform's
+existing LittleFS mount, using the [shared storage component](../ble_store_config/README.md).
 `pan_freertos_tcp.c` bridges Ethernet RX/TX, DHCP endpoint lifecycle, congestion
 and connection generations. ESP-IDF and FreeRTOS+TCP are kept unmodified. The SDK has a small net_al
 integration patch recorded in `component/bouffalo_wifi_tcp_config`.
@@ -70,7 +71,9 @@ claim that all Bluedroid applications/platforms have this queue wired in.
 ## Standalone LE L2CAP CoC
 
 `CONFIG_PAN_BLUEDROID_COC` enables the vendored host's existing LE CoC source
-manifest and compiles `ble_coc_bench.c`. The standalone BL618DG entry selects
+manifest and links the shared `ble_coc_bluedroid` backend from
+[`component/ble_coc_config`](../ble_coc_config/README.md). Its stream protocol is
+also used by TL3238 and Bouffalo NimBLE. The standalone BL618DG entry selects
 this with `BLUEDROID_COC=ON`; other modes retain their previous configuration.
 The fixture uses direct BTU-local L2CA LE CoC calls, plus a read-only GATT PSM
 characteristic. It does not start PAN, Wi-Fi, or a TCP/IP stack.
@@ -90,3 +93,18 @@ receiver counts and payload patterns. See `project/bl618dg_pan/README.md` and
 [the iOS CoC report](https://github.com/zxf1023818103/flash-studio-ios/blob/main/BLUEDROID_L2CAP_VALIDATION.md)
 for reproduction and measurements. This benchmark does not implement production
 authentication or firmware authorization.
+
+## TL3238 LE port
+
+[`project/tl3238_bluedroid`](../../project/tl3238_bluedroid/README.md) selects
+the same host with the component-owned Telink Controller, FreeRTOS CLI,
+GATT echo and shared CoC service. `BLUEDROID_PORT_SOURCES`,
+`BLUEDROID_PORT_LIBRARIES`, `BLUEDROID_PORT_INCLUDE_DIRS` and
+`BLUEDROID_PORT_CONFIG_HEADER` replace the default Bouffalo platform bindings;
+`BLUEDROID_ENABLE_GATT` / `BLUEDROID_ENABLE_COC` select the LE profile sources.
+The default PAN build keeps its platform bindings. Every platform uses the
+[common BLE bond format](../ble_store_config/README.md): `/ble.bonds` stores
+local identity and peer security keys for both NimBLE and Bluedroid. The shared
+Host adapters perform migration and address/key conversion; chip ports supply
+only the existing LittleFS mount and allocator. The generated BTC/SMP overlays
+are also shared by every platform. Old NimBLE files are kept for recovery.

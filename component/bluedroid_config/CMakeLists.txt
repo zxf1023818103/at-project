@@ -1,12 +1,12 @@
 set(IDF_ROOT "${CMAKE_CURRENT_LIST_DIR}/esp-idf")
 set(CONFIG_BT_BLUEDROID_ENABLED ON)
-if(CONFIG_PAN_BLUEDROID_COC)
+if(CONFIG_PAN_BLUEDROID_COC OR BLUEDROID_ENABLE_COC)
     set(CONFIG_BT_BLE_L2CAP_COC_ENABLED ON)
 endif()
 add_subdirectory(${IDF_ROOT}/components/bt/host/bluedroid ${CMAKE_CURRENT_BINARY_DIR}/upstream)
 # Keep the upstream source manifest, omitting optional profile implementations
 # which this PAN image does not configure (some have ESP VFS dependencies).
-if(CONFIG_PAN_GATT_BR OR CONFIG_PAN_GATT_LE OR CONFIG_PAN_BLUEDROID_COC)
+if(CONFIG_PAN_GATT_BR OR CONFIG_PAN_GATT_LE OR CONFIG_PAN_BLUEDROID_COC OR BLUEDROID_ENABLE_GATT OR BLUEDROID_ENABLE_COC)
     set(omit_gatt "")
 else()
     set(omit_gatt "gatt|")
@@ -21,13 +21,30 @@ endif()
 set(BT_COMMON ${IDF_ROOT}/components/bt/common)
 file(GLOB osi_sources CONFIGURE_DEPENDS ${BT_COMMON}/osi/*.c)
 file(GLOB btc_sources CONFIGURE_DEPENDS ${BT_COMMON}/btc/core/*.c)
+if(NOT BLUEDROID_PORT_SOURCES)
+    set(BLUEDROID_PORT_SOURCES esp_compat.c bouffalo_hci.c)
+    set(BLUEDROID_PORT_LIBRARIES sdk_intf_lib)
+endif()
 add_library(bluedroid_config STATIC EXCLUDE_FROM_ALL
-    esp_compat.c nvs_easyflash.c bouffalo_hci.c
+    ${BLUEDROID_PORT_SOURCES} nvs_lfs.c bond_config.c
     ${bluedroid_host_srcs} ${osi_sources} ${btc_sources}
     ${BT_COMMON}/osal/src/bt_osal_freertos.c
     ${IDF_ROOT}/components/bt/ble_profiles/common/src/bt_prf_task.c
 )
-target_link_libraries(bluedroid_config PUBLIC sdk_intf_lib)
+if(NOT TARGET ble_store_lfs)
+    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../ble_store_config" ble_store)
+endif()
+target_link_libraries(bluedroid_config PUBLIC ${BLUEDROID_PORT_LIBRARIES} ble_store_lfs lfs_port)
+# All ports have durable LFS NVS. Enable the Host's bond save/load path too;
+# upstream defaults this off independently of the NVS implementation.
+target_compile_definitions(bluedroid_config PUBLIC CONFIG_BT_BLE_SMP_BOND_NVS_FLASH=1 CONFIG_BT_SMP_MAX_BONDS=${BLE_BOND_MAX_BONDS})
+if(BLUEDROID_PORT_INCLUDE_DIRS)
+    target_include_directories(bluedroid_config PUBLIC ${BLUEDROID_PORT_INCLUDE_DIRS})
+endif()
+if(BLUEDROID_PORT_CONFIG_HEADER)
+    target_compile_definitions(bluedroid_config PUBLIC
+        BLUEDROID_PORT_CONFIG_HEADER="${BLUEDROID_PORT_CONFIG_HEADER}")
+endif()
 target_compile_options(bluedroid_config PRIVATE "SHELL:-include string.h")
 target_include_directories(bluedroid_config PUBLIC
     include
@@ -48,6 +65,26 @@ if(CONFIG_PAN_GATT_BR OR CONFIG_PAN_GATT_LE)
     target_sources(bluedroid_config PRIVATE gatt_control.c)
 endif()
 
-if(CONFIG_PAN_BLUEDROID_COC)
-    target_sources(bluedroid_config PRIVATE ble_coc_bench.c)
+if(CONFIG_PAN_BLUEDROID_COC OR BLUEDROID_ENABLE_COC)
+    if(NOT TARGET ble_coc_bluedroid)
+        add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../ble_coc_config" ble_coc_config)
+    endif()
+    target_include_directories(bluedroid_config PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../ble_coc_config/include")
+    if(CONFIG_PAN_BLUEDROID_COC)
+        target_compile_definitions(bluedroid_config PRIVATE BLE_COC_TX_QUEUE_LIMIT=8
+            BLE_COC_TX_SDU_MAX=1024 BLE_COC_DEVICE_NAME="BL618DG-CoC-BD")
+    endif()
+    target_link_libraries(bluedroid_config PRIVATE ble_coc_bluedroid)
 endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/bond_overlays.cmake")
+set(_bond_host "${IDF_ROOT}/components/bt/host/bluedroid")
+bluedroid_generate_bond_overlays("${_bond_host}" "${CMAKE_CURRENT_BINARY_DIR}")
+get_target_property(_sources bluedroid_config SOURCES)
+list(REMOVE_ITEM _sources "${_bond_host}/btc/core/btc_config.c"
+    "${_bond_host}/btc/core/btc_dm.c" "${_bond_host}/stack/smp/smp_act.c")
+set_property(TARGET bluedroid_config PROPERTY SOURCES "${_sources}")
+target_sources(bluedroid_config PRIVATE
+    "${CMAKE_CURRENT_BINARY_DIR}/btc_config_lfs.c"
+    "${CMAKE_CURRENT_BINARY_DIR}/btc_dm_bonds.c"
+    "${CMAKE_CURRENT_BINARY_DIR}/smp_act_bonds.c")

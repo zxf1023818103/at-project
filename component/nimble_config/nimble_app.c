@@ -7,7 +7,7 @@
  *   2. nimble_platform_controller_bringup() — platform hook (AmebaD: bt_dtm_bringup;
  *      Bouffalo: no-op, its on-chip controller comes up in ble_transport_ll_init)
  *   3. nimble_port_init() — NimBLE port + sysinit (-> ble_transport_ll_init)
- *   4. nimble_platform_store_init() — bond store (default RAM; AmebaD overrides -> LFS)
+ *   4. ble_store_lfs_init() — shared LittleFS bond store
  *   5. register GAP/GATT + a sample custom service, set the device name
  *   6. platform coex + transport-rx hooks, then start the host task
  * On host sync we start connectable advertising. A phone / nRF Connect / bleak can
@@ -15,9 +15,10 @@
  *
  * Platform specifics live behind __weak hooks (default bodies below); a platform's
  * nimble_port provides strong overrides (AmebaD: nimble_platform_amebad.c). Bouffalo
- * needs no override — the defaults (no-op bring-up/coex/rx, RAM store, NIMBLE_DEV_NAME)
+ * needs no override — the defaults (no-op bring-up/coex/rx, NIMBLE_DEV_NAME)
  * already fit its on-chip, callback-driven transport.
  */
+#include "ble_store_littlefs.h"
 #include <string.h>
 #include <stdio.h>
 #include "FreeRTOS.h"
@@ -28,12 +29,18 @@
 #include "host/util/util.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
-#include "store/ram/ble_store_ram.h"
-/* Upstream's ble_store_ram.h declares read/write/delete but not the init entry point,
- * even though ble_store_ram.c defines it. GCC 14 rejects the implicit declaration. */
-int ble_store_ram_init(void);
+int ble_store_lfs_init(void);
 #ifdef AT_NIMBLE_COC
-#include "ble_coc.h"
+#include "ble_coc_nimble.h"
+#include <stdarg.h>
+static void coc_log(const char *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
+    printf("\r\n");
+}
 #elif defined(AT_NIMBLE_GATT)
 #include "ble_gatt_bench.h"
 #else
@@ -63,7 +70,7 @@ __attribute__((weak)) void nimble_platform_coex_init(void) { }
 __attribute__((weak)) void nimble_platform_coex_set_conn(int connected) { (void)connected; }
 __attribute__((weak)) void nimble_platform_transport_start_rx(void) { }
 __attribute__((weak)) void nimble_platform_transport_stop_rx(void) { }
-__attribute__((weak)) void nimble_platform_store_init(void) { ble_store_ram_init(); }
+
 __attribute__((weak)) const char *nimble_platform_device_name(void)
 {
 #ifdef AT_NIMBLE_COC
@@ -136,7 +143,7 @@ nimble_gap_event(struct ble_gap_event *event, void *arg)
 {
     (void)arg;
 #ifdef AT_NIMBLE_COC
-    ble_coc_gap_event(event);
+    ble_coc_nimble_gap_event(event);
 #elif defined(AT_NIMBLE_GATT)
     ble_gatt_bench_event(event);
 #else
@@ -163,6 +170,15 @@ nimble_gap_event(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_ADV_COMPLETE:
         nimble_advertise();
         return 0;
+    case BLE_GAP_EVENT_ENC_CHANGE:
+        /* SMP does not propagate every store-write failure. Apply the same
+         * durable-bond requirement on every platform using this application. */
+        if (!ble_store_littlefs_ready()) {
+            printf("[NimBLE] persistent storage failed; disconnecting\n\r");
+            (void)ble_gap_terminate(event->enc_change.conn_handle,
+                                    BLE_ERR_REM_USER_CONN_TERM);
+        }
+        return 0;
     default:
         return 0;
     }
@@ -176,8 +192,13 @@ nimble_advertise(void)
     const char *name;
     int rc;
 
+    if (!ble_store_littlefs_ready()) {
+        printf("[NimBLE] advertising stopped: persistent storage failed\n\r");
+        return;
+    }
+
 #ifdef AT_NIMBLE_COC
-    static const ble_uuid128_t coc_marker=BLE_UUID128_INIT(0xf0,0x92,0xcd,0xb3,0xaf,0x91,0xf4,0xba,0x38,0x4e,0xb3,0x97,0x00,0x10,0xf0,0xb1);
+    const ble_uuid128_t coc_marker=ble_coc_nimble_uuid;
 #elif defined(AT_NIMBLE_GATT)
     static const ble_uuid128_t coc_marker=BLE_UUID128_INIT(0xf0,0x92,0xcd,0xb3,0xaf,0x91,0xf4,0xba,0x38,0x4e,0xb3,0x97,0x00,0x20,0xf0,0xb1);
 #else
@@ -244,23 +265,10 @@ nimble_on_sync(void)
         printf("[NimBLE] infer_auto rc=%d\n\r", rc);
         return;
     }
-#if defined(AT_NIMBLE_COC) || defined(AT_NIMBLE_GATT)
-    /* Keep the CoC fixture separate from Bluedroid's public identity so iOS
-     * cannot reuse the other host's GATT handle cache after reflashing. */
-    uint8_t fixture_addr[6];
-    rc=ble_hs_id_copy_addr(BLE_ADDR_PUBLIC,fixture_addr,NULL);
-    if(!rc) {
-        #ifdef AT_NIMBLE_GATT
-        fixture_addr[0]^=1; /* separate GATT and CoC handle caches */
-#endif
-        fixture_addr[5]|=0xc0; /* static random, derived from factory identity */
-        rc=ble_hs_id_set_rnd(fixture_addr);
+    if (ble_store_littlefs_on_sync()) {
+        printf("[NimBLE] persistent GATT state failed\n\r");
+        return;
     }
-    if(rc) {printf("[CoC] random identity failed=%d\r\n",rc);return;}
-    own_addr_type=BLE_OWN_ADDR_RANDOM;
-    printf("[CoC] static random=%02x:%02x:%02x:%02x:%02x:%02x\r\n",
-           fixture_addr[5],fixture_addr[4],fixture_addr[3],fixture_addr[2],fixture_addr[1],fixture_addr[0]);
-#endif
     printf("[NimBLE] host synced - controller ready\n\r");
     nimble_advertise();
 }
@@ -268,6 +276,9 @@ nimble_on_sync(void)
 static void
 nimble_on_reset(int reason)
 {
+#ifdef AT_NIMBLE_COC
+    ble_coc_nimble_reset();
+#endif
     printf("[NimBLE] host reset, reason=%d\n\r", reason);
 }
 
@@ -300,10 +311,12 @@ nimble_start(void)
     printf("[NimBLE] nimble_port_init ...\n\r");
     nimble_port_init();
 
-    /* 2b. Bond store (platform hook). Default RAM; AmebaD overrides -> LittleFS
-     * persistent. Must run before the host task, else ble_hs_cfg.store_read_cb stays
+    /* 2b. Shared LittleFS bond store; no platform-specific storage callback. Must run before the host task, else ble_hs_cfg.store_read_cb stays
      * NULL and IRK restore fails with BLE_HS_ENOTSUP (8). */
-    nimble_platform_store_init();
+    if (ble_store_lfs_init()) {
+        printf("[NimBLE] persistent store unavailable; host startup stopped\r\n");
+        return;
+    }
 
     /* 3. services: standard GAP/GATT + our sample service, set the device name */
     ble_svc_gap_init();
@@ -316,7 +329,7 @@ nimble_start(void)
         printf("[NimBLE] gatt svc register rc=%d\n\r", rc);
     }
 #ifdef AT_NIMBLE_COC
-    rc = ble_coc_init();
+    rc = ble_coc_nimble_init(coc_log);
 #elif defined(AT_NIMBLE_GATT)
     rc = ble_gatt_bench_init();
 #else
