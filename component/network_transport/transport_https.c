@@ -78,16 +78,22 @@ static const char HTTPS_AMAZON_ROOT_CA1[] =
  * tears MQTT down first (aws_iot_suspend_for_ota), leaving ~185 KB free, so the full reserve fits. */
 #define HTTPS_RX_RESERVE   16640u
 
-TlsTransportStatus_t Https_Connect( NetworkContext_t * pNet, const char * host, uint16_t port,
-                                    uint32_t recvTmoMs, uint32_t sendTmoMs )
+TlsTransportStatus_t Https_ConnectWithRxReserve( NetworkContext_t * pNet, const char * host, uint16_t port,
+                                                uint32_t recvTmoMs, uint32_t sendTmoMs, size_t rxReserve )
 {
     NetworkCredentials_t creds;
 
     memset( &creds, 0, sizeof( creds ) );
     creds.pRootCa       = ( const uint8_t * ) HTTPS_AMAZON_ROOT_CA1;
     creds.rootCaSize    = sizeof( HTTPS_AMAZON_ROOT_CA1 );   /* incl. NUL, as mbedTLS PEM wants */
-    creds.rxReserveSize = HTTPS_RX_RESERVE;
+    creds.rxReserveSize = rxReserve;
     creds.backendMode   = s_tls_backend;                     /* runtime-selected, shared with AWS MQTT */
 
     return TLS_FreeRTOS_Connect( pNet, host, port, &creds, recvTmoMs, sendTmoMs );
+}
+
+TlsTransportStatus_t Https_Connect( NetworkContext_t * pNet, const char * host, uint16_t port,
+                                    uint32_t recvTmoMs, uint32_t sendTmoMs )
+{
+    return Https_ConnectWithRxReserve( pNet, host, port, recvTmoMs, sendTmoMs, HTTPS_RX_RESERVE );
 }

@@ -37,7 +37,7 @@
 // The bl602/ameba-newer shared prelude (Common.h — selects lwIP vs FreeRTOS+TCP, BT stack headers)
 // + the AT framework (C++ classes). AmebaD's branch is self-contained (its own TU) and its Common.h
 // path still assumes lwIP, so keep all of this out of the AmebaD compile.
-#if !defined(CONFIG_PLATFORM_8721D) && !defined(CONFIG_PLATFORM_8710C)
+#if !defined(CONFIG_PLATFORM_8721D) && !defined(CONFIG_PLATFORM_8710C) && !defined(AT_AMEBADPLUS_STANDALONE)
 #include "Common.h"
 #include "BoardFlashLock.h"
 #include "board_flash_lock.h"   /* cross-platform flash write-protect: board_flash_lock_fw / _log_status / flash_cli_register */
@@ -50,7 +50,7 @@ extern "C" {
 
 __attribute__((__weak__)) void *__dso_handle = (void *)&__dso_handle;
 
-#if defined CONFIG_PLATFORM_AMEBALITE || defined CONFIG_PLATFORM_AMEBASMART || defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2
+#if (defined(CONFIG_PLATFORM_AMEBALITE) || defined(CONFIG_PLATFORM_AMEBASMART) || defined(CONFIG_AMEBADPLUS) || defined(CONFIG_AMEBAGREEN2)) && !defined(AT_AMEBADPLUS_STANDALONE)
 /* Strong override of the Ameba-newer SDK's __weak wifi_do_fast_connect (wifi_fast_connect.c calls it
  * via p_wifi_do_fast_connect at boot): a no-op, so the SDK's flash-blob fast-connect stays disabled --
  * the shared wifi_service (env credentials + cached channel) owns provisioning. It used to spawn the
@@ -62,7 +62,7 @@ int wifi_do_fast_connect(void) {
 #endif
 
 
-#if defined CONFIG_PLATFORM_AMEBALITE || defined CONFIG_PLATFORM_AMEBASMART || defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2
+#if (defined(CONFIG_PLATFORM_AMEBALITE) || defined(CONFIG_PLATFORM_AMEBASMART) || defined(CONFIG_AMEBADPLUS) || defined(CONFIG_AMEBAGREEN2)) && !defined(AT_AMEBADPLUS_STANDALONE)
 int write_fast_connect_data_to_flash(unsigned int offer_ip, unsigned int server_ip) {
     (void) offer_ip;
     (void) server_ip;
@@ -783,7 +783,7 @@ void app_platform_pre_scheduler_services(void)
 // Ameba-NEWER (amebadplus / amebagreen2 / lite / smart) app hook, called by the Realtek SDK's
 // own main() (AT_SDK_OWNS_MAIN). AmebaD (8721D/8710C) is NOT here — it supplies its own main() and
 // body in the AmebaD section below.
-#if defined CONFIG_PLATFORM_AMEBALITE || defined CONFIG_PLATFORM_AMEBASMART || defined CONFIG_AMEBADPLUS || defined CONFIG_AMEBAGREEN2
+#if (defined(CONFIG_PLATFORM_AMEBALITE) || defined(CONFIG_PLATFORM_AMEBASMART) || defined(CONFIG_AMEBADPLUS) || defined(CONFIG_AMEBAGREEN2)) && !defined(AT_AMEBADPLUS_STANDALONE)
 void app_pre_example(void) {
     // Lock the firmware flash region (bottom 3 MB) against accidental writes
     // from glitches / brownouts. Must happen before WLAN / BT / OTA start.

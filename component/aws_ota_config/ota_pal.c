@@ -354,6 +354,20 @@ static OtaPalStatus_t prvCloseFile( OtaFileContext_t * const pFileContext )
     }
 
     /* Signature good: verify length+checksum and arm the new slot (writes boot sig last). */
+#ifdef CONFIG_AMEBADPLUS
+    /* Persist intent before committing. An interrupted download in the old
+     * bank must never look like a newly booted, pending-commit image. */
+    char pendingSlot[ 12 ];
+    ( void ) snprintf( pendingSlot, sizeof( pendingSlot ), "%lu", ( unsigned long ) s_slot.write_off );
+    if( setenv( "OTA_SELFTEST_SLOT", pendingSlot, 1 ) != 0 ||
+        setenv( "OTA_SELFTEST", "1", 1 ) != 0 )
+    {
+        prvPalReset();
+        ota_lock_release( OTA_SRC_AWS );
+        if( pFileContext != NULL ) { pFileContext->pFile = NULL; }
+        return OTA_PAL_COMBINE_ERR( OtaPalFileClose, 0 );
+    }
+#endif
 #if OTA_PAL_READBACK_VERIFY
     if( ota_flash_finish_random( &s_slot ) != 0 )
 #else
@@ -372,7 +386,9 @@ static OtaPalStatus_t prvCloseFile( OtaFileContext_t * const pFileContext )
      * getPlatformImageState() reports PendingCommit and the OTA library runs the self-test (else it
      * rejects: "job in self-test state while platform is not"). Persisted in KV/LFS across reboot;
      * cleared on Accepted/Rejected. */
+#ifndef CONFIG_AMEBADPLUS
     ( void ) setenv( "OTA_SELFTEST", "1", 1 );
+#endif
     s_active = 0;
     ota_lock_release( OTA_SRC_AWS );
     if( pFileContext != NULL ) { pFileContext->pFile = NULL; }
@@ -413,6 +429,9 @@ static OtaPalStatus_t prvSetPlatformImageState( OtaFileContext_t * const pFileCo
         ( eState == OtaImageStateAborted ) )
     {
         ( void ) setenv( "OTA_SELFTEST", "0", 1 );
+#ifdef CONFIG_AMEBADPLUS
+        ( void ) unsetenv( "OTA_SELFTEST_SLOT" );
+#endif
         OTA_PAL_LOG( "setPlatformImageState(%d): self-test flag cleared (%s)", ( int ) eState,
                      ( eState == OtaImageStateAccepted ) ? "committed" : "rejected/aborted" );
     }
@@ -427,6 +446,16 @@ static OtaPalImageState_t prvGetPlatformImageState( OtaFileContext_t * const pFi
      * commits it (-> setPlatformImageState clears the flag); any other boot is committed -> Valid. */
     if( ( v != NULL ) && ( v[ 0 ] == '1' ) )
     {
+#ifdef CONFIG_AMEBADPLUS
+        extern int ota_platform_active_slot( void );
+        const char * pending = getenv( "OTA_SELFTEST_SLOT" );
+        int slot = ota_platform_active_slot();
+        uint32_t active = slot == 0 ? 0x10000U : slot == 1 ? 0x190000U : 0U;
+        if( pending == NULL || active == 0U || strtoul( pending, NULL, 10 ) != active )
+        {
+            return OtaPalImageStateValid;
+        }
+#endif
         return OtaPalImageStatePendingCommit;
     }
     return OtaPalImageStateValid;

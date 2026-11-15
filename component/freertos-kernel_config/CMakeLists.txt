@@ -82,7 +82,11 @@ target_compile_options(freertos_config PRIVATE
 #              start on KM0's image2 — see component/amebad/freertos_port for the why)
 #   KM4 (HP) image2 = Cortex-M33, non-secure -> GCC_ARM_CM33_NTZ_NONSECURE
 #   Bouffalo (RISC-V)                        -> GCC_RISC_V
-if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
+if(AMEBADPLUS_CORE)
+    add_subdirectory(${AT_ROOT}/component/amebadplus/freertos_port
+                     ${CMAKE_BINARY_DIR}/component/amebadplus/freertos_port)
+    set(_frt_port A_CUSTOM_PORT)
+elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
     set(_frt_port GCC_ARM_CM0)
 elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     # KM4 image2 is non-secure (the secure world is TF-M). No-TrustZone port.

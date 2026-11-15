@@ -153,7 +153,7 @@ CI 用的 Windows runner 一般已经满足。
 - **Bouffalo**：[component/bouffalo_sdk/bflb_image_tool/bflb_elf_to_bin.py](../component/bouffalo_sdk/bflb_image_tool/bflb_elf_to_bin.py)
   把 PSM 当作普通 partition 段交给 `BLFlashCommand --build`
 - **Ameba D**：[project/Makefile](../project/Makefile) 的 `amebad` target 把 `build/amebad/firmware.bin`（boot+image2+TF-M，amebad/Makefile 产）和 `lfs.bin` 用 `dd` 合并成 4 MB `build/amebad/Image_All.bin`（全 `0xFF` base，firmware @ 0、LFS @ `0x300000`）
-- **Ameba Dplus / Green2**：[project/ameba/Makefile](../project/ameba/Makefile) 同上
+- **Ameba Dplus / Green2**：[project/amebadplus/Makefile](../project/amebadplus/Makefile) 同上
 
 验证 lfs 段真的被嵌进去了（CI 自动跑，本地也可手动）：
 

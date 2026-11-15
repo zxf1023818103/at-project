@@ -69,7 +69,11 @@ extern void vApplicationMallocFailedHook(void);
 #endif
 
 /* 8-byte alignment to satisfy FreeRTOS portBYTE_ALIGNMENT on Cortex-M. */
+#if portBYTE_ALIGNMENT >= 32
+#define MM_RTOS_FLAGS  (MM_FLAG_HEAP_ANY | MM_FLAG_ALIGN_32BYTE)
+#else
 #define MM_RTOS_FLAGS  (MM_FLAG_HEAP_ANY | MM_FLAG_ALIGN_8BYTE)
+#endif
 
 void *pvPortMalloc(size_t xWantedSize)
 {

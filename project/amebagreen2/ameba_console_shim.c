@@ -6,7 +6,7 @@
  * (platform/ameba-rtos/.../app/monitor/ram/low_level_io.c) as strong _read/_write.
  * We don't hand-edit the submodule, so instead the project link wraps those two
  * symbols (-Wl,--wrap=_read,_write, set as an INTERFACE link option on at_user in
- * project/ameba/CMakeLists.txt). References to _read/_write then resolve to the
+ * project/amebagreen2/CMakeLists.txt). References to _read/_write then resolve to the
  * __wrap_* below; the SDK's originals stay reachable as __real_*.
  *
  * fd 0/1/2 route to the shared dispatcher (canonical line + echo + stdout/stderr

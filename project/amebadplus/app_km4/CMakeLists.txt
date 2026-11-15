@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.24)
+project(amebadplus_app_km4 C CXX ASM)
+get_filename_component(AT_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
+set(AT_ROOT "${AT_ROOT}" CACHE INTERNAL "Repository root")
+set(AMEBADPLUS_IMAGE app_km4)
+include(../config.cmake)
+add_subdirectory(${AT_ROOT}/component ${CMAKE_BINARY_DIR}/component)
+amebadplus_add_image(app_km4)

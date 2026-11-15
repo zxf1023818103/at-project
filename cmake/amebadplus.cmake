@@ -1,0 +1,20 @@
+# ASDK 4523 supplies the ROM-compatible newlib ABI for RTL8711Dx.
+if(NOT DEFINED AMEBAD_TOOLCHAIN_ROOT)
+    if(DEFINED ENV{AMEBAD_TOOLCHAIN_ROOT})
+        set(AMEBAD_TOOLCHAIN_ROOT "$ENV{AMEBAD_TOOLCHAIN_ROOT}")
+    else()
+        foreach(candidate
+                "${CMAKE_CURRENT_LIST_DIR}/../toolchain/asdk-10.3.1-4523/linux/newlib"
+                "/opt/rtk-toolchain/asdk-10.3.1-4523/linux/newlib")
+            if(EXISTS "${candidate}/bin/arm-none-eabi-gcc")
+                set(AMEBAD_TOOLCHAIN_ROOT "${candidate}")
+                break()
+            endif()
+        endforeach()
+    endif()
+endif()
+if(NOT AMEBAD_TOOLCHAIN_ROOT)
+    message(FATAL_ERROR "Set AMEBAD_TOOLCHAIN_ROOT to ASDK 10.3.1-4523 (the newlib directory)")
+endif()
+set(AMEBAD_TOOLCHAIN_ROOT "${AMEBAD_TOOLCHAIN_ROOT}" CACHE PATH "Realtek ASDK root")
+include(${CMAKE_CURRENT_LIST_DIR}/arm-none-eabi.cmake)

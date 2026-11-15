@@ -88,13 +88,14 @@ amebad: lfs.bin
 	@md5sum ../build/amebad/Image_All.bin
 
 amebadplus: lfs.bin
-	$(MAKE) -C ameba amebadplus
+	$(MAKE) -C amebadplus
 
 amebagreen2: lfs.bin
-	$(MAKE) -C ameba amebagreen2
+	$(MAKE) -C amebagreen2
 
 clean:
 	-rm -f lfs.bin
 	-rm -rf $(LFS_BUILD_DIR)
 	-$(MAKE) -C amebad clean
-	-$(MAKE) -C ameba clean
+	-$(MAKE) -C amebadplus clean
+	-$(MAKE) -C amebagreen2 clean

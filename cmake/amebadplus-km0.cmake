@@ -1,0 +1,7 @@
+set(AMEBADPLUS_CORE km0 CACHE STRING "AmebaDplus core" FORCE)
+include(${CMAKE_CURRENT_LIST_DIR}/amebadplus.cmake)
+set(_arch "-march=armv8-m.base -mthumb")
+string(APPEND CMAKE_C_FLAGS_INIT " ${_arch} -DCONFIG_AMEBADPLUS -fno-builtin -fno-strict-aliasing -fno-tree-loop-distribute-patterns")
+string(APPEND CMAKE_CXX_FLAGS_INIT " ${_arch} -DCONFIG_AMEBADPLUS -fno-builtin -fno-strict-aliasing")
+string(APPEND CMAKE_ASM_FLAGS_INIT " ${_arch} -DCONFIG_AMEBADPLUS")
+string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT " ${_arch}")

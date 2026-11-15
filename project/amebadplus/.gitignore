@@ -1,0 +1,2 @@
+# Device private signing/encryption keys remain in the local repository only.
+/keys/com42.json

@@ -39,6 +39,11 @@ void wifi_forget( void );
 /* Re-enable the reconnect monitor after a `wifi forget` (e.g. fresh credentials were set). */
 void wifi_reconnect_enable( void );
 
+/* Temporarily hand association control to WPS/EAP without erasing credentials.
+ * Returns 0 after the service has parked, -1 on timeout. Resume with
+ * wifi_reconnect_enable(). Call from a task, never from a driver callback. */
+int wifi_service_pause( unsigned timeout_ms );
+
 /* (The 802.11d country tally moved to component/80211d_config — dot11d_tally_* / dot11d_cc_valid.) */
 
 #ifdef __cplusplus

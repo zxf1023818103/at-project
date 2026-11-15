@@ -243,3 +243,7 @@ endif()
 if(AMEBAD_CHIP MATCHES "^amebad-km[04]$")
     add_subdirectory(amebad)
 endif()
+
+if(AMEBADPLUS_CORE)
+    add_subdirectory(amebadplus)
+endif()

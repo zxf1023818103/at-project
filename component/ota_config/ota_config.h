@@ -10,6 +10,7 @@
 #define OTA_CONFIG_H
 
 #include <stdio.h>
+#include <string.h>
 
 /* ---- control plane: MQTT (jobs) ----
  * The job control plane (notify-next / $next/get / UpdateJobExecution) is MQTT-only. */
@@ -23,7 +24,11 @@
  * DOWNLOAD therefore rides HTTPS; MQTT stays available as a fallback if a job offers only MQTT.
  * Primary = HTTP so HTTP wins when a job lists both. */
 #define configENABLED_DATA_PROTOCOLS       ( OTA_DATA_OVER_MQTT | OTA_DATA_OVER_HTTP )
+#ifdef CONFIG_AMEBADPLUS
+#define configOTA_PRIMARY_DATA_PROTOCOL    ( OTA_DATA_OVER_HTTP )
+#else
 #define configOTA_PRIMARY_DATA_PROTOCOL    ( OTA_DATA_OVER_MQTT )
+#endif
 
 /* ---- block size ----
  * 2^12 = 4096-byte file blocks. MEASURED to be the heap-bound max on this target: bigger blocks grow
@@ -38,7 +43,11 @@
 /* bl602/bl616 (AWSOTA=ON, MQTT data plane) use 2 KB blocks, not 4 KB: the ~26 KB free heap can't
  * hold the 4 KB block's decode/net/event .bss AND leave a contiguous ~6 KB block for the mbedTLS TLS
  * IN buffer (mbedtls_ssl_setup OOM'd at handshake). 2 KB blocks free ~6 KB of .bss. AmebaD keeps 4 KB. */
-#if defined(BL602) || defined(BL702)
+#if defined(CONFIG_AMEBADPLUS)
+/* Dplus uses signed HTTPS ranged GETs. 4 KiB cuts the request count by four;
+ * it does not use the account's legacy MQTT file-delivery block limitation. */
+#define otaconfigLOG2_FILE_BLOCK_SIZE      ( 12UL )
+#elif defined(BL602) || defined(BL702)
 /* bl602: 1 KB blocks. Post-MQTT-connect free heap is only ~7 KB (the connected mbedTLS session's IN
  * buffer + the 5.7 KB socket RX buffer persist from the handshake), which must still fit the 6 KB OTA
  * agent task stack + its decode/event data buffers + the closeFile crypto working set. 1 KB blocks
@@ -115,7 +124,10 @@
  * The OTA library passes the format+args already parenthesised, so `printf message` works. */
 #define LogError( message )    do { printf( "[OTA] ERR " ); printf message; printf( "\r\n" ); } while( 0 )
 #define LogWarn( message )     do { printf( "[OTA] WRN " ); printf message; printf( "\r\n" ); } while( 0 )
-#define LogInfo( message )     do { printf( "[OTA] " );     printf message; printf( "\r\n" ); } while( 0 )
+/* Parsed fields include a temporary S3 bearer URL. Keep state/progress logs,
+ * but do not echo job-document values to a serial console. */
+#define AT_OTA_LOG_VISIBLE( format, ... ) ( strncmp( ( format ), "Extracted parameter", 19 ) != 0 )
+#define LogInfo( message )     do { if( AT_OTA_LOG_VISIBLE message ) { printf( "[OTA] " ); printf message; printf( "\r\n" ); } } while( 0 )
 #define LogDebug( message )
 
 #endif /* OTA_CONFIG_H */

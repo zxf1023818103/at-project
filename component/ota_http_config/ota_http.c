@@ -118,6 +118,15 @@ static int conn_connect( conn_t * c, int is_https, const char * host, uint16_t p
         }
         FreeRTOS_setsockopt( c->sock, 0, FREERTOS_SO_RCVTIMEO, &rt, sizeof( rt ) );
         FreeRTOS_setsockopt( c->sock, 0, FREERTOS_SO_SNDTIMEO, &wt, sizeof( wt ) );
+#ifdef OTA_HTTP_RX_BUFFER_BYTES
+        /* A platform may cap this additional connection while MQTT/BLE are
+         * active; the throughput-test defaults can otherwise exhaust its heap. */
+        WinProperties_t window = {
+            .lTxBufSize = OTA_HTTP_TX_BUFFER_BYTES, .lTxWinSize = 2,
+            .lRxBufSize = OTA_HTTP_RX_BUFFER_BYTES, .lRxWinSize = 8
+        };
+        FreeRTOS_setsockopt( c->sock, 0, FREERTOS_SO_WIN_PROPERTIES, &window, sizeof( window ) );
+#endif
         memset( &addr, 0, sizeof( addr ) );
         addr.sin_family = FREERTOS_AF_INET;
         addr.sin_port   = FreeRTOS_htons( port );

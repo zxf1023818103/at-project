@@ -15,6 +15,10 @@
 #ifndef FREERTOS_CONFIG_H
 #define FREERTOS_CONFIG_H
 
+#if defined(CONFIG_AMEBADPLUS)
+#include "FreeRTOSConfig_port.h"
+#else
+
 /* ---- AmebaD preamble (SystemCoreClock + Kconfig autoconf used in its branch) ---- */
 #if defined(CONFIG_PLATFORM_8721D)
 #if defined(__ICCARM__) || defined(__CC_ARM) || defined(__GNUC__)
@@ -289,4 +293,5 @@ void vApplicationSleep(uint32_t xExpectedIdleTime);
 #error "FreeRTOSConfig.h: unknown platform (expected CONFIG_PLATFORM_8721D or a BLxxx macro)"
 #endif
 
+#endif /* CONFIG_AMEBADPLUS */
 #endif /* FREERTOS_CONFIG_H */

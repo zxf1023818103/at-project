@@ -7,7 +7,7 @@ project(at C CXX ASM)
 include(proj.conf)
 
 # The repo-root CMakeLists was deleted (each image is its own project now), so this entry adds the
-# shared subtrees directly (like project/ameba): component self-adds the universal *_config + the
+# shared subtrees directly (like project/amebadplus): component self-adds the universal *_config + the
 # BOUFFALO branch's bouffalo_sdk; src exports AT_USER_SOURCES. AT_ROOT anchors the repo root.
 get_filename_component(AT_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 set(AT_ROOT "${AT_ROOT}" CACHE INTERNAL "at-project repo root")

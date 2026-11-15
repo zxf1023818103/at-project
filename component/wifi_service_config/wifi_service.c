@@ -63,6 +63,7 @@ static uint32_t wsvc_rand( void )
 static EventGroupHandle_t s_evt;
 static TaskHandle_t       s_task;
 static volatile int       s_forget;         /* `wifi forget` issued -> stay down until re-enabled */
+#define WSVC_EVT_PARKED (1u << 1)
 
 /* Try to associate: cached WIFI_CHANNEL for an instant re-connect, else a directed scan.
  * On a successful scan, cache the channel (+ security if the platform reports one) so the
@@ -138,7 +139,9 @@ static void wsvc_task( void * arg )
         if( s_forget )
         {
             /* Parked after a `wifi forget`; woken by wifi_reconnect_enable(). */
+            ( void ) xEventGroupSetBits( s_evt, WSVC_EVT_PARKED );
             ( void ) ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
+            ( void ) xEventGroupClearBits( s_evt, WSVC_EVT_PARKED );
             BackoffAlgorithm_InitializeParams( &reconnectParams, WSVC_BACKOFF_BASE_MS,
                                                WSVC_BACKOFF_MAX_MS, BACKOFF_ALGORITHM_RETRY_FOREVER );
             continue;
@@ -165,6 +168,7 @@ static void wsvc_task( void * arg )
         ( void ) xEventGroupClearBits( s_evt, WSVC_EVT_DISCONNECT );
 
         rc = wsvc_connect_once( ssid, pass );
+        if( s_forget ) continue;
         if( rc == 0 )
         {
             /* Connected: reset the backoff and block until the link drops (or a forget sets the bit). */
@@ -261,5 +265,17 @@ void wifi_reconnect_enable( void )
     {
         xTaskNotifyGive( s_task );   /* unpark the monitor */
     }
+}
+
+int wifi_service_pause( unsigned timeout_ms )
+{
+    if( s_task == NULL || s_evt == NULL ) return -1;
+    ( void ) xEventGroupClearBits( s_evt, WSVC_EVT_PARKED );
+    s_forget = 1;
+    wifi_port_disconnect();
+    ( void ) xEventGroupSetBits( s_evt, WSVC_EVT_DISCONNECT );
+    xTaskNotifyGive( s_task );
+    return ( xEventGroupWaitBits( s_evt, WSVC_EVT_PARKED, pdFALSE, pdFALSE,
+                                 pdMS_TO_TICKS( timeout_ms ) ) & WSVC_EVT_PARKED ) ? 0 : -1;
 }
 

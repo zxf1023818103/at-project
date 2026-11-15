@@ -315,7 +315,18 @@ static int32_t prvHttpTransportRecv( NetworkContext_t * pCtx, void * pBuf, size_
     ( void ) pCtx;
     if( s_http.isHttps )
     {
-        return TLS_FreeRTOS_recv( &s_http.netCtx, pBuf, len );
+        /* A small TLS receive buffer can consume ciphertext without producing
+         * plaintext until the full record arrives. coreHTTP's default 10 ms
+         * zero-byte retry budget is too short for that on a WAN. Keep reading
+         * within this connection's bounded receive timeout instead. */
+        TickType_t start = xTaskGetTickCount();
+        int32_t n;
+        do
+        {
+            n = TLS_FreeRTOS_recv( &s_http.netCtx, pBuf, len );
+            if( n != 0 ) { return n; }
+        } while( ( TickType_t ) ( xTaskGetTickCount() - start ) < pdMS_TO_TICKS( OTA_HTTP_RECV_TMO_MS ) );
+        return 0;
     }
     return ( int32_t ) FreeRTOS_recv( s_http.sock, pBuf, len, 0 );
 }
@@ -407,8 +418,9 @@ static OtaHttpStatus_t prvHttpOpenConn( void )
 
         /* Shared server-only HTTPS connect (transport_https.c) — same server-trust + the same
          * runtime-selected backend (at_tls_get_backend) as the ota_http command and AWS MQTT. */
-        if( Https_Connect( &s_http.netCtx, s_http.host, s_http.port,
-                           OTA_HTTP_RECV_TMO_MS, OTA_HTTP_SEND_TMO_MS ) != TLS_TRANSPORT_SUCCESS )
+        if( Https_ConnectWithRxReserve( &s_http.netCtx, s_http.host, s_http.port,
+                                        OTA_HTTP_RECV_TMO_MS, OTA_HTTP_SEND_TMO_MS,
+                                        OTA_HTTP_RXRESERVE ) != TLS_TRANSPORT_SUCCESS )
         {
             OTA_APP_LOG( "http: TLS connect to %s:%u FAIL", s_http.host, ( unsigned ) s_http.port );
             /* CRITICAL: free what TLS_FreeRTOS_Connect allocated before failing - a transient
@@ -510,6 +522,19 @@ static void prvOtaHttpTakeoverFailed( void )
 
 static OtaHttpStatus_t prvOtaHttpInit( char * pUrl )
 {
+#ifdef CONFIG_AMEBADPLUS
+    /* Keep the signed PAL and the OTA Agent's post-boot self-test protocol in
+     * charge. A saved job ID alone is not evidence that a download committed. */
+    if( pUrl == NULL || prvHttpParseUrl( pUrl ) != 0 || !s_http.isHttps )
+    {
+        OTA_APP_LOG( "http: Dplus OTA jobs require a valid HTTPS URL" );
+        return OtaHttpInitFailed;
+    }
+    s_http_takeover = 0;
+    OTA_APP_LOG( "http: signed PAL download from https://%s:%u", s_http.host,
+                 ( unsigned ) s_http.port );
+    return prvHttpOpenConn();
+#else
     const char * jobName;
     const char * prevJob;
 
@@ -557,6 +582,7 @@ static OtaHttpStatus_t prvOtaHttpInit( char * pUrl )
     ota_http_set_fail_hook( prvOtaHttpTakeoverFailed );
     ota_http_start( pUrl );
     return OtaHttpSuccess;
+#endif
 }
 
 /* Millisecond clock for coreHTTP's recv-retry budget (HTTPResponse_t.getTime). */
@@ -1045,9 +1071,19 @@ static void prvOtaAppCallback( OtaJobEvent_t eEvent, const void * pData )
             break;
 
         case OtaJobEventStartTest:
+#ifdef CONFIG_AMEBADPLUS
+        {
+            extern int app_ota_selftest_ready( void );
+            const int ready = app_ota_selftest_ready();
+            OTA_APP_LOG( "job: boot self-tests %s -> %s image", ready ? "PASS" : "incomplete",
+                         ready ? "accepting" : "rejecting" );
+            err = OTA_SetImageState( ready ? OtaImageStateAccepted : OtaImageStateRejected );
+        }
+#else
             /* SIMPLIFICATION: no real self-test - accept immediately. */
             OTA_APP_LOG( "job: self-test -> accepting image (no self-test implemented)" );
             err = OTA_SetImageState( OtaImageStateAccepted );
+#endif
             if( err != OtaErrNone )
             {
                 OTA_APP_LOG( "OTA_SetImageState(Accepted) FAIL %d (%s)", ( int ) err, OTA_Err_strerror( err ) );

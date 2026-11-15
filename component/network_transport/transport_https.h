@@ -36,4 +36,9 @@ TlsBackendMode_t at_tls_backend_from_str( const char * s );
 TlsTransportStatus_t Https_Connect( NetworkContext_t * pNet, const char * host, uint16_t port,
                                     uint32_t recvTmoMs, uint32_t sendTmoMs );
 
+/* Same verified connection, with a receive-buffer allocation hint for bounded
+ * range responses. The transport still grows the buffer for larger records. */
+TlsTransportStatus_t Https_ConnectWithRxReserve( NetworkContext_t * pNet, const char * host, uint16_t port,
+                                                uint32_t recvTmoMs, uint32_t sendTmoMs, size_t rxReserve );
+
 #endif /* TRANSPORT_HTTPS_H */

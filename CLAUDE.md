@@ -87,13 +87,17 @@ Platform SDKs are managed as git submodules under `platform/`. Run `git submodul
 - Output: `build/amebad/Image_All.bin` (KM0+KM4 boot + image2; flash @ 0x08000000 via `project/amebad/flash.ps1`)
 - Build system / image pipeline: `doc/build_system.md`, `doc/amebad_image_build.md`; the layout-sensitive XIP boot-hang gotcha: `doc/amebad_xip_layout_boot_hang.md`; TF-M secure storage (ITS+PS) + the flash/memory layout: `doc/amebad_tfm_storage.md`; the chip's key/cert inventory (RSIP/RDP/HUK/SBOOT eFuse map + manufacturer key-handling): `doc/amebad_keys.md`
 
-### Realtek Ameba Dplus (RTL8711Dx) and Green 2 (RTL8711F)
-- SDK: `platform/ameba-rtos` (Python + CMake build via `ameba.py`)
-- Environment: `source project/ameba/env.sh` (or `env.bat` on Windows)
-- Build: `cd project/ameba && make`
-- Outputs: `project/ameba/build_RTL8711Dx/Image_All.bin` and `project/ameba/build_RTL8711F/Image_All.bin`
-- SoC selection: `project/ameba/soc_info.json` and `project/ameba/prj.conf`
-- Config: `project/ameba/CMakeLists.txt`, `project/ameba/Kconfig`
+### Realtek Ameba Dplus (RTL8711Dx)
+- SDK hardware sources/libraries: `platform/ameba-rtos`; six matching standalone CMake directories in `project/amebadplus/{bootloader_km0,bootloader_km0_2nd,bootloader_km4,app_km0,app_km4,app_km4_secure}`. Dplus embeds the KM0 boot objects in app_km0; TF-M is the APP_ALL IMG3 tail. Shared middleware is under `component/`; local hardware adapters are under `component/amebadplus`.
+- Build: `make -C project amebadplus`; output `build/amebadplus/Image_All.bin` and `ota_all.bin`.
+- ASDK 10.3.1-4523; toolchains `cmake/amebadplus-km{0,4}.cmake`; override `AMEBAD_TOOLCHAIN_ROOT` if needed.
+- COM42 automatic RTS/DTR download: `project/amebadplus/flash.ps1`; validation: `cli_test.ps1`.
+- Feature support and hardware differences from AmebaD: `project/amebadplus/README.md`.
+- Optional features include TF-M/ITS/PS, AWS/HTTP/BLE OTA, WPS/EAP, HCI, QUIC, hardware GCM and signed/RSIP image generation. See `project/amebadplus/VALIDATION.md` for measured coverage; never infer fused secure-boot/RSIP enforcement from signing tests. Development HUK uses secure Flash; no eFuse is programmed by build/flash scripts.
+
+### Realtek Ameba Green2 (RTL8711F)
+- Legacy SDK build preserved separately in `project/amebagreen2` (`ameba.py`); it was not tested as part of the Dplus migration.
+- `project/ameba` has been removed; do not recreate its combined Dplus/Green2 build.
 
 ## Source Code Architecture
 
