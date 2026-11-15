@@ -1,6 +1,8 @@
 # AmebaDplus / RTL8711Dx
 
-与 `project/amebad` 一样，镜像入口、配置和链接脚本位于项目目录，硬件适配位于 `component/amebadplus`，中间件复用 `component/*_config`。SDK `platform/ameba-rtos` 不作修改。
+与 `project/amebad` 一样，镜像入口、配置和链接脚本位于项目目录，硬件适配位于 `component/amebadplus`，中间件复用 `component/*_config`。AmebaDplus 的编译、链接、签名加密和下载工具准备均使用仓库内提取的文件，无需 `platform/ameba-rtos` 目录。
+
+驱动按 `component/amebad` 的归属提取到 `fwlib`、`mbed`、`usrcfg`、`osdep`、`cmsis_rom`、`string_rom`、`pmu`、`wifi`、`wlan`、`wpa_supplicant`、`hci` 等目录，各目录提供头文件或厂商库目标；没有保留一份改名后的 SDK 目录。原有厂商源码和二进制库的来源、提交与逐文件哈希记录在 [UPSTREAM.json](../../component/amebadplus/UPSTREAM.json)，提取说明见 [组件说明](../../component/amebadplus/README.md)。
 
 ```
 project/amebadplus/

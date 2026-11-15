@@ -1,7 +1,10 @@
 # AmebaDplus hardware libraries. Executables and memory maps live in project/amebadplus.
-set(AMEBADPLUS_SDK "${AT_ROOT}/platform/ameba-rtos")
+set(AMEBADPLUS_COMPONENT_DIR "${CMAKE_CURRENT_LIST_DIR}")
 set(AMEBADPLUS_PROJECT "${AT_ROOT}/project/amebadplus")
-include(${CMAKE_CURRENT_LIST_DIR}/${AMEBADPLUS_IMAGE}_includes.cmake)
+foreach(owner fwlib mbed usrcfg string_rom cmsis_rom dlist platform_stdlib osdep monitor_port pmu
+              wifi wlan wpa_supplicant freertos_tcp_port)
+    add_subdirectory(${owner})
+endforeach()
 include(${CMAKE_CURRENT_LIST_DIR}/${AMEBADPLUS_IMAGE}_sources.cmake)
 if(AT_ENABLE_TFM AND AMEBADPLUS_IMAGE STREQUAL "bootloader_km4")
     list(FILTER AMEBADPLUS_VENDOR_SOURCES EXCLUDE REGEX "ameba_boot_trustzonecfg.c$")
@@ -11,7 +14,7 @@ if(AT_ENABLE_EAP)
     list(FILTER AMEBADPLUS_VENDOR_SOURCES EXCLUDE REGEX "wifi_feature_dis_eap.c$")
 endif()
 if(AT_ENABLE_WPS AND AMEBADPLUS_IMAGE STREQUAL "app_km4")
-    set(_wps_source ${AMEBADPLUS_SDK}/component/wifi/wpa_supplicant/wpa_supplicant/wifi_wps_config.c)
+    set(_wps_source ${AMEBADPLUS_COMPONENT_DIR}/wpa_supplicant/wpa_supplicant/wifi_wps_config.c)
     file(READ ${_wps_source} _wps)
     string(REPLACE "setting.password);" "\"[redacted]\");" _wps "${_wps}")
     string(REPLACE "wifi->password);" "\"[redacted]\");" _wps "${_wps}")
@@ -22,14 +25,13 @@ endif()
 add_library(amebadplus_sdk INTERFACE)
 target_include_directories(amebadplus_sdk SYSTEM INTERFACE
     ${AMEBADPLUS_PROJECT}/app_${AMEBADPLUS_CORE}
-    ${AMEBADPLUS_PROJECT}/bootloader_km4
-    ${CMAKE_CURRENT_LIST_DIR}/osdep
-    ${AMEBADPLUS_SDK}/component/at_cmd
-    ${AMEBADPLUS_SDK}/component/lwip/api
-    ${AMEBADPLUS_SDK}/component/lwip/lwip_v2.1.2/src/include
-    ${AMEBADPLUS_SDK}/component/lwip/lwip_v2.1.2/port/realtek
-    ${AMEBADPLUS_SDK}/component/lwip/lwip_v2.1.2/port/realtek/freertos
-    ${AMEBADPLUS_VENDOR_INCLUDES})
+    ${AMEBADPLUS_PROJECT}/bootloader_km4)
+target_link_libraries(amebadplus_sdk INTERFACE
+    amebadplus_fwlib_headers amebadplus_mbed_headers amebadplus_usrcfg_headers
+    amebadplus_string_rom_headers amebadplus_cmsis_rom_headers amebadplus_dlist_headers
+    amebadplus_platform_stdlib_headers amebadplus_osdep_headers
+    amebadplus_monitor_port_headers amebadplus_pmu_headers amebadplus_wifi_headers
+    amebadplus_wlan_headers amebadplus_wpa_supplicant_headers amebadplus_freertos_tcp_port_headers)
 target_compile_definitions(amebadplus_sdk INTERFACE DM_ODM_SUPPORT_TYPE=32)
 if(AT_ENABLE_HCI)
     target_compile_definitions(amebadplus_sdk INTERFACE AT_DPLUS_HCI=1)
@@ -45,20 +47,20 @@ if((AT_ENABLE_NIMBLE OR AT_ENABLE_HCI) AND NOT AMEBADPLUS_IMAGE STREQUAL "bootlo
         target_compile_definitions(amebadplus_sdk INTERFACE CONFIG_COEXIST_HOST=1)
         foreach(source rtw_coex_ipc_host rtw_coex_host_api_com rtw_coex_host_api_bt
                        rtw_coex_host_api_ext rtw_coex_host_api_wp rtw_coex_ipc_host_api)
-            list(APPEND AMEBADPLUS_VENDOR_SOURCES ${AMEBADPLUS_SDK}/component/rtk_coex/${source}.c)
+            list(APPEND AMEBADPLUS_VENDOR_SOURCES ${AMEBADPLUS_COMPONENT_DIR}/wlan/${source}.c)
         endforeach()
     endif()
 endif()
 add_library(amebadplus_vendor OBJECT ${AMEBADPLUS_VENDOR_SOURCES})
 if(AT_ENABLE_WPS AND AMEBADPLUS_IMAGE STREQUAL "app_km4")
     target_include_directories(amebadplus_vendor PRIVATE
-        ${AMEBADPLUS_SDK}/component/wifi/wpa_supplicant/wpa_supplicant)
+        ${AMEBADPLUS_COMPONENT_DIR}/wpa_supplicant/wpa_supplicant)
 endif()
 target_link_libraries(amebadplus_vendor PUBLIC amebadplus_sdk FreeRTOS)
 target_compile_options(amebadplus_vendor PRIVATE -w)
 if(NOT AMEBADPLUS_IMAGE STREQUAL "bootloader_km4")
     target_sources(amebadplus_vendor PRIVATE osdep/os_wrapper_memory.c osdep/heap.c osdep/assert.c
-        ${AMEBADPLUS_SDK}/component/os/freertos/os_wrapper/os_wrapper_static_functions.c)
+        ${AMEBADPLUS_COMPONENT_DIR}/osdep/os_wrapper_static_functions.c)
     target_compile_options(amebadplus_vendor PRIVATE -include ${CMAKE_CURRENT_LIST_DIR}/osdep/heap.h)
 endif()
 include(${CMAKE_CURRENT_LIST_DIR}/image_tool/image.cmake)

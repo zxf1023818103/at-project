@@ -1,5 +1,5 @@
 add_library(amebadplus_wifi_provision STATIC wifi_provision.c)
-set(wpa ${AMEBADPLUS_SDK}/component/wifi/wpa_supplicant)
+set(wpa ${AMEBADPLUS_COMPONENT_DIR}/wpa_supplicant)
 target_include_directories(amebadplus_wifi_provision PRIVATE
     ${wpa}/wpa_supplicant ${wpa}/src/crypto ${wpa}/src/wps)
 target_link_libraries(amebadplus_wifi_provision PRIVATE amebadplus_sdk FreeRTOS
@@ -8,8 +8,7 @@ if(AT_ENABLE_WPS)
     target_compile_definitions(amebadplus_wifi_provision PRIVATE AT_ENABLE_WPS)
 endif()
 if(AT_ENABLE_EAP)
-    set(wpa ${AMEBADPLUS_SDK}/component/wifi/wpa_supplicant)
-    # Adapt the vendor source in the build tree; keep the SDK submodule clean.
+    # Adapt the vendor source in the build tree; keep the upstream copy intact.
     file(READ ${wpa}/src/crypto/tls_polarssl.c tls)
     string(REPLACE "<mbedtls/config.h>" "<mbedtls/build_info.h>" tls "${tls}")
     string(REPLACE "if ((ret = mbedtls_ssl_setup(tls_context->ssl, tls_context->conf)) != 0)"

@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import struct
 
 from cryptography.hazmat.primitives import serialization
@@ -47,6 +48,7 @@ def prepare(template, output, key_file, sboot, rsip):
     (output / 'manifest.json5').write_text(json.dumps(config, indent=2))
     (output / 'manifest.json5').chmod(0o600)
     (output / 'soc_info.json').write_text('{"soc":{"name":"RTL8711Dx"}}\n')
+    shutil.copyfile(Path(template).with_name('ameba_layout.ld'), output / 'ameba_layout.ld')
     return config
 
 

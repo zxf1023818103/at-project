@@ -23,7 +23,7 @@ if (-not $Image) {
 if (-not $ToolDir) {
     $signedTool=Join-Path $repo 'build\amebadplus\security-tools'
     $ToolDir=if (Test-Path "$signedTool\Ameba_1-N_MP_ImageTool.exe") { $signedTool } else {
-        Join-Path $repo 'platform\ameba-rtos\tools\ameba\MP_ImageTool_1_N'
+        Join-Path $repo 'component\amebadplus\image_tool\MP_ImageTool_1_N'
     }
 }
 if (-not $BootLog) { $BootLog = Join-Path $repo 'build\amebadplus\boot.log' }

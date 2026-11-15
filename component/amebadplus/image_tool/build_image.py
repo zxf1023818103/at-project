@@ -9,7 +9,7 @@ import sys
 import shutil
 
 ROOT = Path(__file__).resolve().parents[3]
-SDK = ROOT / 'platform/ameba-rtos'
+IMAGE_TOOLS = Path(__file__).resolve().parent
 PROJECT = ROOT / 'project/amebadplus'
 sys.path.insert(0, str(ROOT / 'build/amebadplus/python-deps'))
 
@@ -75,11 +75,11 @@ def image(args):
         (out / f'{args.core}_image2_all.bin').write_bytes(data)
 
 def axf(*args, extern=PROJECT):
-    env = os.environ.copy(); env['AMEBA_SDK'] = str(SDK)
+    env = os.environ.copy()
     deps = ROOT / 'build/amebadplus/python-deps'
     if deps.is_dir(): env['PYTHONPATH'] = str(deps) + os.pathsep + env.get('PYTHONPATH', '')
     run(sys.executable, Path(__file__).with_name('axf2bin_compat.py'),
-        SDK / 'tools/scripts/axf2bin.py', '--extern-dir', extern, *args, env=env)
+        IMAGE_TOOLS / 'axf2bin.py', '--extern-dir', extern, *args, env=env)
 
 def merge(args):
     from dplus_security import prepare, verify_signed, decrypt_rsip

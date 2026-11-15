@@ -1,4 +1,4 @@
-"""Run the unmodified SDK packer with current cryptography releases."""
+"""Run the extracted Realtek packer with current cryptography releases."""
 import runpy
 import sys
 from pathlib import Path

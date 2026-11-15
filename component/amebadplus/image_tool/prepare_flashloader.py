@@ -3,7 +3,7 @@
 import argparse
 from pathlib import Path
 import shutil
-from build_image import ROOT, SDK, PROJECT, axf
+from build_image import ROOT, IMAGE_TOOLS, PROJECT, axf
 from dplus_security import prepare, verify_manifest
 
 
@@ -14,10 +14,10 @@ def main():
     args = parser.parse_args()
     if not Path(args.keys).is_file():
         parser.error('Existing device keys are required; refusing to generate replacement keys')
-    source = SDK/'tools/ameba/MP_ImageTool_1_N'
+    source = IMAGE_TOOLS/'MP_ImageTool_1_N'
     out = Path(args.output).resolve()
     if out == source.resolve() or source.resolve() in out.parents:
-        parser.error('Use a separate build output; never modify SDK flashloaders')
+        parser.error('Use a separate build output; never modify the vendored flashloader')
     shutil.copytree(source,out,dirs_exist_ok=True,ignore=shutil.ignore_patterns('log','Log','Logs'))
     loader = out/'Devices/Floaders/floader_amebadplus.bin'
     original = loader.read_bytes()

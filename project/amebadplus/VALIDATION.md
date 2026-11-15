@@ -151,3 +151,29 @@ AWS 完整组合启用了与 AmebaD 相同的 `AT_NET_LOW_MEM` TCP 配置，避�
 ## 发布前检查
 
 公开代码仓库通过 `.gitignore` 排除 COM42 私有签名密钥和 RSIP 密钥。私有备份仓库的可见性已确认为 `private`；重新克隆提交 `d2dc7f1a80c4b201b610eb695870e02325c4b76b`，私钥、公钥清单、校验和及恢复说明均与本地备份逐字节一致，私钥文件 SHA-256 与实测记录 `security-result.json` 相符。本机另保留 `refs/local/com42-security-snapshot` 和 `refs/local/com42-owner-key-backup` 引用。缺失密钥时构建拒绝自动生成替代密钥；主机镜像/签名 8 项及原 NOR/OTP 测试通过（`security-publish-tests.log`）。
+
+## SDK 目录隔离构建（2026-11-16）
+
+将 `platform/ameba-rtos` 实际移至仓库外，从新的 `build/amebadplus/no-sdk/` 构建目录开始验证。首次配置因直接引用 SDK 的 `ameba_audio_clock.c` 失败（`no-sdk-initial-build.log`）。随后按 AmebaD 的组件归属提取 503 个驱动、头文件、厂商库、工具和许可文件，共约 9.16 MB；构建不引用原 SDK 路径或临时搬移路径，也没有通过符号链接回指 SDK。
+
+源码和库分别位于 `fwlib`、`mbed`、`usrcfg`、`cmsis_rom`、`string_rom`、`dlist`、`platform_stdlib`、`osdep`、`pmu`、`wifi`、`wlan`、`wpa_supplicant`、`hci` 等所属组件，工具位于 `image_tool`。修正了移出 SDK 后的头文件引用和打包器 SoC/内存布局查找；来源与原始/本地哈希保存在 `component/amebadplus/UPSTREAM.json`。
+
+在 SDK 原目录不存在时，以下配置均完成编译、链接、Ed25519 签名和 RSIP 加密打包：
+
+| 配置 | 覆盖内容 | 日志（`build/amebadplus/` 下） |
+|---|---|---|
+| 完整配置 | TF-M、ITS/PS、AWS、HTTPS OTA、BLE、mcumgr、WPS/EAP、HWGCM、ROMKAT | `no-sdk-complete-build.log` |
+| HCI | 原始控制器传输，关闭 NimBLE | `no-sdk-hci-build.log` |
+| 诊断 | PKCS11、BENCH、VFS、C++、crypto 自测、iperf、HWGCM、ROMKAT、eFuse 调试命令编译 | `no-sdk-diagnostics-build.log` |
+| 配网 | 非 TF-M 的 WPS/EAP、mcumgr、eFuse 调试命令编译 | `no-sdk-provision-build.log` |
+| QUIC | QUIC、HWGCM、ROMKAT | `no-sdk-quic-build.log` |
+| Mbed TLS | AWS + `TLS_BACKEND=mbedtls` | `no-sdk-mbedtls-build.log` |
+| TLS fallback | AWS + `TLS_BACKEND=fallback` | `no-sdk-fallback-build.log` |
+
+`bootloader_km0`、`bootloader_km0_2nd`、`app_km4_secure` 的独立入口另外完成配置和编译（`no-sdk-standalone-build.log`）；加上完整配置覆盖的三个镜像，六个项目入口均已验证。诊断、WPS/EAP 和 mcumgr 同时开启的组合会超过现有 `0x170000` 应用槽，打包器正确拒绝，随后拆成上述独立配置验证；槽位边界未改动。
+
+最终检查了 26 份新构建图及其实际编译头文件依赖、生成的链接/符号 map，原 SDK 与临时搬移目录引用均为 0（`no-sdk-dependency-audit.json`）。503 个提取文件的哈希全部符合清单，均为普通文件，且没有被 Git 忽略规则遗漏。
+
+主机镜像/签名 8 项、NOR 2 项和 OTP 参数校验 1 项通过（`no-sdk-host-tests.log`）。签名 RAM 下载器生成及独立验签通过（`no-sdk-flashloader.log`）。使用原 COM42 实测的未打包输入重新打包，`firmware.bin`、`ota_all.bin`、合并应用及签名 boot 与原 SDK 工具产物逐字节一致（`no-sdk-packer-compat.log`）；其固件 SHA-256 仍为 `6b422926d2fb33d26dd72358fdc63be35171bcbc721b174ec2e4a13f42e421ca`。
+
+本轮是 SDK 依赖移除后的编译与主机验证，未重新烧录设备或写 eFuse。新构建产物和结果记录在 `build/amebadplus/no-sdk-result.json`，配置命令及槽位限制记录在 `no-sdk-matrix.json`。隔离验证后原 SDK 目录原样恢复，供仓库中其他项目使用。
