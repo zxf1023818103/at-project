@@ -20,7 +20,7 @@ project/amebadplus/
   cli_test.ps1          控制台与配置持久化验证
   boottest.ps1          连续复位、TF-M 状态和加密自测检查
   provision_security.ps1  显式分阶段 eFuse 写入和读回检查
-  keys/com42.json       COM42 私钥，保存在本地仓库并被 .gitignore 排除
+  keys/com42.json       COM42 本地私钥，被 .gitignore 排除，另有私有仓库备份
   keys/com42.public.json  可公开的 root/app 公钥和哈希
   hci_test.ps1          原始 H4 命令和 DTM 检查
 ```
@@ -114,9 +114,9 @@ BLE GATT 可用 `nimble_ble_verify.py` 检查；SMP 升级使用 `mcumgr_upload.
 
 TF-M 使用隔离级别 1：安全分区共享安全地址空间，SAU 和锁定的 MPC/PPC 隔离 NS；Flash 修改经检查后的 PSA 服务执行。NS 不可修改 boot、当前运行槽位、PSA 区域或安全映射。OTA 先擦除目标槽证书标记，完整接收、格式/校验和/Flash 回读检查通过后提交目标证书，再使旧槽失效；不支持跨 TF-M/非 TF-M 启动 ABI 的 OTA。
 
-COM42 已永久启用 SBOOT 和 RSIP，后续固件必须使用 `SBOOT=ON RSIP=ON` 及匹配密钥。按用户要求，原有密钥保存在 `project/amebadplus/keys/com42.json`（权限 0600，仅保存在本地仓库，被 `.gitignore` 排除），包含 root/app Ed25519 种子、两组 RSIP 256 位密钥和 boot/app IV；`SECURITY_KEYS` 可指定其他设备的密钥文件。公开仓库仅包含 `keys/com42.public.json` 公钥与哈希。缺少私钥时构建会拒绝签名/加密，不会自动生成替代密钥；全新未熔丝板可用 `SBOOT=OFF RSIP=OFF` 构建明文镜像。普通构建不烧写 eFuse，不要替换已烧录设备的密钥文件。
+COM42 已永久启用 SBOOT 和 RSIP，后续固件必须使用 `SBOOT=ON RSIP=ON` 及匹配密钥。原有密钥保存在 `project/amebadplus/keys/com42.json`（本机权限 0600，被 `.gitignore` 排除），包含 root/app Ed25519 种子、两组 RSIP 256 位密钥和 boot/app IV；`SECURITY_KEYS` 可指定其他设备的密钥文件。`keys/com42.public.json` 记录对应的公钥与哈希。此密钥组对应已烧入 COM42 的 OTP，用于该测试板固件的签名、加密和恢复。缺少私钥时构建会拒绝签名/加密，不会自动生成替代密钥；全新未熔丝板可用 `SBOOT=OFF RSIP=OFF` 构建明文镜像。普通构建不烧写 eFuse，不要替换已烧录设备的密钥文件。
 
-本机保留含原密钥的本地 Git 引用 `refs/local/com42-security-snapshot`，该引用不随普通分支 push 发布。私钥仍位于上述原路径；换机器构建 COM42 固件需要单独安全导入同一密钥文件。
+密钥已备份到私有仓库 [at-project-com42-keys](https://github.com/zxf1023818103/at-project-com42-keys)，包含私钥、公钥清单、校验和及恢复说明。换机器时用获授权的 GitHub 账号克隆该仓库，执行 `sha256sum -c SHA256SUMS`，再将 `com42.json` 复制回上述路径并设置权限 `0600`，或通过 `SECURITY_KEYS` 指定文件。本机另保留含原密钥的 Git 引用 `refs/local/com42-security-snapshot` 和 `refs/local/com42-owner-key-backup`，这些引用不随普通分支 push 发布。
 
 `make flashloader` 将 SDK ImageTool 复制到构建目录，用同一 root 密钥签名 RAM 下载器并独立验签。`make flash` 构建签名下载器，以 firmware-only 方式保留持久数据；`RSIP=ON` 时传入 `-AllowEncrypted`。直接执行 PowerShell 时先准备签名下载器；默认读取 `build/amebadplus/security-tools`，其他构建目录用 `-ToolDir` 指定。熔丝启用 SBOOT 后，原厂未匹配签名的下载器不能用于恢复。
 

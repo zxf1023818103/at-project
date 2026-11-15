@@ -1,6 +1,6 @@
 # COM42 移植与验证记录（2026-11-15～16）
 
-本记录区分实机、主机验证和未覆盖项目。日志均位于忽略目录 `build/amebadplus/`。COM42 的 SBOOT/RSIP 密钥保存在本地 `keys/com42.json` 和本地 Git 备份引用中，不发布到公开远端；公开文件为 `keys/com42.public.json`。硬件为 AmebaDplus / RTL8711Dx，4 MiB NOR（ID `20-40-16`），KM4 240 MHz / KM0 96 MHz；RTS/DTR 自动下载，串口 1500000。
+本记录区分实机、主机验证和未覆盖项目。日志均位于忽略目录 `build/amebadplus/`。COM42 的 SBOOT/RSIP 密钥保存在本地 `keys/com42.json`，已备份至私有仓库 [at-project-com42-keys](https://github.com/zxf1023818103/at-project-com42-keys)；公钥/哈希记录为 `keys/com42.public.json`，本机另保留 Git 备份引用。硬件为 AmebaDplus / RTL8711Dx，4 MiB NOR（ID `20-40-16`），KM4 240 MHz / KM0 96 MHz；RTS/DTR 自动下载，串口 1500000。
 
 ## 结构和功能范围
 
@@ -117,7 +117,7 @@ AWS 完整组合启用了与 AmebaD 相同的 `AT_NET_LOW_MEM` TCP 配置，避�
 
 | 项目 | 已验证结果 | 证据 |
 |---|---|---|
-| 密钥持久保存 | 原有 root/app Ed25519 和 RSIP 密钥保存在 `project/amebadplus/keys/com42.json`，0600，仅本地保存；公钥/哈希可公开，与镜像及下载器一致 | `security-a-encrypted-pack.log`、`flashloader-prepare.log` |
+| 密钥持久保存 | 原有 root/app Ed25519 和 RSIP 密钥保存在 `project/amebadplus/keys/com42.json`，本机权限 0600，另有私有仓库备份；与镜像及下载器一致 | `security-a-encrypted-pack.log`、`flashloader-prepare.log`，私有备份提交 `d2dc7f1` |
 | PK1 | 物理 `0x320..0x33f` 的 SHA-256 为 `50591c9571de24ec3c675a0fbf9b218b812c63edbb30140cf7210d2bfc6d3062`；写后读回一致 | `fuse-keys.log` |
 | RSIP 密钥 | `0x2c0..0x2df`、`0x2e0..0x2ff` 写后读回一致；数值不写入报告 | `fuse-keys.log` |
 | 永久使能 | `0x368=F3`，SBOOT 和 RSIP 均启用，XTS 模式 | `fuse-sboot-enable.log`、`fuse-rsip-enable.log` |
@@ -150,4 +150,4 @@ AWS 完整组合启用了与 AmebaD 相同的 `AT_NET_LOW_MEM` TCP 配置，避�
 
 ## 发布前检查
 
-公开推送不包含 COM42 私有签名密钥和 RSIP 密钥；自动审批拒绝公开这些凭据，原文件和 `refs/local/com42-security-snapshot` 本地备份保留。新增缺失密钥时拒绝自动替换的构建检查；主机镜像/签名 8 项及原 NOR/OTP 测试通过（`security-publish-tests.log`）。
+公开代码仓库通过 `.gitignore` 排除 COM42 私有签名密钥和 RSIP 密钥。私有备份仓库的可见性已确认为 `private`；重新克隆提交 `d2dc7f1a80c4b201b610eb695870e02325c4b76b`，私钥、公钥清单、校验和及恢复说明均与本地备份逐字节一致，私钥文件 SHA-256 与实测记录 `security-result.json` 相符。本机另保留 `refs/local/com42-security-snapshot` 和 `refs/local/com42-owner-key-backup` 引用。缺失密钥时构建拒绝自动生成替代密钥；主机镜像/签名 8 项及原 NOR/OTP 测试通过（`security-publish-tests.log`）。
