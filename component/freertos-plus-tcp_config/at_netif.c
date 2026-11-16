@@ -191,6 +191,14 @@ void at_netif_bringup( void )
     }
     xDone = pdTRUE;
 
+    if( s_ops && s_ops->add_interfaces && s_ops->exclusive_interfaces )
+    {
+        s_ops->add_interfaces();
+        FreeRTOS_IPInit_Multi();
+        at_netif_set_ready();
+        return;
+    }
+
     if( ( s_ops != NULL ) && ( s_ops->mac_get != NULL ) )
     {
         s_ops->mac_get( ucMAC );
@@ -201,6 +209,7 @@ void at_netif_bringup( void )
     xEndPoint.bits.bWantDHCP = pdTRUE_UNSIGNED;
 
     at_netif_ipv6_init();   /* link-local + SLAAC-global IPv6 endpoints (must precede IPInit) */
+    if( s_ops && s_ops->add_interfaces ) s_ops->add_interfaces();
     FreeRTOS_IPInit_Multi();
     at_netif_set_ready();
     at_netif_ipv6_mld_start();   /* periodic MLDv2 reports for inbound IPv6 through a snooping bridge */
@@ -291,6 +300,13 @@ BaseType_t xApplicationDNSQueryHook( const char * pcName )
     }
     return pdFAIL;
 }
+
+#if ( ipconfigIPv4_BACKWARD_COMPATIBLE == 0 )
+BaseType_t xApplicationDNSQueryHook_Multi( NetworkEndPoint_t * endpoint, const char * name )
+{
+    return endpoint && endpoint->pxNetworkInterface == s_pxMyInterface ? xApplicationDNSQueryHook(name) : pdFAIL;
+}
+#endif
 
 /* ===== Shared network-up/down body ========================================
  * Both platforms' STRONG vApplicationIPNetworkEventHook do only their platform-specific dedup +
@@ -530,7 +546,7 @@ void at_netif_on_network_up( void )
     NetworkEndPoint_t * ep;
     char b[ 16 ];
 
-    FreeRTOS_GetAddressConfiguration( &ulIP, &ulMask, &ulGW, &ulDNS );
+    FreeRTOS_GetEndPointConfiguration( &ulIP, &ulMask, &ulGW, &ulDNS , FreeRTOS_FirstEndPoint(s_pxMyInterface));
     printf( "[NET] ==== network UP ====\r\n" );
     at_netif_log_ipv6( "network UP" );
 

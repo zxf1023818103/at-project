@@ -1,3 +1,6 @@
+#ifdef AT_ENABLE_NAN
+#include "../nan/vendor/wifi_api.h"
+#else
 /**
   ******************************************************************************
   * @file    wifi_api.h
@@ -221,3 +224,5 @@ s32 wifi_get_setting(u8 wlan_idx, struct rtw_wifi_setting *psetting);
 #endif
 
 #endif // __WIFI_API_H
+
+#endif /* AT_ENABLE_NAN */

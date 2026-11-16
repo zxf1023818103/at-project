@@ -1,3 +1,6 @@
+#ifdef AT_ENABLE_NAN
+#include "../nan/vendor/ameba_wificfg_common.h"
+#else
 /*
  * Copyright (c) 2024 Realtek Semiconductor Corp.
  *
@@ -310,3 +313,5 @@ void wifi_set_user_config(void);
 
 #endif
 
+
+#endif /* AT_ENABLE_NAN */

@@ -1,6 +1,11 @@
 # AmebaGreen2 hardware libraries. Executables and memory maps live in project/amebagreen2.
 set(AMEBAGREEN2_COMPONENT_DIR "${CMAKE_CURRENT_LIST_DIR}")
 set(AMEBAGREEN2_PROJECT "${AT_ROOT}/project/amebagreen2")
+option(AT_ENABLE_NAN "Standalone Wi-Fi Aware on FreeRTOS" OFF)
+if(AT_ENABLE_NAN)
+    add_compile_definitions(AT_ENABLE_NAN CONFIG_WIFI_NAN_ENABLE CONFIG_NAN CONFIG_NAN_V2
+        CONFIG_NAN_PAIRING NAN_CUSTOMER_NANDOW CONFIG_WIFI_NAN_HOST_APP)
+endif()
 foreach(owner fwlib mbed usrcfg string_rom cmsis_rom dlist platform_stdlib osdep monitor_port pmu
               wifi wlan wpa_supplicant freertos_tcp_port)
     add_subdirectory(${owner})
@@ -24,7 +29,25 @@ if(AT_ENABLE_WPS AND AMEBAGREEN2_IMAGE STREQUAL "app_km4tz")
     list(REMOVE_ITEM AMEBAGREEN2_VENDOR_SOURCES ${_wps_source})
     list(APPEND AMEBAGREEN2_VENDOR_SOURCES ${CMAKE_CURRENT_BINARY_DIR}/wifi_wps_config.c)
 endif()
+if(AT_ENABLE_NAN AND NOT AMEBAGREEN2_IMAGE STREQUAL "bootloader_km4tz")
+    # Match the NAN archive's feature-disable ABI. The older WTN stubs omit
+    # rtw_macid_wtn_mgt_init, so unused R-Mesh initialization overwrites the
+    # NAN MACID capacity with two entries and rejects all NAN peer MACIDs.
+    list(REMOVE_ITEM AMEBAGREEN2_VENDOR_SOURCES
+        ${AMEBAGREEN2_COMPONENT_DIR}/wifi/wifi_feature_dis_wtn.c)
+    list(APPEND AMEBAGREEN2_VENDOR_SOURCES
+        ${AMEBAGREEN2_COMPONENT_DIR}/nan/vendor/wifi_feature_dis_wtn.c)
+    list(REMOVE_ITEM AMEBAGREEN2_VENDOR_SOURCES ${AMEBAGREEN2_COMPONENT_DIR}/usrcfg/ameba_wificfg.c
+        ${AMEBAGREEN2_COMPONENT_DIR}/wifi/wifi_feature_dis_mcc.c)
+    list(APPEND AMEBAGREEN2_VENDOR_SOURCES ${AMEBAGREEN2_COMPONENT_DIR}/nan/vendor/ameba_wificfg.c
+        ${AMEBAGREEN2_COMPONENT_DIR}/nan/vendor/rtw_task_size.c)
+endif()
 add_library(amebagreen2_sdk INTERFACE)
+if(AT_ENABLE_NAN)
+    target_compile_definitions(amebagreen2_sdk INTERFACE AT_ENABLE_NAN CONFIG_WIFI_NAN_ENABLE
+        CONFIG_NAN CONFIG_NAN_V2 CONFIG_NAN_PAIRING NAN_CUSTOMER_NANDOW CONFIG_WIFI_NAN_HOST_APP)
+    target_include_directories(amebagreen2_sdk SYSTEM BEFORE INTERFACE ${AMEBAGREEN2_COMPONENT_DIR}/nan/vendor)
+endif()
 target_include_directories(amebagreen2_sdk SYSTEM INTERFACE
     ${AMEBAGREEN2_PROJECT}/app_${AMEBAGREEN2_CORE}
     ${AMEBAGREEN2_PROJECT}/bootloader_km4tz
@@ -71,6 +94,9 @@ if(NOT AMEBAGREEN2_IMAGE STREQUAL "bootloader_km4tz")
     target_compile_options(amebagreen2_vendor PRIVATE -include ${CMAKE_CURRENT_LIST_DIR}/osdep/heap.h)
 endif()
 include(${CMAKE_CURRENT_LIST_DIR}/image_tool/image.cmake)
+if(AT_ENABLE_NAN AND NOT AMEBAGREEN2_IMAGE STREQUAL "bootloader_km4tz")
+    add_subdirectory(nan)
+endif()
 if(AMEBAGREEN2_CORE STREQUAL "km4ns")
     add_library(bootloader_km4ns OBJECT ${AMEBAGREEN2_PROJECT}/bootloader_km4ns/bootloader_km4ns.c)
     target_link_libraries(bootloader_km4ns PRIVATE amebagreen2_sdk FreeRTOS)

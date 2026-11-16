@@ -1,3 +1,6 @@
+#ifdef AT_ENABLE_NAN
+#include "../nan/vendor/autoconf_8721f.h"
+#else
 /**
   ******************************************************************************
   * @file    autoconf_8721f.h
@@ -228,3 +231,5 @@
 
 #define CONFIG_IOT_RS 1
 #endif /*#ifndef AUTOCONF_8721F_H */
+
+#endif /* AT_ENABLE_NAN */

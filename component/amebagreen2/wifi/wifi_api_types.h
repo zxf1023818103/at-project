@@ -1,3 +1,6 @@
+#ifdef AT_ENABLE_NAN
+#include "../nan/vendor/wifi_api_types.h"
+#else
 /**
   ******************************************************************************
   * @file    wifi_api_types.h
@@ -1208,3 +1211,5 @@ extern struct rtw_wifi_setting *ap_wifisetting;
 #endif
 
 #endif // __WIFI_API_TYPES_H
+
+#endif /* AT_ENABLE_NAN */

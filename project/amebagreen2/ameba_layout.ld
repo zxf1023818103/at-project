@@ -57,7 +57,11 @@
 #define KM4TZ_IMG1_SIZE              KBYTES(32)
 #endif
 
+#ifdef AT_ENABLE_NAN
+#define RAM_KM4NS_IMG2_SIZE          KBYTES(160)
+#else
 #define RAM_KM4NS_IMG2_SIZE          KBYTES(96)
+#endif
 /*
                   amebagreen2 SRAM Layout (512K)
 0x20000000 ──────────►┌──────────────────────┐

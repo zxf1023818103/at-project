@@ -42,6 +42,10 @@ typedef struct
     /* Called on eNetworkUp with the leased IPv4 (advance driver state / post app
      * event). NULL -> nothing extra. */
     void ( * on_got_ip )( uint32_t ulIPAddress );
+    /* Register any additional interfaces before the shared IP task starts. */
+    void ( * add_interfaces )( void );
+    /* The custom interface set replaces the default STA/DHCP/SLAAC endpoints. */
+    BaseType_t exclusive_interfaces;
 } at_netif_ops_t;
 
 /* Register the platform ops (call once, before at_netif_bringup). */

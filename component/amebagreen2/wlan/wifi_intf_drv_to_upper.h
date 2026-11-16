@@ -1,3 +1,6 @@
+#ifdef AT_ENABLE_NAN
+#include "../nan/vendor/wifi_intf_drv_to_upper.h"
+#else
 /**
   ******************************************************************************
   * @file    wifi_intf_drv_to_upper.h
@@ -92,3 +95,5 @@ void wifi_tunnelapi_joinbss_identity_key_get(u8 *identity_key);
 #endif
 
 #endif //#ifndef __RTW_INTF_USER_H__
+
+#endif /* AT_ENABLE_NAN */

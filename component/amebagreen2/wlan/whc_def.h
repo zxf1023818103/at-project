@@ -1,3 +1,6 @@
+#ifdef AT_ENABLE_NAN
+#include "../nan/vendor/whc_def.h"
+#else
 /**
   ******************************************************************************
   * @file    inic_def.h
@@ -198,3 +201,5 @@ enum IPC_LWIP_INFO_TYPE {
 
 #endif
 
+
+#endif /* AT_ENABLE_NAN */

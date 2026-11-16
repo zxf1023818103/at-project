@@ -124,6 +124,10 @@ void wifi_init_thread(void *param)
 void wifi_init(void)
 {
 	wifi_set_rom2flash();
+#ifdef AT_ENABLE_NAN
+    extern void wifi_set_task_size(void);
+    wifi_set_task_size();
+#endif
 	if (rtos_task_create(NULL, ((const char *)"wifi_init_thread"), wifi_init_thread, NULL, WIFI_STACK_SIZE_INIT, 5) != RTK_SUCCESS) {
 		RTK_LOGS(TAG_WLAN_DRV, RTK_LOG_ERROR, "wifi_init failed\n");
 	}

@@ -1,3 +1,6 @@
+#ifdef AT_ENABLE_NAN
+#include "../nan/vendor/whc_ipc_msg_queue.h"
+#else
 /**
   ******************************************************************************
   * @file    inic_ipc_msg_queue.h
@@ -43,3 +46,5 @@ u8 whc_msg_get_queue_status(void);
 void whc_ipc_send_msg(u32 event_num, u32 msg_addr, u32 msg_queue_status, u32 wlan_idx);
 
 #endif /* __INIC_IPC_MSG_QUEUE_H__ */
+
+#endif /* AT_ENABLE_NAN */

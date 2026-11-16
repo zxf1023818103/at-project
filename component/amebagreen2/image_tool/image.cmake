@@ -25,6 +25,9 @@ function(amebagreen2_add_image name)
             add_executable(${name} main.c ameba_app_start.c)
         endif()
     endif()
+    if(AT_ENABLE_NAN)
+        list(APPEND AMEBAGREEN2_LD_DEFINES -DAT_ENABLE_NAN)
+    endif()
     set(extra_rom)
     if(NOT name STREQUAL "bootloader_km4tz")
         list(APPEND extra_rom
@@ -64,6 +67,22 @@ function(amebagreen2_add_image name)
             target_link_libraries(${name} PRIVATE bootloader_km4ns)
             list(APPEND libs amebagreen2_wifi_whc_np amebagreen2_wifi_common
                 ${AMEBAGREEN2_PROJECT}/app_km4ns/lib_wifi_fw.a amebagreen2_coex)
+            if(AT_ENABLE_NAN)
+                list(REMOVE_ITEM libs ${AMEBAGREEN2_PROJECT}/app_km4ns/lib_wifi_fw.a)
+                list(APPEND libs ${AT_ROOT}/component/amebagreen2/nan/vendor/lib_wifi_fw.a)
+                target_link_options(${name} PRIVATE
+                    -Wl,--wrap=whc_ipc_dev_cfg80211_nan_cfgvendor_event_report
+                    -Wl,--wrap=whc_ipc_dev_cfg80211_cfgvendor_send_cmd_reply
+                    -Wl,--wrap=rtw_nan_ndp_response_prehandle
+                    -Wl,--wrap=rtw_nan_pasn_rx_checking
+                    -Wl,--wrap=rtw_nan_intfs_init
+                    -Wl,--wrap=rtw_nan_start_api
+                    -Wl,--wrap=rtw_nan_schdl_faw_act_add
+                    -Wl,--wrap=rtw_nan_sdf_rx
+                    -Wl,--wrap=rtw_nan_ndl_nego_rx
+                    -Wl,--wrap=rtw_nan_ndl_attri_construct
+                    -Wl,--wrap=rtw_nan_ndc_attri_contruct)
+            endif()
             target_sources(${name} PRIVATE ${AT_ROOT}/component/amebagreen2/osdep/gcc_wrap.c)
             foreach(f malloc calloc realloc free _malloc_r _calloc_r _realloc_r _free_r printf)
                 target_link_options(${name} PRIVATE -Wl,--wrap=${f})
@@ -76,6 +95,9 @@ function(amebagreen2_add_image name)
             list(APPEND libs FreeRTOS freertos_config monitor monitor_cmds lfs_port
                 littlefs lfs_config freertos_plus_tcp wifi_service net_cli sntp_time rxi_log mbedtls_config mbedcrypto mbedx509 mbedtls at_console)
             include(${AMEBAGREEN2_PROJECT}/features.cmake)
+            if(AT_ENABLE_NAN)
+                list(APPEND libs green2_nan)
+            endif()
             target_link_options(${name} PRIVATE -Wl,--wrap=setenv -Wl,--wrap=unsetenv
                 -Wl,--wrap=malloc -Wl,--wrap=free -Wl,--wrap=calloc -Wl,--wrap=realloc)
         endif()

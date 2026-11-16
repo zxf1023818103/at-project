@@ -133,6 +133,16 @@ extern int lwip_init_done;
 /* Exported constants --------------------------------------------------------*/
 /* Exported macro ------------------------------------------------------------*/
 /* Exported functions ------------------------------------------------------- */
+#ifdef AT_ENABLE_NAN
+unsigned char *lwip_get_ip(uint8_t idx);
+unsigned char *lwip_get_gw(uint8_t idx);
+unsigned char *lwip_get_mask(uint8_t idx);
+unsigned char *lwip_get_mac(uint8_t idx);
+int lwip_is_valid_ip(uint8_t idx, unsigned char *dest);
+int lwip_get_ipv6_enabled(void);
+void lwip_wlan_set_netif_info(uint8_t idx, void *dev, unsigned char *mac);
+void netif_adapter_wifi_recv_whc(uint8_t idx, struct pbuf *p);
+#endif
 void LwIP_Init(void);
 void LwIP_ReleaseIP(uint8_t idx);
 uint8_t LwIP_DHCP(uint8_t idx, uint8_t dhcp_state);

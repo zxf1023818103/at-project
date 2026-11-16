@@ -64,8 +64,15 @@
 
 /* ---- ECP RAM: AWS suite is ECDHE_RSA (P-256). Shrink the mul window + drop the fixed-point
  * base-point precompute — one-shot handshake ECDHE then uses less RAM (a little slower). ---- */
+#ifdef AT_GREEN2_NAN
+/* PASN responses must fit short NAN radio availability windows. Green2 has
+ * room for the larger multiplication table; keep the tiny MQTT profile below. */
+#define MBEDTLS_ECP_WINDOW_SIZE          4
+#define MBEDTLS_ECP_FIXED_POINT_OPTIM    1
+#else
 #define MBEDTLS_ECP_WINDOW_SIZE          2
 #define MBEDTLS_ECP_FIXED_POINT_OPTIM    0
+#endif
 
 /* ---- MPI (RSA) modexp window: unset defaults to 6 -> the sliding-window table is 2^6=64 mpi
  * temporaries (~8 KB of small allocs) during the client's RSA-2048 CertificateVerify sign. On the

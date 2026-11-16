@@ -1,3 +1,6 @@
+#ifdef AT_ENABLE_NAN
+#include "../nan/vendor/rtw_autoconf.h"
+#else
 /**
   ******************************************************************************
   * @file    rtw_autoconf.h
@@ -137,3 +140,5 @@
 #endif
 
 #endif //WLANCONFIG_H
+
+#endif /* AT_ENABLE_NAN */

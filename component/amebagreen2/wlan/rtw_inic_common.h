@@ -1,3 +1,6 @@
+#ifdef AT_ENABLE_NAN
+#include "../nan/vendor/rtw_inic_common.h"
+#else
 
 #ifndef _RTW_INIC_HOST_COMMON_H
 #define _RTW_INIC_HOST_COMMON_H
@@ -22,3 +25,5 @@
 int whc_ipc_host_send_zephyr(int idx, void *pkt_addr, uint32_t len);
 
 #endif
+
+#endif /* AT_ENABLE_NAN */

@@ -1,3 +1,6 @@
+#ifdef AT_ENABLE_NAN
+#include "../nan/vendor/whc_ipc_host_trx.h"
+#else
 /**
   ******************************************************************************
   * @file    inic_ipc_host_trx.h
@@ -72,3 +75,5 @@ void whc_ipc_host_trx_event_hdl(u8 event_num, u32 msg_addr, u8 wlan_idx);
 int whc_ipc_host_send_skb(int idx, struct sk_buff *skb);
 
 #endif /* __INIC_IPC_HOST_TRX_H__ */
+
+#endif /* AT_ENABLE_NAN */

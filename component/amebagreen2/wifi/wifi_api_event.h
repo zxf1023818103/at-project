@@ -1,3 +1,6 @@
+#ifdef AT_ENABLE_NAN
+#include "../nan/vendor/wifi_api_event.h"
+#else
 /**
   ******************************************************************************
   * @file    wifi_api_event.h
@@ -203,3 +206,5 @@ struct rtw_event_csi_report_info {
 
 #endif //__WIFI_API_EVENT_H
 
+
+#endif /* AT_ENABLE_NAN */

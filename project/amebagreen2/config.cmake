@@ -1,5 +1,14 @@
 option(AT_ENABLE_TFM "Build KM4TZ as TF-M nonsecure firmware" OFF)
 option(AT_ENABLE_STORAGE "Enable TF-M ITS and protected storage" OFF)
+option(AT_ENABLE_NAN "Standalone Wi-Fi Aware publisher and TCP responder" OFF)
+option(AT_NAN_HEAP_CHECKS "Check TLSF heaps around NAN authentication/IPC" OFF)
+option(AT_NAN_NET_DIAG "Record NAN TCP packet timings without packet-path logging" OFF)
+if(AT_ENABLE_NAN)
+    add_compile_definitions(AT_GREEN2_NAN AT_NET_LOW_MEM)
+    if(AT_NAN_HEAP_CHECKS)
+        add_compile_definitions(AT_NAN_HEAP_CHECKS)
+    endif()
+endif()
 # Use the kernel's next deadline for the AP PMC timer. The SDK's alternative
 # policy defaults to sleeping forever, which also stops the NP watchdog task.
 add_compile_definitions(CONFIG_STANDARD_TICKLESS)

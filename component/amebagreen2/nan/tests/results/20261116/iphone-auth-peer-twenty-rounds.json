@@ -1,0 +1,193 @@
+{
+  "cancelled": false,
+  "completedCount": 20,
+  "continuous": false,
+  "disconnectGapSeconds": 0,
+  "finished": true,
+  "part": 1,
+  "requested": 20,
+  "rounds": [
+    {
+      "discoverySeconds": 0.94318608334288,
+      "elapsedSeconds": 3.238505041692406,
+      "number": 1,
+      "readySeconds": 3.2341594583704136,
+      "startedAt": "2026-11-16T10:10:19Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.4636445000069216,
+      "elapsedSeconds": 2.1225943749886937,
+      "interRoundGapSeconds": 0.0013535000034607947,
+      "number": 2,
+      "readySeconds": 2.1225431250059046,
+      "startedAt": "2026-11-16T10:10:22Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.43506445834646,
+      "elapsedSeconds": 0.8684770833351649,
+      "interRoundGapSeconds": 0.0035373750142753124,
+      "number": 3,
+      "readySeconds": 0.8638819999760017,
+      "startedAt": "2026-11-16T10:10:24Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.080078125,
+      "elapsedSeconds": 1.9252885000314564,
+      "interRoundGapSeconds": 0.007247833302244544,
+      "number": 4,
+      "readySeconds": 1.7079198750434443,
+      "startedAt": "2026-11-16T10:10:25Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.24941695830784738,
+      "elapsedSeconds": 0.9499768749810755,
+      "interRoundGapSeconds": 0.003475375007838011,
+      "number": 5,
+      "readySeconds": 0.7033780416240916,
+      "startedAt": "2026-11-16T10:10:27Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.34471641667187214,
+      "elapsedSeconds": 0.9410465416731313,
+      "interRoundGapSeconds": 0.0028495416627265513,
+      "number": 6,
+      "readySeconds": 0.934972083370667,
+      "startedAt": "2026-11-16T10:10:28Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.31759779166895896,
+      "elapsedSeconds": 0.46788179164286703,
+      "interRoundGapSeconds": 0.007658583344891667,
+      "number": 7,
+      "readySeconds": 0.46134720830013976,
+      "startedAt": "2026-11-16T10:10:29Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.3674071249552071,
+      "elapsedSeconds": 0.51592520828126,
+      "interRoundGapSeconds": 0.007185916707385331,
+      "number": 8,
+      "readySeconds": 0.5106061666156165,
+      "startedAt": "2026-11-16T10:10:30Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.3652848749770783,
+      "elapsedSeconds": 0.5500003333436325,
+      "interRoundGapSeconds": 0.0075117083615623415,
+      "number": 9,
+      "readySeconds": 0.5110432499786839,
+      "startedAt": "2026-11-16T10:10:30Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.3358165416866541,
+      "elapsedSeconds": 0.4888175000087358,
+      "interRoundGapSeconds": 0.0028829166549257934,
+      "number": 10,
+      "readySeconds": 0.488611041684635,
+      "startedAt": "2026-11-16T10:10:31Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.375891333387699,
+      "elapsedSeconds": 0.5626605416764505,
+      "interRoundGapSeconds": 0.0028895832947455347,
+      "number": 11,
+      "readySeconds": 0.5575456666992977,
+      "startedAt": "2026-11-16T10:10:31Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.3282897500321269,
+      "elapsedSeconds": 0.47775587503565475,
+      "interRoundGapSeconds": 0.003893874993082136,
+      "number": 12,
+      "readySeconds": 0.471016708354,
+      "startedAt": "2026-11-16T10:10:32Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.3759226250112988,
+      "elapsedSeconds": 1.0416007500025444,
+      "interRoundGapSeconds": 0.004097124969121069,
+      "number": 13,
+      "readySeconds": 1.0359898333554156,
+      "startedAt": "2026-11-16T10:10:32Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.4107450416777283,
+      "elapsedSeconds": 0.5230214583571069,
+      "interRoundGapSeconds": 0.006441875011660159,
+      "number": 14,
+      "readySeconds": 0.5166350416839123,
+      "startedAt": "2026-11-16T10:10:33Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.4937319166492671,
+      "elapsedSeconds": 1.030146875011269,
+      "interRoundGapSeconds": 0.007965624972712249,
+      "number": 15,
+      "readySeconds": 1.0238603333709762,
+      "startedAt": "2026-11-16T10:10:34Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.5040741250268184,
+      "elapsedSeconds": 1.0389134583529085,
+      "interRoundGapSeconds": 0.008156458323355764,
+      "number": 16,
+      "readySeconds": 1.0340386250172742,
+      "startedAt": "2026-11-16T10:10:35Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.542645541660022,
+      "elapsedSeconds": 1.0420027083600871,
+      "interRoundGapSeconds": 0.00830408331239596,
+      "number": 17,
+      "readySeconds": 1.0419454166549258,
+      "startedAt": "2026-11-16T10:10:36Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.5063470000168309,
+      "elapsedSeconds": 1.0455610833014362,
+      "interRoundGapSeconds": 0.00275462499121204,
+      "number": 18,
+      "readySeconds": 1.0388426249846816,
+      "startedAt": "2026-11-16T10:10:37Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.5065511667053215,
+      "elapsedSeconds": 1.0421200416749343,
+      "interRoundGapSeconds": 0.0048527916660532355,
+      "number": 19,
+      "readySeconds": 1.0373570416704752,
+      "startedAt": "2026-11-16T10:10:38Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.5064679583301768,
+      "elapsedSeconds": 1.0411547916592099,
+      "interRoundGapSeconds": 0.007935666712000966,
+      "number": 20,
+      "readySeconds": 1.0356326249893755,
+      "startedAt": "2026-11-16T10:10:39Z",
+      "success": true
+    }
+  ],
+  "startedAt": "2026-11-16T10:10:19Z",
+  "successCount": 20,
+  "timeoutSeconds": 30
+}

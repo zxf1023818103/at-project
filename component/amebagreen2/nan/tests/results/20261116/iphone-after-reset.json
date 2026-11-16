@@ -1,0 +1,40 @@
+{
+  "cancelled": false,
+  "completedCount": 3,
+  "continuous": false,
+  "disconnectGapSeconds": 0,
+  "finished": true,
+  "part": 1,
+  "requested": 3,
+  "rounds": [
+    {
+      "discoverySeconds": 2.2203417916898616,
+      "elapsedSeconds": 15.39689958334202,
+      "number": 1,
+      "readySeconds": 15.377686208346859,
+      "startedAt": "2026-11-16T03:01:37Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.9701913333265111,
+      "elapsedSeconds": 4.693770166661125,
+      "interRoundGapSeconds": 0.0030464583542197943,
+      "number": 2,
+      "readySeconds": 4.208896458323579,
+      "startedAt": "2026-11-16T03:01:52Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.999114875041414,
+      "elapsedSeconds": 14.738799083337653,
+      "interRoundGapSeconds": 0.0028624999686144292,
+      "number": 3,
+      "readySeconds": 14.702210208342876,
+      "startedAt": "2026-11-16T03:01:57Z",
+      "success": true
+    }
+  ],
+  "startedAt": "2026-11-16T03:01:37Z",
+  "successCount": 3,
+  "timeoutSeconds": 30
+}

@@ -69,7 +69,7 @@ static void prvIperfUdpClientTask( void *pvParameters )
     ( void ) memset( &xServer, 0, sizeof( xServer ) );
     xServer.sin_family = FREERTOS_AF_INET;
     xServer.sin_port = FreeRTOS_htons( IPERF_PORT );
-    xServer.sin_addr = iperf_target_ip();
+    xServer.sin_address.ulIP_IPv4 = iperf_target_ip();
 
     log_info( "[iperf-udp] blasting 192.168.2.73:%d for %ds (dgram %d)...",
                 IPERF_PORT, IPERF_SECONDS, IPERF_UDP_DGRAM );

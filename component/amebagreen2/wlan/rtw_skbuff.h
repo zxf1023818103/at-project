@@ -1,3 +1,6 @@
+#ifdef AT_ENABLE_NAN
+#include "../nan/vendor/rtw_skbuff.h"
+#else
 /**
   ******************************************************************************
   * @file    rtw_skbuff.h
@@ -148,3 +151,5 @@ void deinit_skb_pool(void);
 struct sk_buff *get_buf_from_poll(void);
 void release_buf_to_poll(struct sk_buff *skb);
 #endif //__SKBUFF_H__
+
+#endif /* AT_ENABLE_NAN */

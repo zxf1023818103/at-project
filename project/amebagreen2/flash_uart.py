@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Green2 UART download with separate reset/boot control and readback verification."""
+"""Green2 UART download with DTR/RTS control and readback verification."""
 import argparse
+from contextlib import nullcontext
 import hashlib
 import logging
 from pathlib import Path
@@ -97,12 +98,24 @@ def main():
     settings = RtSettings(AutoProgramSpicAddrMode4Byte=0,
                           AutoSwitchToDownloadModeWithDtrRts=0,
                           AutoResetDeviceWithDtrRts=0)
-    with open_port(args.boot_port, 115200) as control:
-        reset(control, download=True)
+    same_port = args.port.upper() == args.boot_port.upper()
+    control_context = nullcontext(None) if same_port else open_port(args.boot_port, 115200)
+    with control_context as control:
+        if control is not None:
+            reset(control, download=True)
         device = Ameba(RtkDeviceProfile(**profile), args.port, args.baud, '',
                        settings, logging.getLogger('green2'))
         try:
+            if same_port:
+                reset(device.serial_port, download=True)
+                # The shared handle receives the ROM banner before NAKs.
+                time.sleep(0.4)
+                device.serial_port.reset_input_buffer()
             checked(device.prepare(), 'prepare flashloader')
+            if device.device_info.did != device.profile_info.device_id:
+                raise RuntimeError('Connected device does not match the Green2 profile')
+            if device.device_info.flash_capacity != 0x400000:
+                raise RuntimeError(f'Unexpected NOR capacity: {device.device_info.flash_capacity}')
             if args.backup:
                 if args.backup.exists():
                     raise FileExistsError(f'Refusing to overwrite backup: {args.backup}')
@@ -137,7 +150,7 @@ def main():
             device.clean_up()
         if firmware is not None:
             with open_port(args.port, args.baud) as console:
-                reset(control)
+                reset(console if same_port else control)
                 deadline = time.monotonic() + args.log_secs
                 log = bytearray()
                 while time.monotonic() < deadline:

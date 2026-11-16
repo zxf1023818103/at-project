@@ -1,0 +1,193 @@
+{
+  "cancelled": false,
+  "completedCount": 20,
+  "continuous": false,
+  "disconnectGapSeconds": 0,
+  "finished": true,
+  "part": 1,
+  "requested": 20,
+  "rounds": [
+    {
+      "discoverySeconds": 0.4516826666658744,
+      "elapsedSeconds": 2.110860708344262,
+      "number": 1,
+      "readySeconds": 2.091866333328653,
+      "startedAt": "2026-11-16T03:41:55Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.8268415833008476,
+      "elapsedSeconds": 0.9722810832899995,
+      "interRoundGapSeconds": 0.002065166656393558,
+      "number": 2,
+      "readySeconds": 0.9684992083348334,
+      "startedAt": "2026-11-16T03:41:58Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.3771822082926519,
+      "elapsedSeconds": 3.216365666652564,
+      "interRoundGapSeconds": 0.001316166715696454,
+      "number": 3,
+      "readySeconds": 3.2110732499859296,
+      "startedAt": "2026-11-16T03:41:59Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.835480333364103,
+      "elapsedSeconds": 1.026216916681733,
+      "interRoundGapSeconds": 0.0037076666485518217,
+      "number": 4,
+      "readySeconds": 1.021343041677028,
+      "startedAt": "2026-11-16T03:42:02Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.32993325003189966,
+      "elapsedSeconds": 0.8614944583387114,
+      "interRoundGapSeconds": 0.007737624982837588,
+      "number": 5,
+      "readySeconds": 0.8561916666803882,
+      "startedAt": "2026-11-16T03:42:03Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.11070449999533594,
+      "elapsedSeconds": 0.5229249583790079,
+      "interRoundGapSeconds": 0.003837458323687315,
+      "number": 6,
+      "readySeconds": 0.5189988749916665,
+      "startedAt": "2026-11-16T03:42:04Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.5038267499767244,
+      "elapsedSeconds": 0.6754262916510925,
+      "interRoundGapSeconds": 0.0036294999881647527,
+      "number": 7,
+      "readySeconds": 0.670600833313074,
+      "startedAt": "2026-11-16T03:42:04Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.35531195835210383,
+      "elapsedSeconds": 0.4975711250444874,
+      "interRoundGapSeconds": 0.0022045416408218443,
+      "number": 8,
+      "readySeconds": 0.49232504167594016,
+      "startedAt": "2026-11-16T03:42:05Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.3772830000380054,
+      "elapsedSeconds": 0.5215088750119321,
+      "interRoundGapSeconds": 0.0019425833015702665,
+      "number": 9,
+      "readySeconds": 0.5164244583575055,
+      "startedAt": "2026-11-16T03:42:05Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.38042420835699886,
+      "elapsedSeconds": 0.5266781250247732,
+      "interRoundGapSeconds": 0.004797499976120889,
+      "number": 10,
+      "readySeconds": 0.5206917083705775,
+      "startedAt": "2026-11-16T03:42:06Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.3746457083616406,
+      "elapsedSeconds": 0.5564461250323802,
+      "interRoundGapSeconds": 0.005781583313364536,
+      "number": 11,
+      "readySeconds": 0.5498587500187568,
+      "startedAt": "2026-11-16T03:42:06Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.3493155416799709,
+      "elapsedSeconds": 0.47451620834181085,
+      "interRoundGapSeconds": 0.0067356249783188105,
+      "number": 12,
+      "readySeconds": 0.46937270835042,
+      "startedAt": "2026-11-16T03:42:07Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.37377920834114775,
+      "elapsedSeconds": 1.0394252500263974,
+      "interRoundGapSeconds": 0.0072627083281986415,
+      "number": 13,
+      "readySeconds": 1.0338297083508223,
+      "startedAt": "2026-11-16T03:42:07Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.5030500833527185,
+      "elapsedSeconds": 1.0699420417076908,
+      "interRoundGapSeconds": 0.00811566662741825,
+      "number": 14,
+      "readySeconds": 1.0698286666884087,
+      "startedAt": "2026-11-16T03:42:08Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.3542639583465643,
+      "elapsedSeconds": 0.5123361666919664,
+      "interRoundGapSeconds": 0.003235083306208253,
+      "number": 15,
+      "readySeconds": 0.5077043333440088,
+      "startedAt": "2026-11-16T03:42:10Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.35969066666439176,
+      "elapsedSeconds": 1.0262401250074618,
+      "interRoundGapSeconds": 0.0038256249972619116,
+      "number": 16,
+      "readySeconds": 1.0210742083145306,
+      "startedAt": "2026-11-16T03:42:10Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.3777422499842942,
+      "elapsedSeconds": 0.5179944999981672,
+      "interRoundGapSeconds": 0.004953458323143423,
+      "number": 17,
+      "readySeconds": 0.5138752500060946,
+      "startedAt": "2026-11-16T03:42:11Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.37293137499364093,
+      "elapsedSeconds": 0.558500291663222,
+      "interRoundGapSeconds": 0.0068101666402071714,
+      "number": 18,
+      "readySeconds": 0.5530148333637044,
+      "startedAt": "2026-11-16T03:42:12Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.3644416250172071,
+      "elapsedSeconds": 0.48527329170610756,
+      "interRoundGapSeconds": 0.0037427916540764272,
+      "number": 19,
+      "readySeconds": 0.47915991669287905,
+      "startedAt": "2026-11-16T03:42:12Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.37247599998954684,
+      "elapsedSeconds": 0.5192275416338816,
+      "interRoundGapSeconds": 0.0070165416691452265,
+      "number": 20,
+      "readySeconds": 0.5131301250075921,
+      "startedAt": "2026-11-16T03:42:13Z",
+      "success": true
+    }
+  ],
+  "startedAt": "2026-11-16T03:41:55Z",
+  "successCount": 20,
+  "timeoutSeconds": 30
+}

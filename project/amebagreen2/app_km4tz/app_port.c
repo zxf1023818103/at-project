@@ -87,6 +87,10 @@ void app_console_register_platform(void)
     ota_http_register();
 #endif
     net_cli_register();
+#ifdef AT_ENABLE_NAN
+    extern void green2_nan_cli_register(void);
+    green2_nan_cli_register();
+#endif
 #ifdef AT_PROJECT_IPERF
     extern void iperf_cli_register(void);
     iperf_cli_register();
@@ -154,7 +158,14 @@ static void ready_task(void *arg)
     printf("[AmebaGreen2] application ready\n");
     vTaskDelete(NULL);
 }
-void app_platform_wifi_bringup(void) { wifi_service_start(); }
+void app_platform_wifi_bringup(void)
+{
+#ifndef AT_ENABLE_NAN
+    wifi_service_start();
+#endif
+    /* The standalone NAN task enables the radio itself. STA auto-connect
+     * would replace NAN's committed channel schedule with the AP channel. */
+}
 void app_platform_pre_scheduler_services(void)
 {
 #ifdef AT_PROJECT_HCI

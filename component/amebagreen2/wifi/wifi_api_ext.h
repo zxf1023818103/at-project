@@ -1,3 +1,6 @@
+#ifdef AT_ENABLE_NAN
+#include "../nan/vendor/wifi_api_ext.h"
+#else
 /**
   ******************************************************************************
   * @file    wifi_api_ext.h
@@ -683,3 +686,5 @@ s32 wifi_set_tx_advanced_config(struct rtw_tx_advanced_cfg *tx_setting);
 
 #endif // __WIFI_API_EXT_H
 
+
+#endif /* AT_ENABLE_NAN */

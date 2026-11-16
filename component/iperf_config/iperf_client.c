@@ -82,11 +82,11 @@ static void prvIperfClientTask( void *pvParameters )
     ( void ) memset( &xServer, 0, sizeof( xServer ) );
     xServer.sin_family = FREERTOS_AF_INET;
     xServer.sin_port = FreeRTOS_htons( IPERF_PORT );
-    xServer.sin_addr = iperf_target_ip();
+    xServer.sin_address.ulIP_IPv4 = iperf_target_ip();
 
     {
         char cAddr[ 16 ];
-        FreeRTOS_inet_ntoa( xServer.sin_addr, cAddr );
+        FreeRTOS_inet_ntoa( xServer.sin_address.ulIP_IPv4, cAddr );
         log_info( "[iperf] connecting to %s:%d ...", cAddr, IPERF_PORT );
     }
     if( FreeRTOS_connect( xSock, &xServer, sizeof( xServer ) ) != 0 )

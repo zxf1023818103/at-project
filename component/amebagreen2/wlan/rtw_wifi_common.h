@@ -1,3 +1,6 @@
+#ifdef AT_ENABLE_NAN
+#include "../nan/vendor/rtw_wifi_common.h"
+#else
 
 #ifndef _RTW_WIFI_COMMON_H
 #define _RTW_WIFI_COMMON_H
@@ -82,3 +85,5 @@ struct ethhdr {
 RTW_PACK_STRUCT_END
 
 #endif
+
+#endif /* AT_ENABLE_NAN */

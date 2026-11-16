@@ -4,6 +4,9 @@
 #include "at_netif.h"
 #include "wifi_service.h"
 #include "wifi_port.h"
+#ifdef AT_ENABLE_NAN
+#include "../nan/nan_network.h"
+#endif
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -43,11 +46,17 @@ static void got_ip(uint32_t address)
         at_netif_on_network_up();
     }
 }
+#if ipconfigIPv4_BACKWARD_COMPATIBLE == 0
+void vApplicationIPNetworkEventHook_Multi(eIPCallbackEvent_t event, NetworkEndPoint_t *ep)
+{
+    if (ep->pxNetworkInterface != at_netif_get() || ep->bits.bIPv6) return;
+#else
 void vApplicationIPNetworkEventHook(eIPCallbackEvent_t event)
 {
+#endif
     if (event == eNetworkUp) {
         uint32_t address = 0;
-        FreeRTOS_GetAddressConfiguration(&address, NULL, NULL, NULL);
+        FreeRTOS_GetEndPointConfiguration(&address, NULL, NULL, NULL, FreeRTOS_FirstEndPoint(at_netif_get()));
         got_ip(address);
     } else if (notified_ip) {
         notified_ip = 0;
@@ -57,6 +66,9 @@ void vApplicationIPNetworkEventHook(eIPCallbackEvent_t event)
 static const at_netif_ops_t ops = {
     .tx = transmit, .link_up = link_up, .mac_get = mac_get,
     .get_random = random_word, .on_got_ip = got_ip
+#ifdef AT_ENABLE_NAN
+    , .add_interfaces = green2_nan_net_init, .exclusive_interfaces = pdTRUE
+#endif
 };
 void amebagreen2_rx(const void *data, size_t len)
 {
@@ -75,12 +87,29 @@ void amebagreen2_join_event(uint8_t status)
         if (!connecting) wifi_service_on_event(WIFI_SVC_EV_DISCONNECT);
     }
 }
-uint8_t *LwIP_GetMAC(uint8_t idx) { (void)idx; return sta_mac; }
-static void addresses(void) { if (at_netif_is_ready()) FreeRTOS_GetAddressConfiguration(&ip, &mask, &gw, NULL); }
+uint8_t *LwIP_GetMAC(uint8_t idx) {
+#ifdef AT_ENABLE_NAN
+    if (idx == 2) return green2_nan_mac();
+#endif
+    return sta_mac;
+}
+static void addresses(void)
+{
+    if (at_netif_is_ready()) {
+        NetworkEndPoint_t *ep = FreeRTOS_FirstEndPoint(at_netif_get());
+        if (ep && !ep->bits.bIPv6) FreeRTOS_GetEndPointConfiguration(&ip, &mask, &gw, NULL, ep);
+    }
+}
 unsigned char *LwIP_GetIP(uint8_t idx) { (void)idx; addresses(); return (unsigned char *)&ip; }
 unsigned char *LwIP_GetGW(uint8_t idx) { (void)idx; addresses(); return (unsigned char *)&gw; }
 unsigned char *LwIP_GetMASK(uint8_t idx) { (void)idx; addresses(); return (unsigned char *)&mask; }
-void LwIP_wlan_set_netif_info(uint8_t idx, void *dev, unsigned char *addr) { (void)dev; if (!idx) memcpy(sta_mac, addr, 6); }
+void LwIP_wlan_set_netif_info(uint8_t idx, void *dev, unsigned char *addr) {
+    (void)dev;
+    if (!idx) memcpy(sta_mac, addr, 6);
+#ifdef AT_ENABLE_NAN
+    if (idx == 2) green2_nan_mac_set(addr);
+#endif
+}
 void LwIP_netif_set_up(uint8_t idx) { (void)idx; }
 void LwIP_netif_set_down(uint8_t idx) { (void)idx; connected = 0; }
 void LwIP_netif_set_link_up(uint8_t idx) { if (!idx) amebagreen2_join_event(RTW_JOINSTATUS_SUCCESS); }
@@ -90,6 +119,10 @@ unsigned wifi_port_task_stack_words(void) { return 4096; }
 int wifi_port_enable(void)
 {
     wifi_set_rom2flash();
+#ifdef AT_ENABLE_NAN
+    extern void wifi_set_task_size(void);
+    wifi_set_task_size();
+#endif
     whc_ipc_host_init();
     int rc = wifi_on(RTW_MODE_STA);
     if (rc) return rc;
@@ -145,3 +178,13 @@ void wifi_port_disconnect(void) { wifi_disconnect(); }
 int wifi_port_sec_from_str(const char *s) { return s && *s ? (int)strtoul(s,NULL,0) : -1; }
 const char *wifi_port_sec_to_str(int sec) { static char buf[16]; snprintf(buf,sizeof(buf),"%u",(unsigned)sec); return buf; }
 void wifi_port_reset_chip(void) { System_Reset(); for (;;) {} }
+
+#ifdef AT_ENABLE_NAN
+unsigned char *lwip_get_ip(uint8_t idx) { return LwIP_GetIP(idx); }
+unsigned char *lwip_get_gw(uint8_t idx) { return LwIP_GetGW(idx); }
+unsigned char *lwip_get_mask(uint8_t idx) { return LwIP_GetMASK(idx); }
+unsigned char *lwip_get_mac(uint8_t idx) { return LwIP_GetMAC(idx); }
+int lwip_is_valid_ip(uint8_t idx, unsigned char *dest) { return LwIP_netif_is_valid_IP(idx, dest); }
+int lwip_get_ipv6_enabled(void) { return 1; }
+void lwip_wlan_set_netif_info(uint8_t idx, void *dev, unsigned char *mac) { LwIP_wlan_set_netif_info(idx, dev, mac); }
+#endif

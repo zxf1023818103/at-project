@@ -4,6 +4,9 @@
 #include "FreeRTOS.h"
 #include <string.h>
 #include <stddef.h>
+#ifdef AT_ENABLE_NAN
+#include "../nan/nan_network.h"
+#endif
 extern void amebagreen2_rx(const void *data, size_t len);
 _Static_assert(offsetof(struct pbuf, payload) == 4, "WHC packet payload ABI");
 _Static_assert(offsetof(struct pbuf, tot_len) == 8, "WHC packet length ABI");
@@ -32,5 +35,13 @@ u8_t pbuf_free(struct pbuf *p)
 void LwIP_ethernetif_recv_inic(uint8_t idx, struct pbuf *p)
 {
     if (idx == 0 && p && p->len == p->tot_len) amebagreen2_rx(p->payload, p->len);
+#ifdef AT_ENABLE_NAN
+    if (idx == 2 && p && p->len == p->tot_len) green2_nan_rx(p->payload, p->len);
+#endif
     pbuf_free(p);
 }
+
+#ifdef AT_ENABLE_NAN
+void netif_adapter_wifi_recv_whc(uint8_t idx, struct pbuf *p)
+{ LwIP_ethernetif_recv_inic(idx, p); }
+#endif

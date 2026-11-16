@@ -1,3 +1,6 @@
+#ifdef AT_ENABLE_NAN
+#include "../nan/vendor/wifi_intf_drv_to_app_internal.h"
+#else
 /**
   ******************************************************************************
   * @file    wifi_intf_drv_to_app_internal.h
@@ -557,3 +560,5 @@ int wifi_event_handle(u32 event_cmd, u8 *evt_info);
 #endif
 
 #endif
+
+#endif /* AT_ENABLE_NAN */

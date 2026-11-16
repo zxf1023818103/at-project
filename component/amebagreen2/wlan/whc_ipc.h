@@ -1,3 +1,6 @@
+#ifdef AT_ENABLE_NAN
+#include "../nan/vendor/whc_ipc.h"
+#else
 /**
   ******************************************************************************
   * @file    inic_ipc.h
@@ -214,3 +217,5 @@ void whc_ipc_dev_wtn_socket_init(u8 enable, u8 rnat_ap_start);
 #endif
 #endif
 #endif /* __INIC_IPC_H__ */
+
+#endif /* AT_ENABLE_NAN */
