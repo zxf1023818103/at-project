@@ -5,7 +5,7 @@
 #include "queue.h"
 #include "FreeRTOS_CLI.h"
 #include "whc_ipc_host_nan.h"
-#include "wifi_api_types.h"
+#include "nan_platform.h"
 #include "nan_pasn.h"
 #include "nan_network.h"
 #include "nan_wire.h"
@@ -22,6 +22,9 @@
 #include "rtw_nan_cmd.h"
 
 #define NAN_SERVICE "_flashstudio._tcp"
+#ifndef NAN_DEVICE_NAME
+#define NAN_DEVICE_NAME "Green2 FreeRTOS"
+#endif
 #define NAN_HEAP_LOG_INTERVAL_MS 10000u
 struct nan_message { uint16_t id, len; uint8_t data[]; };
 static QueueHandle_t events;
@@ -97,7 +100,7 @@ static int publish(void)
     memcpy(p->service_specific_info.info, "\x50\x6f\x9a\x02", 4);
     p->service_specific_info.length = 4;
     append_info(&p->service_specific_info, 2, NAN_SERVICE);
-    append_info(&p->service_specific_info, 3, "Green2 FreeRTOS");
+    append_info(&p->service_specific_info, 3, NAN_DEVICE_NAME);
     /* DNS-SD TXT records used by the reference accessory advertisement. */
     append_info(&p->service_specific_info, 4,
         "\x0e" "vendorName=RTK" "\x15" "pairingName=Green2NAN" "\x12" "modelName=RTL8711F");
@@ -110,13 +113,12 @@ static int publish(void)
 }
 static int start(void)
 {
-    extern int amebagreen2_wifi_ready(void);
-    if (!amebagreen2_wifi_ready()) return -1;
+    if (!green2_nan_radio_ready()) return -1;
     if (running) return 0;
     int rc = whc_host_nan_init();
     printf("[NAN] init rc=%d\n", rc);
     if (rc) return rc;
-    rc = whc_host_nan_start(112, RTW_SUPPORT_BAND_2_4G_5G_BOTH);
+    rc = green2_nan_radio_start();
     printf("[NAN] start rc=%d\n", rc);
     extern int green2_nan_read_mac(void);
     if (!rc) rc = green2_nan_read_mac();
@@ -131,7 +133,7 @@ static int start(void)
         mbedtls_platform_zeroize(&pw, sizeof(pw));
     }
     if (rc) { green2_pasn_stop(); whc_host_nan_stop(); whc_host_nan_deinit(); }
-    else { running = 1; printf("[NAN] published %s / Green2 FreeRTOS\n", NAN_SERVICE); }
+    else { running = 1; printf("[NAN] published %s / %s\n", NAN_SERVICE, NAN_DEVICE_NAME); }
     return rc;
 }
 static void datapath_request(const void *data, size_t len)
@@ -213,8 +215,7 @@ static void datapath_established(const void *data, size_t len)
 static void nan_task(void *arg)
 {
     (void)arg;
-    extern int wifi_port_enable(void);
-    int rc = wifi_port_enable();
+    int rc = green2_nan_radio_enable();
     if (!rc) rc = start();
     printf("[NAN] standalone startup result=%d\n", rc);
     TickType_t last_heap_log = xTaskGetTickCount();

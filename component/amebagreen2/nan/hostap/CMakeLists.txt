@@ -29,7 +29,7 @@ add_library(green2_pasn_raw STATIC
     ../pasn_freertos.c ../pasn_crypto.c ../nan_pasn.c)
 target_include_directories(green2_pasn_raw PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/utils ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_compile_definitions(green2_pasn_raw PRIVATE CONFIG_PASN CONFIG_SAE CONFIG_IEEE80211W CONFIG_ECC CONFIG_NO_RANDOM_POOL CONFIG_NO_RADIUS CONFIG_NO_VLAN)
-target_compile_options(green2_pasn_raw PRIVATE -include ${CMAKE_CURRENT_SOURCE_DIR}/../pasn_endian.h -Wno-unused-parameter)
+target_compile_options(green2_pasn_raw PRIVATE "SHELL:-include ${CMAKE_CURRENT_SOURCE_DIR}/../pasn_endian.h" -Wno-unused-parameter)
 target_link_libraries(green2_pasn_raw PRIVATE FreeRTOS mbedcrypto)
 set(pasn_library ${CMAKE_CURRENT_BINARY_DIR}/libgreen2_pasn.a)
 add_custom_command(OUTPUT ${pasn_library}

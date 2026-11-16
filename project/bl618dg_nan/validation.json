@@ -1,0 +1,105 @@
+{
+  "date": "2026-11-16",
+  "psram_ap_bytes": 4194304,
+  "psram_test_bytes": 2097152,
+  "psram_test_patterns": 2,
+  "usb_roundtrips": 12,
+  "native_sanitizer_tests_passed": 6,
+  "phone_throughput_test": "device_completed_both_phases_after_psram_fix; phone_receive_counter_not_captured",
+  "boot_log": "build/nan-usb/bl618dg-psram-heap-fix-boot.log",
+  "firmware": {
+    "bl618dg": {
+      "path": "build/nan-usb/bl618dg-host/whole_flash_data.bin",
+      "bytes": 385984,
+      "sha256": "9fbf529a9b9b77a6105da92961122269b713d5c8a4ed5726658c75e1b8e574a4"
+    },
+    "green2": {
+      "path": "build/nan-usb/green2-radio/firmware.bin",
+      "bytes": 785184,
+      "sha256": "1d5be40103d29863ac7e2fa75293150fce1c913a889fd30a33d98bbbe88331a6"
+    }
+  },
+  "json_format_fix": {
+    "config": "CONFIG_VSNPRINTF_LONG_LONG=y",
+    "sdk_formatter_reproduction": {
+      "disabled": "{\"bytes\":,\"mbps\":.}",
+      "enabled": "{\"bytes\":4294967296,\"mbps\":8.005}"
+    },
+    "board_uint64_boundary_check": "PASS: 4294967296 and UINT64_MAX with trailing string",
+    "board_protocol_selftest": "PASS: shared upload/download protocol, synthetic I/O and clock",
+    "board_protocol_selftest_results": [
+      {
+        "version": 1,
+        "test_id": "selftest",
+        "direction": "upload",
+        "bytes": 65536,
+        "seconds": 1.25,
+        "mbps": 0.419,
+        "counter": "received"
+      },
+      {
+        "version": 1,
+        "test_id": "selftest",
+        "direction": "download",
+        "bytes": 65536,
+        "seconds": 1.25,
+        "mbps": 0.419,
+        "counter": "submitted"
+      }
+    ],
+    "host_json_parser": "PASS: both board-emitted JSON lines decoded and matched",
+    "flash_log": "build/nan-usb/flash-bl618dg-json-fix.log"
+  },
+  "psram_allocator_fix": {
+    "cause": "SDK pvPortMalloc selects OCRAM even with PSRAM enabled",
+    "scope": [
+      "NAN host data",
+      "USB message data",
+      "FreeRTOS+TCP streams/sockets",
+      "FreeRTOS+TCP network buffers"
+    ],
+    "kernel_and_usb_driver_allocator": "unchanged",
+    "hardware_allocation_stress": {
+      "rounds": 8,
+      "stream_blocks": 2,
+      "stream_block_bytes": 65536,
+      "network_buffers": 32,
+      "mtu_blocks": 64,
+      "psram_placement_readback_and_release": "PASS"
+    },
+    "idle_heap_bytes": {
+      "ocram_free": 136864,
+      "ocram_max": 116288,
+      "psram_free": 4190020,
+      "psram_max": 4189916,
+      "wram_free": 324416,
+      "wram_max": 324416
+    },
+    "json_regression": "PASS: both directions parsed",
+    "flash_log": "build/nan-usb/flash-bl618dg-psram-heap-fix.log"
+  },
+  "app_run_after_psram_fix": {
+    "log": "build/nan-usb/app-psram-fix-session.log",
+    "device_results": [
+      {
+        "direction": "upload",
+        "bytes": 12058624,
+        "elapsed_ms": 10088,
+        "mbps": 9.562,
+        "counter": "received"
+      },
+      {
+        "direction": "download",
+        "bytes": 24444928,
+        "elapsed_ms": 10007,
+        "mbps": 19.542,
+        "counter": "submitted"
+      }
+    ],
+    "negotiated_tcp_mss": 1024,
+    "software_rx_drops": 0,
+    "software_tx_drops": 0,
+    "phone_receive_counter_matched": null,
+    "note": "Download is firmware submitted-byte timing, not a captured phone receive measurement."
+  }
+}

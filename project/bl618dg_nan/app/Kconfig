@@ -1,0 +1,2 @@
+mainmenu "BL618DG AP NAN over USB"
+source "$BL_SDK_BASE/Kconfig"

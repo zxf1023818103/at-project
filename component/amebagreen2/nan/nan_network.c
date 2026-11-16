@@ -1,5 +1,6 @@
 #include "nan_network.h"
 #include "nan_tcp_protocol.h"
+#include "nan_platform.h"
 #include "at_netif.h"
 #include "FreeRTOS_IP_Private.h"
 #include "FreeRTOS_ND.h"
@@ -8,8 +9,6 @@
 #include <string.h>
 #include <stdio.h>
 #include <inttypes.h>
-struct eth_drv_sg;
-extern int whc_ipc_host_send(int, struct eth_drv_sg *, int, int, void *, uint8_t);
 static NetworkInterface_t iface;
 static NetworkEndPoint_t endpoint;
 static uint8_t own_mac[6], data_mac[6];
@@ -134,11 +133,10 @@ static BaseType_t output(NetworkInterface_t *i, NetworkBufferDescriptor_t *b, Ba
 {
     (void)i; BaseType_t rc = pdFALSE;
     if (link_up && b && b->xDataLength <= 1514) {
-        struct { unsigned int buf, len; } sg = {(unsigned int)b->pucEthernetBuffer, b->xDataLength};
 #ifdef AT_NAN_NET_DIAG
         TickType_t before = xTaskGetTickCount();
 #endif
-        rc = whc_ipc_host_send(2, (struct eth_drv_sg *)&sg, 1, b->xDataLength, NULL, 0) == 0 ? pdTRUE : pdFALSE;
+        rc = green2_nan_send(b->pucEthernetBuffer, b->xDataLength) == 0 ? pdTRUE : pdFALSE;
 #ifdef AT_NAN_NET_DIAG
         if (rc) diag_packet(b->pucEthernetBuffer, b->xDataLength, pdTRUE,
                             before, xTaskGetTickCount() - before);

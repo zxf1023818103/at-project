@@ -3710,6 +3710,12 @@
       "source": "component/soc/amebagreen2/project/manifest.json5",
       "upstream_sha256": "ca477eb1fc2f4ce17a632187c1f1b18be9b04183f8bd8263f3c3506a38ffcaab",
       "sha256": "40eec66eb80e8386d1056f66e44f2f89444b01ebd31dfdbc471b530eee31ee91"
+    },
+    {
+      "path": "component/amebagreen2/usb_port/lib_usb_hal.a",
+      "source": "component/soc/amebagreen2/project/project_km4tz/lib/application/lib_usb_hal.a",
+      "upstream_sha256": "40dec30e55b33aa6f0f75762659508cb1ae350c699fe9fdc93f6605466fcbcfa",
+      "sha256": "40dec30e55b33aa6f0f75762659508cb1ae350c699fe9fdc93f6605466fcbcfa"
     }
   ]
 }

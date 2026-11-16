@@ -58,6 +58,10 @@ void app_platform_boot_init(void)
 
 void app_console_register_platform(void)
 {
+#ifdef AT_ENABLE_USB_BENCH
+    extern void green2_usb_bench_register(void);
+    green2_usb_bench_register();
+#endif
     FreeRTOS_CLIRegisterCommand(&reboot_def);
     extern void dsleep_cli_register(void);
     dsleep_cli_register();

@@ -130,7 +130,9 @@ int wifi_port_enable(void)
     amebagreen2_country_init();
     struct rtw_mac mac;
     if (wifi_get_mac_address(0, &mac, 0) == 0) memcpy(sta_mac, &mac, 6);
+#ifndef AT_NAN_USB_BRIDGE
     at_netif_set_ops(&ops); at_netif_bringup();
+#endif
     enabled = 1;
     printf("[WiFi] ready %02x:%02x:%02x:%02x:%02x:%02x\n", sta_mac[0],sta_mac[1],sta_mac[2],sta_mac[3],sta_mac[4],sta_mac[5]);
     return 0;

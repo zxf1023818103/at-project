@@ -103,6 +103,9 @@ if(AMEBAGREEN2_CORE STREQUAL "km4ns")
 endif()
 
 if(AMEBAGREEN2_IMAGE STREQUAL "app_km4tz")
+    if(AT_ENABLE_USB_BENCH OR AT_NAN_USB_BRIDGE)
+        add_subdirectory(usb_port)
+    endif()
     # Armv8.1-M does not select monitor's Armv8-M default. Certificate commands
     # need the same bounded line buffer as AmebaD/Dplus, including base64 data.
     target_compile_definitions(monitor PRIVATE MONITOR_CLI_MAX_INPUT=2560)
