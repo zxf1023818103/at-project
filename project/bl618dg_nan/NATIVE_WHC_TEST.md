@@ -33,6 +33,19 @@ make -C project/bl618dg_nan NATIVE_WHC=1 whole
 make -C project/bl618dg_nan NATIVE_WHC=0 all
 ```
 
+启用原生 SDK 的 2 KiB USB 接收缓冲实验（使用独立输出目录）：
+
+```sh
+python3 project/bl618dg_nan/build_native_green2.py --bulk-2048 \
+  --out build/native-whc/bulk2048
+```
+
+脚本只在输出目录生成配置覆盖，检查生成的
+`CONFIG_WHC_USB_BULK_2048=y` 后才打包固件，不修改原 SDK 配置文件。
+此开关扩大 Green2 的接收缓冲及 SKB 容量，端点 MPS 仍是 512 字节，
+并不启用报文聚合。BL618DG 原有 IN URB 已为 2048 字节，OUT 报文上限
+保持 1536 字节；当前以太网帧和 WHC 头可容纳在该上限内。
+
 原生输出 `build/native-whc/green2-native.bin`（应用偏移 `0x40000`）和
 `build/native-whc/bl618dg-host/whole_flash_data.bin`。
 基线输出的不可覆盖副本位于 `build/native-whc/baseline/`。
@@ -197,6 +210,40 @@ App 已确认两轮完成，但未提供显示值，下载仍以设备 `submitte
 SHA-256 `fbe696d0e791570cf38110b66e9a455f3811c27f1f1c7d051ab444a66a92a758`。
 完整结果见 `native_whc_validation.json` 的 `rx_path_diagnosis` 与
 `psram_execution_fix`。
+
+## Green2 2 KiB Bulk 缓冲对照
+
+在上述 PSRAM 正式主机镜像不变的条件下，启用
+`CONFIG_WHC_USB_BULK_2048=y`，用 COM15 烧录、COM19 控制复位。
+生成的 Green2 配置逐行比较只有该选项不同，原 SDK 源码和工作区状态
+均保留；固件逐字节读回通过。启动日志确认：
+
+```text
+USB bulk RX capacity=2048, SKB capacity=2144, reserve=64
+```
+
+之前对应值为 `1536 / 1632 / 64`。BL618DG 只复位重连，未更换镜像，
+继续使用 `fbe696d0...a92a758` 的 PSRAM 代码、原 ACK 参数及关闭的诊断。
+USB High-Speed 枚举、NAN 发布正常，复用配对完成 PASN type=2 认证。
+App 确认两轮完成，板端计数如下：
+
+| 轮次 | 上传收到字节 / ms | 上传 Mbps | 下载提交字节 / ms | 下载提交 Mbps |
+|---|---:|---:|---:|---:|
+| 1 | 28573696 / 10053 | 22.738 | 20643840 / 10007 | 16.503 |
+| 2 | 28508160 / 10082 | 22.621 | 19857408 / 10011 | 15.868 |
+
+两轮后 `up=2 down=2 err=0 rxdrop=0 txdrop=0`，USB
+`drop=0 bad=0 io=0`。上传高于此前两个样本，下载未见明确收益；由于样本
+少且存在无线波动，不能据此认定增大缓冲必然带来这些速度差异。
+该选项仅增加接收容量，不会将当前约一个以太网帧的报文聚合到 2 KiB，
+端点 MPS、主机发送报文上限及实际传输长度策略保持原样。
+
+Green2 当前保留 2 KiB 缓冲版本，镜像
+`build/native-whc/bulk2048/green2-native.bin` 的 SHA-256 为
+`4fc3b0e30967188379fb232fc5d5f2846685c1a72b4643ce086fc66b520c483f`。
+原 1536 字节版本仍保存于 `build/native-whc/green2-native.bin`。
+完整结果、固件指纹和日志路径见 `native_whc_validation.json` 的
+`bulk_2048_experiment`。
 
 保持手机位置、双向时长和 RF 环境尽量一致，建议连续三轮，记录 App
 接收结果与设备字节数/耗时；串口记录在 `build/native-whc/`。

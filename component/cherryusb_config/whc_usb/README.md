@@ -17,6 +17,12 @@ code is linked into the MCU image.
 - Variable-size messages, no 16 KiB polling or application-level bridge ACK.
   Exact multiples of the 512-byte maximum packet size terminate with a ZLP.
 - Uncached internal-RAM DMA buffers; queued CPU-owned records use PSRAM.
+- Host IN URBs have 2048-byte capacity; OUT messages retain a 1536-byte limit
+  for compatibility with the original device configuration. The optional
+  Green2 `CONFIG_WHC_USB_BULK_2048` enlarges its receive buffer and backing SKB
+  pool. It does not change the 512-byte endpoint MPS, Ethernet MTU or enable
+  frame aggregation. From the repo root, build that device variant with
+  `python3 project/bl618dg_nan/build_native_green2.py --bulk-2048 --out build/native-whc/bulk2048`.
 - 16-byte API/Ethernet headers, 8-byte custom-command headers. Interface 2 is
   NAN. Lengths and DMA padding are bounded before dispatch; unused full-MAC
   header bytes are ignored because native firmware does not initialize them.

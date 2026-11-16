@@ -4,7 +4,8 @@
 
 /* Ameba native WHC USB framing (whc_common/whc_def.h). No MCU pointers. */
 #define WHC_USB_MTU 1600u
-/* Selected original SDK firmware arms its OUT buffers for 1536 bytes. */
+/* Keep compatibility with 1536-byte device buffers and the optional 2 KiB
+ * buffers. Normal Ethernet frames plus the WHC header fit this limit. */
 #define WHC_USB_OUT_MTU 1536u
 #define WHC_HEADER_SIZE 16u
 #define WHC_TX_PACKET 0xa5a5a500u

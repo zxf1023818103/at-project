@@ -122,7 +122,7 @@
     "rx_stage_diagnostic_build": "PASS",
     "psram_memory_and_protocol_selftests": "PASS"
   },
-  "conclusion": "BL618DG flash execution/read-only access was a substantial packet-processing bottleneck. Running the same shared stack from PSRAM raised final native WHC upload to 17.884–21.808 Mbps and download submitted to 16.413–16.539 Mbps. ACK policy is unchanged; final firmware has diagnostics disabled. Green2 was unchanged throughout these tests.",
+  "conclusion": "Running BL618DG code and read-only data from PSRAM substantially reduced packet-processing cost. With that host firmware unchanged, enabling Green2 2 KiB USB RX buffers produced 22.621–22.738 Mbps upload and 15.868–16.503 Mbps download submitted in two further runs. Endpoint MPS remains 512 bytes. All recorded final host error/drop counters were zero; the small RF sample does not establish a causal throughput gain from buffer enlargement.",
   "rx_path_diagnosis": {
     "runs": [
       {
@@ -496,5 +496,89 @@
       "build/native-whc/psram-final-status.log",
       "build/native-whc/psram-final-flash.log"
     ]
+  },
+  "bulk_2048_experiment": {
+    "option": "CONFIG_WHC_USB_BULK_2048=y",
+    "only_generated_green2_config_difference": true,
+    "green2_firmware": {
+      "path": "build/native-whc/bulk2048/green2-native.bin",
+      "bytes": 788544,
+      "sha256": "4fc3b0e30967188379fb232fc5d5f2846685c1a72b4643ce086fc66b520c483f"
+    },
+    "bl618dg_firmware_unchanged": {
+      "path": "build/native-whc/bl618dg-psram-final/whole_flash_data.bin",
+      "bytes": 390144,
+      "sha256": "fbe696d0e791570cf38110b66e9a455f3811c27f1f1c7d051ab444a66a92a758"
+    },
+    "device_rx_capacity_bytes": 2048,
+    "device_skb_capacity_bytes": 2144,
+    "device_headroom_bytes": 64,
+    "prior_device_rx_capacity_bytes": 1536,
+    "prior_device_skb_capacity_bytes": 1632,
+    "host_in_urb_capacity_bytes": 2048,
+    "host_out_limit_bytes": 1536,
+    "endpoint_mps_bytes": 512,
+    "aggregation_enabled": false,
+    "results": [
+      {
+        "direction": "upload",
+        "bytes": 28573696,
+        "milliseconds": 10053,
+        "mbps": 22.738,
+        "counter": "received"
+      },
+      {
+        "direction": "download",
+        "bytes": 20643840,
+        "milliseconds": 10007,
+        "mbps": 16.503,
+        "counter": "submitted"
+      },
+      {
+        "direction": "upload",
+        "bytes": 28508160,
+        "milliseconds": 10082,
+        "mbps": 22.621,
+        "counter": "received"
+      },
+      {
+        "direction": "download",
+        "bytes": 19857408,
+        "milliseconds": 10011,
+        "mbps": 15.868,
+        "counter": "submitted"
+      }
+    ],
+    "status": {
+      "uploads": 2,
+      "downloads": 2,
+      "protocol_errors": 0,
+      "software_rx_drops": 0,
+      "software_tx_drops": 0,
+      "usb_tx_packets": 42711,
+      "usb_rx_packets": 74783,
+      "usb_errors": 0,
+      "usb_invalid_frames": 0,
+      "usb_drops": 0,
+      "psram_free_bytes": 3886796,
+      "ocram_free_bytes": 151100
+    },
+    "checks": {
+      "green2_build": "PASS",
+      "firmware_readback": "PASS",
+      "runtime_capacity": "PASS",
+      "nan_startup": "PASS",
+      "reused_pairing": "PASS",
+      "sdk_source_status_unchanged": true,
+      "bl618dg_firmware_sha256_unchanged": true
+    },
+    "logs": [
+      "build/native-whc/bulk2048/green2-flash.log",
+      "build/native-whc/bulk2048/green2-boot.log",
+      "build/native-whc/bulk2048/green2-app-console.log",
+      "build/native-whc/bulk2048/bl618dg-app-session.log",
+      "build/native-whc/bulk2048/bl618dg-final-status.log"
+    ],
+    "conclusion": "Two runs reached 22.621–22.738 Mbps upload and 15.868–16.503 Mbps download submitted. Upload exceeded the prior two samples, while download showed no clear gain; this small RF test does not establish a causal speed improvement. Device remains on the 2 KiB buffer variant."
   }
 }
