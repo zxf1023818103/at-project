@@ -1,0 +1,38 @@
+{
+  "otaUpdateId": "amebagreen2-https-unique-build-id",
+  "description": "AmebaGreen2 signed HTTPS OTA",
+  "targets": [
+    "arn:aws:iot:REGION:ACCOUNT:thing/THING_NAME"
+  ],
+  "protocols": ["HTTP"],
+  "targetSelection": "SNAPSHOT",
+  "awsJobExecutionsRolloutConfig": {"maximumPerMinute": 1},
+  "awsJobPresignedUrlConfig": {"expiresInSec": 1800},
+  "awsJobTimeoutConfig": {"inProgressTimeoutInMinutes": 20},
+  "files": [
+    {
+      "fileName": "ota_all.bin",
+      "fileType": 0,
+      "fileVersion": "NEXT_APP_BUILD",
+      "fileLocation": {
+        "s3Location": {
+          "bucket": "OTA_BUCKET",
+          "key": "amebagreen2/BUILD_ID/ota_all.bin",
+          "version": "S3_OBJECT_VERSION_ID"
+        }
+      },
+      "codeSigning": {
+        "startSigningJobParameter": {
+          "signingProfileName": "PROFILE_MATCHING_EMBEDDED_OTA_SIGNER",
+          "destination": {
+            "s3Destination": {
+              "bucket": "OTA_BUCKET",
+              "prefix": "amebagreen2/signed/"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "roleArn": "arn:aws:iam::ACCOUNT:role/OTA_SERVICE_ROLE"
+}

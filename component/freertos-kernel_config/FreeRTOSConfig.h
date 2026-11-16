@@ -15,7 +15,7 @@
 #ifndef FREERTOS_CONFIG_H
 #define FREERTOS_CONFIG_H
 
-#if defined(CONFIG_AMEBADPLUS)
+#if defined(CONFIG_AMEBADPLUS) || defined(CONFIG_AMEBAGREEN2)
 #include "FreeRTOSConfig_port.h"
 #else
 

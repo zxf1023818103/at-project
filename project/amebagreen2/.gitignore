@@ -1,2 +1,3 @@
-/build_*/
-/soc_info.json
+# Per-device private material stays local unless explicitly backed up.
+/keys/*.json
+!/keys/*.public.json

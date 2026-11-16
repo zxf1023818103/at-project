@@ -45,9 +45,9 @@ TlsBackendMode_t at_tls_backend_from_str( const char * s )
     return TLS_BACKEND_MODE_FALLBACK;
 }
 
-/* Amazon Root CA 1 (covers both AWS IoT and S3). Always compiled in: an AT_PROJECT_CRT_BUNDLE build
- * verifies via the embedded Mozilla bundle and IGNORES this pRootCa (transport_picotls.c), so
- * setting it is harmless there and it is the real trust anchor on a no-bundle build. ~1.2 KB. */
+/* Amazon Root CA 1 for backends that consume the inline credentials field.
+ * The current picotls/mbedTLS ports load pRootCaPath and optionally the embedded
+ * Mozilla bundle. Without that bundle, provision the required roots in ca/. */
 static const char HTTPS_AMAZON_ROOT_CA1[] =
     "-----BEGIN CERTIFICATE-----\n"
     "MIIDQTCCAimgAwIBAgITBmyfz5m/jAo54vB4ikPmljZbyjANBgkqhkiG9w0BAQsF\n"
@@ -84,6 +84,9 @@ TlsTransportStatus_t Https_ConnectWithRxReserve( NetworkContext_t * pNet, const 
     NetworkCredentials_t creds;
 
     memset( &creds, 0, sizeof( creds ) );
+    /* Share the provisioned CA store with MQTT and crt_bundle addca. The
+     * embedded bundle still supplies public roots when the folder is absent. */
+    creds.pRootCaPath   = "ca";
     creds.pRootCa       = ( const uint8_t * ) HTTPS_AMAZON_ROOT_CA1;
     creds.rootCaSize    = sizeof( HTTPS_AMAZON_ROOT_CA1 );   /* incl. NUL, as mbedTLS PEM wants */
     creds.rxReserveSize = rxReserve;

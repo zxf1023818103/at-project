@@ -1,0 +1,107 @@
+/*
+ * Copyright (c) 2024 Realtek Semiconductor Corp.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include "ameba_soc.h"
+
+#if defined(CONFIG_TRUSTZONE) && !defined(AT_ENABLE_TFM)
+#define PMC_ENTRY_SECTION  IMAGE3_ENTRY_SECTION
+#define PMC_ENTRY          NS_ENTRY
+#else
+#define PMC_ENTRY_SECTION
+#define PMC_ENTRY
+#endif
+
+
+/**
+  *  @brief set work modules/wake up event after sleep.
+  *  @retval None
+  */
+PMC_ENTRY_SECTION
+void PMC_ENTRY SOCPS_SleepInitEntry(struct PSCFG_TypeDef *ps_config)
+{
+	u8 chip_version = EFUSE_GetChipVersion();
+	/*1. Clock configuration*/
+	SOCPS_ClockSourceConfig(ps_config->sleep_to_08V, ps_config->xtal_mode_in_sleep, ps_config->keep_osc4m_on);
+
+	/*2. Power settings*/
+	SOCPS_PowerManage(ps_config->sleep_to_08V);
+
+	if (chip_version == SYSCFG_CUT_VERSION_A) {
+		/* Timing fix: Delay at least 1T before pulling down rst_n to avoid postsim bit errors.
+		This problem is fixed in Bcut by modifying pmc rom code */
+		SOCPS_FixSpicRetFailPatch();
+	}
+
+	if (chip_version <= SYSCFG_CUT_VERSION_B) {
+		/* disable wake status of USB */
+		SOCPS_USBSuspendWakeControl(DISABLE);
+	}
+
+}
+
+PMC_ENTRY_SECTION
+u32 PMC_ENTRY SOCPS_CPURoleGetEntry(void)
+{
+	return SOCPS_CPURoleGet();
+}
+
+PMC_ENTRY_SECTION
+void PMC_ENTRY SOCPS_HWSleepFilter(u32 enable)
+{
+	SOCPS_HWSleepFilter_AP(enable);
+}
+
+PMC_ENTRY_SECTION
+void PMC_ENTRY SOCPS_PeriPermissionEntry(uint32_t ip_mask, u32 enable)
+{
+#ifdef AT_ENABLE_TFM
+	/* Retention SleepCG keeps TF-M's boot-time attribution. The SDK sleep
+	 * library normally lends peripherals to NS then revokes them on wake;
+	 * NS must neither write the secure permission registers nor change the
+	 * SPIC/MPC/RSIP policy owned and locked by SPE. */
+	UNUSED(ip_mask);
+	UNUSED(enable);
+#else
+	SOCPS_PeriPermissionControl(ip_mask, enable);
+#endif
+}
+
+PMC_ENTRY_SECTION
+void PMC_ENTRY SOCPS_BitPermissionEntry(uint32_t ip_mask, u32 enable)
+{
+#ifdef AT_ENABLE_TFM
+	/* The timer/PMC clocks are already available to NS. Keep that policy
+	 * across SleepCG instead of accessing SYSTEM_CTRL_BASE_S from NS. */
+	UNUSED(ip_mask);
+	UNUSED(enable);
+#else
+	SOCPS_BitPermissionControl(ip_mask, enable);
+#endif
+}
+
+PMC_ENTRY_SECTION
+void PMC_ENTRY SOCPS_NVICBackupEntry(struct CPU_BackUp_TypeDef *bk, SysTick_Type *systick, NVIC_Type *nvic, SCB_Type *scb)
+{
+	SOCPS_NVICBackup(bk, systick, nvic, scb);
+}
+
+PMC_ENTRY_SECTION
+void PMC_ENTRY SOCPS_NVICReFillEntry(struct CPU_BackUp_TypeDef *bk, SysTick_Type *systick, NVIC_Type *nvic, SCB_Type *scb)
+{
+	SOCPS_NVICReFill(bk, systick, nvic, scb);
+}
+
+PMC_ENTRY_SECTION
+void PMC_ENTRY SOCPS_MPUBackupEntry(struct CPU_BackUp_TypeDef *bk, MPU_Type *mpu)
+{
+	SOCPS_MPUBackup(bk, mpu);
+}
+
+PMC_ENTRY_SECTION
+void PMC_ENTRY SOCPS_MPUReFillEntry(struct CPU_BackUp_TypeDef *bk, MPU_Type *mpu)
+{
+	SOCPS_MPUReFill(bk, mpu);
+}

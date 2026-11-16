@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.24)
+project(amebagreen2_app_km4tz C CXX ASM)
+get_filename_component(AT_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
+set(AT_ROOT "${AT_ROOT}" CACHE INTERNAL "Repository root")
+set(AMEBAGREEN2_IMAGE app_km4tz)
+include(../config.cmake)
+add_subdirectory(${AT_ROOT}/component ${CMAKE_BINARY_DIR}/component)
+amebagreen2_add_image(app_km4tz)
