@@ -121,9 +121,82 @@ USB 错误均为 0。主机状态统计：
   `-Os` 编译。下载 socket send 累计等待约 8760 ms，这包含发送缓冲背压，
   不能直接当作 CPU 耗时。
 
-现有证据优先指向 BL618DG 的收包处理/TCP 交互路径，需要进一步分解
-缓冲分配、拷贝、IP 任务处理和 ACK 等待才能确定根因。
+该轮证据指向 BL618DG 的收包处理/TCP 交互路径，后续分段诊断和修复如下。
 固件 SHA-256、完整计数和日志位置见 [native_whc_validation.json](native_whc_validation.json)。
+
+## 分段诊断与 PSRAM 执行修复
+
+Green2 保持同一份原生固件。BL618DG 的 `USB_DIAG=1` 新增链接包装器，
+分别测量接收缓冲分配、拷贝、端点匹配和投递 IP 队列，并通过调度器运行
+计数器记录各任务占用。每轮结束后才输出汇总，不在逐包路径打印日志。
+投递耗时包含优先级更高的 IP 任务及其他任务抢占，任务计数包含归入当前
+任务的中断时间；两者不能作为独立 CPU 开销相加。
+
+| 执行位置 / ACK 设置 | 上传 Mbps | 下载提交 Mbps |
+|---|---:|---:|
+| Flash，原 ACK | 8.715 | 12.036 |
+| Flash，ACK 上限 1 ms | 8.151 | 12.209 |
+| PSRAM，原 ACK | 21.269 | 17.411 |
+| PSRAM，ACK 上限 1 ms | 17.985 | 16.664 |
+
+同参数的上传接收路径对照（平均微秒）：
+
+| 阶段 | Flash | PSRAM |
+|---|---:|---:|
+| 分配 | 56 | 8 |
+| 拷贝 | 28 | 20 |
+| 端点匹配 | 23 | 3 |
+| 投递及任务抢占 | 341 | 54 |
+| 整个接收回调 | 478 | 90 |
+
+上传 CPU 空闲占比由 33.6% 变为 69.5%。独立微基准将 1100 字节从 USB
+非缓存内存拷到 PSRAM，每次约 16 us；拷贝不足以解释原回调的数百微秒。
+PSRAM 对照只启用 SDK 的 `CONFIG_PSRAM_COPY_CODE`，链接图确认 TCP、
+内核、分配器等从 `0xb000...` 改为 `0xb800...`，同时搬移只读数据。
+这确认 Flash 执行/访问路径是显著开销，尚未进一步区分指令缓存缺失与
+只读数据访问成本，不代表已经确定芯片或无线链路的最终速度上限。
+
+1 ms ACK 在两种执行位置都未提高上传速度。Flash 上传 TCP 出包由 614
+增至 10367，PSRAM 下由 1350 增至 22110，多数为 ACK。因此正式配置保留
+共享栈的原 ACK 策略，仅将 `CONFIG_PSRAM_COPY_CODE=y` 设为本工程默认值。
+两种执行位置的各两轮测试结束后，USB I/O 错误、非法帧、软件丢包及协议
+错误均为 0。PSRAM 代码约占 280 KiB，仍保留约 3.9 MB PSRAM 空闲；
+USB DMA 缓冲继续使用片内非缓存区。
+
+复现同一诊断方式（使用独立输出目录，避免覆盖已有测速镜像）：
+
+```sh
+make -C project/bl618dg_nan NATIVE_WHC=1 USB_DIAG=1 \
+  CONFIG_PSRAM_COPY_CODE=n OUT="$PWD/build/native-whc/repro-flash" whole
+make -C project/bl618dg_nan NATIVE_WHC=1 USB_DIAG=1 \
+  CONFIG_PSRAM_COPY_CODE=y OUT="$PWD/build/native-whc/repro-psram" whole
+```
+
+仅诊断版本提供 `nanack 1` 和 `nanack 0`，分别设定 ACK 超时上限和恢复
+上游参数，必须在两次测速之间修改。默认值为 0，每个方向汇总均记录该
+值和实际缩短次数。此开关只作用于 TCP 8000 收到数据后的待发送 ACK，
+不改上游源码、窗口和缓冲所有权。`USB_DIAG=0` 完全不链接这些包装器。
+
+正式配置的原生 WHC 与原有 USB 桥接两种主机均构建验证；本次硬件实测
+使用原生 Green2，桥接版本仅做编译回归。
+
+关闭诊断后的最终固件已烧录 COM37 并通过 SHA-256 校验，App 两轮结果：
+
+| 轮次 | 上传收到字节 / ms | 上传 Mbps | 下载提交字节 / ms | 下载提交 Mbps |
+|---|---:|---:|---:|---:|
+| 1 | 27459584 / 10073 | 21.808 | 20709376 / 10017 | 16.539 |
+| 2 | 22478848 / 10055 | 17.884 | 20578304 / 10030 | 16.413 |
+
+两轮结束后 `up=2 down=2 err=0 rxdrop=0 txdrop=0`，USB
+`drop=0 bad=0 io=0`。PSRAM 剩余 3886796 字节，OCRAM 剩余 151100 字节。
+2 MiB PSRAM/Cache、8 轮分配压力与 64 位 JSON 自检通过，重启后复用
+原配对完成 PASN type=2 认证。设备保留运行该版本，ACK 使用上游默认值。
+App 已确认两轮完成，但未提供显示值，下载仍以设备 `submitted` 口径记录。
+
+最终镜像为 `build/native-whc/bl618dg-psram-final/whole_flash_data.bin`，
+SHA-256 `fbe696d0e791570cf38110b66e9a455f3811c27f1f1c7d051ab444a66a92a758`。
+完整结果见 `native_whc_validation.json` 的 `rx_path_diagnosis` 与
+`psram_execution_fix`。
 
 保持手机位置、双向时长和 RF 环境尽量一致，建议连续三轮，记录 App
 接收结果与设备字节数/耗时；串口记录在 `build/native-whc/`。

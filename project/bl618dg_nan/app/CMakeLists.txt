@@ -46,6 +46,15 @@ endif()
 include(${AT_ROOT}/project/bl618dg_usb_bench/app/ehci_completion.cmake)
 if(CONFIG_NAN_USB_DIAGNOSTICS)
     include(native_ehci_diag.cmake)
+    target_sources(${proj_name}.elf PRIVATE nan_rx_perf.c)
+    foreach(symbol green2_nan_rx at_netif_rx_alloc FreeRTOS_MatchingEndpoint
+                   xSendEventStructToIPTask green2_nan_tcp_command prvSendData)
+        target_link_options(${proj_name}.elf PRIVATE -Wl,--wrap=${symbol})
+    endforeach()
+    # Rename memcpy only in this shared source's diagnostic compilation.
+    # Flash HAL/IRAM memcpy calls remain untouched, including during XIP-off.
+    set_property(SOURCE ${AT_ROOT}/component/amebagreen2/nan/nan_network.c
+        APPEND PROPERTY COMPILE_DEFINITIONS memcpy=bl618dg_nan_profile_memcpy)
 endif()
 target_sources(${proj_name}.elf PRIVATE nan_port.c nan_protocol_selftest.c nan_heap.c)
 target_include_directories(${proj_name}.elf PRIVATE ${AT_ROOT}/component/amebagreen2/nan/vendor)

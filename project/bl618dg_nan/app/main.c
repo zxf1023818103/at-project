@@ -58,6 +58,10 @@ static void startup(void *arg)
     bl618dg_nan_heap_selftest();
     configASSERT(bl618dg_nan_protocol_selftest() == 0);
     mbedtls_threading_freertos_init();
+#ifdef CONFIG_NAN_USB_DIAGNOSTICS
+    extern void bl618dg_nan_profile_init(void);
+    bl618dg_nan_profile_init();
+#endif
 #ifdef CONFIG_NAN_NATIVE_WHC_USB
     bl618dg_native_init(USB_BASE);
 #else

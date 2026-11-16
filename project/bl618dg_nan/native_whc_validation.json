@@ -116,7 +116,385 @@
     "native_build": "PASS",
     "diagnostic_build": "PASS",
     "isolated_sdk_builder_reproduction": "PASS",
-    "zlib_original_files_unchanged": 257
+    "zlib_original_files_unchanged": 257,
+    "psram_native_build": "PASS",
+    "psram_bridge_build": "PASS",
+    "rx_stage_diagnostic_build": "PASS",
+    "psram_memory_and_protocol_selftests": "PASS"
   },
-  "conclusion": "Native WHC USB did not materially raise upload throughput. Focus further diagnosis on BL618DG RX/IP/TCP handling; CPU hardware limits are not established."
+  "conclusion": "BL618DG flash execution/read-only access was a substantial packet-processing bottleneck. Running the same shared stack from PSRAM raised final native WHC upload to 17.884–21.808 Mbps and download submitted to 16.413–16.539 Mbps. ACK policy is unchanged; final firmware has diagnostics disabled. Green2 was unchanged throughout these tests.",
+  "rx_path_diagnosis": {
+    "runs": [
+      {
+        "log": "build/native-whc/rx-profile-default-session.log",
+        "execution": "flash",
+        "ack_cap_ms": 0,
+        "results": [
+          {
+            "direction": "upload",
+            "bytes": 11010048,
+            "milliseconds": 10106,
+            "mbps": 8.715,
+            "counter": "received"
+          },
+          {
+            "direction": "download",
+            "bytes": 15073280,
+            "milliseconds": 10018,
+            "mbps": 12.036,
+            "counter": "submitted"
+          }
+        ],
+        "profile": {
+          "upload": {
+            "interval_us": 10108270,
+            "ack_caps": [
+              0,
+              0
+            ],
+            "ack_shortened": 0,
+            "rx_average_us": {
+              "total": 478,
+              "allocate": 56,
+              "copy": 28,
+              "match": 23,
+              "submit+IP-preemption": 341
+            },
+            "task_percent_including_isr": {
+              "nan_tcp": 6.9,
+              "IDLE": 33.6,
+              "nan": 0.0,
+              "IP-Task": 32.7,
+              "whc_rx": 25.5,
+              "whc_tx": 1.0,
+              "usbh_hub0": 0.0,
+              "shell_task": 0.0
+            }
+          },
+          "download": {
+            "interval_us": 10022404,
+            "ack_caps": [
+              0,
+              0
+            ],
+            "ack_shortened": 0,
+            "rx_average_us": {
+              "total": 552,
+              "allocate": 41,
+              "copy": 11,
+              "match": 32,
+              "submit+IP-preemption": 426
+            },
+            "task_percent_including_isr": {
+              "nan_tcp": 6.0,
+              "IDLE": 17.1,
+              "nan": 0.0,
+              "IP-Task": 37.9,
+              "whc_rx": 18.9,
+              "shell_task": 0.0,
+              "whc_tx": 19.8,
+              "usbh_hub0": 0.0
+            }
+          }
+        }
+      },
+      {
+        "log": "build/native-whc/rx-profile-ack1-session.log",
+        "execution": "flash",
+        "ack_cap_ms": 1,
+        "results": [
+          {
+            "direction": "upload",
+            "bytes": 10354688,
+            "milliseconds": 10162,
+            "mbps": 8.151,
+            "counter": "received"
+          },
+          {
+            "direction": "download",
+            "bytes": 15269888,
+            "milliseconds": 10005,
+            "mbps": 12.209,
+            "counter": "submitted"
+          }
+        ],
+        "profile": {
+          "upload": {
+            "interval_us": 10164571,
+            "ack_caps": [
+              1,
+              1
+            ],
+            "ack_shortened": 8635,
+            "rx_average_us": {
+              "total": 684,
+              "allocate": 34,
+              "copy": 23,
+              "match": 32,
+              "submit+IP-preemption": 565
+            },
+            "task_percent_including_isr": {
+              "nan_tcp": 2.2,
+              "IDLE": 18.1,
+              "nan": 0.0,
+              "IP-Task": 39.8,
+              "whc_rx": 22.9,
+              "whc_tx": 16.6,
+              "usbh_hub0": 0.0,
+              "shell_task": 0.0
+            }
+          },
+          "download": {
+            "interval_us": 10007620,
+            "ack_caps": [
+              1,
+              1
+            ],
+            "ack_shortened": 0,
+            "rx_average_us": {
+              "total": 543,
+              "allocate": 37,
+              "copy": 10,
+              "match": 31,
+              "submit+IP-preemption": 424
+            },
+            "task_percent_including_isr": {
+              "nan_tcp": 6.1,
+              "IDLE": 17.5,
+              "nan": 0.0,
+              "IP-Task": 37.2,
+              "whc_rx": 18.7,
+              "shell_task": 0.0,
+              "whc_tx": 20.2,
+              "usbh_hub0": 0.0
+            }
+          }
+        }
+      },
+      {
+        "log": "build/native-whc/psram-code-session.log",
+        "execution": "psram",
+        "ack_cap_ms": 0,
+        "results": [
+          {
+            "direction": "upload",
+            "bytes": 26738688,
+            "milliseconds": 10057,
+            "mbps": 21.269,
+            "counter": "received"
+          },
+          {
+            "direction": "download",
+            "bytes": 21823488,
+            "milliseconds": 10027,
+            "mbps": 17.411,
+            "counter": "submitted"
+          }
+        ],
+        "profile": {
+          "upload": {
+            "interval_us": 10057196,
+            "ack_caps": [
+              0,
+              0
+            ],
+            "ack_shortened": 0,
+            "rx_average_us": {
+              "total": 90,
+              "allocate": 8,
+              "copy": 20,
+              "match": 3,
+              "submit+IP-preemption": 54
+            },
+            "task_percent_including_isr": {
+              "nan_tcp": 2.2,
+              "IDLE": 69.5,
+              "whc_tx": 0.3,
+              "nan": 0.0,
+              "IP-Task": 12.8,
+              "whc_rx": 14.9,
+              "usbh_hub0": 0.0,
+              "shell_task": 0.0
+            }
+          },
+          "download": {
+            "interval_us": 10027696,
+            "ack_caps": [
+              0,
+              0
+            ],
+            "ack_shortened": 0,
+            "rx_average_us": {
+              "total": 133,
+              "allocate": 7,
+              "copy": 3,
+              "match": 4,
+              "submit+IP-preemption": 114
+            },
+            "task_percent_including_isr": {
+              "nan_tcp": 3.1,
+              "IDLE": 68.9,
+              "whc_tx": 10.6,
+              "nan": 0.0,
+              "IP-Task": 12.5,
+              "whc_rx": 4.6,
+              "shell_task": 0.0,
+              "usbh_hub0": 0.0
+            }
+          }
+        }
+      },
+      {
+        "log": "build/native-whc/psram-code-ack1-session.log",
+        "execution": "psram",
+        "ack_cap_ms": 1,
+        "results": [
+          {
+            "direction": "upload",
+            "bytes": 22609920,
+            "milliseconds": 10057,
+            "mbps": 17.985,
+            "counter": "received"
+          },
+          {
+            "direction": "download",
+            "bytes": 20840448,
+            "milliseconds": 10005,
+            "mbps": 16.664,
+            "counter": "submitted"
+          }
+        ],
+        "profile": {
+          "upload": {
+            "interval_us": 10058310,
+            "ack_caps": [
+              1,
+              1
+            ],
+            "ack_shortened": 22037,
+            "rx_average_us": {
+              "total": 124,
+              "allocate": 7,
+              "copy": 19,
+              "match": 4,
+              "submit+IP-preemption": 89
+            },
+            "task_percent_including_isr": {
+              "nan_tcp": 2.3,
+              "IDLE": 64.6,
+              "whc_rx": 12.5,
+              "nan": 0.0,
+              "IP-Task": 15.1,
+              "whc_tx": 5.2,
+              "usbh_hub0": 0.0,
+              "shell_task": 0.0
+            }
+          },
+          "download": {
+            "interval_us": 10005133,
+            "ack_caps": [
+              1,
+              1
+            ],
+            "ack_shortened": 0,
+            "rx_average_us": {
+              "total": 134,
+              "allocate": 6,
+              "copy": 2,
+              "match": 4,
+              "submit+IP-preemption": 116
+            },
+            "task_percent_including_isr": {
+              "nan_tcp": 3.0,
+              "IDLE": 70.3,
+              "whc_rx": 4.2,
+              "nan": 0.0,
+              "IP-Task": 12.1,
+              "whc_tx": 10.1,
+              "shell_task": 0.0,
+              "usbh_hub0": 0.0
+            }
+          }
+        }
+      }
+    ],
+    "firmware": {
+      "flash": {
+        "path": "build/native-whc/bl618dg-rx-profile/whole_flash_data.bin",
+        "bytes": 394336,
+        "sha256": "98b82fcfa8488e964537c608ddac0fefd4b71293e588d52baf710e7ce969703d"
+      },
+      "psram": {
+        "path": "build/native-whc/bl618dg-psram-code/whole_flash_data.bin",
+        "bytes": 394336,
+        "sha256": "e737a25758efba70b41cc0be3c2fb61450acfb388d5ac28b93c959c102addaf0"
+      }
+    },
+    "conclusion": "Copying code and read-only data from flash to PSRAM reduced upload RX callback mean from 478 to 90 us. A 1 ms ACK cap did not help in either execution location. Cache-miss and rodata-access costs were not separately measured.",
+    "errors_and_drops": 0,
+    "status_logs": [
+      "build/native-whc/rx-profile-restore-session.log",
+      "build/native-whc/psram-code-status.log"
+    ]
+  },
+  "psram_execution_fix": {
+    "option": "CONFIG_PSRAM_COPY_CODE=y",
+    "diagnostics": false,
+    "ack_policy": "upstream default",
+    "firmware": {
+      "path": "build/native-whc/bl618dg-psram-final/whole_flash_data.bin",
+      "bytes": 390144,
+      "sha256": "fbe696d0e791570cf38110b66e9a455f3811c27f1f1c7d051ab444a66a92a758"
+    },
+    "results": [
+      {
+        "direction": "upload",
+        "bytes": 27459584,
+        "milliseconds": 10073,
+        "mbps": 21.808,
+        "counter": "received"
+      },
+      {
+        "direction": "download",
+        "bytes": 20709376,
+        "milliseconds": 10017,
+        "mbps": 16.539,
+        "counter": "submitted"
+      },
+      {
+        "direction": "upload",
+        "bytes": 22478848,
+        "milliseconds": 10055,
+        "mbps": 17.884,
+        "counter": "received"
+      },
+      {
+        "direction": "download",
+        "bytes": 20578304,
+        "milliseconds": 10030,
+        "mbps": 16.413,
+        "counter": "submitted"
+      }
+    ],
+    "status": {
+      "uploads": 2,
+      "downloads": 2,
+      "protocol_errors": 0,
+      "software_rx_drops": 0,
+      "software_tx_drops": 0,
+      "usb_tx_packets": 43236,
+      "usb_rx_packets": 68172,
+      "usb_errors": 0,
+      "usb_invalid_frames": 0,
+      "usb_drops": 0,
+      "psram_free_bytes": 3886796,
+      "ocram_free_bytes": 151100
+    },
+    "reused_pairing_after_host_reboot": true,
+    "logs": [
+      "build/native-whc/psram-final-session.log",
+      "build/native-whc/psram-final-status.log",
+      "build/native-whc/psram-final-flash.log"
+    ]
+  }
 }

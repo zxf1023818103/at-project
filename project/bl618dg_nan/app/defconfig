@@ -16,3 +16,5 @@ CONFIG_DUALCORE_DISABLE =y
 
 CONFIG_PSRAM =y
 CONFIG_PSRAM_FOR_AP_SIZE =0x400000
+# Run code/rodata from PSRAM to reduce measured packet-processing latency.
+CONFIG_PSRAM_COPY_CODE =y

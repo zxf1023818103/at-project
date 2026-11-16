@@ -4,6 +4,6 @@ config NAN_NATIVE_WHC_USB
     bool "Use Green2 original native WHC USB firmware"
     default n
 config NAN_USB_DIAGNOSTICS
-    bool "Measure native USB completion latency and TCP metadata"
+    bool "Measure USB/RX stages, task CPU time and TCP metadata"
     depends on NAN_NATIVE_WHC_USB
     default n

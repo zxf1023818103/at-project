@@ -59,6 +59,14 @@ USB 异常会停止交换并打印错误，重新接好线后使用 COM37 `reboo
 
 ## PSRAM 与构建
 
+默认启用 `CONFIG_PSRAM_COPY_CODE=y`，启动时把代码及只读数据从 Flash
+复制到 PSRAM 执行；Flash 中仍保存完整可启动固件。仅启用 PSRAM 堆不能
+解决 Flash 执行路径的包处理开销。原生 WHC USB 的同参数对照中，上传
+接收回调从平均 478 us 降到 90 us，上传从 8.715 提升至 21.269 Mbps。
+该项沿用 SDK 原有链接和启动复制机制，共享 NAN/FreeRTOS+TCP 源码不变。
+复现 Flash 执行对照时加 `CONFIG_PSRAM_COPY_CODE=n`，并用独立 `OUT`
+保留当前固件。详细数据和测试口径见 [NATIVE_WHC_TEST.md](NATIVE_WHC_TEST.md)。
+
 `CONFIG_PSRAM=y`，AP 分配 4 MiB PSRAM（NP 不使用）。本工程显式将 libc /
 mbedTLS 的普通分配优先级设为 PSRAM，并为 NAN、FreeRTOS+TCP 及 USB 消息
 缓冲选择 `app/nan_heap.c` 的 PSRAM 分配接口。SDK 的 `pvPortMalloc` 本身固定
