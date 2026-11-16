@@ -71,8 +71,9 @@ lfs_t *lfs_config_mount(const struct lfs_diskio *io);
 void lfs_config_unmount(void);
 
 /* Reformat the LFS region (mkfs): unmount, lfs_format the medium, then re-mount the
- * now-blank filesystem. Requires a prior successful mount (the geometry + diskio are
- * captured at mount time). Returns LFS_ERR_OK, or a negative lfs error. */
+ * now-blank filesystem. Requires configuration from a prior mount attempt; that
+ * mount may have failed on a corrupt medium. Returns LFS_ERR_OK, or a negative lfs
+ * error (LFS_ERR_INVAL if the geometry + diskio have not been initialized). */
 int lfs_config_format(void);
 
 #ifdef __cplusplus

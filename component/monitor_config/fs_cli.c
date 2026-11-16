@@ -483,10 +483,9 @@ static BaseType_t cmd_mkfs(char *out, size_t outlen, const char *cmd)
                  "      run 'mkfs yes' (or 'mkfs -y') to confirm.\r\n");
         return pdFALSE;
     }
-    if (vfs_lfs_mount() == NULL) {       /* ensure mounted -> s_cfg geometry is built */
-        snprintf(out, outlen, "mkfs: mount unavailable\r\n");
-        return pdFALSE;
-    }
+    /* A failed mount still prepares the geometry and diskio. Explicit mkfs must
+     * be able to recover a corrupt, nonblank filesystem that cannot mount. */
+    (void)vfs_lfs_mount();
     err = lfs_config_format();
     snprintf(out, outlen, "mkfs: format %s (err=%d)\r\n", (err == 0) ? "OK" : "FAILED", err);
     return pdFALSE;

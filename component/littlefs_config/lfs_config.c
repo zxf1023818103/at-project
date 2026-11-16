@@ -90,8 +90,11 @@ int lfs_config_format(void)
 {
     int err;
 
-    /* Requires a prior successful mount: s_cfg holds the geometry + diskio captured
-     * by build_config() at mount time (mkfs runs at runtime, long after boot mount). */
+    /* A prior mount attempt prepares s_cfg even if the medium is corrupt.
+     * Reject an uninitialized config before littlefs dereferences its callbacks. */
+    if (!s_cfg.read || !s_cfg.prog || !s_cfg.erase || !s_cfg.sync) {
+        return LFS_ERR_INVAL;
+    }
     if (s_mounted) {
         lfs_unmount(&s_lfs);
         s_mounted = 0;
