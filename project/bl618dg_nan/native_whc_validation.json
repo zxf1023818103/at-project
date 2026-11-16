@@ -1,0 +1,122 @@
+{
+  "baseline_commit": "03e12d11692fd287aebdc5776fc667a3a985a628",
+  "branch": "test/bl618dg-native-whc-usb",
+  "sdk_commit": "9f648d9b9fad552fcbfc7604b58f58b79abb38e9",
+  "sdk_config": "green2_nan_usb_bt_h4.config",
+  "baseline": {
+    "upload_mbps": 9.562,
+    "download_submitted_mbps": 19.542
+  },
+  "native_runs": [
+    {
+      "direction": "upload",
+      "bytes": 12910592,
+      "milliseconds": 10122,
+      "mbps": 10.203,
+      "counter": "received"
+    },
+    {
+      "direction": "download",
+      "bytes": 16056320,
+      "milliseconds": 10016,
+      "mbps": 12.824,
+      "counter": "submitted"
+    },
+    {
+      "direction": "upload",
+      "bytes": 12648448,
+      "milliseconds": 10085,
+      "mbps": 10.033,
+      "counter": "received"
+    },
+    {
+      "direction": "download",
+      "bytes": 15990784,
+      "milliseconds": 10002,
+      "mbps": 12.79,
+      "counter": "submitted"
+    }
+  ],
+  "firmware": {
+    "bl618dg": {
+      "bytes": 390144,
+      "sha256": "b3a8bd8c066f3869140d763c6ba266b84e0432179491b629c494e387a785f75f"
+    },
+    "green2": {
+      "bytes": 788544,
+      "sha256": "c24acc4dbaf81faf7bd191d0aed06a4ab6ca75aad0f633bc1476e7d2ccc763fb"
+    }
+  },
+  "phone_receive_results": null,
+  "limitations": [
+    "Single bulk OUT pipe on the MCU host; not Linux multi-URB throughput.",
+    "Existing pairing reconnect failed; user confirmed fresh pairing succeeded.",
+    "Native Green2 LittleFS/BT FTL mount fails with prior filesystem geometry; no format performed."
+  ],
+  "logs": [
+    "build/native-whc/app-native-session.log",
+    "build/native-whc/green2-native-app-console.log",
+    "build/native-whc/native-baseline-status.log",
+    "build/native-whc/app-diag-session.log",
+    "build/native-whc/native-diag-status.log"
+  ],
+  "diagnostic_run": {
+    "firmware_sha256": "e777895b7badea59dd67e3bd1f429374dbdfaf6381a87eb2997ed7471c9cb93d",
+    "results": [
+      {
+        "direction": "upload",
+        "bytes": 12124160,
+        "milliseconds": 10094,
+        "mbps": 9.609,
+        "counter": "received"
+      },
+      {
+        "direction": "download",
+        "bytes": 15466496,
+        "milliseconds": 10031,
+        "mbps": 12.334,
+        "counter": "submitted"
+      }
+    ],
+    "irq_completions": 35381,
+    "poll_completions": 139,
+    "poll_checks_including_idle": 104879,
+    "out_average_us": 424,
+    "out_maximum_us": 139012,
+    "rx_dispatch_average_us_including_ip_task_preemption": 481,
+    "rx_dispatch_maximum_us": 1292,
+    "usb_errors": 0,
+    "usb_drops": 0,
+    "usb_invalid_frames": 0,
+    "software_rx_drops": 0,
+    "software_tx_drops": 0,
+    "download_send_wait_ms": 8760,
+    "shared_tcp_delayed_ack_default_ms": 20,
+    "reused_pairing_after_host_reboot": true
+  },
+  "native_totals": {
+    "uploads": 2,
+    "downloads": 2,
+    "pongs": 100,
+    "protocol_errors": 0,
+    "rx_drops": 0,
+    "tx_drops": 0,
+    "usb_tx_packets": 33940,
+    "usb_tx_bytes": 35111830,
+    "usb_rx_packets": 42424,
+    "usb_rx_bytes": 29635770,
+    "usb_errors": 0,
+    "usb_invalid_frames": 0,
+    "usb_drops": 0
+  },
+  "checks": {
+    "wire_asan_ubsan": "PASS",
+    "journal_power_cut_asan_ubsan": "PASS",
+    "bridge_build": "PASS",
+    "native_build": "PASS",
+    "diagnostic_build": "PASS",
+    "isolated_sdk_builder_reproduction": "PASS",
+    "zlib_original_files_unchanged": 257
+  },
+  "conclusion": "Native WHC USB did not materially raise upload throughput. Focus further diagnosis on BL618DG RX/IP/TCP handling; CPU hardware limits are not established."
+}

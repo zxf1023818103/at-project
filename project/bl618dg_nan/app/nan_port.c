@@ -1,4 +1,6 @@
+#ifndef CONFIG_NAN_NATIVE_WHC_USB
 #include "nan_usb.h"
+#endif
 #include "nan_platform.h"
 #include "nan_network.h"
 #include "whc_ipc_host_nan.h"
@@ -13,9 +15,10 @@
 #include "mbedtls/ecp.h"
 #include <stdio.h>
 #include <string.h>
+static BaseType_t network_ready;
+#ifndef CONFIG_NAN_NATIVE_WHC_USB
 static void (*event_callback)(uint16_t, void *, uint32_t);
 static void (*reply_callback)(void *, uint32_t);
-static BaseType_t network_ready;
 void bl618dg_nan_receive(const struct nan_usb_record *r, const void *data)
 {
     if (r->type == NAN_USB_EVENT && event_callback) event_callback(r->code, (void *)data, r->length);
@@ -63,6 +66,7 @@ int green2_nan_read_mac(void)
 }
 int green2_nan_send(const void *data, size_t size)
 { return nan_usb_send(NAN_USB_ETHERNET, 0, 0, 0, data, size); }
+#endif
 int green2_nan_random(void *data, size_t size) { return bflb_trng_readlen(data, size); }
 void green2_nan_heap_check(const char *where) { (void)where; }
 void green2_nan_p256_init(void) { printf("[NAN] P-256 mbedTLS software backend on BL618DG AP\n"); }
@@ -89,6 +93,15 @@ void vApplicationIPNetworkEventHook_Multi(eIPCallbackEvent_t event, NetworkEndPo
 BaseType_t at_netif_is_ready(void) { return network_ready; }
 NetworkBufferDescriptor_t *at_netif_rx_alloc(size_t length) { return pxGetNetworkBufferWithDescriptor(length, 0); }
 
+void bl618dg_nan_network_start(void)
+{
+    if (!network_ready) {
+        green2_nan_net_init();
+        configASSERT(FreeRTOS_IPInit_Multi() == pdPASS);
+        network_ready = pdTRUE;
+    }
+}
+#ifndef CONFIG_NAN_NATIVE_WHC_USB
 int green2_nan_radio_enable(void)
 {
     for (unsigned i = 0; i < 600 && !nan_usb_connected(); ++i) vTaskDelay(pdMS_TO_TICKS(50));
@@ -115,10 +128,7 @@ int green2_nan_radio_enable(void)
     vPortFree(sent); vPortFree(got);
     printf("[NAN-USB] ABI + 12 payload roundtrips %s\n", rc ? "FAIL" : "PASS");
     if (rc) return rc;
-    if (!network_ready) {
-        green2_nan_net_init();
-        configASSERT(FreeRTOS_IPInit_Multi() == pdPASS);
-        network_ready = pdTRUE;
-    }
+    bl618dg_nan_network_start();
     return 0;
 }
+#endif

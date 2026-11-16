@@ -7,13 +7,18 @@
 #include "FreeRTOS_CLI.h"
 #include "shell.h"
 #include "mm.h"
+#ifdef CONFIG_NAN_NATIVE_WHC_USB
+#include "whc_usb.h"
+extern void bl618dg_native_init(uintptr_t);
+#else
 #include "nan_usb.h"
+extern void bl618dg_nan_receive(const struct nan_usb_record *, const void *);
+#endif
 #include "nan_heap.h"
 #include <stdio.h>
 #include <string.h>
 extern void shell_init_with_task(struct bflb_device_s *uart);
 extern void green2_nan_cli_register(void);
-extern void bl618dg_nan_receive(const struct nan_usb_record *, const void *);
 extern void mbedtls_threading_freertos_init(void);
 extern int bl618dg_nan_protocol_selftest(void);
 
@@ -22,7 +27,13 @@ static int nan_command(int argc, char **argv)
     char line[40], out[512];
     snprintf(line, sizeof(line), "nan %s", argc > 1 ? argv[1] : "status");
     FreeRTOS_CLIProcessCommand(line, out, sizeof(out));
-    printf("%s", out); nan_usb_status(); bl618dg_nan_heap_status();
+    printf("%s", out);
+#ifdef CONFIG_NAN_NATIVE_WHC_USB
+    whc_usb_status();
+#else
+    nan_usb_status();
+#endif
+    bl618dg_nan_heap_status();
     return 0;
 }
 SHELL_CMD_EXPORT_ALIAS(nan_command, nan, NAN status/start/stop.);
@@ -47,7 +58,11 @@ static void startup(void *arg)
     bl618dg_nan_heap_selftest();
     configASSERT(bl618dg_nan_protocol_selftest() == 0);
     mbedtls_threading_freertos_init();
+#ifdef CONFIG_NAN_NATIVE_WHC_USB
+    bl618dg_native_init(USB_BASE);
+#else
     nan_usb_init(USB_BASE, bl618dg_nan_receive);
+#endif
     green2_nan_cli_register();
     vTaskDelete(NULL);
 }

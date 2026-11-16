@@ -71,6 +71,9 @@ def main():
                         help='Only for a board already provisioned with matching RSIP keys')
     parser.add_argument('--backup', type=Path)
     parser.add_argument('--image', type=Path, help='firmware.bin (boot + OTA1 only)')
+    parser.add_argument('--app-offset', type=lambda value: int(value, 0), default=0x10000,
+                        choices=(0x10000, 0x40000),
+                        help='Application offset: standalone 0x10000, original SDK 0x40000')
     parser.add_argument('--verify-only', action='store_true', help='Read back --image without programming')
     parser.add_argument('--lfs', type=Path, help='Explicitly replace the 960 KiB LittleFS partition')
     parser.add_argument('--boot-log', type=Path, default=ROOT/'build/amebagreen2/boot.log')
@@ -83,13 +86,13 @@ def main():
     if lfs is not None and (firmware is None or len(lfs) != 0xf0000):
         raise ValueError('--lfs requires --image and a 960 KiB filesystem image')
     if firmware is not None:
-        if not 0x12000 < len(firmware) <= 0x180000:
+        if not args.app_offset + 0x2000 < len(firmware) <= 0x180000:
             raise ValueError('Expected boot + OTA1 firmware within the first 1.5 MiB')
-        if firmware[0x10000:0x10008] != b'81958711':
+        if firmware[args.app_offset:args.app_offset+8] != b'81958711':
             raise ValueError('Missing application certificate')
         if not args.allow_encrypted and (
             firmware[0x1000:0x1008] != bytes.fromhex('999996963fcc66fc') or
-            firmware[0x12000:0x12008] != b'81958711'):
+            firmware[args.app_offset+0x2000:args.app_offset+0x2008] != b'81958711'):
             raise ValueError('Encrypted or invalid image; use RSIP=OFF on an unprovisioned board')
     logging.basicConfig(level=logging.INFO, format='%(message)s')
     profile = JsonUtils.load_from_file(str(TOOLS/'Devices/Profiles/RTL8711F_NOR.rdev'))
@@ -131,7 +134,7 @@ def main():
                         checked(status, 'read NOR status')
                         checked(device.write_flash_status_register(write_cmd, 0, value & ~mask), 'unlock NOR')
                 # Keep the calibration/system sectors at 0xe000..0xffff intact.
-                parts = [(0, firmware[:0xe000]), (0x10000, firmware[0x10000:])]
+                parts = [(0, firmware[:0xe000]), (args.app_offset, firmware[args.app_offset:])]
                 if lfs is not None:
                     parts.append((0x300000, lfs))
                 for offset, payload in parts:
@@ -161,7 +164,9 @@ def main():
             checked_log = log.replace(b'\r', b'')
             if re.search(rb'FATAL ERROR|ASSERT|HardFault|SecureFault|TRNG failed| FAIL\b', checked_log):
                 raise RuntimeError(f'Boot reported a fault or failed self-test; see {args.boot_log}')
-            if b'application ready' not in checked_log and b'entering HCI bridge' not in checked_log:
+            ready = (b'USB device init done!' in checked_log if args.app_offset == 0x40000 else
+                     b'application ready' in checked_log or b'entering HCI bridge' in checked_log)
+            if not ready:
                 raise RuntimeError(f'Application startup failed; see {args.boot_log}')
 
 

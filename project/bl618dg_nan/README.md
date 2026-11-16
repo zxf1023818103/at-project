@@ -1,5 +1,8 @@
 # BL618DG AP FreeRTOS NAN，通过 USB 使用 Green2 无线侧
 
+原生 SDK WHC USB 的对照分支和构建/恢复说明见
+[NATIVE_WHC_TEST.md](NATIVE_WHC_TEST.md)。下文默认描述原有自定义桥接模式。
+
 BL618DG 的 AP 核运行 NAN 控制、hostap PASN/SAE 配对、mbedTLS、FreeRTOS+TCP
 IPv6 和 App 的 `NAN-THROUGHPUT/1` 服务。Green2 NP 运行原有 NAN 无线驱动；
 Green2 AP 将 USB 命令、事件和以太网帧转到 WHC IPC，不运行另一份认证或 TCP
