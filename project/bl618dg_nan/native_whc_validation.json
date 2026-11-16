@@ -122,7 +122,7 @@
     "rx_stage_diagnostic_build": "PASS",
     "psram_memory_and_protocol_selftests": "PASS"
   },
-  "conclusion": "Running BL618DG code and read-only data from PSRAM substantially reduced packet-processing cost. With that host firmware unchanged, enabling Green2 2 KiB USB RX buffers produced 22.621–22.738 Mbps upload and 15.868–16.503 Mbps download submitted in two further runs. Endpoint MPS remains 512 bytes. All recorded final host error/drop counters were zero; the small RF sample does not establish a causal throughput gain from buffer enlargement.",
+  "conclusion": "Internal SRAM hot code and cached WRAM buffers reached 21.886–22.908 Mbps upload and 16.379–17.007 Mbps download submitted with PSRAM disabled, comparable to the PSRAM + 2 KiB WHC baseline. The device retains the SRAM-only final image; no application PSRAM LOAD segments or PSRAM initialization are linked.",
   "rx_path_diagnosis": {
     "runs": [
       {
@@ -580,5 +580,184 @@
       "build/native-whc/bulk2048/bl618dg-final-status.log"
     ],
     "conclusion": "Two runs reached 22.621–22.738 Mbps upload and 15.868–16.503 Mbps download submitted. Upload exceeded the prior two samples, while download showed no clear gain; this small RF test does not establish a causal speed improvement. Device remains on the 2 KiB buffer variant."
+  },
+  "sram_only_experiment": {
+    "base_pushed_commit": "e086a26",
+    "options": {
+      "PSRAM": 0,
+      "SRAM_HOT": 1,
+      "USB_DIAG": 0,
+      "NATIVE_WHC": 1
+    },
+    "green2_unchanged": {
+      "path": "build/native-whc/bulk2048/green2-native.bin",
+      "bytes": 788544,
+      "sha256": "4fc3b0e30967188379fb232fc5d5f2846685c1a72b4643ce086fc66b520c483f"
+    },
+    "firmware": {
+      "path": "build/native-whc/bl618dg-sram-final/whole_flash_data.bin",
+      "bytes": 394192,
+      "sha256": "871ed73e7d053d3bde825b08fdae4541e485447a8d44d7abd3fef915bf5efcd2"
+    },
+    "diagnostic_firmware_sha256": "afe80fe1918ce12e52796ff83df776baf29125b9477efb3d990571f95fae9cb3",
+    "diagnostic_results": [
+      {
+        "direction": "upload",
+        "bytes": 27525120,
+        "milliseconds": 10047,
+        "mbps": 21.917,
+        "counter": "received"
+      },
+      {
+        "direction": "download",
+        "bytes": 20905984,
+        "milliseconds": 10036,
+        "mbps": 16.664,
+        "counter": "submitted"
+      }
+    ],
+    "diagnostic_upload": {
+      "rx_mean_us": 72,
+      "allocate_us": 3,
+      "copy_us": 18,
+      "endpoint_match_us": 7,
+      "submit_and_preemption_us": 39,
+      "idle_percent": 75.4
+    },
+    "diagnostic_note": "The first SRAM diagnostic still had memcmp/memmove in Flash. They were relocated into SRAM in the final image; the 72 us measurement is not a final-image profile.",
+    "results": [
+      {
+        "direction": "upload",
+        "bytes": 27459584,
+        "milliseconds": 10037,
+        "mbps": 21.886,
+        "counter": "received",
+        "run": 1
+      },
+      {
+        "direction": "download",
+        "bytes": 20578304,
+        "milliseconds": 10051,
+        "mbps": 16.379,
+        "counter": "submitted",
+        "run": 1
+      },
+      {
+        "direction": "upload",
+        "bytes": 28770304,
+        "milliseconds": 10047,
+        "mbps": 22.908,
+        "counter": "received",
+        "run": 3
+      },
+      {
+        "direction": "download",
+        "bytes": 21299200,
+        "milliseconds": 10019,
+        "mbps": 17.007,
+        "counter": "submitted",
+        "run": 3
+      }
+    ],
+    "missing_rate_rows": [
+      {
+        "run": 2,
+        "reason": "UART monitor handover lost rate lines; not reconstructed or included in throughput comparison."
+      }
+    ],
+    "hot_code_bytes": 84948,
+    "hot_rodata_bytes": 16018,
+    "hot_function_addresses": {
+      "green2_nan_rx": "0xa10170fe",
+      "prvIPTask": "0xa1008d56",
+      "xProcessReceivedTCPPacket": "0xa100b21a",
+      "prvTCPHandleState": "0xa100ba26",
+      "usGenerateProtocolChecksum": "0xa1009bf0",
+      "FreeRTOS_MatchingEndpoint": "0xa100fb34",
+      "pxGetNetworkBufferWithDescriptor": "0xa10109fc",
+      "kmalloc": "0xa1010e6c",
+      "vTaskSwitchContext": "0xa1005e3a",
+      "usbh_submit_urb": "0xa1015310",
+      "memcpy": "0xa10177f6",
+      "memcmp": "0xa1017cc8",
+      "memmove": "0xa1017cf4"
+    },
+    "cold_flash_example": {
+      "green2_pasn_handle_auth_pasn_1": "0xb002f5f8"
+    },
+    "elf_load_segments": [
+      {
+        "address": "0xa1000000",
+        "memory_bytes": 14912
+      },
+      {
+        "address": "0xaffff000",
+        "memory_bytes": 256
+      },
+      {
+        "address": "0xb0000000",
+        "memory_bytes": 4236
+      },
+      {
+        "address": "0x21000000",
+        "memory_bytes": 14912
+      },
+      {
+        "address": "0xa1003b00",
+        "memory_bytes": 122632
+      },
+      {
+        "address": "0xa1021a10",
+        "memory_bytes": 67068
+      },
+      {
+        "address": "0xa103200c",
+        "memory_bytes": 8196
+      },
+      {
+        "address": "0xb001f740",
+        "memory_bytes": 188608
+      }
+    ],
+    "psram_load_segments": 0,
+    "psram_initialization_linked": false,
+    "ocram_region_bytes": 458752,
+    "wram_region_bytes": 327680,
+    "wram_cpu_alias": "0xa1070000",
+    "status": {
+      "uploads": 3,
+      "downloads": 3,
+      "pongs": 100,
+      "protocol_errors": 0,
+      "software_rx_drops": 0,
+      "software_tx_drops": 0,
+      "usb_tx_packets": 66185,
+      "usb_rx_packets": 111172,
+      "usb_errors": 0,
+      "usb_invalid_frames": 0,
+      "usb_drops": 0,
+      "ocram_free_bytes": 179724,
+      "wram_free_bytes": 305704,
+      "psram_free_bytes": 0
+    },
+    "checks": {
+      "sram_native_build": "PASS",
+      "sram_bridge_build": "PASS",
+      "psram_native_regression_build": "PASS",
+      "flash_sha256_verification": "PASS",
+      "wram_256k_cache_selftest": "PASS",
+      "allocation_stress_8_rounds": "PASS",
+      "json_selftest": "PASS",
+      "reused_pairing": "PASS"
+    },
+    "logs": [
+      "build/native-whc/sram-diag-session.log",
+      "build/native-whc/sram-diag-status.log",
+      "build/native-whc/sram-final-session.log",
+      "build/native-whc/sram-final-repeat-session.log",
+      "build/native-whc/sram-final-complete-status.log",
+      "build/native-whc/sram-final-flash.log"
+    ],
+    "conclusion": "With the same Green2 2 KiB WHC firmware, internal SRAM hot code plus cached WRAM buffers reached comparable NAN throughput without any application PSRAM use. Two complete rate records were retained; counters confirm three completed bidirectional runs and 100 PONGs, all with zero host protocol/USB errors or drops."
   }
 }

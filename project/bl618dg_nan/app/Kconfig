@@ -7,3 +7,7 @@ config NAN_USB_DIAGNOSTICS
     bool "Measure USB/RX stages, task CPU time and TCP metadata"
     depends on NAN_NATIVE_WHC_USB
     default n
+config NAN_SRAM_HOTCODE
+    bool "Link the NAN packet path into internal SRAM"
+    depends on !PSRAM_COPY_CODE && !PSRAM_XIP && DUALCORE_DISABLE
+    default n

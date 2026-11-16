@@ -245,5 +245,64 @@ Green2 当前保留 2 KiB 缓冲版本，镜像
 完整结果、固件指纹和日志路径见 `native_whc_validation.json` 的
 `bulk_2048_experiment`。
 
+## SRAM 热点与零 PSRAM 对照
+
+先将截至 `e086a26` 的测试分支推送到 `origin/test/bl618dg-native-whc-usb`，
+再进行本轮实验。Green2 保持上节 2 KiB 固件及相同 SHA-256。
+
+主机使用 `PSRAM=0 SRAM_HOT=1`，关闭 PSRAM 驱动、代码复制和 PSRAM XIP，
+PSRAM 区域长度为 0。AP 独占 448 KiB OCRAM 和 320 KiB WRAM，NP 不启用。
+`app/nan_memory.cmake` 在构建目录生成 SDK 链接模板的视图，把已测得的
+接收、IP/TCP、分配及调度路径放入 SDK 启动时加载的 `tcm_text/tcm_rodata`。
+包和协议缓冲使用 WRAM 缓存别名，DMA 仍使用原片内非缓存区；共享协议、
+ACK、MSS、窗口和队列容量不改。硬件自检验证 WRAM 缓存别名的读写与维护。
+
+初版诊断轮上传 27525120 bytes / 10047 ms（21.917 Mbps），下载提交
+20905984 bytes / 10036 ms（16.664 Mbps）。上传回调平均 72 us，其中分配
+3 us、拷贝 18 us、匹配 7 us、投递及任务抢占 39 us；CPU 空闲 75.4%。
+这比此前 PSRAM 诊断的整个回调 90 us 更低。继续检查调用路径发现
+`FreeRTOS_MatchingEndpoint` 调用的 `memcmp` 仍位于 Flash，正式版将它及
+`memmove` 也链接到 SRAM。上述 72 us 属于初版诊断镜像，未当作最终版
+逐函数测量值；本次采用分段计时及调用路径定位，并非 PC 采样排名。
+
+最终 ELF 核验的部分函数地址：
+
+| 函数 | SRAM 地址 |
+|---|---|
+| `green2_nan_rx` | `0xa10170fe` |
+| `prvIPTask` | `0xa1008d56` |
+| `xProcessReceivedTCPPacket` | `0xa100b21a` |
+| `FreeRTOS_MatchingEndpoint` | `0xa100fb34` |
+| `pxGetNetworkBufferWithDescriptor` | `0xa10109fc` |
+| `kmalloc` | `0xa1010e6c` |
+| `vTaskSwitchContext` | `0xa1005e3a` |
+| `usbh_submit_urb` | `0xa1015310` |
+| `memcmp` | `0xa1017cc8` |
+
+热点代码共 84948 字节，相关只读数据 16018 字节。其余代码例如
+`green2_pasn_handle_auth_pasn_1` 仍位于 Flash（`0xb002f5f8`）。所有非空
+ELF LOAD 段均不在 PSRAM，未链接 `board_psram_x8_init`，运行始终报告
+`PSRAM=0/0`。256 KiB 两模式读写/Cache、8 轮分配压力和 JSON 自检通过。
+
+关闭诊断后的正式镜像在 COM37 烧录并通过 SHA-256 验证，完整速率记录：
+
+| 轮次 | 上传收到字节 / ms | 上传 Mbps | 下载提交字节 / ms | 下载提交 Mbps |
+|---|---:|---:|---:|---:|
+| 第 1 轮 | 27459584 / 10037 | 21.886 | 20578304 / 10051 | 16.379 |
+| 补测（第 3 轮） | 28770304 / 10047 | 22.908 | 21299200 / 10019 | 17.007 |
+
+第二轮的速率行在切换串口记录期间遗漏，未推算或计入速度对比；随后补测
+一轮。最终计数 `up=3 down=3 pong=100 err=0 rxdrop=0 txdrop=0`，USB
+`drop=0 bad=0 io=0`。OCRAM 剩余 179724 字节，WRAM 剩余 305704 字节。
+复用原配对完成 PASN type=2 认证。结果说明当前 NAN 单连接双向测速可在
+不使用 PSRAM 时达到相近速度，不等同于任意并发或缓冲压力均已验证。
+
+原生 SRAM、原生 PSRAM 和桥接 SRAM 三种配置构建通过；后两种在本轮仅
+做编译回归。最终镜像保留运行于 COM37，文件
+`build/native-whc/bl618dg-sram-final/whole_flash_data.bin`，SHA-256：
+`871ed73e7d053d3bde825b08fdae4541e485447a8d44d7abd3fef915bf5efcd2`。
+完整计时、地址、固件和日志见 `native_whc_validation.json` 的
+`sram_only_experiment`。
+
 保持手机位置、双向时长和 RF 环境尽量一致，建议连续三轮，记录 App
 接收结果与设备字节数/耗时；串口记录在 `build/native-whc/`。

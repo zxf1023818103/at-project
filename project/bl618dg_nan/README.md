@@ -43,7 +43,7 @@ python project/bl618dg_nan/console.py --seconds 300 --log build/nan-usb/app-test
 看到以下状态后再打开 App：
 
 ```text
-[NAN] PSRAM 2 MiB read/write/cache test PASS ...
+[NAN] PSRAM 2048 KiB read/write/cache test PASS ...
 [NAN] PSRAM allocation stress PASS: 8 rounds, 2x64KiB + 32 network buffers + 64 MTU blocks
 [NAN] 64-bit + upload/download JSON self-test PASS (synthetic I/O)
 [NAN-USB] ABI + 12 payload roundtrips PASS
@@ -104,6 +104,34 @@ BL618DG 必须使用本 SDK 的 `BLFlashCommand.exe --chipname bl618dg --port CO
 `mbedtls_sdk.cmake` 建立仅存在于构建目录的源码链接视图，让 Mbed TLS 调用
 原 CMake 命令。SDK 与 mbedTLS 子模块均不修改。BL618DG EHCI 沿用已实测的
 同步完成状态补查，USB 传输开销包含在 App 实际测得的吞吐量中。
+
+## 完全不使用 PSRAM 的对照
+
+```sh
+make -C project/bl618dg_nan NATIVE_WHC=1 PSRAM=0 whole
+```
+
+`PSRAM=0` 同时关闭 PSRAM 驱动、代码复制和 PSRAM XIP，并将 PSRAM 区域
+长度设为 0。默认启用 `SRAM_HOT=1`：TCP/IP 收发、缓冲分配、RTOS 调度、
+USB 以及常用内存函数经 `app/nan_memory.cmake` 生成的链接视图放到 OCRAM，
+其余认证/加密和格式化代码留在 Flash。SDK 与共享组件源码不修改。
+最终版本热点代码 84948 字节，相关只读数据 16018 字节。
+
+AP 使用 448 KiB OCRAM 和 320 KiB WRAM，NP/本地无线保持关闭。
+CPU 协议缓冲分配到 WRAM 的缓存别名 `0xa1070000`；USB DMA 缓冲继续位于
+原有非缓存 OCRAM。启动执行 256 KiB WRAM 读写/Cache 自检，以及同样的
+8 轮分配压力测试。ELF 的 PSRAM 段必须为空，运行时应显示 `PSRAM=0/0`。
+该布局要求 BL618DG B0 AP 独占这些内存，不适用于开启 NP 的工程。
+
+默认输出 `build/native-whc/bl618dg-sram/whole_flash_data.bin`；添加
+`USB_DIAG=1` 时输出到 `bl618dg-sram-diag/`。`SRAM_HOT=0` 可保留无 PSRAM
+数据分配而将普通代码留在 Flash；恢复原 PSRAM 方案使用 `PSRAM=1`。
+
+Green2 保持 2 KiB 原生 WHC USB 固件，正式版完整记录到的两轮上传为
+21.886 / 22.908 Mbps，下载提交为 16.379 / 17.007 Mbps，达到 PSRAM 版的
+相近速度。累计 3 轮双向测试、100 次 PONG 均无协议/USB 错误或软件丢包。
+第二轮速率行因切换串口记录遗漏，未计入速率对比。具体数据见
+[NATIVE_WHC_TEST.md](NATIVE_WHC_TEST.md) 与 `native_whc_validation.json`。
 
 ## 检查
 

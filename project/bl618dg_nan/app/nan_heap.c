@@ -10,11 +10,11 @@
 void *bl618dg_nan_malloc(size_t size)
 {
     vTaskSuspendAll();
-    void *p = kmalloc(size, MM_FLAG_HEAP_PSRAM_0);
+    void *p = kmalloc(size, NAN_DATA_HEAP_FLAGS);
     traceMALLOC(p, size);
     (void)xTaskResumeAll();
     if (!p) {
-        printf("[NAN] PSRAM allocation failed bytes=%lu task=%s\n",
+        printf("[NAN] " NAN_DATA_HEAP_NAME " allocation failed bytes=%lu task=%s\n",
                (unsigned long)size, pcTaskGetName(NULL));
         bl618dg_nan_heap_status();
         vApplicationMallocFailedHook();
@@ -38,7 +38,7 @@ void bl618dg_nan_heap_selftest(void)
     enum { STREAMS = 2, PACKETS = 32, MESSAGES = 64, COUNT = STREAMS + PACKETS + MESSAGES };
     uint8_t *blocks[COUNT];
     size_t lengths[COUNT];
-    size_t before = kfree_size(MM_HEAP_PSRAM_0);
+    size_t before = kfree_size(NAN_DATA_HEAP);
     for (unsigned round = 0; round < 8; ++round) {
         for (unsigned i = 0; i < COUNT; ++i) {
             int packet = i >= STREAMS && i < STREAMS + PACKETS;
@@ -46,7 +46,7 @@ void bl618dg_nan_heap_selftest(void)
             blocks[i] = packet ? pucGetNetworkBuffer(&lengths[i]) : pvPortMalloc(lengths[i]);
             configASSERT(blocks[i]);
             mm_heap_t *heap = mm_find_heap_by_addr(blocks[i]);
-            configASSERT(heap && heap->heap_id == MM_HEAP_PSRAM_0);
+            configASSERT(heap && heap->heap_id == NAN_DATA_HEAP);
             memset(blocks[i], (uint8_t)(i + round), lengths[i]);
         }
         for (unsigned i = 0; i < COUNT; ++i)
@@ -60,7 +60,7 @@ void bl618dg_nan_heap_selftest(void)
             }
         }
     }
-    configASSERT(kfree_size(MM_HEAP_PSRAM_0) == before);
-    puts("[NAN] PSRAM allocation stress PASS: 8 rounds, 2x64KiB + 32 network buffers + 64 MTU blocks");
+    configASSERT(kfree_size(NAN_DATA_HEAP) == before);
+    puts("[NAN] " NAN_DATA_HEAP_NAME " allocation stress PASS: 8 rounds, 2x64KiB + 32 network buffers + 64 MTU blocks");
     bl618dg_nan_heap_status();
 }

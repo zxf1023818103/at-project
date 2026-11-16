@@ -10,6 +10,7 @@
 #include "FreeRTOS_TCP_Transmission.h"
 #include "NetworkBufferManagement.h"
 #include "nan_tcp_protocol.h"
+#include "nan_heap.h"
 #include "bflb_mtimer.h"
 #include "shell.h"
 #include <stdio.h>
@@ -175,7 +176,7 @@ void bl618dg_nan_profile_init(void)
         for (unsigned n = 0; n < 256; ++n) memcpy(b + 2, a + 2, size);
         uint32_t ram_us = bl618dg_nan_runtime_us() - started;
         configASSERT(!memcmp(b + 2, a + 2, size));
-        printf("[RX-PERF] memcpy bytes=%u 256_rounds uncached_to_psram_us=%u psram_to_psram_us=%u\n",
+        printf("[RX-PERF] memcpy heap=" NAN_DATA_HEAP_NAME " bytes=%u 256_rounds uncached_to_heap_us=%u heap_to_heap_us=%u\n",
             size, rx_us, ram_us);
     }
     vPortFree(a); vPortFree(b);

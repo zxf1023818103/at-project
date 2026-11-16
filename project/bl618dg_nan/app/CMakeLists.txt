@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.18)
 find_package(bouffalo_sdk REQUIRED HINTS $ENV{BL_SDK_BASE})
 sdk_add_include_directories(.)
 sdk_set_main_file(main.c)
+include(nan_memory.cmake)
 project(nan_host)
 set(AT_ROOT ${CMAKE_CURRENT_LIST_DIR}/../../..)
 set_target_properties(${proj_name}.elf PROPERTIES LINK_FLAGS "-T${CMAKE_CURRENT_BINARY_DIR}/generated/linker.ld -Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/build_out/${proj_name}.map")
@@ -61,8 +62,8 @@ target_include_directories(${proj_name}.elf PRIVATE ${AT_ROOT}/component/amebagr
 target_link_libraries(${proj_name}.elf bl618dg_nan ${NAN_TRANSPORT} mbedtls_config freertos_plus_tcp monitor)
 target_compile_options(${proj_name}.elf PRIVATE -O2)
 # SDK heap_3 pins pvPortMalloc to OCRAM. Route CPU-only protocol and packet
-# allocations to PSRAM; kernel stacks/objects and CherryUSB DMA stay on their
-# original allocators. vPortFree uses kfree and accepts either memory region.
+# allocations to the selected data heap; kernel stacks and CherryUSB DMA keep
+# their original allocators. vPortFree uses kfree and accepts either region.
 foreach(t ${proj_name}.elf bl618dg_nan ${NAN_TRANSPORT} freertos_plus_tcp freertos_plus_tcp_port)
     target_compile_definitions(${t} PRIVATE pvPortMalloc=bl618dg_nan_malloc)
 endforeach()
