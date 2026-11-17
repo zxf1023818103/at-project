@@ -9,6 +9,9 @@
 #include "nan_pasn.h"
 #include "nan_network.h"
 #include "nan_wire.h"
+#ifdef AT_NAN_BLE_OOB
+#include "nan_oob.h"
+#endif
 #include "nan_event.h"
 #include "mbedtls/sha256.h"
 #include "mbedtls/platform_util.h"
@@ -37,6 +40,10 @@ void green2_nan_authenticated(const unsigned char *peer, unsigned char type)
 {
     printf("[NAN] PASN authenticated type=%u\n", type);
     if (type == 1) {
+#ifdef AT_NAN_BLE_OOB
+        green2_nan_oob_close();
+        printf("[NAN-BLE] PIN consumed by successful NAN setup\n");
+#endif
         struct vendor_tx_followup_info f = {0};
         f.follow_up_type = NAN_TX_FOLLOW_UP_REQ; f.local_inst_id = 1; f.remote_inst_id = peer_instance;
         memcpy(f.remote_mac, peer, 6); f.sec_key_type = 1 << 3;
@@ -125,10 +132,15 @@ static int start(void)
     if (!rc) rc = green2_pasn_init();
     if (!rc) rc = publish();
     if (!rc) {
+#ifdef AT_NAN_BLE_OOB
+        /* No reusable default PIN in this profile. BLE opens the window. */
+        green2_nan_oob_close();
+#else
         struct vendor_pairing_setpw pw = {0};
         memcpy(pw.pw, "123456", 6); pw.pw_len = 6;
         rc = whc_host_nan_cfgvendor_cmd(0x1907, &pw, sizeof(pw));
         mbedtls_platform_zeroize(&pw, sizeof(pw));
+#endif
     }
     if (rc) { green2_pasn_stop(); whc_host_nan_stop(); whc_host_nan_deinit(); }
     else { running = 1; printf("[NAN] published %s / Green2 FreeRTOS\n", NAN_SERVICE); }
@@ -231,7 +243,16 @@ static void nan_task(void *arg)
         green2_pasn_timers();
         if (xQueueReceive(events, &m, pdMS_TO_TICKS(100)) != pdPASS) continue;
         if (m->id == 0xffff) printf("[NAN] start result=%d\n", start());
+#ifdef AT_NAN_BLE_OOB
+        else if (m->id == 0xfffd) {
+            if (running) green2_nan_oob_open();
+            else green2_nan_oob_error();
+        }
+#endif
         else if (m->id == 0xfffe && running) {
+#ifdef AT_NAN_BLE_OOB
+            green2_nan_oob_close();
+#endif
             running = 0; datapath_active = request_pending = false; peer_instance = 0;
             green2_nan_net_down(); green2_pasn_stop(); whc_host_nan_stop(); whc_host_nan_deinit();
         }
@@ -264,6 +285,21 @@ static void nan_task(void *arg)
         mbedtls_platform_zeroize(m->data, m->len); vPortFree(m);
     }
 }
+#ifdef AT_NAN_BLE_OOB
+int green2_nan_oob_request(void)
+{
+    if (!events || !running) return -1;
+    if (!green2_nan_oob_pending()) return 0;
+    struct nan_message *m = pvPortMalloc(sizeof(*m));
+    if (m) {
+        m->id = 0xfffd; m->len = 0;
+        if (xQueueSend(events, &m, 0) == pdPASS) return 0;
+        vPortFree(m);
+    }
+    green2_nan_oob_error();
+    return -1;
+}
+#endif
 static BaseType_t nan_command(char *out, size_t n, const char *cmd)
 {
     if (!strcmp(cmd, "nan start")) { nan_event(0xffff, NULL, 0); snprintf(out, n, "nan: start queued\r\n"); }

@@ -17,7 +17,13 @@ WPS ?= OFF
 EAP ?= OFF
 HCI ?= OFF
 NAN ?= OFF
+NAN_BLE_OOB ?= OFF
+ifeq ($(NAN_BLE_OOB),ON)
+override NAN := ON
+override NIMBLE := ON
+endif
 NAN_HEAP_CHECKS ?= OFF
+NAN_NP_HEAP_TRACE ?= OFF
 NAN_NET_DIAG ?= OFF
 SBOOT ?= OFF
 # Enable signing/encryption only with this board's explicitly provisioned keys.
@@ -41,6 +47,8 @@ BOOT_PORT ?= COM19
 EXTRA_FLAGS += -DAT_ENABLE_TFM=$(TFM) -DAT_ENABLE_STORAGE=$(STORAGE)
 EXTRA_FLAGS += -DAT_ENABLE_NAN=$(NAN) -DAT_NAN_HEAP_CHECKS=$(NAN_HEAP_CHECKS)
 EXTRA_FLAGS += -DAT_NAN_NET_DIAG=$(NAN_NET_DIAG)
+EXTRA_FLAGS += -DAT_NAN_NP_HEAP_TRACE=$(NAN_NP_HEAP_TRACE)
+EXTRA_FLAGS += -DAT_NAN_BLE_OOB=$(NAN_BLE_OOB)
 EXTRA_FLAGS += -DAT_ENABLE_HWGCM=$(HWGCM) -DAT_ENABLE_ROM_KAT=$(ROMKAT) -DAT_EFUSE_DEBUG=$(EFUSE_DEBUG) -DAT_TLS_HEAP_TRACE=$(TLS_HEAP_TRACE) -DAT_ENABLE_AWS_OTA=$(AWSOTA) -DAT_ENABLE_MCUMGR=$(MCUMGR) -DAT_ENABLE_WPS=$(WPS) -DAT_ENABLE_EAP=$(EAP) -DAT_ENABLE_HCI=$(HCI)
 .PHONY: all image bootloader_km4ns bootloader_km4tz app_km4ns app_km4tz app_km4tz_secure deps tfm_deps test flash flashloader cli_test clean distclean
 all: image

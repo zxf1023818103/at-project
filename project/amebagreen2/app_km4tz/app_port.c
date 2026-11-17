@@ -76,7 +76,7 @@ void app_console_register_platform(void)
     extern void wifi_provision_cli_register(void);
     wifi_provision_cli_register();
 #endif
-#ifdef AT_PROJECT_NIMBLE
+#if defined(AT_PROJECT_NIMBLE) && !defined(AT_NAN_BLE_OOB)
     extern void ble_tp_cli_register(void);
     ble_tp_cli_register();
 #endif
@@ -109,11 +109,16 @@ void app_console_register_platform(void)
 static void ble_task(void *arg)
 {
     (void)arg;
-    extern void nimble_start(void);
     /* The controller RF calibration uses the WLAN/coexistence IPC service. */
     extern int amebagreen2_wifi_ready(void);
     while (!amebagreen2_wifi_ready()) vTaskDelay(pdMS_TO_TICKS(50));
+#ifdef AT_NAN_BLE_OOB
+    extern void green2_nan_ble_start(void);
+    green2_nan_ble_start();
+#else
+    extern void nimble_start(void);
     nimble_start();
+#endif
     vTaskDelete(NULL);
 }
 #endif

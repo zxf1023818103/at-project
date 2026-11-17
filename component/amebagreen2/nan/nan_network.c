@@ -266,8 +266,16 @@ static void server(void *arg)
     /* Only this service needs bulk buffers. Accepted sockets inherit these
      * properties; the shared low-memory defaults and other profiles stay intact. */
     const WinProperties_t window = {
+#ifdef AT_NAN_BLE_OOB
+        /* NimBLE keeps its host/controller allocations alive after PIN delivery.
+         * The 40-MSS TX stream can no longer get a contiguous block after RX
+         * allocation. Leave room for BLE, PASN and transient packet buffers. */
+        .lTxBufSize = 24 * ipconfigTCP_MSS, .lTxWinSize = 24,
+        .lRxBufSize = 16 * ipconfigTCP_MSS, .lRxWinSize = 16
+#else
         .lTxBufSize = 40 * ipconfigTCP_MSS, .lTxWinSize = 32,
         .lRxBufSize = 24 * ipconfigTCP_MSS, .lRxWinSize = 16
+#endif
     };
     if (listener == FREERTOS_INVALID_SOCKET ||
         FreeRTOS_setsockopt(listener, 0, FREERTOS_SO_WIN_PROPERTIES, &window, sizeof(window)) ||

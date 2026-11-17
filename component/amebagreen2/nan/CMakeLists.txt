@@ -1,7 +1,12 @@
 # The radio remains on KM4NS; NAN control and IP run on KM4TZ under FreeRTOS.
 if(AMEBAGREEN2_CORE STREQUAL "km4ns")
-    target_sources(amebagreen2_vendor PRIVATE vendor/ameba_xtal_trackingcfg.c nan_ipc_device.c
+    target_sources(amebagreen2_vendor PRIVATE vendor/ameba_xtal_trackingcfg.c nan_ipc_device.c nan_peer_monitor.c nan_peer_release.c nan_ndc_reference.c
         fixes/whc_dev_nan_restart_fix.c)
+    if(AT_NAN_NP_HEAP_TRACE)
+        target_sources(amebagreen2_vendor PRIVATE nan_heap_trace.c)
+        target_compile_definitions(amebagreen2_vendor PRIVATE AT_NAN_NP_HEAP_TRACE)
+        target_link_libraries(amebagreen2_vendor PRIVATE tlsf_config)
+    endif()
     set_target_properties(amebagreen2_coex PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/vendor/lib_coex.a)
     set_target_properties(amebagreen2_wifi_common PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/vendor/lib_wifi_common_km4ns.a)
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
@@ -12,6 +17,7 @@ if(AMEBAGREEN2_CORE STREQUAL "km4ns")
             ${CMAKE_CURRENT_SOURCE_DIR}/vendor/lib_wifi_whc_np.a ${nan_radio}
         DEPENDS vendor/lib_wifi_whc_np.a
             fixes/make_nan_fixed_library.py fixes/make_nan_bootstrap_fix.py
+            fixes/make_nan_peer_free_fix.py
             fixes/make_nan_faw_id_fix.py fixes/make_nan_ndl_peer_fix.py
             fixes/whc_dev_nan_pasn_cipher_fix.c fixes/whc_dev_nan_bootstrap_fix.c
             fixes/whc_dev_nan_auth_peer_fix.c
@@ -38,6 +44,10 @@ else()
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
     add_subdirectory(hostap)
     add_library(green2_nan STATIC nan_service.c nan_transport.c nan_network.c nan_wire.c nan_tcp_protocol.c nan_p256.c)
+    if(AT_NAN_BLE_OOB)
+        target_sources(green2_nan PRIVATE nan_ble.c nan_oob.c nan_oob_protocol.c)
+        target_link_libraries(green2_nan PRIVATE nimble nimble_config ble_store_lfs)
+    endif()
     if(AT_NAN_NET_DIAG)
         target_compile_definitions(green2_nan PRIVATE AT_NAN_NET_DIAG)
     endif()

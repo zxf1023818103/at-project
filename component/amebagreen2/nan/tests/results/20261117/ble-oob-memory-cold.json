@@ -1,0 +1,22 @@
+{
+  "cancelled": false,
+  "completedCount": 1,
+  "continuous": false,
+  "disconnectGapSeconds": 0,
+  "finished": true,
+  "part": 1,
+  "requested": 1,
+  "rounds": [
+    {
+      "discoverySeconds": 1.700509374961257,
+      "elapsedSeconds": 3.991794208297506,
+      "number": 1,
+      "readySeconds": 3.9863866249797866,
+      "startedAt": "2026-11-17T01:54:59Z",
+      "success": true
+    }
+  ],
+  "startedAt": "2026-11-17T01:54:59Z",
+  "successCount": 1,
+  "timeoutSeconds": 30
+}

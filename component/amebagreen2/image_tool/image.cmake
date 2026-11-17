@@ -77,11 +77,21 @@ function(amebagreen2_add_image name)
                     -Wl,--wrap=rtw_nan_pasn_rx_checking
                     -Wl,--wrap=rtw_nan_intfs_init
                     -Wl,--wrap=rtw_nan_start_api
+                    -Wl,--wrap=rtw_nan_linked_status_chk
+                    -Wl,--wrap=rtw_nan_ndc_info_add_new
+                    -Wl,--wrap=rtw_nan_ndc_info_del
+                    -Wl,--wrap=rtw_nan_schdlr_priv_free
                     -Wl,--wrap=rtw_nan_schdl_faw_act_add
                     -Wl,--wrap=rtw_nan_sdf_rx
                     -Wl,--wrap=rtw_nan_ndl_nego_rx
                     -Wl,--wrap=rtw_nan_ndl_attri_construct
                     -Wl,--wrap=rtw_nan_ndc_attri_contruct)
+                if(AT_NAN_NP_HEAP_TRACE)
+                    target_link_options(${name} PRIVATE
+                        -Wl,--wrap=kmalloc -Wl,--wrap=kfree -Wl,--wrap=krealloc
+                        -Wl,--wrap=rtos_mem_malloc -Wl,--wrap=rtos_mem_zmalloc
+                        -Wl,--wrap=rtos_mem_calloc -Wl,--wrap=rtos_mem_realloc)
+                endif()
             endif()
             target_sources(${name} PRIVATE ${AT_ROOT}/component/amebagreen2/osdep/gcc_wrap.c)
             foreach(f malloc calloc realloc free _malloc_r _calloc_r _realloc_r _free_r printf)

@@ -1,0 +1,68 @@
+{
+  "case": "macid-mutex-final-idle",
+  "module_reset": false,
+  "app_terminated_for_idle": true,
+  "requested_idle_seconds": 65,
+  "np_heap_samples": [
+    {
+      "bytes": 58068,
+      "used": 0,
+      "capacity": 12
+    },
+    {
+      "bytes": 58068,
+      "used": 0,
+      "capacity": 12
+    },
+    {
+      "bytes": 58068,
+      "used": 0,
+      "capacity": 12
+    },
+    {
+      "bytes": 58068,
+      "used": 0,
+      "capacity": 12
+    },
+    {
+      "bytes": 58068,
+      "used": 0,
+      "capacity": 12
+    },
+    {
+      "bytes": 58068,
+      "used": 0,
+      "capacity": 12
+    },
+    {
+      "bytes": 58068,
+      "used": 0,
+      "capacity": 12
+    },
+    {
+      "bytes": 58068,
+      "used": 0,
+      "capacity": 12
+    }
+  ],
+  "ap_heap_samples": [
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248
+  ],
+  "unintended_boots": 0,
+  "macid_pool_full_warnings": 0,
+  "malloc_failures": 0,
+  "unreleased_mutex_warnings": 0,
+  "extra_post_termination_launch": {
+    "started": false,
+    "coredevice_error": 10002,
+    "reason": "Locked",
+    "counted_as_nan_attempt": false
+  }
+}

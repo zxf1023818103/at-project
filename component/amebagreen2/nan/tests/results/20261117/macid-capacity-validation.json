@@ -1,0 +1,107 @@
+{
+  "date": "2026-11-17",
+  "status": "capacity_comparison_passed_np_heap_leak_found",
+  "environment": {
+    "device": "iPhone 13 Pro",
+    "ios": "27.2.1",
+    "uart": "COM5",
+    "baud": 1500000,
+    "saved_pairs_preserved": true
+  },
+  "baseline": {
+    "firmware_sha256": "c9aa1828f06b8a10c98cab3578ebe6c4f94c97d0788d1ce47c942bd7ce1a33a9",
+    "peer_limit": 6,
+    "np_sram_kib": 160,
+    "short_case": "macid-baseline1.json",
+    "churn_case": "macid-baseline-churn.json",
+    "restart_successes": 10,
+    "restart_attempts": 12,
+    "timed_out_restarts": [
+      6,
+      10
+    ],
+    "pool_full_warnings": 28,
+    "missing_peer_warnings": 2,
+    "native_recovery_without_reset_restarts": [
+      7,
+      11
+    ],
+    "stress40_successes": 39,
+    "stress40_attempts": 40,
+    "stress40_includes_unplanned_watchdog_reset": true,
+    "np_malloc_failure_free_bytes": 9648
+  },
+  "candidate": {
+    "bytes": 1011296,
+    "sha256": "e654ff5e20b2d95e01e2a0ec7e98ba1cc8ecbd241ba7fae049be891e78aa8f25",
+    "uart_readback": "PASS",
+    "peer_limit": 12,
+    "np_sram_kib": 184,
+    "np_startup_free_bytes": 60748,
+    "np_startup_peer_slots_used": 0,
+    "ap_np_boundary": "0x20052000",
+    "native_aging_unchanged": true,
+    "native_tests_passed": 10,
+    "native_tests_total": 10,
+    "native_tests_asan_ubsan": true,
+    "hardware_churn_qualified": true,
+    "hardware_throughput_qualified": true,
+    "nan_only_build": "PASS (separate build directory; not flashed)",
+    "image_ota_efuse_tests_passed": 12,
+    "comparison_case": "macid-capacity12-sram184-churn.json",
+    "app_restart_successes": 12,
+    "app_restart_attempts": 12,
+    "continuous_reconnect_successes": 40,
+    "continuous_reconnect_attempts": 40,
+    "np_sampled_free_low_bytes": 36008,
+    "ap_sampled_free_low_bytes": 19200,
+    "np_sampled_peak_slots": 7,
+    "warning_counts": {
+      "macid_pool_full": 0,
+      "missing_peer": 0,
+      "station_add_failures": 0,
+      "malloc_failures": 0,
+      "hard_faults": 0,
+      "stack_overflows": 0,
+      "boots": 1,
+      "watchdog_boots": 0,
+      "protocol_aborts": 0
+    },
+    "throughput10": [
+      {
+        "bytes": 13893632,
+        "direction": "upload",
+        "mbps": 11.042028213788992,
+        "peerBytes": 13893632,
+        "receiverSeconds": 10.066,
+        "senderSeconds": 10.001356208347715
+      },
+      {
+        "bytes": 23330816,
+        "direction": "download",
+        "mbps": 18.641546602935282,
+        "peerBytes": 23330816,
+        "receiverSeconds": 10.012395000027027,
+        "senderSeconds": 10.021
+      }
+    ],
+    "extended_reconnects_completed": 165,
+    "idle_zero_slots_free_bytes": 47452,
+    "np_heap_leak_unresolved": true
+  },
+  "excluded_prelaunch_attempts": {
+    "details": "The earlier 192 KiB NP candidate booted and passed readback, but no test launched; it was replaced by the 184 KiB candidate to preserve more AP SRAM.",
+    "coredevice_errors": [
+      "StreamingAction file listing failed",
+      "10004 launch PID unavailable",
+      "10002 Locked launch denied"
+    ]
+  },
+  "limitations": [
+    "Capacity-only candidate recovers MACIDs, but its idle NP free heap decreases; do not claim a memory-leak fix.",
+    "Capacity is bounded; no forced peer eviction or liveness-policy change is implemented.",
+    "Heap telemetry is sampled current free bytes, not the true allocation minimum.",
+    "Baseline throughput after IWDG reset cannot establish uninterrupted operation."
+  ],
+  "superseded_by": "macid-mutex-fix-validation.json"
+}

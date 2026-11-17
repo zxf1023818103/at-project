@@ -31,6 +31,11 @@ void green2_nan_heap_check(const char *where)
 
 int green2_nan_random(void *out, size_t len)
 { return TRNG_get_random_bytes(out, len); }
+#ifdef AT_NAN_BLE_OOB
+/* The NAN WHC ABI renamed this function; retain the existing controller port's
+ * spelling while sending the same NP power-save/coexistence command. */
+void wifi_ps_en_by_bt_on(u8 enable) { wifi_ps_en_by_bt_state(enable); }
+#endif
 int green2_nan_vendor(unsigned short id, const void *data, size_t len)
 {
     int rc = whc_host_nan_cfgvendor_cmd(id, data, len);

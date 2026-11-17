@@ -1,0 +1,100 @@
+{
+  "date": "2026-11-17",
+  "status": "implementation and local checks complete; phone hardware regression pending unlock",
+  "cause": "Repeated schedule acceptance increments a native NDC reference for the same peer; ordinary NDP end decrements once. Peer aging also bypasses NDC deletion and clears the ID/selected bit.",
+  "repair": [
+    "Track one native NDC reference per peer, capture the held ID, skip duplicate acceptance, transfer ownership on changed ID.",
+    "Call ownership cleanup on peer aging, before native NDP teardown.",
+    "Relinquish ownership before native scheduler bulk destruction, which deletes the NDC list mutex before peer teardown."
+  ],
+  "native_tests": {
+    "sanitizers": [
+      "address",
+      "undefined"
+    ],
+    "passed": 13,
+    "total": 13,
+    "coverage": [
+      "duplicate acceptance",
+      "multiple peers sharing a cluster",
+      "changed and cleared peer ID/flag",
+      "mutex and node allocation failures",
+      "owner table capacity",
+      "1000 balanced peer lifetimes",
+      "stop/start with live owners",
+      "peer mutex cleanup and exact binary patch boundary"
+    ]
+  },
+  "builds": {
+    "NAN_BLE_OOB_ON_TRACE_ON": "pass",
+    "NAN_BLE_OOB_ON_TRACE_OFF": "pass",
+    "NAN_ONLY_TRACE_OFF": "pass"
+  },
+  "original_vendor_archives": {
+    "checked": 8,
+    "unchanged": 8
+  },
+  "source_sha256": {
+    "component/amebagreen2/nan/nan_ndc_reference.c": "661da8033f67c32d78041bb754e58d1ba1480255bbfd3d73d16d6e94aab921c9",
+    "component/amebagreen2/nan/nan_peer_release.c": "46c4f6cda2a88d98870f8433bc341bce6bd6d562603254fedbc4ab92baa02f30",
+    "component/amebagreen2/nan/fixes/make_nan_peer_free_fix.py": "a8f2f44dc0bfa3edac002f395fb0e33473c1026a5b7ef41a49413923f06766fb"
+  },
+  "current_COM5_diagnostic": {
+    "sha256": "4b270b8e368a70aebdc147ce3deccd880e3f5c71b88fac8241f82e4c6e594bab",
+    "bytes": 1013024,
+    "trace": true,
+    "scheduler_stop_cleanup": true,
+    "flash_exit": 0,
+    "readback_pass": true
+  },
+  "ordinary_candidate_not_flashed": {
+    "sha256": "da166fa73327ffb367b19a43c6dd11fceb4aade50f79ba6517ada7d596b33765",
+    "bytes": 1011840,
+    "trace": false,
+    "scheduler_stop_cleanup": true,
+    "flashed": false
+  },
+  "hardware_idle_stop_start": {
+    "case": "ndc-owner-stop-cycles",
+    "start_results": [
+      0,
+      0,
+      0
+    ],
+    "running": [
+      1,
+      0,
+      1,
+      0,
+      1,
+      0,
+      1
+    ],
+    "fatal": false,
+    "owner_errors": 0,
+    "unexpected_boots": 0,
+    "pass": true,
+    "scope": "Idle module-only NAN stop/start. No phone reconnection and no active NDC owners were exercised by these hardware cycles."
+  },
+  "hardware_reconnect_qualification": {
+    "status": "not started: iOS launch rejected with CoreDevice error 10002, Locked",
+    "last_lock_check_local": "2026-11-17 18:02:41 +08:00",
+    "completed_connections_on_current_repair": 0,
+    "heap_recovery_confirmed": false
+  },
+  "prior_evidence": {
+    "before_repair": "ndc-leak-before-trace.json",
+    "insufficient_destructor_only_repair": "ndc-destructor-only-rejected.json",
+    "duplicate_reference_trace": "ndc-reference-lifecycle.json"
+  },
+  "pending": [
+    "On diagnostic firmware, complete 3 groups of 8 App restarts with 45 s idle after each, then 50 continuous rounds and final idle.",
+    "Require zero residual NDC nodes, no dropped trace records, and compare warmed zero-peer heap snapshots.",
+    "Flash the ordinary candidate only after the diagnostic passes; run saved-pair reconnect and throughput regression."
+  ],
+  "limitations": [
+    "Earlier 125/125 PINGs qualify a different mutex-only image, not this ownership repair.",
+    "Idle stop/start hardware tests do not validate active-owner teardown; that case is covered only by the native ownership test so far.",
+    "No indefinite-soak or multiple-phone qualification."
+  ]
+}

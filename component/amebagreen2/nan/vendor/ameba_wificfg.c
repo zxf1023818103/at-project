@@ -155,7 +155,11 @@ _WEAK void wifi_set_user_config(void)
 #endif
 
 #if defined(CONFIG_WIFI_NAN_ENABLE)
-	wifi_user_config.nan_max_peer_num = 6;	/*should not exceed 15 */
+	/* iOS reconnects can overlap several old and new NAN identities until
+	 * native peer aging runs. Six slots can fill before that 12 s sweep.
+	 * Keep native liveness/teardown checks; allow headroom for this overlap.
+	 * The SDK supports at most 15. Use 12 to bound NP heap consumption. */
+	wifi_user_config.nan_max_peer_num = 12;
 #endif
 
 	/* ensure skb_num_np >= rx_ampdu_num + skb_num_np_rsvd */

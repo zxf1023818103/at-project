@@ -1,0 +1,869 @@
+{
+  "case": "macid-capacity12-sram184-soak-tail",
+  "warnings": {
+    "macid_pool_full": 0,
+    "missing_peer": 0,
+    "station_add_failures": 0,
+    "malloc_failures": 0,
+    "hard_faults": 0,
+    "stack_overflows": 0,
+    "boots": 0,
+    "watchdog_boots": 0,
+    "protocol_aborts": 0
+  },
+  "phases": [
+    {
+      "phase": "restart6",
+      "watchdog": false,
+      "seconds": 4.3,
+      "startedAt": "2026-11-17T07:23:42Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.4154805000289343
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "restart7",
+      "watchdog": false,
+      "seconds": 4.5,
+      "startedAt": "2026-11-17T07:23:50Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.7819104166701436
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "restart8",
+      "watchdog": false,
+      "seconds": 4.4,
+      "startedAt": "2026-11-17T07:23:58Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.240791625052225
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "restart9",
+      "watchdog": false,
+      "seconds": 4.4,
+      "startedAt": "2026-11-17T07:24:06Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.6976900000008754
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "restart10",
+      "watchdog": false,
+      "seconds": 4.4,
+      "startedAt": "2026-11-17T07:24:13Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.1656687916256487
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "restart11",
+      "watchdog": false,
+      "seconds": 4.4,
+      "startedAt": "2026-11-17T07:24:21Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.5072842083172873
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "restart12",
+      "watchdog": false,
+      "seconds": 4.4,
+      "startedAt": "2026-11-17T07:24:29Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.4810356666566804
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "throughput30",
+      "watchdog": false,
+      "seconds": 63.9,
+      "startedAt": "2026-11-17T07:24:37Z",
+      "firmware_fault": false,
+      "rounds": 0,
+      "successes": 0,
+      "results": [
+        {
+          "bytes": 44498944,
+          "direction": "upload",
+          "mbps": 11.829319864424802,
+          "peerBytes": 44498944,
+          "receiverSeconds": 30.094,
+          "senderSeconds": 30.002546250005253
+        },
+        {
+          "bytes": 62652416,
+          "direction": "download",
+          "mbps": 16.5872811967135,
+          "peerBytes": 62652416,
+          "receiverSeconds": 30.21708754170686,
+          "senderSeconds": 30.227
+        }
+      ],
+      "cancelled": false,
+      "ready_seconds": [
+        2.437358708353713
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "post_idle_saved_pair",
+      "watchdog": false,
+      "seconds": 4.4,
+      "startedAt": "2026-11-17T07:26:26Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.145398083375767
+      ],
+      "failed_rounds": []
+    }
+  ],
+  "np_heap_samples": [
+    {
+      "bytes": 45284,
+      "used": 2,
+      "capacity": 12
+    },
+    {
+      "bytes": 39832,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "bytes": 38056,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "bytes": 36572,
+      "used": 5,
+      "capacity": 12
+    },
+    {
+      "bytes": 33744,
+      "used": 6,
+      "capacity": 12
+    },
+    {
+      "bytes": 41272,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "bytes": 36024,
+      "used": 5,
+      "capacity": 12
+    },
+    {
+      "bytes": 38248,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "bytes": 32788,
+      "used": 6,
+      "capacity": 12
+    },
+    {
+      "bytes": 40112,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "bytes": 34864,
+      "used": 5,
+      "capacity": 12
+    },
+    {
+      "bytes": 41188,
+      "used": 2,
+      "capacity": 12
+    },
+    {
+      "bytes": 41188,
+      "used": 2,
+      "capacity": 12
+    },
+    {
+      "bytes": 43628,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 43628,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 43628,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 43580,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 43628,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 43868,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 43748,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 43748,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 44804,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 47452,
+      "used": 0,
+      "capacity": 12
+    },
+    {
+      "bytes": 42204,
+      "used": 2,
+      "capacity": 12
+    }
+  ],
+  "ap_heap_samples": [
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    19200,
+    20320,
+    20320,
+    20320,
+    20320,
+    20320,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248
+  ],
+  "queue_counters": [
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    }
+  ],
+  "peer_events": [
+    {
+      "ms": 78,
+      "event": "phase",
+      "value": "preflight"
+    },
+    {
+      "ms": 78,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 4058,
+      "event": "phase",
+      "value": "restart6"
+    },
+    {
+      "ms": 4058,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 6058,
+      "event": "alloc",
+      "peer": "peer1",
+      "macid": 9,
+      "live": 1
+    },
+    {
+      "ms": 6591,
+      "event": "alloc",
+      "peer": "peer2",
+      "macid": 10,
+      "live": 2
+    },
+    {
+      "ms": 7827,
+      "event": "pong"
+    },
+    {
+      "ms": 9510,
+      "event": "phase",
+      "value": "restart6 done"
+    },
+    {
+      "ms": 9510,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 11911,
+      "event": "phase",
+      "value": "restart7"
+    },
+    {
+      "ms": 11911,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 13526,
+      "event": "alloc",
+      "peer": "peer3",
+      "macid": 11,
+      "live": 3
+    },
+    {
+      "ms": 14444,
+      "event": "alloc",
+      "peer": "peer4",
+      "macid": 12,
+      "live": 4
+    },
+    {
+      "ms": 16064,
+      "event": "pong"
+    },
+    {
+      "ms": 17497,
+      "event": "phase",
+      "value": "restart7 done"
+    },
+    {
+      "ms": 17498,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 19924,
+      "event": "phase",
+      "value": "restart8"
+    },
+    {
+      "ms": 19924,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 21781,
+      "event": "alloc",
+      "peer": "peer5",
+      "macid": 13,
+      "live": 5
+    },
+    {
+      "ms": 22326,
+      "event": "alloc",
+      "peer": "peer6",
+      "macid": 14,
+      "live": 6
+    },
+    {
+      "ms": 22615,
+      "event": "free",
+      "peer": "peer1",
+      "lifetime_ms": 16557,
+      "live": 5
+    },
+    {
+      "ms": 22615,
+      "event": "free",
+      "peer": "peer2",
+      "lifetime_ms": 16024,
+      "live": 4
+    },
+    {
+      "ms": 23535,
+      "event": "pong"
+    },
+    {
+      "ms": 25509,
+      "event": "phase",
+      "value": "restart8 done"
+    },
+    {
+      "ms": 25510,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 27916,
+      "event": "phase",
+      "value": "restart9"
+    },
+    {
+      "ms": 27917,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 30182,
+      "event": "alloc",
+      "peer": "peer7",
+      "macid": 9,
+      "live": 5
+    },
+    {
+      "ms": 30698,
+      "event": "alloc",
+      "peer": "peer8",
+      "macid": 10,
+      "live": 6
+    },
+    {
+      "ms": 31944,
+      "event": "pong"
+    },
+    {
+      "ms": 33323,
+      "event": "phase",
+      "value": "restart9 done"
+    },
+    {
+      "ms": 33323,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 34622,
+      "event": "free",
+      "peer": "peer3",
+      "lifetime_ms": 21096,
+      "live": 5
+    },
+    {
+      "ms": 34622,
+      "event": "free",
+      "peer": "peer4",
+      "lifetime_ms": 20178,
+      "live": 4
+    },
+    {
+      "ms": 34622,
+      "event": "free",
+      "peer": "peer5",
+      "lifetime_ms": 12841,
+      "live": 3
+    },
+    {
+      "ms": 35763,
+      "event": "phase",
+      "value": "restart10"
+    },
+    {
+      "ms": 35764,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 37508,
+      "event": "alloc",
+      "peer": "peer9",
+      "macid": 11,
+      "live": 4
+    },
+    {
+      "ms": 38036,
+      "event": "alloc",
+      "peer": "peer10",
+      "macid": 12,
+      "live": 5
+    },
+    {
+      "ms": 39287,
+      "event": "pong"
+    },
+    {
+      "ms": 41249,
+      "event": "phase",
+      "value": "restart10 done"
+    },
+    {
+      "ms": 41249,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 43782,
+      "event": "phase",
+      "value": "restart11"
+    },
+    {
+      "ms": 43782,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 45504,
+      "event": "alloc",
+      "peer": "peer11",
+      "macid": 13,
+      "live": 6
+    },
+    {
+      "ms": 46426,
+      "event": "alloc",
+      "peer": "peer12",
+      "macid": 15,
+      "live": 7
+    },
+    {
+      "ms": 46666,
+      "event": "free",
+      "peer": "peer6",
+      "lifetime_ms": 24340,
+      "live": 6
+    },
+    {
+      "ms": 46666,
+      "event": "free",
+      "peer": "peer7",
+      "lifetime_ms": 16484,
+      "live": 5
+    },
+    {
+      "ms": 46666,
+      "event": "free",
+      "peer": "peer8",
+      "lifetime_ms": 15968,
+      "live": 4
+    },
+    {
+      "ms": 47657,
+      "event": "pong"
+    },
+    {
+      "ms": 49317,
+      "event": "phase",
+      "value": "restart11 done"
+    },
+    {
+      "ms": 49317,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 51738,
+      "event": "phase",
+      "value": "restart12"
+    },
+    {
+      "ms": 51738,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 53370,
+      "event": "alloc",
+      "peer": "peer13",
+      "macid": 9,
+      "live": 5
+    },
+    {
+      "ms": 54291,
+      "event": "alloc",
+      "peer": "peer14",
+      "macid": 10,
+      "live": 6
+    },
+    {
+      "ms": 55544,
+      "event": "pong"
+    },
+    {
+      "ms": 57201,
+      "event": "phase",
+      "value": "restart12 done"
+    },
+    {
+      "ms": 57201,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 58652,
+      "event": "free",
+      "peer": "peer9",
+      "lifetime_ms": 21144,
+      "live": 5
+    },
+    {
+      "ms": 58652,
+      "event": "free",
+      "peer": "peer10",
+      "lifetime_ms": 20616,
+      "live": 4
+    },
+    {
+      "ms": 58652,
+      "event": "free",
+      "peer": "peer11",
+      "lifetime_ms": 13148,
+      "live": 3
+    },
+    {
+      "ms": 59646,
+      "event": "phase",
+      "value": "throughput30"
+    },
+    {
+      "ms": 59646,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 61226,
+      "event": "alloc",
+      "peer": "peer15",
+      "macid": 11,
+      "live": 4
+    },
+    {
+      "ms": 62150,
+      "event": "alloc",
+      "peer": "peer16",
+      "macid": 12,
+      "live": 5
+    },
+    {
+      "ms": 70648,
+      "event": "free",
+      "peer": "peer12",
+      "lifetime_ms": 24222,
+      "live": 4
+    },
+    {
+      "ms": 70648,
+      "event": "free",
+      "peer": "peer13",
+      "lifetime_ms": 17278,
+      "live": 3
+    },
+    {
+      "ms": 70648,
+      "event": "free",
+      "peer": "peer14",
+      "lifetime_ms": 16357,
+      "live": 2
+    },
+    {
+      "ms": 82650,
+      "event": "free",
+      "peer": "peer15",
+      "lifetime_ms": 21424,
+      "live": 1
+    },
+    {
+      "ms": 124608,
+      "event": "phase",
+      "value": "throughput30 done"
+    },
+    {
+      "ms": 124609,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 124643,
+      "event": "phase",
+      "value": "idle 40 seconds"
+    },
+    {
+      "ms": 124644,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 166649,
+      "event": "free",
+      "peer": "peer16",
+      "lifetime_ms": 104499,
+      "live": 0
+    },
+    {
+      "ms": 167917,
+      "event": "phase",
+      "value": "post_idle_saved_pair"
+    },
+    {
+      "ms": 167917,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 169630,
+      "event": "alloc",
+      "peer": "peer17",
+      "macid": 9,
+      "live": 1
+    },
+    {
+      "ms": 170158,
+      "event": "alloc",
+      "peer": "peer18",
+      "macid": 10,
+      "live": 2
+    },
+    {
+      "ms": 171407,
+      "event": "pong"
+    },
+    {
+      "ms": 173441,
+      "event": "phase",
+      "value": "post_idle_saved_pair done"
+    },
+    {
+      "ms": 173441,
+      "event": "command",
+      "value": "nan status"
+    }
+  ],
+  "live_at_end_inferred": 2,
+  "clean": true
+}

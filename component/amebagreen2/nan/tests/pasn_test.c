@@ -17,13 +17,24 @@ static size_t tx_len, rx_len;
 static unsigned installations, authenticated;
 static unsigned expected_type = 1;
 static u8 nik_cache[500], stored[888];
-static int stored_valid;
+static int stored_valid, store_fail;
 static const u8 peer[6] = {2,1,2,3,4,5}, own[6] = {2,1,2,3,4,6};
+#ifdef AT_NAN_BLE_OOB
+static int window_open;
+static uint32_t window_generation = 1;
+int green2_nan_oob_password(char pin[7], uint32_t *generation)
+{
+    if (!window_open) return 0;
+    memcpy(pin, "123456", 7); *generation = window_generation; return 1;
+}
+int green2_nan_oob_valid(uint32_t generation)
+{ return window_open && generation == window_generation; }
+#endif
 
 int green2_nan_store(void *p, size_t n, int write)
 {
     assert(n == sizeof(stored));
-    if (write) { memcpy(stored, p, n); stored_valid = 1; return 0; }
+    if (write) { if (store_fail) return -1; memcpy(stored, p, n); stored_valid = 1; return 0; }
     if (!stored_valid) return -1;
     memcpy(p, stored, n); return 0;
 }
@@ -33,11 +44,19 @@ int green2_nan_vendor(unsigned short id, const void *p, size_t n)
 {
     if (id == 0x1909) {
         assert(n == sizeof(installed)); memcpy(installed, p, n); installations++;
+    } else if (id == 0x1907) {
+        const u8 *pw = p;
+        assert(n == 24 && !memcmp(pw, peer, 6) && !memcmp(pw + 6, "123456", 6) && pw[23] == 6);
     } else { assert(id == 0x190a && n == 500); memcpy(nik_cache, p, n); }
     return 0;
 }
 void green2_nan_authenticated(const u8 *p, u8 type)
-{ assert(!memcmp(p, peer, 6) && type == expected_type); authenticated++; }
+{
+    assert(!memcmp(p, peer, 6) && type == expected_type); authenticated++;
+#ifdef AT_NAN_BLE_OOB
+    if (type == 1) window_open = 0;
+#endif
+}
 static int capture(void *ctx, const u8 *p, size_t n, int noack, unsigned freq, unsigned wait)
 {
     (void)ctx; (void)noack; (void)freq; (void)wait;
@@ -96,8 +115,9 @@ static void verify_cached_pairing(void)
     assert(!memcmp(installed, p->ptk.tk, 16) && !memcmp(installed + 16, p->ptk.kdk, 32));
     green2_pasn_stop(); wpa_pasn_reset(p); pasn_data_deinit(p); pasn_initiator_pmksa_cache_deinit(pmksa);
 }
-int main(void)
+int main(int argc, char **argv)
 {
+    (void)argc; (void)argv;
     extern int wpa_debug_level; wpa_debug_level = MSG_WARNING;
     int groups[] = {19, 0};
     const u8 rsnxe[] = {WLAN_EID_RSNX, 2, 1 | (1 << WLAN_RSNX_CAPAB_SAE_H2E), 0};
@@ -115,12 +135,32 @@ int main(void)
     start[1] = 2; start[2] = 1; memcpy(start + 3, peer, 6); memcpy(start + 9, own, 6);
     start[15] = start[16] = 1; start[17] = 6; memcpy(start + 18, "123456", 6);
     WPA_PUT_LE16(start + 34, tx_len); memcpy(start + 36, tx, tx_len);
+#ifdef AT_NAN_BLE_OOB
+    assert(green2_pasn_event(29, start, sizeof(start)) < 0);
+    assert(!installations && !authenticated);
+    window_open = 1;
+    /* The AP must use the active BLE credential even if the NP/cache still
+     * reports a previous password. This also covers an empty NP password. */
+    start[17] = 0; memset(start + 18, 0, 16);
+#endif
     assert(!green2_pasn_event(29, start, sizeof(start)));
     struct wpa_pasn_params_data params = {0};
     assert(!wpa_pasn_auth_rx(p, rx, rx_len, &params));
     assert(tx[26] == 3);
     u8 auth3[598] = {3,1,6}; memcpy(auth3 + 3, "123456", 6);
     WPA_PUT_LE16(auth3 + 19, tx_len); memcpy(auth3 + 21, tx, tx_len);
+#ifdef AT_NAN_BLE_OOB
+    if (argc > 1) {
+        if (!strcmp(argv[1], "expire")) window_open = 0;
+        else window_generation++;
+        assert(green2_pasn_event(30, auth3, sizeof(auth3)) < 0);
+        assert(!installations && !authenticated && !green2_pasn_peer_authorized(peer));
+        green2_pasn_stop(); wpa_pasn_reset(p); pasn_data_deinit(p);
+        pasn_initiator_pmksa_cache_deinit(pmksa);
+        puts("PASS: expired/replaced BLE credential cannot install NAN keys");
+        return 0;
+    }
+#endif
     auth3[21 + tx_len - 1] ^= 1;
     assert(green2_pasn_event(30, auth3, sizeof(auth3)) < 0 && !installations);
     auth3[21 + tx_len - 1] ^= 1;
@@ -140,9 +180,22 @@ int main(void)
     nik_cache[4] ^= 1;
     assert(green2_pasn_cache_update(nik_cache, 500, 7) < 0);
     nik_cache[4] ^= 1;
+    /* Two peers/re-pairings can reuse the same service instance. Reject two
+     * equal passwords; a different old password must not block the new bond. */
+    memcpy(nik_cache + 80, nik_cache + 20, 60);
+    memset(nik_cache + 91, 0x88, 16);
+    assert(green2_pasn_cache_update(nik_cache, sizeof(nik_cache), 7) < 0);
+    memcpy(nik_cache + 124, "654321", 6);
+    store_fail = 1;
+    assert(green2_pasn_cache_update(nik_cache, sizeof(nik_cache), 7) < 0);
+    store_fail = 0;
     assert(!green2_pasn_cache_update(nik_cache, sizeof(nik_cache), 7));
     assert(!memcmp(stored + 504, nik_cache + 31, 16));
     assert(p->pmk_len == 32 && !memcmp(stored + 520, p->pmk, 32));
+    /* Ordinary PMKID/cache refreshes need no NPK binding and tolerate duplicate
+     * instance numbers even when a historical password also matches. */
+    memcpy(nik_cache + 124, "123456", 6);
+    assert(!green2_pasn_cache_update(nik_cache, sizeof(nik_cache), 7));
     green2_pasn_stop();
     assert(!green2_pasn_peer_authorized(peer));
     /* Reinitialization loads the same persistent identity without leaking a

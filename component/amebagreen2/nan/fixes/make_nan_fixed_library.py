@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Package the verified Green2 vendor library and NAN function wrappers.
 
-The result is linked whole-archive with --wrap for the patched functions, exactly
-as in the source-build path. Original vendor members remain byte-identical.
+The result is linked whole-archive with --wrap for the patched functions. The
+peer object's NDP-cleanup and final-free relocations are redirected; all other vendor members
+remain byte-identical. The original input archive is never modified.
 Use the SDK's ASDK 12.3.1 toolchain to reproduce the checked-in archive.
 """
 import argparse
@@ -37,6 +38,11 @@ def main():
         faw = tmp / "nan_faw_id_fix.o"
         bootstrap = tmp / "nan_bootstrap_fix.o"
         bootstrap_gate = tmp / "whc_dev_nan_bootstrap_fix.o"
+        peer = tmp / "rtw_nan_peer.o"
+        subprocess.run([
+            sys.executable, str(srcdir / "make_nan_peer_free_fix.py"),
+            args.cross_compile + "ar", str(source), str(peer),
+        ], check=True)
         subprocess.run([
             args.cross_compile + "gcc", "-std=c11", "-Os", "-g0",
             "-mthumb", "-march=armv8.1-m.main", "-mcmse",
@@ -102,7 +108,7 @@ def main():
         ], cwd=srcdir, check=True)
         shutil.copyfile(source, archive)
         subprocess.run([args.cross_compile + "ar", "rD", str(archive),
-                        str(cipher), str(auth_peer), str(faw), str(bootstrap), str(bootstrap_gate),
+                        str(peer), str(cipher), str(auth_peer), str(faw), str(bootstrap), str(bootstrap_gate),
                         str(ndl), str(ndl_gate), str(immutable), str(ndc_control)], check=True)
         subprocess.run([args.cross_compile + "ranlib", "-D", str(archive)], check=True)
         shutil.copyfile(archive, output)

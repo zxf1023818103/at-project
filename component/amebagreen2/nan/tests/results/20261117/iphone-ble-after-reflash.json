@@ -1,0 +1,35 @@
+{
+  "id": "2B1841FE-4F0B-4505-A07E-B7E52D057891",
+  "stages": [
+    {
+      "stage": "scan_requested",
+      "time": "2026-11-17T01:43:17Z"
+    },
+    {
+      "stage": "discovered",
+      "time": "2026-11-17T01:43:36Z"
+    },
+    {
+      "stage": "connecting",
+      "time": "2026-11-17T01:43:36Z"
+    },
+    {
+      "stage": "ble_connected",
+      "time": "2026-11-17T01:43:36Z"
+    },
+    {
+      "stage": "requesting_pin",
+      "time": "2026-11-17T01:43:37Z"
+    },
+    {
+      "stage": "request_accepted",
+      "time": "2026-11-17T01:43:37Z"
+    },
+    {
+      "stage": "credential_received",
+      "time": "2026-11-17T01:43:37Z"
+    }
+  ],
+  "startedAt": "2026-11-17T01:43:17Z",
+  "test": "ble-assisted-nan-pin"
+}

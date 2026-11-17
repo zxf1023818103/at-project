@@ -1,0 +1,227 @@
+{
+  "case": "macid-baseline1",
+  "warnings": {
+    "macid_pool_full": 0,
+    "missing_peer": 0,
+    "station_add_failures": 0,
+    "malloc_failures": 0,
+    "hard_faults": 0,
+    "stack_overflows": 0,
+    "boots": 1,
+    "watchdog_boots": 0,
+    "protocol_aborts": 0
+  },
+  "phases": [
+    {
+      "phase": "stress5",
+      "watchdog": false,
+      "seconds": 9.2,
+      "startedAt": "2026-11-17T06:55:52Z",
+      "rounds": 5,
+      "successes": 5,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        3.96329424995929,
+        0.881648333335761,
+        0.5183994167018682,
+        0.514290000020992,
+        0.518121708300896
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "throughput10",
+      "watchdog": false,
+      "seconds": 26.6,
+      "startedAt": "2026-11-17T06:56:04Z",
+      "rounds": 0,
+      "successes": 0,
+      "results": [
+        {
+          "bytes": 15532032,
+          "direction": "upload",
+          "mbps": 12.24199566502463,
+          "peerBytes": 15532032,
+          "receiverSeconds": 10.15,
+          "senderSeconds": 10.042837708315346
+        },
+        {
+          "bytes": 21299200,
+          "direction": "download",
+          "mbps": 17.05307394002092,
+          "peerBytes": 21299200,
+          "receiverSeconds": 9.991958083293866,
+          "senderSeconds": 10.001
+        }
+      ],
+      "cancelled": false,
+      "ready_seconds": [
+        2.3192128333612345
+      ],
+      "failed_rounds": []
+    }
+  ],
+  "np_heap_samples": [],
+  "ap_heap_samples": [
+    104824,
+    44884,
+    44884,
+    104812
+  ],
+  "queue_counters": [
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    }
+  ],
+  "peer_events": [
+    {
+      "ms": 152,
+      "event": "reset",
+      "value": "RTS"
+    },
+    {
+      "ms": 170,
+      "event": "phase",
+      "value": "preflight"
+    },
+    {
+      "ms": 170,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 206,
+      "event": "boot",
+      "previous_live": 0
+    },
+    {
+      "ms": 3857,
+      "event": "phase",
+      "value": "stress5"
+    },
+    {
+      "ms": 3857,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 6842,
+      "event": "alloc",
+      "peer": "peer1",
+      "macid": 9,
+      "live": 1
+    },
+    {
+      "ms": 7767,
+      "event": "alloc",
+      "peer": "peer2",
+      "macid": 10,
+      "live": 2
+    },
+    {
+      "ms": 9136,
+      "event": "pong"
+    },
+    {
+      "ms": 10020,
+      "event": "pong"
+    },
+    {
+      "ms": 10547,
+      "event": "pong"
+    },
+    {
+      "ms": 11067,
+      "event": "pong"
+    },
+    {
+      "ms": 11599,
+      "event": "pong"
+    },
+    {
+      "ms": 14102,
+      "event": "phase",
+      "value": "stress5 done"
+    },
+    {
+      "ms": 14102,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 16515,
+      "event": "phase",
+      "value": "throughput10"
+    },
+    {
+      "ms": 16515,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 18391,
+      "event": "alloc",
+      "peer": "peer3",
+      "macid": 11,
+      "live": 3
+    },
+    {
+      "ms": 18906,
+      "event": "alloc",
+      "peer": "peer4",
+      "macid": 12,
+      "live": 4
+    },
+    {
+      "ms": 24243,
+      "event": "free",
+      "peer": "peer1",
+      "lifetime_ms": 17401,
+      "live": 3
+    },
+    {
+      "ms": 36248,
+      "event": "free",
+      "peer": "peer2",
+      "lifetime_ms": 28481,
+      "live": 2
+    },
+    {
+      "ms": 36248,
+      "event": "free",
+      "peer": "peer3",
+      "lifetime_ms": 17857,
+      "live": 1
+    },
+    {
+      "ms": 44225,
+      "event": "phase",
+      "value": "throughput10 done"
+    },
+    {
+      "ms": 44225,
+      "event": "command",
+      "value": "nan status"
+    }
+  ],
+  "live_at_end_inferred": 1,
+  "clean": true
+}

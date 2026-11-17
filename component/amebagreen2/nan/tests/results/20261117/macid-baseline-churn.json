@@ -1,0 +1,1647 @@
+{
+  "case": "macid-baseline-churn",
+  "warnings": {
+    "macid_pool_full": 28,
+    "missing_peer": 2,
+    "station_add_failures": 0,
+    "malloc_failures": 1,
+    "hard_faults": 0,
+    "stack_overflows": 0,
+    "boots": 2,
+    "watchdog_boots": 1,
+    "protocol_aborts": 0
+  },
+  "phases": [
+    {
+      "phase": "restart1",
+      "watchdog": false,
+      "seconds": 4.4,
+      "startedAt": "2026-11-17T07:00:05Z",
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.9366700417012908
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "restart2",
+      "watchdog": false,
+      "seconds": 4.4,
+      "startedAt": "2026-11-17T07:00:12Z",
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        1.8668646666919813
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "restart3",
+      "watchdog": false,
+      "seconds": 4.4,
+      "startedAt": "2026-11-17T07:00:20Z",
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        3.3800341250025667
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "restart4",
+      "watchdog": false,
+      "seconds": 4.3,
+      "startedAt": "2026-11-17T07:00:28Z",
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.3171805000165477
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "restart5",
+      "watchdog": false,
+      "seconds": 4.4,
+      "startedAt": "2026-11-17T07:00:36Z",
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.4456687083584256
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "restart6",
+      "watchdog": false,
+      "seconds": 31.1,
+      "startedAt": "2026-11-17T07:00:44Z",
+      "rounds": 1,
+      "successes": 0,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        null
+      ],
+      "failed_rounds": [
+        1
+      ]
+    },
+    {
+      "phase": "restart7",
+      "watchdog": false,
+      "seconds": 4.4,
+      "startedAt": "2026-11-17T07:01:18Z",
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        1.9713402916677296
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "restart8",
+      "watchdog": false,
+      "seconds": 4.4,
+      "startedAt": "2026-11-17T07:01:26Z",
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.0130945416749455
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "restart9",
+      "watchdog": false,
+      "seconds": 4.4,
+      "startedAt": "2026-11-17T07:01:34Z",
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        1.9967917500180192
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "restart10",
+      "watchdog": false,
+      "seconds": 31.3,
+      "startedAt": "2026-11-17T07:01:42Z",
+      "rounds": 1,
+      "successes": 0,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        null
+      ],
+      "failed_rounds": [
+        1
+      ]
+    },
+    {
+      "phase": "restart11",
+      "watchdog": false,
+      "seconds": 4.3,
+      "startedAt": "2026-11-17T07:02:17Z",
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.430481624964159
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "restart12",
+      "watchdog": false,
+      "seconds": 4.3,
+      "startedAt": "2026-11-17T07:02:24Z",
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        1.5679730416741222
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "stress40",
+      "watchdog": false,
+      "seconds": 71.9,
+      "startedAt": "2026-11-17T07:02:32Z",
+      "rounds": 40,
+      "successes": 39,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        null,
+        3.9927805000334047,
+        0.8578760000527836,
+        0.5151874583680183,
+        0.5313436249853112,
+        1.015748874982819,
+        0.5088587083737366,
+        0.635137916659005,
+        1.034185541619081,
+        1.0703460416407324,
+        1.551389249972999,
+        0.5036299583734944,
+        0.5156250833533704,
+        1.029783416655846,
+        1.0422615833231248,
+        0.5134459583787248,
+        1.0242392083164304,
+        1.082085583359003,
+        0.8715601249714382,
+        0.5155564583255909,
+        0.6734869166393764,
+        1.5194816250004806,
+        0.5124115833314136,
+        1.5545450416393578,
+        1.0416957082925364,
+        1.0311684583430178,
+        1.0327042916906066,
+        1.0350383333861828,
+        1.0795509166782722,
+        0.8755896249786019,
+        0.4993421666440554,
+        1.1555177082773298,
+        1.0340304166893475,
+        1.0719612499815412,
+        1.0096260416903533,
+        1.0400309166871011,
+        1.0471927082980983,
+        0.5111199999810196,
+        0.4955985000124201,
+        0.51388262497494
+      ],
+      "failed_rounds": [
+        1
+      ]
+    },
+    {
+      "phase": "throughput10",
+      "watchdog": false,
+      "seconds": 22.5,
+      "startedAt": "2026-11-17T07:03:48Z",
+      "rounds": 0,
+      "successes": 0,
+      "results": [
+        {
+          "bytes": 15138816,
+          "direction": "upload",
+          "mbps": 12.011358524248736,
+          "peerBytes": 15138816,
+          "receiverSeconds": 10.083,
+          "senderSeconds": 10.050937916676048
+        },
+        {
+          "bytes": 24117248,
+          "direction": "download",
+          "mbps": 19.26223217621378,
+          "peerBytes": 24117248,
+          "receiverSeconds": 10.01638762501534,
+          "senderSeconds": 10.022
+        }
+      ],
+      "cancelled": false,
+      "ready_seconds": [
+        2.064208374998998
+      ],
+      "failed_rounds": []
+    }
+  ],
+  "np_heap_samples": [],
+  "ap_heap_samples": [
+    104824,
+    104824,
+    104824,
+    104824,
+    104824,
+    104824,
+    104824,
+    104260,
+    104824,
+    104824,
+    104824,
+    104824,
+    104824,
+    104824,
+    104824,
+    114192,
+    114192,
+    104824,
+    104824,
+    104824,
+    104824,
+    104824,
+    43776,
+    44896
+  ],
+  "queue_counters": [
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    }
+  ],
+  "peer_events": [
+    {
+      "ms": 152,
+      "event": "reset",
+      "value": "RTS"
+    },
+    {
+      "ms": 183,
+      "event": "phase",
+      "value": "preflight"
+    },
+    {
+      "ms": 183,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 221,
+      "event": "boot",
+      "previous_live": 0
+    },
+    {
+      "ms": 4158,
+      "event": "phase",
+      "value": "restart1"
+    },
+    {
+      "ms": 4158,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 6753,
+      "event": "alloc",
+      "peer": "peer1",
+      "macid": 9,
+      "live": 1
+    },
+    {
+      "ms": 7382,
+      "event": "alloc",
+      "peer": "peer2",
+      "macid": 10,
+      "live": 2
+    },
+    {
+      "ms": 8399,
+      "event": "pong"
+    },
+    {
+      "ms": 9614,
+      "event": "phase",
+      "value": "restart1 done"
+    },
+    {
+      "ms": 9614,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 12002,
+      "event": "phase",
+      "value": "restart2"
+    },
+    {
+      "ms": 12002,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 13587,
+      "event": "alloc",
+      "peer": "peer3",
+      "macid": 11,
+      "live": 3
+    },
+    {
+      "ms": 14179,
+      "event": "alloc",
+      "peer": "peer4",
+      "macid": 12,
+      "live": 4
+    },
+    {
+      "ms": 15205,
+      "event": "pong"
+    },
+    {
+      "ms": 17479,
+      "event": "phase",
+      "value": "restart2 done"
+    },
+    {
+      "ms": 17480,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 19916,
+      "event": "phase",
+      "value": "restart3"
+    },
+    {
+      "ms": 19916,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 21486,
+      "event": "alloc",
+      "peer": "peer5",
+      "macid": 13,
+      "live": 5
+    },
+    {
+      "ms": 23013,
+      "event": "alloc",
+      "peer": "peer6",
+      "macid": 14,
+      "live": 6
+    },
+    {
+      "ms": 24260,
+      "event": "free",
+      "peer": "peer1",
+      "lifetime_ms": 17507,
+      "live": 5
+    },
+    {
+      "ms": 24260,
+      "event": "free",
+      "peer": "peer2",
+      "lifetime_ms": 16878,
+      "live": 4
+    },
+    {
+      "ms": 24642,
+      "event": "pong"
+    },
+    {
+      "ms": 25455,
+      "event": "phase",
+      "value": "restart3 done"
+    },
+    {
+      "ms": 25455,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 27890,
+      "event": "phase",
+      "value": "restart4"
+    },
+    {
+      "ms": 27890,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 29697,
+      "event": "alloc",
+      "peer": "peer7",
+      "macid": 9,
+      "live": 5
+    },
+    {
+      "ms": 30064,
+      "event": "alloc",
+      "peer": "peer8",
+      "macid": 10,
+      "live": 6
+    },
+    {
+      "ms": 31467,
+      "event": "pong"
+    },
+    {
+      "ms": 33240,
+      "event": "phase",
+      "value": "restart4 done"
+    },
+    {
+      "ms": 33240,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 35541,
+      "event": "phase",
+      "value": "restart5"
+    },
+    {
+      "ms": 35542,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 36255,
+      "event": "free",
+      "peer": "peer3",
+      "lifetime_ms": 22668,
+      "live": 5
+    },
+    {
+      "ms": 36255,
+      "event": "free",
+      "peer": "peer4",
+      "lifetime_ms": 22076,
+      "live": 4
+    },
+    {
+      "ms": 36255,
+      "event": "free",
+      "peer": "peer5",
+      "lifetime_ms": 14769,
+      "live": 3
+    },
+    {
+      "ms": 37137,
+      "event": "alloc",
+      "peer": "peer9",
+      "macid": 11,
+      "live": 4
+    },
+    {
+      "ms": 37689,
+      "event": "alloc",
+      "peer": "peer10",
+      "macid": 12,
+      "live": 5
+    },
+    {
+      "ms": 39335,
+      "event": "pong"
+    },
+    {
+      "ms": 41029,
+      "event": "phase",
+      "value": "restart5 done"
+    },
+    {
+      "ms": 41030,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 43414,
+      "event": "phase",
+      "value": "restart6"
+    },
+    {
+      "ms": 43415,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 44898,
+      "event": "alloc",
+      "peer": "peer11",
+      "macid": 13,
+      "live": 6
+    },
+    {
+      "ms": 45427,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 45427,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 45545,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 45545,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 45545,
+      "event": "missing_peer"
+    },
+    {
+      "ms": 45545,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 45545,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 45941,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 45941,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 46072,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 46072,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 46474,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 46474,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 46594,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 46594,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 47113,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 47120,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 47520,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 47520,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 47650,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 47650,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 48043,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 48043,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 48178,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 48178,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 48281,
+      "event": "free",
+      "peer": "peer6",
+      "lifetime_ms": 25268,
+      "live": 5
+    },
+    {
+      "ms": 48281,
+      "event": "free",
+      "peer": "peer7",
+      "lifetime_ms": 18584,
+      "live": 4
+    },
+    {
+      "ms": 48281,
+      "event": "free",
+      "peer": "peer8",
+      "lifetime_ms": 18217,
+      "live": 3
+    },
+    {
+      "ms": 48569,
+      "event": "alloc",
+      "peer": "peer12",
+      "macid": 9,
+      "live": 4
+    },
+    {
+      "ms": 60274,
+      "event": "free",
+      "peer": "peer9",
+      "lifetime_ms": 23137,
+      "live": 3
+    },
+    {
+      "ms": 60274,
+      "event": "free",
+      "peer": "peer10",
+      "lifetime_ms": 22585,
+      "live": 2
+    },
+    {
+      "ms": 60274,
+      "event": "free",
+      "peer": "peer11",
+      "lifetime_ms": 15376,
+      "live": 1
+    },
+    {
+      "ms": 72279,
+      "event": "free",
+      "peer": "peer12",
+      "lifetime_ms": 23710,
+      "live": 0
+    },
+    {
+      "ms": 75603,
+      "event": "phase",
+      "value": "restart6 done"
+    },
+    {
+      "ms": 75603,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 77988,
+      "event": "phase",
+      "value": "restart7"
+    },
+    {
+      "ms": 77988,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 79504,
+      "event": "alloc",
+      "peer": "peer13",
+      "macid": 9,
+      "live": 1
+    },
+    {
+      "ms": 79861,
+      "event": "alloc",
+      "peer": "peer14",
+      "macid": 10,
+      "live": 2
+    },
+    {
+      "ms": 81269,
+      "event": "pong"
+    },
+    {
+      "ms": 83429,
+      "event": "phase",
+      "value": "restart7 done"
+    },
+    {
+      "ms": 83429,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 85788,
+      "event": "phase",
+      "value": "restart8"
+    },
+    {
+      "ms": 85789,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 87342,
+      "event": "alloc",
+      "peer": "peer15",
+      "macid": 11,
+      "live": 3
+    },
+    {
+      "ms": 87892,
+      "event": "alloc",
+      "peer": "peer16",
+      "macid": 12,
+      "live": 4
+    },
+    {
+      "ms": 89134,
+      "event": "pong"
+    },
+    {
+      "ms": 91329,
+      "event": "phase",
+      "value": "restart8 done"
+    },
+    {
+      "ms": 91329,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 93684,
+      "event": "phase",
+      "value": "restart9"
+    },
+    {
+      "ms": 93684,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 95232,
+      "event": "alloc",
+      "peer": "peer17",
+      "macid": 13,
+      "live": 5
+    },
+    {
+      "ms": 95598,
+      "event": "alloc",
+      "peer": "peer18",
+      "macid": 14,
+      "live": 6
+    },
+    {
+      "ms": 96302,
+      "event": "free",
+      "peer": "peer13",
+      "lifetime_ms": 16798,
+      "live": 5
+    },
+    {
+      "ms": 96983,
+      "event": "pong"
+    },
+    {
+      "ms": 99089,
+      "event": "phase",
+      "value": "restart9 done"
+    },
+    {
+      "ms": 99089,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 101515,
+      "event": "phase",
+      "value": "restart10"
+    },
+    {
+      "ms": 101516,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 103225,
+      "event": "alloc",
+      "peer": "peer19",
+      "macid": 9,
+      "live": 6
+    },
+    {
+      "ms": 103836,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 103836,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 103836,
+      "event": "missing_peer"
+    },
+    {
+      "ms": 103836,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 103836,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 104201,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 104201,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 104276,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 104276,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 104661,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 104661,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 104788,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 104788,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 105309,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 105309,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 105708,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 105708,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 105841,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 105841,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 106245,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 106245,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 106365,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 106365,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 106761,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 106761,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 106899,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 106899,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 107417,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 107417,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 107807,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 107807,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 107934,
+      "event": "pool_full",
+      "live": 6
+    },
+    {
+      "ms": 107934,
+      "event": "free",
+      "peer": "failed-allocation",
+      "lifetime_ms": null,
+      "live": 6
+    },
+    {
+      "ms": 108299,
+      "event": "free",
+      "peer": "peer14",
+      "lifetime_ms": 28438,
+      "live": 5
+    },
+    {
+      "ms": 108299,
+      "event": "free",
+      "peer": "peer15",
+      "lifetime_ms": 20957,
+      "live": 4
+    },
+    {
+      "ms": 108299,
+      "event": "free",
+      "peer": "peer16",
+      "lifetime_ms": 20407,
+      "live": 3
+    },
+    {
+      "ms": 108299,
+      "event": "free",
+      "peer": "peer17",
+      "lifetime_ms": 13067,
+      "live": 2
+    },
+    {
+      "ms": 108330,
+      "event": "alloc",
+      "peer": "peer20",
+      "macid": 10,
+      "live": 3
+    },
+    {
+      "ms": 120301,
+      "event": "free",
+      "peer": "peer18",
+      "lifetime_ms": 24703,
+      "live": 2
+    },
+    {
+      "ms": 120301,
+      "event": "free",
+      "peer": "peer19",
+      "lifetime_ms": 17076,
+      "live": 1
+    },
+    {
+      "ms": 132298,
+      "event": "free",
+      "peer": "peer20",
+      "lifetime_ms": 23968,
+      "live": 0
+    },
+    {
+      "ms": 133901,
+      "event": "phase",
+      "value": "restart10 done"
+    },
+    {
+      "ms": 133901,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 136226,
+      "event": "phase",
+      "value": "restart11"
+    },
+    {
+      "ms": 136226,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 137825,
+      "event": "alloc",
+      "peer": "peer21",
+      "macid": 9,
+      "live": 1
+    },
+    {
+      "ms": 138745,
+      "event": "alloc",
+      "peer": "peer22",
+      "macid": 10,
+      "live": 2
+    },
+    {
+      "ms": 139993,
+      "event": "pong"
+    },
+    {
+      "ms": 141570,
+      "event": "phase",
+      "value": "restart11 done"
+    },
+    {
+      "ms": 141570,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 143885,
+      "event": "phase",
+      "value": "restart12"
+    },
+    {
+      "ms": 143885,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 145477,
+      "event": "alloc",
+      "peer": "peer23",
+      "macid": 11,
+      "live": 3
+    },
+    {
+      "ms": 145788,
+      "event": "alloc",
+      "peer": "peer24",
+      "macid": 12,
+      "live": 4
+    },
+    {
+      "ms": 146808,
+      "event": "pong"
+    },
+    {
+      "ms": 149321,
+      "event": "phase",
+      "value": "restart12 done"
+    },
+    {
+      "ms": 149321,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 151757,
+      "event": "phase",
+      "value": "stress40"
+    },
+    {
+      "ms": 151757,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 153422,
+      "event": "alloc",
+      "peer": "peer25",
+      "macid": 13,
+      "live": 5
+    },
+    {
+      "ms": 153950,
+      "event": "alloc",
+      "peer": "peer26",
+      "macid": 14,
+      "live": 6
+    },
+    {
+      "ms": 153968,
+      "event": "malloc_failed"
+    },
+    {
+      "ms": 158045,
+      "event": "boot",
+      "previous_live": 6
+    },
+    {
+      "ms": 184431,
+      "event": "alloc",
+      "peer": "peer27",
+      "macid": 9,
+      "live": 1
+    },
+    {
+      "ms": 185096,
+      "event": "alloc",
+      "peer": "peer28",
+      "macid": 10,
+      "live": 2
+    },
+    {
+      "ms": 187135,
+      "event": "pong"
+    },
+    {
+      "ms": 187996,
+      "event": "pong"
+    },
+    {
+      "ms": 188525,
+      "event": "pong"
+    },
+    {
+      "ms": 189067,
+      "event": "pong"
+    },
+    {
+      "ms": 190092,
+      "event": "pong"
+    },
+    {
+      "ms": 190621,
+      "event": "pong"
+    },
+    {
+      "ms": 191268,
+      "event": "pong"
+    },
+    {
+      "ms": 192317,
+      "event": "pong"
+    },
+    {
+      "ms": 193393,
+      "event": "pong"
+    },
+    {
+      "ms": 194940,
+      "event": "pong"
+    },
+    {
+      "ms": 195463,
+      "event": "pong"
+    },
+    {
+      "ms": 195989,
+      "event": "pong"
+    },
+    {
+      "ms": 197025,
+      "event": "pong"
+    },
+    {
+      "ms": 198092,
+      "event": "pong"
+    },
+    {
+      "ms": 198612,
+      "event": "pong"
+    },
+    {
+      "ms": 199651,
+      "event": "pong"
+    },
+    {
+      "ms": 200744,
+      "event": "pong"
+    },
+    {
+      "ms": 201623,
+      "event": "pong"
+    },
+    {
+      "ms": 202150,
+      "event": "pong"
+    },
+    {
+      "ms": 202838,
+      "event": "pong"
+    },
+    {
+      "ms": 204385,
+      "event": "pong"
+    },
+    {
+      "ms": 204899,
+      "event": "pong"
+    },
+    {
+      "ms": 206131,
+      "event": "free",
+      "peer": "peer27",
+      "lifetime_ms": 21700,
+      "live": 1
+    },
+    {
+      "ms": 206465,
+      "event": "pong"
+    },
+    {
+      "ms": 207530,
+      "event": "pong"
+    },
+    {
+      "ms": 208568,
+      "event": "pong"
+    },
+    {
+      "ms": 209613,
+      "event": "pong"
+    },
+    {
+      "ms": 210660,
+      "event": "pong"
+    },
+    {
+      "ms": 211751,
+      "event": "pong"
+    },
+    {
+      "ms": 212645,
+      "event": "pong"
+    },
+    {
+      "ms": 213169,
+      "event": "pong"
+    },
+    {
+      "ms": 214329,
+      "event": "pong"
+    },
+    {
+      "ms": 215376,
+      "event": "pong"
+    },
+    {
+      "ms": 216428,
+      "event": "pong"
+    },
+    {
+      "ms": 217474,
+      "event": "pong"
+    },
+    {
+      "ms": 218538,
+      "event": "pong"
+    },
+    {
+      "ms": 219580,
+      "event": "pong"
+    },
+    {
+      "ms": 220124,
+      "event": "pong"
+    },
+    {
+      "ms": 220629,
+      "event": "pong"
+    },
+    {
+      "ms": 221159,
+      "event": "pong"
+    },
+    {
+      "ms": 224779,
+      "event": "phase",
+      "value": "stress40 done"
+    },
+    {
+      "ms": 224779,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 227184,
+      "event": "phase",
+      "value": "throughput10"
+    },
+    {
+      "ms": 227184,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 228862,
+      "event": "alloc",
+      "peer": "peer29",
+      "macid": 9,
+      "live": 2
+    },
+    {
+      "ms": 229239,
+      "event": "alloc",
+      "peer": "peer30",
+      "macid": 11,
+      "live": 3
+    },
+    {
+      "ms": 242143,
+      "event": "free",
+      "peer": "peer28",
+      "lifetime_ms": 57047,
+      "live": 2
+    },
+    {
+      "ms": 242143,
+      "event": "free",
+      "peer": "peer29",
+      "lifetime_ms": 13281,
+      "live": 1
+    },
+    {
+      "ms": 250865,
+      "event": "phase",
+      "value": "throughput10 done"
+    },
+    {
+      "ms": 250866,
+      "event": "command",
+      "value": "nan status"
+    }
+  ],
+  "live_at_end_inferred": 1,
+  "clean": false
+}

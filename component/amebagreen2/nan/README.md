@@ -22,6 +22,10 @@ make -C project/amebagreen2 NAN=ON
 make -C project/amebagreen2 NAN=ON NAN_HEAP_CHECKS=ON
 # Optional bounded TCP metadata/timing trace, printed after each test phase:
 make -C project/amebagreen2 NAN=ON NAN_NET_DIAG=ON
+# Optional NP allocation ownership snapshots when the peer MACID pool is empty:
+make -C project/amebagreen2 NAN_BLE_OOB=ON NAN_NP_HEAP_TRACE=ON
+# Experimental BLE-assisted NAN PIN bootstrap (implies NAN=ON NIMBLE=ON):
+make -C project/amebagreen2 NAN_BLE_OOB=ON
 # Build the ordinary STA profile separately:
 make -C project/amebagreen2 NAN=OFF BUILD="$PWD/build/amebagreen2-normal"
 ```
@@ -30,6 +34,292 @@ Artifacts are `build/amebagreen2/firmware.bin` (boot + OTA1), `Image_All.bin`
 (4 MiB factory image), and the per-core AXF/map files. Use `firmware.bin` for
 updates that retain pairing and calibration. `NAN=OFF` remains the default.
 The ASDK 12.3.1 compiler and normal project dependencies are required.
+
+### BLE-assisted pairing experiment
+
+`NAN_BLE_OOB=ON` runs NimBLE and the Green2 controller alongside NAN, entirely
+on FreeRTOS. It replaces the fixed development PIN with a random six-digit PIN
+requested over encrypted BLE GATT. The window lasts 300 seconds, is consumed
+after successful NAN setup, and is invalidated on NAN stop/restart. Existing
+NIK/NPK records and `/nan-pairing` are retained; pair verification does not
+require another BLE exchange. Both Auth1 and Auth3 enforce the active window,
+and Auth3 must belong to the same PIN generation as Auth1.
+
+This is **BLE delivery of the NAN PIN**, not native iOS key import or automatic
+PIN entry. [Apple's Accessory Design Guidelines](https://developer.apple.com/accessories/Accessory-Design-Guidelines.pdf)
+(2026-10-30, §55.4) specify six-digit display PIN bootstrapping for a publisher.
+The installed iOS 26.2 SDK exposes no API to import an OOB NAN key or supply a
+PIN to AccessorySetupKit. Flash Studio therefore reads the PIN using
+CoreBluetooth, displays it, disconnects BLE, and opens the normal system NAN
+picker. The person still selects Green2 and enters that PIN. The native NAN
+bootstrap method remains PIN display (`1 << 1`); do not claim a BLE bootstrap
+method was negotiated on the NAN wire.
+
+BLE advertises service `7D2F8A10-6F4B-4C9E-A835-91D04B72E601` as
+`Green2 NAN BLE`. Characteristic `7D2F8A11-6F4B-4C9E-A835-91D04B72E601`
+requires encrypted reads/writes and a 16-byte key. Legacy BLE pairing is disabled;
+LE Secure Connections uses Just Works because this board has no display/input.
+That provides encryption but no BLE MITM authentication. This experiment must
+not be described as authenticated OOB provisioning for a production device.
+
+Write one byte `01`, then read until the state is ready. Reads never rotate the
+PIN; another request during an active window returns the same credential.
+The 20-byte `GNO1` value is bounded to fit even a default ATT MTU:
+
+| Bytes | Meaning |
+| --- | --- |
+| 0–3 | ASCII `GNO1` |
+| 4 | 0 closed, 1 ready, 2 pending, 3 failed |
+| 5–6 | Remaining seconds, little endian; zero unless ready |
+| 7–12 | Six ASCII PIN digits; zero unless ready |
+| 13–18 | Board NAN data-interface address, for display only |
+| 19 | Reserved zero |
+
+The NAN task alone installs the vendor password; the BLE callback queues that
+request and reads a short protected snapshot. PIN generation uses TRNG with
+rejection sampling. No PIN is put in advertisements or diagnostic messages.
+NimBLE mesh and BLE throughput services are omitted in this profile, with
+smaller GATT/ACL pools. Its TCP TX/RX streams use 24/16 configured MSSes and
+windows 24/16. With NimBLE resident, the NAN-only 40/24 streams failed their
+first TX allocation despite 69,248 total free heap bytes; the smaller streams
+leave room for contiguous allocation and transient traffic. The regular BLE
+and NAN-only profiles keep their defaults.
+Disable this experiment with `NAN_BLE_OOB=OFF` when selecting another profile.
+
+Native ASan/UBSan tests cover packet encoding, expiry across tick wrap, entropy
+and vendor-command failures, real PASN/SAE setup using the BLE PIN despite an
+empty NP password, expired/replaced Auth3 rejection, and cached pair verification.
+
+The first hardware pairing exposed an existing cache ambiguity: iOS reused
+service instance `1`, which also appeared in older NIK records. NPK binding now
+requires the local responder role, service instance, and a hash of the password
+used in the completed SAE exchange. Two matching credentials remain an error;
+ordinary cache refreshes do not require a globally unique instance. The AP also
+updates the NP peer's password before the BLE-assisted SAE exchange. The new
+NIK/NPK is committed atomically before clearing the pending NPK; a file-write
+failure retains it for retry. Native tests reproduce duplicate instances,
+ambiguous credentials, failed persistence, and successful later verification.
+
+On 2026-11-17 the iPhone confirmed pairing with the BLE-delivered PIN, and the
+board logged `authenticated pairing persisted slot=1` with cache result `0`.
+After the memory adjustment, five consecutive PING reconnections and two COM5
+RTS resets followed by saved-pair verification passed (the second reset used
+the final App build, after another encrypted BLE PIN read). A 10-second run per
+direction measured **11.582 Mbps upload / 19.733 Mbps download**, with matching
+payload totals (14,614,528 / 24,707,072 bytes), no protocol aborts and zero
+RX/TX queue drops. AP free heap sampled during both phases was 44,896 bytes;
+this is a sample, not a recorded minimum. New App installation, BLE credential
+decoding and the nine native ASan/UBSan tests passed. These are short bench
+checks, not a long-duration or multi-device qualification.
+
+Validated firmware: 1,010,112 bytes, SHA-256
+`8cc752d35816e92b009efb21f5dfd4ddd0d195292513b47a42bef0681a880f1f`,
+COM5 firmware readback PASS. Sanitized results are in
+[`tests/results/20261117`](tests/results/20261117/ble-oob-validation.json).
+Private UART captures remain outside source control; the vendor NAN diagnostics
+can contain pairing credentials even though the new BLE service does not log them.
+
+### AccessorySetupKit follow-up (2026-11-17)
+
+The iOS app now uses ASK for BLE selection as well as NAN pairing, in two
+explicit steps. Each descriptor discovers one transport; the BLE reader only
+connects to the system-selected peripheral and never scans independently.
+Previously authorized BLE devices are read directly, and existing NAN pairings
+remain usable. A fresh NAN setup still requires the person to enter the PIN.
+This is **not** a verified single-picker / single-ASAccessory integration:
+combined discovery produced separate BLE/NAN candidates, explicit migration did
+not produce a joint record, and adding NAN with `updateAuthorization` did not
+show a picker on the tested iPhone (iOS 27.2.1, SDK 26.2). Those experimental paths
+were removed from the app; the user confirmed removal of their extra BLE record.
+
+The Green2 controller can report a resolved BLE identity with a zero peer RPA.
+Saved-key encryption still works, but SC f5/f6 must use the actual over-the-air
+address for a new handshake. The BLE/NAN profile now wraps connection completion
+on the NimBLE host task, queries HCI LE Read Peer Resolvable Address only for a
+resolved identity with a missing RPA, validates the returned address format,
+and leaves all other event fields and existing RPAs unchanged. A failed query
+never substitutes an invented address. The repeat-pairing handler only replaces
+the connected peer's old bond with SC, 128-bit keys, bonding, and no authentication
+downgrade; it also rejects an unresolved missing address. NAN pairing storage is
+unaffected. No upstream NimBLE source or common profile is modified.
+
+The recovery branch and encrypted saved-bond PIN read were observed on hardware.
+The new native test covers both identity types, already supplied addresses,
+unsupported types, absent identities, HCI errors, and invalid returned RPAs;
+ASan/UBSan suite **10/10 PASS**. That ASK qualification image is **1,011,072 bytes**, SHA-256
+`c9aa1828f06b8a10c98cab3578ebe6c4f94c97d0788d1ce47c942bd7ce1a33a9`,
+COM5 byte-for-byte readback PASS. A complete new BLE→NAN setup and a forced
+fresh SC rebond were not repeated on this final image; do not generalize the
+saved-bond check into proof that every re-pairing failure is eliminated.
+
+Final-image saved-pair PING passed **5/5 after a COM5 RTS reset**. The first
+subsequent throughput attempt never reached TCP: the radio printed six
+`mac id all occupied` warnings and one missing-peer warning, and the test
+watchdog expired after 100 seconds. That image contains **no fix for the NAN
+peer/MACID exhaustion**; the failure was not counted as a pass. After another
+module reset, 10 seconds per direction passed at **11.956 Mbps upload /
+19.007 Mbps download**, matching payload counts (15,073,280 / 23,789,568 bytes),
+zero RX/TX queue drops, and no protocol abort. AP free heap samples were 44,896
+bytes during traffic and 104,824 afterward. This does not establish long-run
+reconnection reliability. Sanitized successful and failed checks are preserved in
+[`accessorysetupkit-validation.json`](tests/results/20261117/accessorysetupkit-validation.json).
+
+### MACID pressure follow-up — 2026-11-17
+
+The original six-slot image reproduced the problem with saved pairing and
+repeated App launches. Of 12 launches, 10 connected and launches 6/10 timed
+out after 30 seconds. UART recorded 28 `mac id all occupied` warnings in two
+bursts and two missing-peer warnings. Old slots were freed, and launches 7/11
+connected without a module reset. This demonstrates transient capacity
+pressure rather than a permanently leaked slot in those failures.
+
+The subsequent 40-round test also exposed NP allocation failure at 9,648 free
+bytes, followed by an IWDG reset. Its aggregate 39/40 result spans that reset
+and is **not** a clean continuity pass. The following throughput success also
+ran after this automatic reset. Both failures are retained in
+[`macid-baseline-churn.json`](tests/results/20261117/macid-baseline-churn.json).
+A separate short 5-round/throughput baseline passed without these warnings:
+[`macid-baseline1.json`](tests/results/20261117/macid-baseline1.json).
+
+The pinned native driver checks peer activity every 12 seconds (six 2-second
+dynamic checks), then clears its activity counters for the next window.
+The candidate increases `nan_max_peer_num` from 6 to 12 and NP SRAM from
+160 to 184 KiB, leaving the native activity checks, authentication and teardown
+unchanged. Both cores share the new SRAM boundary. A read-only NP monitor now
+prints `Available Heap Size` and sampled peer MACID usage alongside the AP
+heap logs. It allocates no task or timer; samples are not a true low-water mark.
+
+The capacity-only comparison image is **1,011,296 bytes**, SHA-256
+`e654ff5e20b2d95e01e2a0ec7e98ba1cc8ecbd241ba7fae049be891e78aa8f25`.
+COM5 firmware-only write/readback passed, saved pairs were preserved, and
+startup reports NP free **60,748 bytes**, MACID **0/12**. Native ASan/UBSan
+tests pass **10/10**, image/OTA/eFuse unit checks **12/12**, and the separate
+NAN-only profile builds successfully (not hardware-qualified here).
+
+The matching hardware comparison now passes **12/12 App restarts** and
+**40/40 consecutive reconnects**, followed without a reset by 10 seconds per
+direction at **11.042 Mbps upload / 18.642 Mbps download**. Payload byte counts
+agree and software queue drops are zero. There are no pool-full/missing-peer,
+station-add, allocation-failure or protocol-abort warnings, and no unintended
+reset. The radio used MACID 15, exceeding the old 9–14 range. Sampled occupancy
+reached **7/12**; NP/AP sampled free-byte minima were **36,008 / 19,200**.
+These are samples, not allocator low-water marks. Report:
+[`macid-capacity12-sram184-churn.json`](tests/results/20261117/macid-capacity12-sram184-churn.json).
+Extended regression reached 165 successful PINGs without a reset, but then
+exposed **a separate NP heap leak**: with MACID usage back at zero, free memory
+had fallen from 60,748 to 47,452 bytes. Thus capacity expansion alone is not
+the complete fix. The interim reports remain available in
+[`macid-capacity-validation.json`](tests/results/20261117/macid-capacity-validation.json).
+
+The native peer destructor omitted the service/NDI queue mutex deletes. The
+final repair redirects its last storage-free call to `nan_peer_release.c`,
+after native timer, station, key and queue cleanup. It releases those two
+mutexes with the vendor API and then frees the peer; the third mutex remains
+owned by native cleanup. The hash-pinned derived object changes one relocation,
+with all instructions and other relocations preserved. This also covers failed
+MACID-allocation rollback and calls within the same vendor object.
+
+The mutex-fix image is **1,011,360 bytes**, SHA-256
+`bff3a6a08fdf83fe456c9bdf40bc01ab4b319a48ccc820cf8e4877950f5791b9`.
+COM5 write/readback and **12/12 native checks** pass (11 C test cases under
+ASan/UBSan plus the Python binary-patch boundary check). The NAN-only build
+also passes; all eight original vendor archive hashes remain unchanged.
+
+Final-image hardware regression passed **24/24 App restarts** in three groups,
+**100/100 consecutive reconnects**, and **1/1 reconnect after an idle interval**:
+125/125 PINGs following one initial reset, with no later module reset. Median
+ready time was 2.245 seconds for App restarts and 0.992 seconds for the 100-round
+test. There were no MACID-full, missing-peer, station-add, malloc, mutex-release
+or protocol-abort warnings. Thirty seconds per direction passed at
+**12.248 Mbps upload / 18.694 Mbps download**, with matching payload totals
+46,071,808 / 70,123,520 bytes and zero software RX/TX queue drops. Sampled NP/AP
+free-byte minima were **39,248 / 19,200**, and sampled MACID occupancy peaked
+at **7/12**.
+
+After terminating the test App to release its remaining NAN session, an
+additional 65-second idle capture recorded **0/12 slots and 58,068 free NP
+bytes**, identically across eight samples. Earlier zero-slot snapshots were
+58,628 and 58,404 bytes: the remaining **560-byte baseline difference is not
+explained by this test**, so this is not a claim that every possible leak is
+eliminated. An extra App launch after this idle capture was refused because
+iOS had locked; it never attempted NAN and is excluded from the 125 rounds.
+Saved pairing, rather than a fresh BLE/NAN setup, was exercised. Finite runs
+on one phone do not qualify larger peer populations or indefinite operation.
+Full final and interim evidence:
+[`macid-mutex-fix-validation.json`](tests/results/20261117/macid-mutex-fix-validation.json).
+
+### NDC reference cleanup follow-up — 2026-11-17
+
+Allocation tracing located the remaining idle decline in
+`rtw_nan_ndc_info_add_new`: selected NAN Data Cluster (NDC) records survived
+peer aging. Three completed groups of eight App restarts produced:
+
+| Completed App restarts | Orphaned 20-byte NDC records | NP free bytes (trace image) |
+| --- | --- | --- |
+| 8 | 8 | 51,332 |
+| 16 | 16 | 51,108 |
+| 24 | 24 | 50,888 |
+
+The allocation differences between those idle snapshots consisted entirely
+of eight new NDC records; mutex/semaphore/timer counts were unchanged. Eight
+20-byte payloads plus the additional TLSF allocated/free-block headers explain
+the 224-byte second-group decline. The next group lost 220 bytes because its
+free-block count grew by seven rather than eight. This identifies an ownership
+leak, rather than assuming a fixed per-record overhead from heap totals alone.
+The [baseline trace](tests/results/20261117/ndc-leak-before-trace.json) retains
+all allocation snapshots. Its later 50-round stress segment stopped advancing
+after 27 successful rounds, and the next App launch was rejected by iOS lock
+state; that segment is incomplete and is not a 50/50 pass.
+
+Two ownership errors contribute. Peer aging calls `rtw_nan_ndp_data_free`
+without first releasing its NDC; data-free clears the ID and selected bit.
+Adding the missing cleanup alone (`c5ae562d...`) still left **7 then 15** NDC
+nodes after two groups of eight restarts. That run was deliberately stopped
+after 18 successful connections because heap recovery had failed. A separate
+four-restart lifecycle trace showed repeated schedule acceptance raising a
+single NDC's count from **1 to 2 to 3**, followed by only one decrement at
+normal NDP termination.
+The rejected interim run and its follow-up trace are retained in
+[`ndc-destructor-only-rejected.json`](tests/results/20261117/ndc-destructor-only-rejected.json)
+and [`ndc-reference-lifecycle.json`](tests/results/20261117/ndc-reference-lifecycle.json).
+
+`nan_ndc_reference.c` therefore records one held NDC reference per peer. It
+skips duplicate acceptance, retains separate references for peers sharing a
+cluster, transfers ownership when a peer changes ID, and releases the recorded
+ID even if negotiation has already cleared the live ID/selected bit.
+`green2_nan_peer_ndp_free` also invokes that cleanup on peer aging. Actual NDC
+list/refcount operations still use the native APIs. A fixed 15-entry owner
+table and one retained mutex avoid per-peer allocations. The pinned peer-object
+patch redirects two cleanup relocations; all native instruction bytes remain
+unchanged. See [PROVENANCE.md](PROVENANCE.md) for the private ABI checks.
+On NAN stop, native scheduler teardown frees the whole NDC list and deletes
+its mutex before freeing peers. A third wrapper relinquishes the owner table
+to that bulk cleanup, so subsequent peer teardown cannot access the deleted
+native mutex. The owner mutex remains available for the next NAN start.
+
+ASan/UBSan and binary-patch checks pass **13/13**, including shared clusters,
+duplicate acceptance, changed/cleared IDs, allocation failures, table capacity
+and 1,000 peer lifetimes, plus stop/start with live owners. BLE+NAN and NAN-only
+builds pass. The current ownership diagnostic (1,013,024 bytes, SHA-256
+`4b270b8e368a70aebdc147ce3deccd880e3f5c71b88fac8241f82e4c6e594bab`)
+has passed COM5 write/readback and three idle NAN stop/start cycles without
+faults, unexpected reboots or mutex-release warnings. **Phone reconnect/idle
+heap regression is still pending:** iOS rejected launch because the phone was
+locked. This is not evidence of repaired heap recovery under reconnect load.
+The non-trace candidate (1,011,840 bytes, SHA-256
+`da166fa73327ffb367b19a43c6dd11fceb4aade50f79ba6517ada7d596b33765`)
+is compiled but has not been flashed or qualified. The earlier 125/125 result
+belongs to the preceding mutex fix and does not qualify this ownership repair.
+Current scope and pending checks:
+[`ndc-ownership-validation.json`](tests/results/20261117/ndc-ownership-validation.json).
+
+`NAN_NP_HEAP_TRACE=ON` enables the bounded NP allocation diagnostic used here.
+It reserves 512 live-allocation records and 96 summary groups (about 7.1 KiB
+of static NP RAM), records call sites and allocation sizes, and emits snapshots
+only with zero peer MACIDs. It logs no allocation payloads. `lost` and `omitted`
+must be zero and `tracked` must match the allocator's node count before using
+a snapshot to account for all memory. The option is off by default; ordinary
+builds contain neither its tables nor allocation hooks.
 
 On the COM5 board, DTR and RTS control BOOT/RESET on the same UART:
 
@@ -87,8 +377,9 @@ the App's matching receive counter establishes their delivery. These are
 application TCP rates, not Wi-Fi PHY rates.
 
 `nan_tcp_protocol.c` streams through a 4 KiB work buffer without allocating
-whole frames. The listener reserves 40/24 configured MSSes for TX/RX streams
-and 32/16 for their windows, for this service only. The NAN profile has 40 AP
+whole frames. The NAN-only listener reserves 40/24 configured MSSes for TX/RX
+streams and 32/16 for their windows, for this service only. `NAN_BLE_OOB=ON`
+uses streams 24/16 and windows 24/16 to fit alongside NimBLE. The NAN profile has 40 AP
 IPC buffers, 32 NP buffers, RX/TX aggregation limits of 16/32, 96 TCP segment
 records and 32 network buffer descriptors. Other low-memory profiles retain
 their defaults. Stream lengths and windows use the configured MSS of 1460;
@@ -107,7 +398,7 @@ the listener available. Timed payload processing does not log each packet.
   concurrent infrastructure Wi-Fi, multiple active peers, initiator mode and
   video streaming are outside this implementation. Bulk TCP measurement is
   supported; radio scheduling and maximum-throughput tuning remain separate.
-- NP SRAM grows from 96 to 160 KiB in both linker layouts. Both cores must use
+- NP SRAM grows from 96 to 184 KiB in both linker layouts. Both cores must use
   the same `NAN` option. Matching radio archives, task sizes and headers are
   selected only for this profile.
 - NAN discovery uses both 2.4 and 5 GHz, matching the reference's dual-band

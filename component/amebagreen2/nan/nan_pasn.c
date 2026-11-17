@@ -18,6 +18,9 @@
 #define PAIRING_SETUP 1
 #define PAIRING_VERIFICATION 2
 #include "nan_pasn.h"
+#ifdef AT_NAN_BLE_OOB
+#include "nan_oob.h"
+#endif
 extern int green2_nan_mgmt(const unsigned char *, size_t);
 extern int green2_nan_vendor(unsigned short, const void *, size_t);
 extern int green2_nan_store(void *, size_t, int);
@@ -71,14 +74,19 @@ struct bridge {
 	size_t auth1_len, auth2_len;
 	struct os_reltime auth1_started;
 	bool keys_installed;
+    u8 setup_password_hash[32];
+#ifdef AT_NAN_BLE_OOB
+    uint32_t oob_generation;
+#endif
 };
 
 static struct bridge state;
-static struct {
+struct pairing_storage {
     u8 magic[4];
     struct nik_cache_file nik;
     struct { u8 nik[16], npk[32]; } keys[8];
-} persistent;
+};
+static struct pairing_storage persistent;
 static u8 pending_npk[32];
 static bool pending_npk_valid;
 static int store_npk(struct bridge *b)
@@ -291,6 +299,7 @@ static void reset_session(struct bridge *b)
 	b->auth2_sent = 0;
 	b->auth1_len = b->auth2_len = 0;
 	b->keys_installed = false;
+    forced_memzero(b->setup_password_hash, sizeof(b->setup_password_hash));
 	memset(b->auth1_frame, 0, sizeof(b->auth1_frame));
 	memset(b->auth2_frame, 0, sizeof(b->auth2_frame));
 	b->pairing_type = 0;
@@ -454,7 +463,10 @@ static int on_start(struct bridge *b, const void *data, size_t len)
 	if (!data || len != sizeof(e)) return -1;
     memcpy(&e, data, sizeof(e));
 	if (e.deinit || e.role != 2 || e.auth_method != 1 ||
-	    !e.pass_len || e.pass_len > PASS_MAX ||
+#ifndef AT_NAN_BLE_OOB
+        !e.pass_len ||
+#endif
+	    e.pass_len > PASS_MAX ||
 	    e.frame_len < offsetof(struct ieee80211_mgmt, u.auth.variable) ||
 	    e.frame_len > AUTH_MAX || e.attrs_len > ATTR_MAX)
 		goto done;
@@ -468,7 +480,12 @@ static int on_start(struct bridge *b, const void *data, size_t len)
 	if (ret < 0) goto done;
 	if (ret > 0)
 		fprintf(stderr, "Corrected stale verification event and Auth2 attributes to SAE setup\n");
-	if (auth1_is_retry(b, &e)) {
+	if (auth1_is_retry(b, &e)
+#ifdef AT_NAN_BLE_OOB
+        && (b->keys_installed || b->pairing_type != PAIRING_SETUP ||
+            green2_nan_oob_valid(b->oob_generation))
+#endif
+    ) {
 		printf("Auth1 retransmission: retaining PASN handshake%s\n",
 		       b->keys_installed ? " (already completed)" : ", resending Auth2");
 		ret = b->keys_installed ? 0 :
@@ -485,7 +502,28 @@ static int on_start(struct bridge *b, const void *data, size_t len)
 	memcpy(b->peer, e.peer, 6);
 	memcpy(b->bssid, e.bssid, 6);
 	b->pairing_type = e.pairing_type;
-	memcpy(password, e.pass, e.pass_len);
+#ifdef AT_NAN_BLE_OOB
+    if (e.pairing_type == PAIRING_SETUP) {
+        if (!green2_nan_oob_password(password, &b->oob_generation)) {
+            printf("[NAN-BLE] setup rejected: no active BLE pairing window\n");
+            goto done;
+        }
+        e.pass_len = 6;
+        /* A rediscovered peer may have inherited its previous password from
+         * the NP cache. Update that peer too, so its authenticated NIK record
+         * carries the same credential used by the AP's SAE calculation. */
+        struct { u8 peer[6]; char pass[17]; u8 length; } pw = {0};
+        _Static_assert(sizeof(pw) == 24, "vendor set-password ABI");
+        memcpy(pw.peer, b->peer, 6); memcpy(pw.pass, password, 6); pw.length = 6;
+        int pw_rc = green2_nan_vendor(0x1907, &pw, sizeof(pw));
+        forced_memzero(&pw, sizeof(pw));
+        if (pw_rc) goto done;
+    } else {
+        memcpy(password, e.pass, e.pass_len);
+    }
+#else
+    memcpy(password, e.pass, e.pass_len);
+#endif
 	b->pasn = pasn_data_init();
 	if (!b->pasn) goto done;
 	pasn_set_responder_pmksa(b->pasn, b->pmksa);
@@ -502,6 +540,9 @@ static int on_start(struct bridge *b, const void *data, size_t len)
 	pasn_set_wpa_key_mgmt(b->pasn, WPA_KEY_MGMT_SAE);
 	pasn_enable_kdk_derivation(b->pasn);
 	if (e.pairing_type == PAIRING_SETUP) {
+        const u8 *parts[] = { &e.pass_len, (const u8 *)password };
+        size_t lengths[] = { 1, e.pass_len };
+        if (sha256_vector(2, parts, lengths, b->setup_password_hash)) goto done;
 		b->pt = sae_derive_pt(b->pasn->pasn_groups,
 				      (const u8 *) NAN_PASN_SSID,
 				      strlen(NAN_PASN_SSID),
@@ -564,6 +605,14 @@ static int on_rx(struct bridge *b, const void *data, size_t len)
 		memset(&e, 0, sizeof(e));
 		return 0;
 	}
+#ifdef AT_NAN_BLE_OOB
+    if (b->pairing_type == PAIRING_SETUP && !green2_nan_oob_valid(b->oob_generation)) {
+        printf("[NAN-BLE] Auth3 rejected: pairing window expired or replaced\n");
+        forced_memzero(&e, sizeof(e));
+        reset_session(b);
+        return -1;
+    }
+#endif
 	ret = handle_auth_pasn_3(b->pasn, b->own, b->peer, auth, e.frame_len);
     green2_nan_heap_check("Auth3 crypto complete");
 	printf("Auth3 verification %s: peer=" MACSTR ", TK=%zu, KDK=%zu\n",
@@ -617,25 +666,56 @@ int green2_pasn_cache_update(const void *data, size_t len, unsigned char peer_in
     struct nik_cache_file next;
     if (!data || len != sizeof(next)) return -1;
     memcpy(&next, data, len);
-    if (next.version != 1 || memcmp(next.own_nik, persistent.nik.own_nik, 16)) return -1;
+    if (next.version != 1 || memcmp(next.own_nik, persistent.nik.own_nik, 16)) {
+        printf("[NAN] cache rejected: version=%u own_identity_changed=%u\n", next.version,
+               !!memcmp(next.own_nik, persistent.nik.own_nik, 16));
+        return -1;
+    }
     int index = -1;
     for (unsigned i = 0; i < 8; ++i) {
-        if (next.entries[i].pass_len > PASS_MAX) return -1;
+        if (next.entries[i].pass_len > PASS_MAX) {
+            printf("[NAN] cache rejected: invalid password length entry=%u\n", i);
+            return -1;
+        }
         /* Lifetime zero is unlimited, as used by iOS. auth/role mark occupancy. */
-        if (next.entries[i].auth == 1 && (next.entries[i].role == 1 || next.entries[i].role == 2) &&
+        if (pending_npk_valid && state.keys_installed &&
+            next.entries[i].auth == 1 && next.entries[i].role == 2 &&
             next.entries[i].peer_inst == peer_instance) {
-            if (index >= 0) return -1;
+            /* Service instance IDs are peer-local and reused on re-pairing.
+             * Only bind the new NPK to a driver-authenticated NIK cache entry
+             * carrying the password from this successful SAE setup. Never
+             * choose the first record solely by instance number. */
+            u8 digest[32];
+            const u8 *parts[] = { &next.entries[i].pass_len, next.entries[i].pass };
+            size_t lengths[] = { 1, next.entries[i].pass_len };
+            int match = !sha256_vector(2, parts, lengths, digest) &&
+                !os_memcmp_const(digest, state.setup_password_hash, sizeof(digest));
+            forced_memzero(digest, sizeof(digest));
+            if (!match) continue;
+            if (index >= 0) {
+                printf("[NAN] cache rejected: ambiguous authenticated credential instance=%u\n", peer_instance);
+                return -1;
+            }
             index = i;
         }
     }
-    if (pending_npk_valid && state.keys_installed && index >= 0) {
-        memcpy(persistent.keys[index].nik, next.entries[index].nik, 16);
-        memcpy(persistent.keys[index].npk, pending_npk, 32);
+    struct pairing_storage candidate = persistent;
+    if (index >= 0) {
+        memcpy(candidate.keys[index].nik, next.entries[index].nik, 16);
+        memcpy(candidate.keys[index].npk, pending_npk, 32);
+    }
+    memcpy(&candidate.nik, &next, len);
+    int rc = green2_nan_store(&candidate, sizeof(candidate), 1);
+    if (!rc) memcpy(&persistent, &candidate, sizeof(persistent));
+    forced_memzero(&candidate, sizeof(candidate));
+    forced_memzero(&next, sizeof(next));
+    if (!rc && index >= 0) {
         forced_memzero(pending_npk, sizeof(pending_npk));
         pending_npk_valid = false;
+        forced_memzero(state.setup_password_hash, sizeof(state.setup_password_hash));
+        printf("[NAN] authenticated pairing persisted slot=%d\n", index);
     }
-    memcpy(&persistent.nik, &next, len);
-    return green2_nan_store(&persistent, sizeof(persistent), 1);
+    return rc;
 }
 void green2_pasn_stop(void)
 {

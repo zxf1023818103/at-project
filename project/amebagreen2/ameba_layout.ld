@@ -58,7 +58,10 @@
 #endif
 
 #ifdef AT_ENABLE_NAN
-#define RAM_KM4NS_IMG2_SIZE          KBYTES(160)
+/* NAN peer identities overlap during native aging. Reserve radio-core SRAM
+ * for their station/key state as well as the increased peer MACID capacity.
+ * Both images include this layout, so the AP/NP boundary moves together. */
+#define RAM_KM4NS_IMG2_SIZE          KBYTES(184)
 #else
 #define RAM_KM4NS_IMG2_SIZE          KBYTES(96)
 #endif

@@ -79,6 +79,10 @@ target_compile_definitions(nimble_config PRIVATE
 # Our glue rides on the vendored tinycrypt/NimBLE headers — silence their warnings
 # (the AmebaD flag stack is -Wall -Wextra -Werror). -w (last) overrides -Werror.
 target_compile_options(nimble_config PRIVATE -w)
+if(AT_NAN_BLE_OOB)
+    # This application exposes a different GATT database from the sample app.
+    target_compile_definitions(nimble_config PUBLIC BLE_STORE_GATT_DATABASE_ID=0x474e4f31u)
+endif()
 
 # mcumgr SMP-over-BLE DFU (MCUMGR=ON): nimble_app.c::nimble_start() registers the SMP GATT
 # service + img/os groups under AT_PROJECT_MCUMGR.

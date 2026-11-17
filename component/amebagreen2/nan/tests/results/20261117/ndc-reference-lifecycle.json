@@ -1,0 +1,1046 @@
+{
+  "case": "ndc-lifecycle-test",
+  "firmware": {
+    "bytes": 1012768,
+    "sha256": "d904ea3ee4a0ef97a15b9b05e5120ba3e2b5089d75f24478d66e84ee449c9d5c"
+  },
+  "result": "confirmed duplicate native NDC reference acquisition; diagnostic, not a fix qualification",
+  "warnings": {
+    "macid_pool_full": 0,
+    "missing_peer": 0,
+    "station_add_failures": 0,
+    "malloc_failures": 0,
+    "hard_faults": 0,
+    "stack_overflows": 0,
+    "boots": 1,
+    "watchdog_boots": 0,
+    "protocol_aborts": 0,
+    "unreleased_mutex": 0
+  },
+  "phases": [
+    {
+      "phase": "block1_restart1",
+      "watchdog": false,
+      "seconds": 4.6,
+      "startedAt": "2026-11-17T09:42:06Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        3.460394041670952
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "block1_restart2",
+      "watchdog": false,
+      "seconds": 4.5,
+      "startedAt": "2026-11-17T09:42:15Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.0611947916913778
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "block1_restart3",
+      "watchdog": false,
+      "seconds": 4.5,
+      "startedAt": "2026-11-17T09:42:23Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.218156708346214
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "block1_restart4",
+      "watchdog": false,
+      "seconds": 5.1,
+      "startedAt": "2026-11-17T09:42:31Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.460276916681323
+      ],
+      "failed_rounds": []
+    }
+  ],
+  "reference_events": [
+    {
+      "operation": "add",
+      "ndc": "ndc1",
+      "selected": 1,
+      "before": 0,
+      "after": 1,
+      "caller": "rtw_nan_ndl_reply_accept_event+0x19a"
+    },
+    {
+      "operation": "add",
+      "ndc": "ndc1",
+      "selected": 1,
+      "before": 1,
+      "after": 2,
+      "caller": "rtw_nan_ndl_reply_accept_event+0x19a"
+    },
+    {
+      "operation": "add",
+      "ndc": "ndc1",
+      "selected": 1,
+      "before": 2,
+      "after": 3,
+      "caller": "rtw_nan_ndl_reply_accept_event+0x19a"
+    },
+    {
+      "operation": "del",
+      "ndc": "ndc1",
+      "selected": 1,
+      "before": 3,
+      "after": 2,
+      "caller": "rtw_nan_ndp_empty_event+0x2e"
+    },
+    {
+      "operation": "add",
+      "ndc": "ndc2",
+      "selected": 1,
+      "before": 0,
+      "after": 1,
+      "caller": "rtw_nan_ndl_reply_accept_event+0x19a"
+    },
+    {
+      "operation": "add",
+      "ndc": "ndc2",
+      "selected": 1,
+      "before": 1,
+      "after": 2,
+      "caller": "rtw_nan_ndl_reply_accept_event+0x19a"
+    },
+    {
+      "operation": "del",
+      "ndc": "ndc2",
+      "selected": 1,
+      "before": 2,
+      "after": 1,
+      "caller": "rtw_nan_ndp_empty_event+0x2e"
+    },
+    {
+      "operation": "del",
+      "ndc": "ndc3",
+      "selected": 0,
+      "before": 0,
+      "after": 0,
+      "caller": "green2_nan_peer_ndp_free+0xa"
+    },
+    {
+      "operation": "add",
+      "ndc": "ndc4",
+      "selected": 1,
+      "before": 0,
+      "after": 1,
+      "caller": "rtw_nan_ndl_reply_accept_event+0x19a"
+    },
+    {
+      "operation": "add",
+      "ndc": "ndc4",
+      "selected": 1,
+      "before": 1,
+      "after": 2,
+      "caller": "rtw_nan_ndl_reply_accept_event+0x19a"
+    },
+    {
+      "operation": "del",
+      "ndc": "ndc4",
+      "selected": 1,
+      "before": 2,
+      "after": 1,
+      "caller": "rtw_nan_ndp_empty_event+0x2e"
+    },
+    {
+      "operation": "add",
+      "ndc": "ndc5",
+      "selected": 1,
+      "before": 0,
+      "after": 1,
+      "caller": "rtw_nan_ndl_reply_accept_event+0x19a"
+    },
+    {
+      "operation": "add",
+      "ndc": "ndc5",
+      "selected": 1,
+      "before": 1,
+      "after": 2,
+      "caller": "rtw_nan_ndl_reply_accept_event+0x19a"
+    },
+    {
+      "operation": "del",
+      "ndc": "ndc5",
+      "selected": 1,
+      "before": 2,
+      "after": 1,
+      "caller": "rtw_nan_ndp_empty_event+0x2e"
+    },
+    {
+      "operation": "del",
+      "ndc": "ndc3",
+      "selected": 0,
+      "before": 0,
+      "after": 0,
+      "caller": "green2_nan_peer_ndp_free+0xa"
+    },
+    {
+      "operation": "del",
+      "ndc": "ndc3",
+      "selected": 0,
+      "before": 0,
+      "after": 0,
+      "caller": "green2_nan_peer_ndp_free+0xa"
+    },
+    {
+      "operation": "del",
+      "ndc": "ndc3",
+      "selected": 0,
+      "before": 0,
+      "after": 0,
+      "caller": "green2_nan_peer_ndp_free+0xa"
+    },
+    {
+      "operation": "del",
+      "ndc": "ndc3",
+      "selected": 0,
+      "before": 0,
+      "after": 0,
+      "caller": "green2_nan_peer_ndp_free+0xa"
+    },
+    {
+      "operation": "del",
+      "ndc": "ndc3",
+      "selected": 0,
+      "before": 0,
+      "after": 0,
+      "caller": "green2_nan_peer_ndp_free+0xa"
+    },
+    {
+      "operation": "del",
+      "ndc": "ndc3",
+      "selected": 0,
+      "before": 0,
+      "after": 0,
+      "caller": "green2_nan_peer_ndp_free+0xa"
+    },
+    {
+      "operation": "del",
+      "ndc": "ndc3",
+      "selected": 0,
+      "before": 0,
+      "after": 0,
+      "caller": "green2_nan_peer_ndp_free+0xa"
+    }
+  ],
+  "allocation_snapshots": [
+    {
+      "ms": 2232,
+      "phase": "preflight",
+      "groups": {
+        "pvPortMalloc+0x8 size=536": 1,
+        "pvPortMalloc+0x8 size=408": 7,
+        "pvPortMalloc+0x8 size=720": 1,
+        "pvPortMalloc+0x8 size=904": 1,
+        "whc_msg_q_init+0x3c size=1152": 1,
+        "0x133746 size=2048": 1,
+        "pvPortMalloc+0x8 size=44": 8,
+        "pvPortMalloc+0x8 size=4096": 1,
+        "0x13375a size=52224": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x102 size=2360": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x120 size=36": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x130 size=6612": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x140 size=1784": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x150 size=404": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x15e size=32": 1,
+        "rtw_mcc_start+0x494 size=68": 1,
+        "rtw_macid_mgt_init+0x28 size=84": 1,
+        "rtk_coex_init+0x34 size=280": 1,
+        "pvPortMalloc+0x8 size=84": 15,
+        "rtw_xmit_priv_init+0x26 size=240": 1,
+        "rtw_recv_init_priv+0x3e size=120": 1,
+        "halrf_dpk_info_init+0x12 size=12": 1,
+        "halrf_dpk_info_init+0x1c size=12": 1,
+        "halrf_dpk_info_init+0x26 size=12": 1,
+        "halrf_dpk_info_init+0x30 size=12": 1,
+        "halrf_dpk_info_init+0x3a size=12": 1,
+        "halrf_dpk_info_init+0x44 size=12": 1,
+        "halrf_dpk_info_init+0x4e size=12": 1,
+        "halrf_dpk_info_init+0x58 size=12": 1,
+        "halrf_dpk_info_init+0x88 size=128": 2,
+        "halrf_dpk_info_init+0x96 size=128": 2,
+        "wififw_ra_init+0x10 size=3696": 1,
+        "pvPortMalloc+0x8 size=2368": 1,
+        "pvPortMalloc+0x8 size=1400": 1,
+        "pvPortMalloc+0x8 size=576": 1,
+        "wifi_if3_drv_init+0xa size=952": 1,
+        "rtw_alloc_stainfo+0xaa size=1240": 1,
+        "_rtw_nan_mlme_priv_init+0x18 size=32": 1,
+        "_rtw_nan_mlme_priv_init+0x2c size=24": 1,
+        "_rtw_nan_mlme_priv_init+0x12a size=56": 1,
+        "wifi_hal_nan_faw_schdl_init+0x14 size=320": 1,
+        "rtw_enqueue_cmd+0x12 size=24": 1,
+        "rtw_nan_srvc_instance_alloc+0x20 size=96": 1,
+        "rtw_nan_srvc_instance_alloc+0x2a size=136": 1,
+        "rtw_nan_srvc_instance_alloc+0x4c size=104": 1,
+        "rtw_nan_srvc_instance_alloc+0x6e size=264": 1,
+        "rtw_nan_srvc_instance_alloc+0x78 size=264": 1
+      },
+      "heap": {
+        "free": 53452,
+        "used": 90944,
+        "allocated": 76,
+        "free_nodes": 77,
+        "tracked": 76,
+        "lost": 0,
+        "omitted": 0
+      },
+      "pools": {
+        "mutex": [
+          22,
+          14
+        ],
+        "sema": [
+          15,
+          0
+        ],
+        "timer": [
+          8,
+          6
+        ]
+      }
+    },
+    {
+      "ms": 12233,
+      "phase": "initial_idle",
+      "groups": {
+        "pvPortMalloc+0x8 size=536": 1,
+        "pvPortMalloc+0x8 size=408": 7,
+        "pvPortMalloc+0x8 size=720": 1,
+        "pvPortMalloc+0x8 size=904": 1,
+        "whc_msg_q_init+0x3c size=1152": 1,
+        "0x133746 size=2048": 1,
+        "pvPortMalloc+0x8 size=44": 8,
+        "pvPortMalloc+0x8 size=4096": 1,
+        "0x13375a size=52224": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x102 size=2360": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x120 size=36": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x130 size=6612": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x140 size=1784": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x150 size=404": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x15e size=32": 1,
+        "rtw_mcc_start+0x494 size=68": 1,
+        "rtw_macid_mgt_init+0x28 size=84": 1,
+        "rtk_coex_init+0x34 size=280": 1,
+        "pvPortMalloc+0x8 size=84": 15,
+        "rtw_xmit_priv_init+0x26 size=240": 1,
+        "rtw_recv_init_priv+0x3e size=120": 1,
+        "halrf_dpk_info_init+0x12 size=12": 1,
+        "halrf_dpk_info_init+0x1c size=12": 1,
+        "halrf_dpk_info_init+0x26 size=12": 1,
+        "halrf_dpk_info_init+0x30 size=12": 1,
+        "halrf_dpk_info_init+0x3a size=12": 1,
+        "halrf_dpk_info_init+0x44 size=12": 1,
+        "halrf_dpk_info_init+0x4e size=12": 1,
+        "halrf_dpk_info_init+0x58 size=12": 1,
+        "halrf_dpk_info_init+0x88 size=128": 2,
+        "halrf_dpk_info_init+0x96 size=128": 2,
+        "wififw_ra_init+0x10 size=3696": 1,
+        "pvPortMalloc+0x8 size=2368": 1,
+        "pvPortMalloc+0x8 size=1400": 1,
+        "pvPortMalloc+0x8 size=576": 1,
+        "wifi_if3_drv_init+0xa size=952": 1,
+        "rtw_alloc_stainfo+0xaa size=1240": 1,
+        "_rtw_nan_mlme_priv_init+0x18 size=32": 1,
+        "_rtw_nan_mlme_priv_init+0x2c size=24": 1,
+        "_rtw_nan_mlme_priv_init+0x12a size=56": 1,
+        "wifi_hal_nan_faw_schdl_init+0x14 size=320": 1,
+        "rtw_enqueue_cmd+0x12 size=24": 1,
+        "rtw_nan_srvc_instance_alloc+0x20 size=96": 1,
+        "rtw_nan_srvc_instance_alloc+0x2a size=136": 1,
+        "rtw_nan_srvc_instance_alloc+0x4c size=104": 1,
+        "rtw_nan_srvc_instance_alloc+0x6e size=264": 1,
+        "rtw_nan_srvc_instance_alloc+0x78 size=264": 1
+      },
+      "heap": {
+        "free": 53452,
+        "used": 90944,
+        "allocated": 76,
+        "free_nodes": 77,
+        "tracked": 76,
+        "lost": 0,
+        "omitted": 0
+      },
+      "pools": {
+        "mutex": [
+          22,
+          14
+        ],
+        "sema": [
+          15,
+          0
+        ],
+        "timer": [
+          8,
+          6
+        ]
+      }
+    },
+    {
+      "ms": 22229,
+      "phase": "initial_idle",
+      "groups": {
+        "pvPortMalloc+0x8 size=536": 1,
+        "pvPortMalloc+0x8 size=408": 7,
+        "pvPortMalloc+0x8 size=720": 1,
+        "pvPortMalloc+0x8 size=904": 1,
+        "whc_msg_q_init+0x3c size=1152": 1,
+        "0x133746 size=2048": 1,
+        "pvPortMalloc+0x8 size=44": 8,
+        "pvPortMalloc+0x8 size=4096": 1,
+        "0x13375a size=52224": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x102 size=2360": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x120 size=36": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x130 size=6612": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x140 size=1784": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x150 size=404": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x15e size=32": 1,
+        "rtw_mcc_start+0x494 size=68": 1,
+        "rtw_macid_mgt_init+0x28 size=84": 1,
+        "rtk_coex_init+0x34 size=280": 1,
+        "pvPortMalloc+0x8 size=84": 15,
+        "rtw_xmit_priv_init+0x26 size=240": 1,
+        "rtw_recv_init_priv+0x3e size=120": 1,
+        "halrf_dpk_info_init+0x12 size=12": 1,
+        "halrf_dpk_info_init+0x1c size=12": 1,
+        "halrf_dpk_info_init+0x26 size=12": 1,
+        "halrf_dpk_info_init+0x30 size=12": 1,
+        "halrf_dpk_info_init+0x3a size=12": 1,
+        "halrf_dpk_info_init+0x44 size=12": 1,
+        "halrf_dpk_info_init+0x4e size=12": 1,
+        "halrf_dpk_info_init+0x58 size=12": 1,
+        "halrf_dpk_info_init+0x88 size=128": 2,
+        "halrf_dpk_info_init+0x96 size=128": 2,
+        "wififw_ra_init+0x10 size=3696": 1,
+        "pvPortMalloc+0x8 size=2368": 1,
+        "pvPortMalloc+0x8 size=1400": 1,
+        "pvPortMalloc+0x8 size=576": 1,
+        "wifi_if3_drv_init+0xa size=952": 1,
+        "rtw_alloc_stainfo+0xaa size=1240": 1,
+        "_rtw_nan_mlme_priv_init+0x18 size=32": 1,
+        "_rtw_nan_mlme_priv_init+0x2c size=24": 1,
+        "_rtw_nan_mlme_priv_init+0x12a size=56": 1,
+        "wifi_hal_nan_faw_schdl_init+0x14 size=320": 1,
+        "rtw_enqueue_cmd+0x12 size=24": 1,
+        "rtw_nan_srvc_instance_alloc+0x20 size=96": 1,
+        "rtw_nan_srvc_instance_alloc+0x2a size=136": 1,
+        "rtw_nan_srvc_instance_alloc+0x4c size=104": 1,
+        "rtw_nan_srvc_instance_alloc+0x6e size=264": 1,
+        "rtw_nan_srvc_instance_alloc+0x78 size=264": 1
+      },
+      "heap": {
+        "free": 53452,
+        "used": 90944,
+        "allocated": 76,
+        "free_nodes": 77,
+        "tracked": 76,
+        "lost": 0,
+        "omitted": 0
+      },
+      "pools": {
+        "mutex": [
+          22,
+          14
+        ],
+        "sema": [
+          15,
+          0
+        ],
+        "timer": [
+          8,
+          6
+        ]
+      }
+    },
+    {
+      "ms": 32226,
+      "phase": "initial_idle",
+      "groups": {
+        "pvPortMalloc+0x8 size=536": 1,
+        "pvPortMalloc+0x8 size=408": 7,
+        "pvPortMalloc+0x8 size=720": 1,
+        "pvPortMalloc+0x8 size=904": 1,
+        "whc_msg_q_init+0x3c size=1152": 1,
+        "0x133746 size=2048": 1,
+        "pvPortMalloc+0x8 size=44": 8,
+        "pvPortMalloc+0x8 size=4096": 1,
+        "0x13375a size=52224": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x102 size=2360": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x120 size=36": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x130 size=6612": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x140 size=1784": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x150 size=404": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x15e size=32": 1,
+        "rtw_mcc_start+0x494 size=68": 1,
+        "rtw_macid_mgt_init+0x28 size=84": 1,
+        "rtk_coex_init+0x34 size=280": 1,
+        "pvPortMalloc+0x8 size=84": 15,
+        "rtw_xmit_priv_init+0x26 size=240": 1,
+        "rtw_recv_init_priv+0x3e size=120": 1,
+        "halrf_dpk_info_init+0x12 size=12": 1,
+        "halrf_dpk_info_init+0x1c size=12": 1,
+        "halrf_dpk_info_init+0x26 size=12": 1,
+        "halrf_dpk_info_init+0x30 size=12": 1,
+        "halrf_dpk_info_init+0x3a size=12": 1,
+        "halrf_dpk_info_init+0x44 size=12": 1,
+        "halrf_dpk_info_init+0x4e size=12": 1,
+        "halrf_dpk_info_init+0x58 size=12": 1,
+        "halrf_dpk_info_init+0x88 size=128": 2,
+        "halrf_dpk_info_init+0x96 size=128": 2,
+        "wififw_ra_init+0x10 size=3696": 1,
+        "pvPortMalloc+0x8 size=2368": 1,
+        "pvPortMalloc+0x8 size=1400": 1,
+        "pvPortMalloc+0x8 size=576": 1,
+        "wifi_if3_drv_init+0xa size=952": 1,
+        "rtw_alloc_stainfo+0xaa size=1240": 1,
+        "_rtw_nan_mlme_priv_init+0x18 size=32": 1,
+        "_rtw_nan_mlme_priv_init+0x2c size=24": 1,
+        "_rtw_nan_mlme_priv_init+0x12a size=56": 1,
+        "wifi_hal_nan_faw_schdl_init+0x14 size=320": 1,
+        "rtw_enqueue_cmd+0x12 size=24": 1,
+        "rtw_nan_srvc_instance_alloc+0x20 size=96": 1,
+        "rtw_nan_srvc_instance_alloc+0x2a size=136": 1,
+        "rtw_nan_srvc_instance_alloc+0x4c size=104": 1,
+        "rtw_nan_srvc_instance_alloc+0x6e size=264": 1,
+        "rtw_nan_srvc_instance_alloc+0x78 size=264": 1
+      },
+      "heap": {
+        "free": 53452,
+        "used": 90944,
+        "allocated": 76,
+        "free_nodes": 77,
+        "tracked": 76,
+        "lost": 0,
+        "omitted": 0
+      },
+      "pools": {
+        "mutex": [
+          22,
+          14
+        ],
+        "sema": [
+          15,
+          0
+        ],
+        "timer": [
+          8,
+          6
+        ]
+      }
+    },
+    {
+      "ms": 42232,
+      "phase": "initial_idle",
+      "groups": {
+        "pvPortMalloc+0x8 size=536": 1,
+        "pvPortMalloc+0x8 size=408": 7,
+        "pvPortMalloc+0x8 size=720": 1,
+        "pvPortMalloc+0x8 size=904": 1,
+        "whc_msg_q_init+0x3c size=1152": 1,
+        "0x133746 size=2048": 1,
+        "pvPortMalloc+0x8 size=44": 8,
+        "pvPortMalloc+0x8 size=4096": 1,
+        "0x13375a size=52224": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x102 size=2360": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x120 size=36": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x130 size=6612": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x140 size=1784": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x150 size=404": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x15e size=32": 1,
+        "rtw_mcc_start+0x494 size=68": 1,
+        "rtw_macid_mgt_init+0x28 size=84": 1,
+        "rtk_coex_init+0x34 size=280": 1,
+        "pvPortMalloc+0x8 size=84": 15,
+        "rtw_xmit_priv_init+0x26 size=240": 1,
+        "rtw_recv_init_priv+0x3e size=120": 1,
+        "halrf_dpk_info_init+0x12 size=12": 1,
+        "halrf_dpk_info_init+0x1c size=12": 1,
+        "halrf_dpk_info_init+0x26 size=12": 1,
+        "halrf_dpk_info_init+0x30 size=12": 1,
+        "halrf_dpk_info_init+0x3a size=12": 1,
+        "halrf_dpk_info_init+0x44 size=12": 1,
+        "halrf_dpk_info_init+0x4e size=12": 1,
+        "halrf_dpk_info_init+0x58 size=12": 1,
+        "halrf_dpk_info_init+0x88 size=128": 2,
+        "halrf_dpk_info_init+0x96 size=128": 2,
+        "wififw_ra_init+0x10 size=3696": 1,
+        "pvPortMalloc+0x8 size=2368": 1,
+        "pvPortMalloc+0x8 size=1400": 1,
+        "pvPortMalloc+0x8 size=576": 1,
+        "wifi_if3_drv_init+0xa size=952": 1,
+        "rtw_alloc_stainfo+0xaa size=1240": 1,
+        "_rtw_nan_mlme_priv_init+0x18 size=32": 1,
+        "_rtw_nan_mlme_priv_init+0x2c size=24": 1,
+        "_rtw_nan_mlme_priv_init+0x12a size=56": 1,
+        "wifi_hal_nan_faw_schdl_init+0x14 size=320": 1,
+        "rtw_enqueue_cmd+0x12 size=24": 1,
+        "rtw_nan_srvc_instance_alloc+0x20 size=96": 1,
+        "rtw_nan_srvc_instance_alloc+0x2a size=136": 1,
+        "rtw_nan_srvc_instance_alloc+0x4c size=104": 1,
+        "rtw_nan_srvc_instance_alloc+0x6e size=264": 1,
+        "rtw_nan_srvc_instance_alloc+0x78 size=264": 1
+      },
+      "heap": {
+        "free": 53452,
+        "used": 90944,
+        "allocated": 76,
+        "free_nodes": 77,
+        "tracked": 76,
+        "lost": 0,
+        "omitted": 0
+      },
+      "pools": {
+        "mutex": [
+          22,
+          14
+        ],
+        "sema": [
+          15,
+          0
+        ],
+        "timer": [
+          8,
+          6
+        ]
+      }
+    },
+    {
+      "ms": 52223,
+      "phase": "initial_idle",
+      "groups": {
+        "pvPortMalloc+0x8 size=536": 1,
+        "pvPortMalloc+0x8 size=408": 7,
+        "pvPortMalloc+0x8 size=720": 1,
+        "pvPortMalloc+0x8 size=904": 1,
+        "whc_msg_q_init+0x3c size=1152": 1,
+        "0x133746 size=2048": 1,
+        "pvPortMalloc+0x8 size=44": 8,
+        "pvPortMalloc+0x8 size=4096": 1,
+        "0x13375a size=52224": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x102 size=2360": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x120 size=36": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x130 size=6612": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x140 size=1784": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x150 size=404": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x15e size=32": 1,
+        "rtw_mcc_start+0x494 size=68": 1,
+        "rtw_macid_mgt_init+0x28 size=84": 1,
+        "rtk_coex_init+0x34 size=280": 1,
+        "pvPortMalloc+0x8 size=84": 15,
+        "rtw_xmit_priv_init+0x26 size=240": 1,
+        "rtw_recv_init_priv+0x3e size=120": 1,
+        "halrf_dpk_info_init+0x12 size=12": 1,
+        "halrf_dpk_info_init+0x1c size=12": 1,
+        "halrf_dpk_info_init+0x26 size=12": 1,
+        "halrf_dpk_info_init+0x30 size=12": 1,
+        "halrf_dpk_info_init+0x3a size=12": 1,
+        "halrf_dpk_info_init+0x44 size=12": 1,
+        "halrf_dpk_info_init+0x4e size=12": 1,
+        "halrf_dpk_info_init+0x58 size=12": 1,
+        "halrf_dpk_info_init+0x88 size=128": 2,
+        "halrf_dpk_info_init+0x96 size=128": 2,
+        "wififw_ra_init+0x10 size=3696": 1,
+        "pvPortMalloc+0x8 size=2368": 1,
+        "pvPortMalloc+0x8 size=1400": 1,
+        "pvPortMalloc+0x8 size=576": 1,
+        "wifi_if3_drv_init+0xa size=952": 1,
+        "rtw_alloc_stainfo+0xaa size=1240": 1,
+        "_rtw_nan_mlme_priv_init+0x18 size=32": 1,
+        "_rtw_nan_mlme_priv_init+0x2c size=24": 1,
+        "_rtw_nan_mlme_priv_init+0x12a size=56": 1,
+        "wifi_hal_nan_faw_schdl_init+0x14 size=320": 1,
+        "rtw_enqueue_cmd+0x12 size=24": 1,
+        "rtw_nan_srvc_instance_alloc+0x20 size=96": 1,
+        "rtw_nan_srvc_instance_alloc+0x2a size=136": 1,
+        "rtw_nan_srvc_instance_alloc+0x4c size=104": 1,
+        "rtw_nan_srvc_instance_alloc+0x6e size=264": 1,
+        "rtw_nan_srvc_instance_alloc+0x78 size=264": 1
+      },
+      "heap": {
+        "free": 53452,
+        "used": 90944,
+        "allocated": 76,
+        "free_nodes": 77,
+        "tracked": 76,
+        "lost": 0,
+        "omitted": 0
+      },
+      "pools": {
+        "mutex": [
+          22,
+          14
+        ],
+        "sema": [
+          15,
+          0
+        ],
+        "timer": [
+          8,
+          6
+        ]
+      }
+    },
+    {
+      "ms": 96249,
+      "phase": "block1_idle",
+      "groups": {
+        "pvPortMalloc+0x8 size=536": 1,
+        "pvPortMalloc+0x8 size=408": 7,
+        "pvPortMalloc+0x8 size=720": 1,
+        "pvPortMalloc+0x8 size=904": 1,
+        "whc_msg_q_init+0x3c size=1152": 1,
+        "0x133746 size=2048": 1,
+        "pvPortMalloc+0x8 size=44": 8,
+        "pvPortMalloc+0x8 size=4096": 1,
+        "0x13375a size=52224": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x102 size=2360": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x120 size=36": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x130 size=6612": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x140 size=1784": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x150 size=404": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x15e size=32": 1,
+        "rtw_mcc_start+0x494 size=68": 1,
+        "rtw_macid_mgt_init+0x28 size=84": 1,
+        "rtk_coex_init+0x34 size=280": 1,
+        "pvPortMalloc+0x8 size=84": 19,
+        "rtw_xmit_priv_init+0x26 size=240": 1,
+        "rtw_recv_init_priv+0x3e size=120": 1,
+        "halrf_dpk_info_init+0x12 size=12": 1,
+        "halrf_dpk_info_init+0x1c size=12": 1,
+        "halrf_dpk_info_init+0x26 size=12": 1,
+        "halrf_dpk_info_init+0x30 size=12": 1,
+        "halrf_dpk_info_init+0x3a size=12": 1,
+        "halrf_dpk_info_init+0x44 size=12": 1,
+        "halrf_dpk_info_init+0x4e size=12": 1,
+        "halrf_dpk_info_init+0x58 size=12": 1,
+        "halrf_dpk_info_init+0x88 size=128": 2,
+        "halrf_dpk_info_init+0x96 size=128": 2,
+        "wififw_ra_init+0x10 size=3696": 1,
+        "pvPortMalloc+0x8 size=2368": 1,
+        "pvPortMalloc+0x8 size=1400": 1,
+        "pvPortMalloc+0x8 size=576": 1,
+        "wifi_if3_drv_init+0xa size=952": 1,
+        "rtw_alloc_stainfo+0xaa size=1240": 1,
+        "_rtw_nan_mlme_priv_init+0x18 size=32": 1,
+        "_rtw_nan_mlme_priv_init+0x2c size=24": 1,
+        "_rtw_nan_mlme_priv_init+0x12a size=56": 1,
+        "wifi_hal_nan_faw_schdl_init+0x14 size=320": 1,
+        "rtw_nan_srvc_instance_alloc+0x20 size=96": 1,
+        "rtw_nan_srvc_instance_alloc+0x2a size=136": 1,
+        "rtw_nan_srvc_instance_alloc+0x4c size=104": 1,
+        "rtw_nan_srvc_instance_alloc+0x6e size=264": 1,
+        "rtw_nan_srvc_instance_alloc+0x78 size=264": 1,
+        "rtw_enqueue_cmd+0x12 size=24": 1,
+        "rtw_nan_group_keys_init+0x24 size=52": 1,
+        "__smakebuf_r+0x30 size=1024": 1,
+        "rtw_nan_ndc_info_add_new+0x2e size=20": 4,
+        "rtw_nan_group_keys_init+0x72 size=52": 1,
+        "rtw_nan_group_keys_init+0xcc size=52": 1,
+        "rtw_nan_self_schdl_entry_alloc+0x8 size=188": 1,
+        "rtw_nan_schdlr_cmt_schdl_alloc+0xa size=32": 2,
+        "_rtw_nan_create_cmt_sch_from_ch_window+0xd4 size=12": 2
+      },
+      "heap": {
+        "free": 51444,
+        "used": 92952,
+        "allocated": 93,
+        "free_nodes": 94,
+        "tracked": 93,
+        "lost": 0,
+        "omitted": 0
+      },
+      "pools": {
+        "mutex": [
+          22,
+          15
+        ],
+        "sema": [
+          15,
+          0
+        ],
+        "timer": [
+          8,
+          6
+        ]
+      }
+    },
+    {
+      "ms": 106250,
+      "phase": "block1_idle",
+      "groups": {
+        "pvPortMalloc+0x8 size=536": 1,
+        "pvPortMalloc+0x8 size=408": 7,
+        "pvPortMalloc+0x8 size=720": 1,
+        "pvPortMalloc+0x8 size=904": 1,
+        "whc_msg_q_init+0x3c size=1152": 1,
+        "0x133746 size=2048": 1,
+        "pvPortMalloc+0x8 size=44": 8,
+        "pvPortMalloc+0x8 size=4096": 1,
+        "0x13375a size=52224": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x102 size=2360": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x120 size=36": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x130 size=6612": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x140 size=1784": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x150 size=404": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x15e size=32": 1,
+        "rtw_mcc_start+0x494 size=68": 1,
+        "rtw_macid_mgt_init+0x28 size=84": 1,
+        "rtk_coex_init+0x34 size=280": 1,
+        "pvPortMalloc+0x8 size=84": 19,
+        "rtw_xmit_priv_init+0x26 size=240": 1,
+        "rtw_recv_init_priv+0x3e size=120": 1,
+        "halrf_dpk_info_init+0x12 size=12": 1,
+        "halrf_dpk_info_init+0x1c size=12": 1,
+        "halrf_dpk_info_init+0x26 size=12": 1,
+        "halrf_dpk_info_init+0x30 size=12": 1,
+        "halrf_dpk_info_init+0x3a size=12": 1,
+        "halrf_dpk_info_init+0x44 size=12": 1,
+        "halrf_dpk_info_init+0x4e size=12": 1,
+        "halrf_dpk_info_init+0x58 size=12": 1,
+        "halrf_dpk_info_init+0x88 size=128": 2,
+        "halrf_dpk_info_init+0x96 size=128": 2,
+        "wififw_ra_init+0x10 size=3696": 1,
+        "pvPortMalloc+0x8 size=2368": 1,
+        "pvPortMalloc+0x8 size=1400": 1,
+        "pvPortMalloc+0x8 size=576": 1,
+        "wifi_if3_drv_init+0xa size=952": 1,
+        "rtw_alloc_stainfo+0xaa size=1240": 1,
+        "_rtw_nan_mlme_priv_init+0x18 size=32": 1,
+        "_rtw_nan_mlme_priv_init+0x2c size=24": 1,
+        "_rtw_nan_mlme_priv_init+0x12a size=56": 1,
+        "wifi_hal_nan_faw_schdl_init+0x14 size=320": 1,
+        "rtw_enqueue_cmd+0x12 size=24": 1,
+        "rtw_nan_srvc_instance_alloc+0x20 size=96": 1,
+        "rtw_nan_srvc_instance_alloc+0x2a size=136": 1,
+        "rtw_nan_srvc_instance_alloc+0x4c size=104": 1,
+        "rtw_nan_srvc_instance_alloc+0x6e size=264": 1,
+        "rtw_nan_srvc_instance_alloc+0x78 size=264": 1,
+        "rtw_nan_group_keys_init+0x24 size=52": 1,
+        "__smakebuf_r+0x30 size=1024": 1,
+        "rtw_nan_ndc_info_add_new+0x2e size=20": 4,
+        "rtw_nan_group_keys_init+0x72 size=52": 1,
+        "rtw_nan_group_keys_init+0xcc size=52": 1,
+        "rtw_nan_self_schdl_entry_alloc+0x8 size=188": 1,
+        "rtw_nan_schdlr_cmt_schdl_alloc+0xa size=32": 2,
+        "_rtw_nan_create_cmt_sch_from_ch_window+0xd4 size=12": 2
+      },
+      "heap": {
+        "free": 51444,
+        "used": 92952,
+        "allocated": 93,
+        "free_nodes": 94,
+        "tracked": 93,
+        "lost": 0,
+        "omitted": 0
+      },
+      "pools": {
+        "mutex": [
+          22,
+          15
+        ],
+        "sema": [
+          15,
+          0
+        ],
+        "timer": [
+          8,
+          6
+        ]
+      }
+    },
+    {
+      "ms": 116249,
+      "phase": "block1_idle",
+      "groups": {
+        "pvPortMalloc+0x8 size=536": 1,
+        "pvPortMalloc+0x8 size=408": 7,
+        "pvPortMalloc+0x8 size=720": 1,
+        "pvPortMalloc+0x8 size=904": 1,
+        "whc_msg_q_init+0x3c size=1152": 1,
+        "0x133746 size=2048": 1,
+        "pvPortMalloc+0x8 size=44": 8,
+        "pvPortMalloc+0x8 size=4096": 1,
+        "0x13375a size=52224": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x102 size=2360": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x120 size=36": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x130 size=6612": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x140 size=1784": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x150 size=404": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x15e size=32": 1,
+        "rtw_mcc_start+0x494 size=68": 1,
+        "rtw_macid_mgt_init+0x28 size=84": 1,
+        "rtk_coex_init+0x34 size=280": 1,
+        "pvPortMalloc+0x8 size=84": 19,
+        "rtw_xmit_priv_init+0x26 size=240": 1,
+        "rtw_recv_init_priv+0x3e size=120": 1,
+        "halrf_dpk_info_init+0x12 size=12": 1,
+        "halrf_dpk_info_init+0x1c size=12": 1,
+        "halrf_dpk_info_init+0x26 size=12": 1,
+        "halrf_dpk_info_init+0x30 size=12": 1,
+        "halrf_dpk_info_init+0x3a size=12": 1,
+        "halrf_dpk_info_init+0x44 size=12": 1,
+        "halrf_dpk_info_init+0x4e size=12": 1,
+        "halrf_dpk_info_init+0x58 size=12": 1,
+        "halrf_dpk_info_init+0x88 size=128": 2,
+        "halrf_dpk_info_init+0x96 size=128": 2,
+        "wififw_ra_init+0x10 size=3696": 1,
+        "pvPortMalloc+0x8 size=2368": 1,
+        "pvPortMalloc+0x8 size=1400": 1,
+        "pvPortMalloc+0x8 size=576": 1,
+        "wifi_if3_drv_init+0xa size=952": 1,
+        "rtw_alloc_stainfo+0xaa size=1240": 1,
+        "_rtw_nan_mlme_priv_init+0x18 size=32": 1,
+        "_rtw_nan_mlme_priv_init+0x2c size=24": 1,
+        "_rtw_nan_mlme_priv_init+0x12a size=56": 1,
+        "wifi_hal_nan_faw_schdl_init+0x14 size=320": 1,
+        "rtw_enqueue_cmd+0x12 size=24": 1,
+        "rtw_nan_srvc_instance_alloc+0x20 size=96": 1,
+        "rtw_nan_srvc_instance_alloc+0x2a size=136": 1,
+        "rtw_nan_srvc_instance_alloc+0x4c size=104": 1,
+        "rtw_nan_srvc_instance_alloc+0x6e size=264": 1,
+        "rtw_nan_srvc_instance_alloc+0x78 size=264": 1,
+        "rtw_nan_group_keys_init+0x24 size=52": 1,
+        "__smakebuf_r+0x30 size=1024": 1,
+        "rtw_nan_ndc_info_add_new+0x2e size=20": 4,
+        "rtw_nan_group_keys_init+0x72 size=52": 1,
+        "rtw_nan_group_keys_init+0xcc size=52": 1,
+        "rtw_nan_self_schdl_entry_alloc+0x8 size=188": 1,
+        "rtw_nan_schdlr_cmt_schdl_alloc+0xa size=32": 2,
+        "_rtw_nan_create_cmt_sch_from_ch_window+0xd4 size=12": 2
+      },
+      "heap": {
+        "free": 51444,
+        "used": 92952,
+        "allocated": 93,
+        "free_nodes": 94,
+        "tracked": 93,
+        "lost": 0,
+        "omitted": 0
+      },
+      "pools": {
+        "mutex": [
+          22,
+          15
+        ],
+        "sema": [
+          15,
+          0
+        ],
+        "timer": [
+          8,
+          6
+        ]
+      }
+    },
+    {
+      "ms": 126246,
+      "phase": "block1_idle",
+      "groups": {
+        "pvPortMalloc+0x8 size=536": 1,
+        "pvPortMalloc+0x8 size=408": 7,
+        "pvPortMalloc+0x8 size=720": 1,
+        "pvPortMalloc+0x8 size=904": 1,
+        "whc_msg_q_init+0x3c size=1152": 1,
+        "0x133746 size=2048": 1,
+        "pvPortMalloc+0x8 size=44": 8,
+        "pvPortMalloc+0x8 size=4096": 1,
+        "0x13375a size=52224": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x102 size=2360": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x120 size=36": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x130 size=6612": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x140 size=1784": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x150 size=404": 1,
+        "_rtw_nan_avail_t_bitmap_set.part.0+0x15e size=32": 1,
+        "rtw_mcc_start+0x494 size=68": 1,
+        "rtw_macid_mgt_init+0x28 size=84": 1,
+        "rtk_coex_init+0x34 size=280": 1,
+        "pvPortMalloc+0x8 size=84": 19,
+        "rtw_xmit_priv_init+0x26 size=240": 1,
+        "rtw_recv_init_priv+0x3e size=120": 1,
+        "halrf_dpk_info_init+0x12 size=12": 1,
+        "halrf_dpk_info_init+0x1c size=12": 1,
+        "halrf_dpk_info_init+0x26 size=12": 1,
+        "halrf_dpk_info_init+0x30 size=12": 1,
+        "halrf_dpk_info_init+0x3a size=12": 1,
+        "halrf_dpk_info_init+0x44 size=12": 1,
+        "halrf_dpk_info_init+0x4e size=12": 1,
+        "halrf_dpk_info_init+0x58 size=12": 1,
+        "halrf_dpk_info_init+0x88 size=128": 2,
+        "halrf_dpk_info_init+0x96 size=128": 2,
+        "wififw_ra_init+0x10 size=3696": 1,
+        "pvPortMalloc+0x8 size=2368": 1,
+        "pvPortMalloc+0x8 size=1400": 1,
+        "pvPortMalloc+0x8 size=576": 1,
+        "wifi_if3_drv_init+0xa size=952": 1,
+        "rtw_alloc_stainfo+0xaa size=1240": 1,
+        "_rtw_nan_mlme_priv_init+0x18 size=32": 1,
+        "_rtw_nan_mlme_priv_init+0x2c size=24": 1,
+        "_rtw_nan_mlme_priv_init+0x12a size=56": 1,
+        "wifi_hal_nan_faw_schdl_init+0x14 size=320": 1,
+        "rtw_enqueue_cmd+0x12 size=24": 1,
+        "rtw_nan_srvc_instance_alloc+0x20 size=96": 1,
+        "rtw_nan_srvc_instance_alloc+0x2a size=136": 1,
+        "rtw_nan_srvc_instance_alloc+0x4c size=104": 1,
+        "rtw_nan_srvc_instance_alloc+0x6e size=264": 1,
+        "rtw_nan_srvc_instance_alloc+0x78 size=264": 1,
+        "rtw_nan_group_keys_init+0x24 size=52": 1,
+        "__smakebuf_r+0x30 size=1024": 1,
+        "rtw_nan_ndc_info_add_new+0x2e size=20": 4,
+        "rtw_nan_group_keys_init+0x72 size=52": 1,
+        "rtw_nan_group_keys_init+0xcc size=52": 1,
+        "rtw_nan_self_schdl_entry_alloc+0x8 size=188": 1,
+        "rtw_nan_schdlr_cmt_schdl_alloc+0xa size=32": 2,
+        "_rtw_nan_create_cmt_sch_from_ch_window+0xd4 size=12": 2
+      },
+      "heap": {
+        "free": 51444,
+        "used": 92952,
+        "allocated": 93,
+        "free_nodes": 94,
+        "tracked": 93,
+        "lost": 0,
+        "omitted": 0
+      },
+      "pools": {
+        "mutex": [
+          22,
+          15
+        ],
+        "sema": [
+          15,
+          0
+        ],
+        "timer": [
+          8,
+          6
+        ]
+      }
+    }
+  ]
+}

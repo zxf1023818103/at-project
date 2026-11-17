@@ -1,0 +1,139 @@
+{
+  "date": "2026-11-17",
+  "status": "qualified_for_this_one_phone_regression",
+  "firmware": {
+    "bytes": 1011360,
+    "sha256": "bff3a6a08fdf83fe456c9bdf40bc01ab4b319a48ccc820cf8e4877950f5791b9",
+    "uart_readback": "PASS"
+  },
+  "environment": {
+    "uart": "COM5",
+    "baud": 1500000,
+    "device": "iPhone 13 Pro",
+    "ios": "27.2.1",
+    "saved_ble_and_nan_pairs_preserved": true,
+    "app_changed_for_this_fix": false
+  },
+  "changes": {
+    "peer_capacity_before": 6,
+    "peer_capacity_after": 12,
+    "np_sram_kib_before": 160,
+    "np_sram_kib_after": 184,
+    "native_aging_unchanged": true,
+    "released_peer_mutex_offsets": [
+      20,
+      32
+    ],
+    "scheduler_mutex_offset_left_to_native": 44,
+    "patch_scope": "One final-free relocation in the hash-pinned derived rtw_nan_peer.o; all instructions and other relocations unchanged.",
+    "telemetry": "NP current free bytes and sampled peer MACID occupancy; no new task/timer."
+  },
+  "verification": {
+    "c_asan_ubsan_test_cases": 11,
+    "python_binary_patch_test_cases": 1,
+    "ctest_total_passed": 12,
+    "image_ota_efuse_tests_passed": 12,
+    "ble_nan_firmware_build": "PASS",
+    "nan_only_build": "PASS (compile only)",
+    "original_vendor_archive_hashes": "8/8 unchanged"
+  },
+  "hardware": {
+    "case": "macid-mutex-final-qualify.json",
+    "app_restart_successes": 24,
+    "app_restart_attempts": 24,
+    "continuous_successes": 100,
+    "continuous_attempts": 100,
+    "post_idle_saved_pair_successes": 1,
+    "total_ping_successes": 125,
+    "total_ping_attempts": 125,
+    "initial_intentional_reset": true,
+    "unintended_resets": 0,
+    "warnings": {
+      "macid_pool_full": 0,
+      "missing_peer": 0,
+      "station_add_failures": 0,
+      "malloc_failures": 0,
+      "hard_faults": 0,
+      "stack_overflows": 0,
+      "boots": 1,
+      "watchdog_boots": 0,
+      "protocol_aborts": 0,
+      "unreleased_mutex": 0
+    },
+    "restart_ready_seconds": {
+      "median": 2.2452438333129976,
+      "min": 1.9998980833333917,
+      "max": 3.4392169999773614
+    },
+    "stress100_ready_seconds": {
+      "median": 0.9923338333610445,
+      "min": 0.43541195831494406,
+      "max": 2.613149125012569
+    },
+    "throughput_seconds_per_direction": 30,
+    "throughput": [
+      {
+        "bytes": 46071808,
+        "direction": "upload",
+        "mbps": 12.24784714053102,
+        "peerBytes": 46071808,
+        "receiverSeconds": 30.093,
+        "senderSeconds": 30.01304600003641
+      },
+      {
+        "bytes": 70123520,
+        "direction": "download",
+        "mbps": 18.69441103930581,
+        "peerBytes": 70123520,
+        "receiverSeconds": 30.008335583319422,
+        "senderSeconds": 30.011
+      }
+    ],
+    "all_queue_counters_zero": true,
+    "np_sampled_peak_slots": 7,
+    "np_sampled_free_low_bytes": 39248,
+    "ap_sampled_free_low_bytes": 19200,
+    "empty_peer_heap_samples": [
+      {
+        "phase": "preflight",
+        "ms": 2230,
+        "bytes": 60748
+      },
+      {
+        "phase": "block1 idle 40 seconds",
+        "ms": 108245,
+        "bytes": 58628
+      },
+      {
+        "phase": "block2 idle 40 seconds",
+        "ms": 192276,
+        "bytes": 58404
+      },
+      {
+        "phase": "block2 idle 40 seconds",
+        "ms": 202281,
+        "bytes": 58404
+      },
+      {
+        "phase": "block2 idle 40 seconds",
+        "ms": 212275,
+        "bytes": 58404
+      }
+    ],
+    "final_empty_peer_idle_report": "macid-mutex-final-idle.json",
+    "final_empty_peer_heap_bytes": 58068,
+    "final_empty_peer_heap_identical_samples": 8
+  },
+  "interim_failure_evidence": {
+    "six_slot_baseline": "macid-baseline-churn.json",
+    "capacity_only_heap_decline": "macid-capacity-validation.json"
+  },
+  "limitations": [
+    "One phone and finite runs; larger populations or longer operation remain unqualified.",
+    "Idle zero-slot NP snapshots were 58628, 58404 and finally 58068 bytes: a residual 560-byte difference is not explained by this test, so do not claim all possible heap leaks are eliminated.",
+    "The final 65-second idle capture repeats 58068 bytes with 0/12 slots; startup 60748 bytes is not an equivalent warmed idle baseline.",
+    "Heap minima and occupancy peaks are samples, not allocation-level watermarks.",
+    "Fresh BLE/NAN pairing was not repeated; current saved pairs were retained.",
+    "One transient CoreDevice report-fetch error was retried; an extra launch after the final idle test was refused by iOS lock state and excluded from the 125 NAN attempts."
+  ]
+}

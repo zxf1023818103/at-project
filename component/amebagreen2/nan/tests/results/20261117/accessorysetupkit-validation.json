@@ -1,0 +1,166 @@
+{
+  "date": "2026-11-17",
+  "firmware": {
+    "bytes": 1011072,
+    "sha256": "c9aa1828f06b8a10c98cab3578ebe6c4f94c97d0788d1ce47c942bd7ce1a33a9",
+    "uart_readback": "PASS"
+  },
+  "environment": {
+    "device": "iPhone 13 Pro",
+    "ios": "27.2.1",
+    "xcode": "26.3 (17C529)",
+    "iphoneos_sdk": "26.2"
+  },
+  "app_sources": {
+    "NANBench.swift": "4e6865a9d082d4b2f22f2fcd67129ebbee42513ff8177009f451bbd8b9d23570",
+    "NANBLEPairing.swift": "0099b2ce4a62a22b996d074ab726862c4f0965cf2415905e48f50cfcb7e47b4e",
+    "Info.plist": "45c28d238ed9dac0af462c8adb68f9c015bd83c2aba1f48476b8aa75f6b47a7d"
+  },
+  "ask": {
+    "final_flow": "Separate BLE-only ASK selection, then NAN-only ASK selection after PIN is visible.",
+    "single_system_record_verified": false,
+    "combined_descriptor_produced_separate_candidates": true,
+    "explicit_migration_did_not_merge": true,
+    "ble_to_nan_update_authorization_did_not_present": true,
+    "experimental_duplicate_ble_record_removed_with_user_confirmation": true,
+    "saved_nan_pair_preserved": true,
+    "initial_ble_setup_user_confirmed": true,
+    "fresh_nan_setup_repeated_on_final_build": false,
+    "post_cleanup_bluetooth_device_count": 1,
+    "post_cleanup_nan_device_count": 1
+  },
+  "ble_final": {
+    "startedAt": "2026-11-17T03:03:55Z",
+    "stages": [
+      {
+        "stage": "ask_authorized_device",
+        "time": "2026-11-17T03:03:55Z"
+      },
+      {
+        "stage": "bluetooth_state_4",
+        "time": "2026-11-17T03:03:55Z"
+      },
+      {
+        "stage": "bluetooth_state_5",
+        "time": "2026-11-17T03:03:56Z"
+      },
+      {
+        "stage": "connecting",
+        "time": "2026-11-17T03:03:56Z"
+      },
+      {
+        "stage": "ble_connected",
+        "time": "2026-11-17T03:03:57Z"
+      },
+      {
+        "stage": "requesting_pin",
+        "time": "2026-11-17T03:03:57Z"
+      },
+      {
+        "stage": "request_accepted",
+        "time": "2026-11-17T03:03:57Z"
+      },
+      {
+        "stage": "credential_received",
+        "time": "2026-11-17T03:03:57Z"
+      }
+    ],
+    "credential_received": true,
+    "recovered_missing_peer_rpa": 1,
+    "encrypted_bonded_key_size_16": true,
+    "forced_fresh_sc_rebond_tested": false
+  },
+  "native_tests": {
+    "passed": 10,
+    "total": 10,
+    "asan_ubsan": true
+  },
+  "nan_saved_pair_after_reset": {
+    "case": "ask-final-reset-stress5",
+    "reset": true,
+    "startedAt": "2026-11-17T03:04:34Z",
+    "early_peer_created": 0,
+    "early_peer_alloc_failed": 0,
+    "missing_peer_warnings": 0,
+    "station_add_failures": 0,
+    "PKE_self_test_passes": 1,
+    "tcp_pong_count": 5,
+    "ap_heap_samples": [
+      104824
+    ],
+    "protocol_aborts": 0,
+    "queue_counters": [],
+    "successes": 5,
+    "rounds": 5,
+    "ready_seconds": [
+      3.9816675833426416,
+      2.108377583324909,
+      2.6176141666364856,
+      2.621015583339613,
+      0.843993041664362
+    ],
+    "pass": true
+  },
+  "throughput_initial_attempt": {
+    "startedAt": "2026-11-17T03:04:55Z",
+    "finished": false,
+    "results": [],
+    "watchdog_seconds": 100,
+    "macid_pool_full_warnings": 6,
+    "missing_peer_warnings": 1,
+    "disposition": "Failed before TCP transfer; resource exhaustion remains unresolved. Not counted as a throughput pass."
+  },
+  "throughput_after_reset": {
+    "case": "ask-final-throughput-reset10",
+    "reset": true,
+    "startedAt": "2026-11-17T03:08:22Z",
+    "early_peer_created": 0,
+    "early_peer_alloc_failed": 0,
+    "missing_peer_warnings": 0,
+    "station_add_failures": 0,
+    "PKE_self_test_passes": 1,
+    "tcp_pong_count": 0,
+    "ap_heap_samples": [
+      44896,
+      44896,
+      104824
+    ],
+    "protocol_aborts": 0,
+    "queue_counters": [
+      {
+        "rxdrop": 0,
+        "txdrop": 0
+      },
+      {
+        "rxdrop": 0,
+        "txdrop": 0
+      }
+    ],
+    "results": [
+      {
+        "bytes": 15073280,
+        "direction": "upload",
+        "mbps": 11.955804084870117,
+        "peerBytes": 15073280,
+        "receiverSeconds": 10.086,
+        "senderSeconds": 10.005787374975625
+      },
+      {
+        "bytes": 23789568,
+        "direction": "download",
+        "mbps": 19.006892458118877,
+        "peerBytes": 23789568,
+        "receiverSeconds": 10.01302787498571,
+        "senderSeconds": 10.018
+      }
+    ],
+    "readySeconds": 3.9805559999658726,
+    "pass": true
+  },
+  "limitations": [
+    "BLE and NAN are two separate ASK steps and system records, not a verified joint accessory.",
+    "Only saved BLE/NAN pairs were retested on the final firmware; new combined setup and fresh SC rebond are not qualified.",
+    "NAN peer/MACID pool exhaustion occurred after the reconnect test; a module reset restored throughput. No resource reclamation fix is included.",
+    "Short one-device tests; no long soak or general reliability guarantee."
+  ]
+}
