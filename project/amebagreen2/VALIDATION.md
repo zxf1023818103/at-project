@@ -357,3 +357,50 @@ iPhone 在下一轮测试前变为 CoreDevice `unavailable`，已请求恢复 US
 前台状态。不能把旧固件的测量或诊断版结果当作优化后的提升。
 脱敏报告见 [upload-receiver-analysis.json](../../component/amebagreen2/nan/tests/results/20261118/upload-receiver-analysis.json)，
 私有构建及原始日志位于 `build/green2-upload-20261118/`。
+
+### 2026-11-18：master 接收优化版 COM43 吞吐及自动 DSLP 补测
+
+拉取并切换到 master `91cb2e69318b23f893173949756bff5f55718169`，在
+COM43 的 RTL8711FAF-VA2-CG 上重新构建、烧录并逐字节回读通过。配置为
+`NAN=ON NAN_DEEP_SLEEP=ON NAN_DEEP_SLEEP_MS=30000 MINIMAL=ON`，
+NimBLE、BLE OOB、USB 桥接、TF-M 及网络/堆诊断均关闭。BLU COM17 保持
+3.3 V 设置供电；原有配对、校准分区保留，未写 eFuse。固件 900032 字节，
+SHA-256：`9493035a39abdc438e7f52f1b1f09e9313760a40464cc98986f42269277ee237`。
+原生 ASan/UBSan/LeakSanitizer **15/15 通过**，构建配置无原 SDK 路径引用。
+
+用户最初报告输入固定 PIN 后配对失败，该时间窗口的 COM43 日志没有 PASN
+认证请求。未修改固件或清除配对，用户重试后 `type=1` 认证通过，配对保存到
+slot 1、`cache rc=0`，随后 `type=2` 验证和数据建链成功。首次失败原因尚未
+确定，不能将重试成功描述成已修复某个配对缺陷。
+
+| 轮次 | 方向 | 有效负载字节 | 固件计时 | 吞吐量 |
+|---|---|---:|---:|---:|
+| 1 | 上传，App → Green2 | 21,889,024 | 10,052 ms | **17.420 Mbps** |
+| 1 | 下载，Green2 → App | 28,377,088 | 10,017 ms | **22.663 Mbps** |
+| 2 | 上传，App → Green2 | 21,626,880 | 10,039 ms | **17.234 Mbps** |
+| 2 | 下载，Green2 → App | 28,377,088 | 10,003 ms | **22.694 Mbps** |
+
+两轮结束时均为 `up=1 down=1 err=0 dropped=0 rxdrop=0 txdrop=0`。最后一笔
+传输结束后分别 **5.029 s / 5.016 s** 自动发起待机，随后进入 DSLP；两次
+AON 唤醒的启动原因为 `0x2`、唤醒源为 `0x8`，NAN 应用初始化均为
+**231 ms**，恢复后计数为
+`host_inits=1 radio_inits=1 pauses=0 resumes=0`。未发送手动休眠、复位或
+断电指令触发此循环。
+
+主机接收时间中，两轮 DSLP 入口日志到 ROM 启动日志分别为
+**43.000 s / 43.016 s**，到 NAN 发布完成为 **43.219 s / 43.235 s**；
+这些数值包含串口排空和启动过程，不等于电流波形
+中的纯深睡时长。本轮未采集电流，也不据此重新宣称此前约 8 µA 的结果。
+
+两轮完整上传/下载及自动 DSLP/AON 循环通过。第二轮在第一次真正深睡唤醒后
+使用已保存配对，日志仅出现 `PASN authenticated type=2`，没有再次执行
+`type=1` 新配对。服务重启使采集进程在第一轮唤醒后退出，原始记录保留；
+之后重新打开 COM43，未改变固件或设备供电，第二轮完整采集及检查通过。
+结束时 NAN 已再次恢复，串口采集正常关闭，3.3 V 供电保持开启。
+
+两轮数据不足以证明长期稳定性；本次没有同时进行同板旧版固件对照，不能将
+相对历史速率的全部差异归因于单项接收优化。
+
+脱敏结果见 [master-com43-rx-throughput.json](../../component/amebagreen2/nan/tests/results/20261118/master-com43-rx-throughput.json)。
+构建、烧录、原生测试与原始串口记录位于 `build/power/green2-master-throughput-20261118/`。
+zlib 的 HEAD、索引差异和工作区状态摘要与拉取前一致。

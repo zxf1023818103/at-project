@@ -1,0 +1,156 @@
+{
+  "schema": 1,
+  "date": "2026-11-18",
+  "status": "passed-two-throughput-and-automatic-dslp-aon-cycles",
+  "commit": "91cb2e69318b23f893173949756bff5f55718169",
+  "firmware_sha256": "9493035a39abdc438e7f52f1b1f09e9313760a40464cc98986f42269277ee237",
+  "firmware_bytes": 900032,
+  "target": {
+    "board": "RTL8711FAF-VA2-CG",
+    "port": "COM43",
+    "power": "BLU COM17, 3.3 V setpoint"
+  },
+  "build_options": {
+    "NAN": "ON",
+    "NAN_DEEP_SLEEP": "ON",
+    "NAN_DEEP_SLEEP_MS": 30000,
+    "NIMBLE": "OFF",
+    "NAN_BLE_OOB": "OFF",
+    "BLE_NAN_WAKE": "OFF",
+    "NAN_USB": "OFF",
+    "NAN_NET_DIAG": "OFF",
+    "NAN_HEAP_CHECKS": "OFF",
+    "NAN_NP_HEAP_TRACE": "OFF",
+    "MINIMAL": "ON",
+    "IPERF": "OFF",
+    "TFM": "OFF"
+  },
+  "cycles": [
+    {
+      "cycle": 1,
+      "throughput": [
+        {
+          "direction": "upload",
+          "bytes": 21889024,
+          "elapsed_ms": 10052,
+          "Mbps": 17.42,
+          "calculated_Mbps": 17.420631914046957,
+          "host_s": 242.28200000000652
+        },
+        {
+          "direction": "download",
+          "bytes": 28377088,
+          "elapsed_ms": 10017,
+          "Mbps": 22.663,
+          "calculated_Mbps": 22.663143056803435,
+          "host_s": 252.329000000027
+        }
+      ],
+      "idle_ms": 5029,
+      "uploads": 1,
+      "downloads": 1,
+      "protocol_errors": 0,
+      "auto_request_host_s": 257.375,
+      "entry_host_s": 257.375,
+      "boot_host_s": 300.375,
+      "nan_ready_host_s": 300.594000000041,
+      "transfer_end_to_entry_s": 5.045999999972992,
+      "entry_to_boot_s": 43.0,
+      "confirmed_dslp_aon_wake": true,
+      "nan_startup_ms": 231,
+      "entry_to_nan_ready_s": 43.21900000004098,
+      "capture": "run-1"
+    },
+    {
+      "cycle": 2,
+      "throughput": [
+        {
+          "direction": "upload",
+          "bytes": 21626880,
+          "elapsed_ms": 10039,
+          "Mbps": 17.234,
+          "calculated_Mbps": 17.234290267954975,
+          "host_s": 204.71799999999348
+        },
+        {
+          "direction": "download",
+          "bytes": 28377088,
+          "elapsed_ms": 10003,
+          "Mbps": 22.694,
+          "calculated_Mbps": 22.694861941417575,
+          "host_s": 214.75
+        }
+      ],
+      "idle_ms": 5016,
+      "uploads": 1,
+      "downloads": 1,
+      "protocol_errors": 0,
+      "auto_request_host_s": 219.76500000001397,
+      "entry_host_s": 219.76500000001397,
+      "boot_host_s": 262.78100000007544,
+      "nan_ready_host_s": 263.0,
+      "transfer_end_to_entry_s": 5.01500000001397,
+      "entry_to_boot_s": 43.01600000006147,
+      "confirmed_dslp_aon_wake": true,
+      "nan_startup_ms": 231,
+      "entry_to_nan_ready_s": 43.23499999998603,
+      "capture": "run-2-recovered"
+    }
+  ],
+  "network_status": [
+    "nan: running=1 events=2 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+    "nan: running=1 events=58 dropped=0 link=1 rx=31345 tx=29591 pong=0 up=1 down=1 err=0 rxdrop=0 txdrop=0",
+    "nan: running=1 events=1 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+    "nan: running=1 events=2 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+    "nan: running=1 events=26 dropped=0 link=1 rx=31274 tx=29559 pong=0 up=1 down=1 err=0 rxdrop=0 txdrop=0",
+    "nan: running=1 events=1 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0"
+  ],
+  "diagnostics": {
+    "fault": 0,
+    "pasn_failure": 0,
+    "cache_failure": 0,
+    "tcp_abort": 0,
+    "allocation_failure": 0
+  },
+  "pairing": {
+    "initial_attempt": "User reported failure after entering PIN; COM43 log showed no PASN authentication at that time. Cause undetermined.",
+    "retry": "Succeeded without firmware changes; type=1 and authenticated pairing persisted slot=1, followed by type=2.",
+    "post_dslp_reconnect": "PASS: second round authenticated type=2 using the saved pairing after true DSLP, without another type=1 setup."
+  },
+  "validation": {
+    "native_asan_ubsan_lsan": {
+      "passed": 15,
+      "failed": 0
+    },
+    "flash_readback": "PASS",
+    "nan_started": "PASS",
+    "original_sdk_build_references": false,
+    "automatic_sleep_wake_cycles": 2,
+    "post_dslp_saved_pairing_reconnect": "PASS"
+  },
+  "timing_note": "Host UART receipt timestamps; entry-to-boot includes serial draining and boot latency, and is not a current-waveform sleep duration.",
+  "capture_interruption": "Recorder process exited during assistant service restart after the first complete sleep/wake cycle. Second capture reopened COM43 without reset, reflash or power changes; it recorded and passed the second full cycle.",
+  "evidence_directory": "build/power/green2-master-throughput-20261118",
+  "raw_evidence_sha256": {
+    "run-1/uart.log": "e098a2857eeb81be232e3c7eaa93a3c575685e7d1abd5b08855ea7f2e6434325",
+    "run-1/events.jsonl": "ababebbcb927f58a4e4c935f8e84b066268b74bc46d92e797bb56b14e1d40310",
+    "native-tests.log": "7d8bac620cde8b15353561b6bdeb6c2bb54dfbf222f2df6c45669aade3e7aa26",
+    "boot.log": "b9e2476f8b00ceef0a336b72dde00dae86c9717bef28d726c03d4446f3401e16",
+    "flash.log": "d24313ccd0a89ae6737bf7dc758f6feda7ddae8c79aa3ccdf08e969acc7bfd9c",
+    "run-2-recovered/uart.log": "1d953e08064be8845f015740b65b6ee78008832eaaff3fb006b8cc8031550932",
+    "run-2-recovered/events.jsonl": "278114402e46bd2eb5648ba1291862e4bf851164e5a1140710c316d6ea5af99c",
+    "run-2-recovered/result.json": "e96c961bd9a8745a9143958edac2771d3ee7688f754991ab10ebe9194248e184"
+  },
+  "limitations": [
+    "Two 10-second runs per direction; no claim of long-term throughput stability.",
+    "No concurrent same-board baseline run: do not attribute the entire difference from historical speeds to one optimization.",
+    "This run measured UART throughput and sleep/wake behavior, not current.",
+    "Initial pairing failure is unresolved; successful retry does not establish a firmware fix.",
+    "Configured AON duration remains 30000 ms; observed entry-to-ROM-boot times are about 43 s."
+  ],
+  "final_observed_state": "Second automatic AON wake completed; NAN running; host_inits=1 radio_inits=1 pauses=0 resumes=0; serial capture closed; 3.3 V supply left enabled.",
+  "aggregate_Mbps": {
+    "upload": 17.327521377731323,
+    "download": 22.678991408591408
+  }
+}
