@@ -11,8 +11,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <lwip/inet.h>
-#include <lwip/netifapi.h>
 #include "bl_main.h"
 #include "bl_defs.h"
 #include "bl_cmds.h"
@@ -24,7 +22,6 @@
 #include <bl_wpa.h>
 
 #ifdef BL602_MATTER_SUPPORT
-#include <lwip/dhcp6.h>
 #endif
 
 #include <bflb_os_private.h>
@@ -423,6 +420,16 @@ static void _rx_handle_beacon(struct scanu_result_ind *ind, struct ieee80211_mgm
         ind_new.wps = 0;
     }
 
+    /* at-project: 802.11d Country IE (id 7) -> first 2 chars, for the country auto-detect
+     * majority vote (component/80211d_config dot11d_autodetect_country). 0/0 when the AP doesn't advertise one. */
+    #define MAC_ELTID_COUNTRY 7
+    elmt_addr = mac_ie_find(var_part_addr, var_part_len, MAC_ELTID_COUNTRY);
+    if (elmt_addr != 0 && co_read8p(elmt_addr + MAC_INFOELT_LEN_OFT) >= 2)
+    {
+        ind_new.country[0] = co_read8p(elmt_addr + MAC_INFOELT_INFO_OFT);
+        ind_new.country[1] = co_read8p(elmt_addr + MAC_INFOELT_INFO_OFT + 1);
+    }
+
     /* TODO: Only consider 2.4G and bgn mode 
      * (NO 5G and a/ac/ax) / (NO g-only and n-only difference)
      */
@@ -680,22 +687,17 @@ static int bl_rx_sm_connect_ind(struct bl_hw *bl_hw,
             sta->is_used = 0;
             bl_tx_cntrl_link_down(sta);
 
-            if (bl_vif->dev){
-                netifapi_netif_set_link_down(bl_vif->dev);
+            if (bl_vif){
+                bl_vif->up = 0;   /* lwIP netif link-down gone; phy-link poll reports down */
             }
         }
     } else {
-        if (bl_vif && bl_vif->dev) {
-            netifapi_netif_set_link_up(bl_vif->dev);
-#ifdef BL602_MATTER_SUPPORT
-            netif_create_ip6_linklocal_address(bl_vif->dev, 1);
-            bl_vif->dev->ip6_autoconfig_enabled = 1;
-#endif
-        } else {
-            bflb_os_printf("[RX]  -------- CRITICAL when check netif. ptr is %p:%p\r\n",
-                    bl_vif,
-                    bl_vif ? bl_vif->dev : NULL
-            );
+        /* Connected: mark the vif up and kick FreeRTOS-Plus-TCP to (re)start DHCP
+         * (bl602_tcp_kick -> FreeRTOS_NetworkDown, component/.../freertos_tcp_port). */
+        extern void bl602_tcp_kick(void);
+        if (bl_vif) {
+            bl_vif->up = 1;
+            bl602_tcp_kick();
         }
     }
     return 0;
@@ -709,11 +711,9 @@ static int bl_rx_sm_disconnect_ind(struct bl_hw *bl_hw,
     struct wifi_event_sm_disconnect_ind ind_new;
     struct bl_vif *bl_vif = NULL;
     struct bl_sta *sta;
-    ip4_addr_t addr_any;
 
     RWNX_DBG(RWNX_FN_ENTRY_STR);
 
-    addr_any.addr = inet_addr("0.0.0.0");
     bflb_os_printf("[RX]   sm_disconnect_ind\r\n"
               "       status_code %u\r\n"
               "       802.11 reason_code %u\r\n", ind->status_code, ind->reason_code);
@@ -751,9 +751,10 @@ static int bl_rx_sm_disconnect_ind(struct bl_hw *bl_hw,
     }
 
     bl_vif = &(bl_hw->vif_table[BL_VIF_STA]);
-    if (bl_vif && bl_vif->dev) {
-        netifapi_netif_set_link_down(bl_vif->dev);
-        netifapi_netif_set_addr(bl_vif->dev, &addr_any, &addr_any, &addr_any);
+    if (bl_vif) {
+        /* lwIP netif link-down gone: mark the vif down (RX drops) — the FreeRTOS+TCP
+         * phy-link poll (prvGetPhyLinkStatus -> wifi_mgmr_sta_state_get) sees it down. */
+        bl_vif->up = 0;
     }
     RWNX_DBG(RWNX_FN_LEAVE_STR);
     return 0;
@@ -852,10 +853,7 @@ static int bl_rx_apm_sta_add_ind(struct bl_hw *bl_hw, struct bl_cmd *cmd, struct
         sta->is_used = 1;
         bl_tx_cntrl_link_up(sta);
         bl_hw->vif_table[BL_VIF_AP].links_num++;
-        if (bl_hw->vif_table[BL_VIF_AP].dev)
-        {
-            netifapi_netif_set_link_up(bl_hw->vif_table[BL_VIF_AP].dev);
-        }
+        /* AP netif link-up removed (STA-only FreeRTOS+TCP slice). */
     }
     else
     {
@@ -903,11 +901,7 @@ static int bl_rx_apm_sta_del_ind(struct bl_hw *bl_hw, struct bl_cmd *cmd, struct
         sta = &(wifi_hw.sta_table[fixed_sta_idx]);
         sta->is_used = 0;
         bl_tx_cntrl_link_down(sta);
-
-        if (bl_hw->vif_table[BL_VIF_AP].dev)
-        {
-            netifapi_netif_set_link_down(bl_hw->vif_table[BL_VIF_AP].dev);
-        }
+        /* AP netif link-down removed (STA-only FreeRTOS+TCP slice). */
     }
 
     platform_post_event(EV_WIFI, CODE_WIFI_ON_AP_STA_DEL, ind->sta_idx);

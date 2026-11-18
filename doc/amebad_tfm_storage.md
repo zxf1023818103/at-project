@@ -428,3 +428,29 @@ for (i=0;i<32;i++)                        /* EFUSERead8 secure ROM 别名 = 0x10
   `[STG]` 在 scheduler 前已 PASS）；疑似既有的 TFM+全驱动镜像网络 flakiness。
 - **串口**：别用 PnP Disable/Enable-PnpDevice 解锁被占的 COM 口——会把 CH340 重枚举成 ghost 还掉线；
   直接 kill 占口进程或等它释放。
+
+---
+
+## MPU / SAU 隔离资源与空闲槽（TF-M 隔离硬件）
+
+TF-M 的隔离靠核内两块硬件:**MPU**(内存属性/权限,等价于 RISC-V 的 PMP)+ **SAU**
+(Security Attribution Unit,划 secure/non-secure 地址空间——E907 没有的那块,见
+`doc/bouffalo_trustzone.md`)。ARMv8-M 的 MPU 是 **banked** 的:secure(`MPU_S`)、
+non-secure(`MPU_NS`)各一套,互不占用。
+
+**MPU 槽位数**(权威源 `component/amebad/cmsis_rom/mpu.h`,`MPU_MAX_REGION`):
+| 核 | 实际 core | 每安全态 MPU regions | boot 占用 | **空闲** |
+|---|---|---|---|---|
+| KM4(HP,主核) | Cortex-M33(ARMv8-M Mainline) | **8** | 5 | **3** |
+| KM0(LP) | Cortex-M23(ARMv8-M Baseline) | **4** | 4 | **0** |
+
+- 命名坑:仓里把 HP 核叫 `ARM_CORE_CM4`(历史名),实际是 **Cortex-M33**(用
+  `cmsis_rom/core_armv8m*.h`,不是老 SDK 的 `core_cm4.h`);LP 是 Cortex-M23。
+- `mpu_entry_alloc()` 是 **boot ROM 函数**(`cmsis_rom_km4.ld: PROVIDE(mpu_entry_alloc = 0x1010cdc1)`,
+  声明 `char mpu_entry_alloc(void)`),单调分配、不释放;全项目只有 `app_start` 调它。
+- **KM4 占的 5 个**(`rtl8721dhp_app_start.c:app_mpu_nocache_init`,line 490 启动一次):
+  nocache RAM(或 0x10000000 512K)/ 关 216K irom_ns cache / 关 80K drom_ns cache /
+  1KB retention RAM nocache / PSRAM(0x02000000)write-back。→ **主核还剩 3 个 MPU 槽空闲**。
+- **KM0 4 个用满,0 空闲。**
+- 上表是**应用/当前安全态那一套** MPU 的账;TF-M 打开时 secure 世界(SPE)用**另一套**
+  secure MPU(自己的 8 个),两套独立。SAU region 另算(通常 4/8 个,专门做 secure/NS 划分)。

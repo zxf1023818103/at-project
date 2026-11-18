@@ -1,15 +1,11 @@
 /*
- * freertos_heap_tlsf.c — AmebaD FreeRTOS heap backed by the shared tlsf_config
- * allocator (component/tlsf_config, TLSF), replacing the kernel's heap_5.c.
+ * freertos_heap_tlsf.c — the cross-platform FreeRTOS heap surface backed by the shared
+ * tlsf_config allocator (component/tlsf_config, TLSF), replacing the kernel's heap_5.c.
  *
  * The kernel's heap source is disabled (FREERTOS_HEAP points at the empty
  * freertos_heap_none.c), so this file provides the FreeRTOS heap surface
- * (pvPortMalloc/vPortFree/...) over kmalloc/kfree. The existing
- * freertos_heap5_config.c is kept UNCHANGED: its os_heap_init() still computes the
- * per-core AmebaD heap region table and calls vPortDefineHeapRegions() — which we
- * reimplement here to register each region as a tlsf_config TLSF heap. So the
- * battle-tested per-core region math (KM4 dynamic SRAM; KM0 static/ROM-BSS) is
- * reused verbatim, and only the allocator underneath changes.
+ * (pvPortMalloc/vPortFree/...) over kmalloc/kfree. The heap REGIONS themselves are
+ * registered by ram_heap_init() (ram_heap.c) directly from each platform's linker symbols.
  *
  * Also provides a STRONG mm_lock_save/mm_unlock_restore (tlsf_config's are weak): a
  * pre-scheduler-safe critical section via the Cortex-M PRIMASK.
@@ -22,49 +18,47 @@
 #include "mm.h"          /* shared tlsf_config: mem_manager_init / mm_register_heap / kmalloc / ... */
 
 /* ---- tlsf_config critical section (strong override of the weak defaults) ---- *
- * Used before the scheduler starts (first allocations are C ctors / stdio), so it
- * uses the FreeRTOS interrupt-mask save/restore (safe in task + ISR + pre-scheduler
- * context) rather than a mutex. No CMSIS include needed. */
+ * The heap is shared across tasks (e.g. the WiFi RX driver task allocates network
+ * buffers while the TCP/IP task allocates/frees them), so this MUST provide real
+ * mutual exclusion: it saves the current interrupt-enable state and disables
+ * interrupts, then restores. Nestable + ISR- + pre-scheduler-safe (no mutex, so
+ * usable by the first allocations from C ctors / stdio, before the scheduler).
+ *
+ * Per-arch, because the FreeRTOS interrupt-mask primitive differs:
+ *  - Cortex-M (AmebaD): portSET/CLEAR_INTERRUPT_MASK_FROM_ISR raise/restore BASEPRI.
+ *  - RISC-V (Bouffalo BL60x/BL61x): those two macros are NO-OPS in the RISC-V port
+ *    (they assume the trap handler already masked interrupts on ISR entry), so using
+ *    them in TASK context gives ZERO protection -> concurrent malloc/free from two
+ *    tasks corrupts the TLSF free-list. Save+clear mstatus.MIE (bit 3) directly. */
 uintptr_t mm_lock_save(void)
 {
+#if defined( __riscv )
+    uintptr_t mstatus;
+    /* Atomic: read mstatus into %0, then clear MIE (bit 3) -> interrupts off. */
+    __asm volatile ( "csrrci %0, mstatus, 8" : "=r" ( mstatus ) :: "memory" );
+    return mstatus;
+#else
     return (uintptr_t)portSET_INTERRUPT_MASK_FROM_ISR();
+#endif
 }
 
 void mm_unlock_restore(uintptr_t flags)
 {
-    portCLEAR_INTERRUPT_MASK_FROM_ISR((UBaseType_t)flags);
-}
-
-/* ---- region registration: vPortDefineHeapRegions() over tlsf_config ---- *
- * Each non-zero HeapRegion_t becomes a TLSF heap (ids 1..N). kmalloc(...,
- * MM_FLAG_HEAP_ANY) then spans them via the auto-list. Terminator = size 0
- * (matches heap_5 semantics). */
-#define AMEBAD_MM_MAX_HEAPS 4
-static uint8_t s_heap_ids[AMEBAD_MM_MAX_HEAPS];
-static int     s_heap_count;
-
-void vPortDefineHeapRegions(const HeapRegion_t * const pxHeapRegions)
-{
-    int i;
-
-    mem_manager_init();          /* registers the TLSF allocator; idempotent */
-    s_heap_count = 0;
-
-    for (i = 0; pxHeapRegions[i].xSizeInBytes != 0; i++) {
-        uint32_t heap_id = (uint32_t)(i + 1);   /* heap ids are 1.. (0 = invalid) */
-        if (heap_id >= CONFIG_MM_HEAP_COUNT) {
-            break;
-        }
-        if (mm_register_heap(heap_id, "rtos", MM_ALLOCATOR_TLSF,
-                             (void *)pxHeapRegions[i].pucStartAddress,
-                             (size_t)pxHeapRegions[i].xSizeInBytes) != NULL) {
-            if (s_heap_count < AMEBAD_MM_MAX_HEAPS) {
-                s_heap_ids[s_heap_count] = (uint8_t)heap_id;
-            }
-            s_heap_count++;
-        }
+#if defined( __riscv )
+    /* Re-enable interrupts only if MIE was set before (so nested locks stay off). */
+    if( ( flags & 0x8U ) != 0U )
+    {
+        __asm volatile ( "csrsi mstatus, 8" ::: "memory" );
     }
+#else
+    portCLEAR_INTERRUPT_MASK_FROM_ISR((UBaseType_t)flags);
+#endif
 }
+
+/* Heap-region registration lives in the shared ram_heap_init()
+ * (component/freertos-kernel_config/ram_heap.c): it calls mem_manager_init() + mm_register_heap()
+ * directly from the platform's linker symbols. This file only provides the pvPortMalloc surface
+ * below over the resulting tlsf_config heaps. (The old vPortDefineHeapRegions() shim is gone.) */
 
 /* ---- FreeRTOS heap surface over tlsf_config ---- */
 #if defined(configUSE_MALLOC_FAILED_HOOK) && (configUSE_MALLOC_FAILED_HOOK == 1)
@@ -75,7 +69,11 @@ extern void vApplicationMallocFailedHook(void);
 #endif
 
 /* 8-byte alignment to satisfy FreeRTOS portBYTE_ALIGNMENT on Cortex-M. */
+#if portBYTE_ALIGNMENT >= 32
+#define MM_RTOS_FLAGS  (MM_FLAG_HEAP_ANY | MM_FLAG_ALIGN_32BYTE)
+#else
 #define MM_RTOS_FLAGS  (MM_FLAG_HEAP_ANY | MM_FLAG_ALIGN_8BYTE)
+#endif
 
 void *pvPortMalloc(size_t xWantedSize)
 {
@@ -132,7 +130,7 @@ void vPortResetMinimumEverFreeHeapSize(void)
 
 void vPortInitialiseBlocks(void)
 {
-    /* heap is set up by vPortDefineHeapRegions() / os_heap_init(); nothing to do. */
+    /* heap is set up by ram_heap_init(); nothing to do. */
 }
 
 void vPortGetHeapStats(HeapStats_t *pxHeapStats)

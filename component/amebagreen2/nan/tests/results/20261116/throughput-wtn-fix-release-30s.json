@@ -1,0 +1,31 @@
+{
+  "blockBytes": 65536,
+  "cancelled": false,
+  "device": "Green2",
+  "discoverySeconds": 1.7393548333202489,
+  "finished": true,
+  "readySeconds": 3.495662999979686,
+  "requestedSecondsPerDirection": 30,
+  "results": [
+    {
+      "bytes": 40435712,
+      "direction": "upload",
+      "mbps": 10.745605102311986,
+      "peerBytes": 40435712,
+      "receiverSeconds": 30.104,
+      "senderSeconds": 30.046695958357304
+    },
+    {
+      "bytes": 53477376,
+      "direction": "download",
+      "mbps": 14.248496967735532,
+      "peerBytes": 53477376,
+      "receiverSeconds": 30.025553500046954,
+      "senderSeconds": 30.025
+    }
+  ],
+  "startedAt": "2026-11-16T06:40:06Z",
+  "testID": "5AB1BDD3-D236-48E5-9485-97D09419A911",
+  "transport": "Wi-Fi Aware TCP / bulk",
+  "version": 1
+}

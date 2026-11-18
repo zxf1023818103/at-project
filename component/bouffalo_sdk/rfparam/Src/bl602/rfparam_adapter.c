@@ -11,7 +11,7 @@ extern void phy_powroffset_set(int8_t power_offset[14]);
 extern void ble_controller_set_tx_pwr(int ble_tx_power);
 
 #define DBG_TAG "rfparam"
-#include "log.h"
+#include "bflb_log_compat.h"   /* bflb LOG_* -> rxi log_* (bflb_log deleted) */
 
 BFLB_LOG_DEFINE_TAG(RFPARAM, DBG_TAG, true);
 

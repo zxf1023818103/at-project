@@ -1,0 +1,12 @@
+click
+colorama==0.4.6
+cryptography>=3.4.8
+ecdsa==0.19.0
+json5
+lz4
+packaging
+pycryptodome==3.21.0
+pyDes==2.0.1
+pyelftools==0.31
+python-mbedtls==2.10.1
+sslcrypto==5.3

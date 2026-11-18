@@ -10,7 +10,7 @@ UNC='\\wsl.localhost\Ubuntu\home\zxf10\at-project'
 echo "===== PAD=$PAD : configure + build ====="
 cmake -S "$REPO" -B "$REPO/build/km4" -G Ninja -DAMEBAD_CHIP=amebad-km4 \
   -DCMAKE_TOOLCHAIN_FILE=cmake/amebad-km4.cmake -DCMAKE_BUILD_TYPE=MinSizeRel \
-  -DAMEBAD_ENABLE_QUIC=ON -DAMEBAD_WOLFSSL_ARMASM=ON -DAMEBAD_XIP_PAD="$PAD" >/dev/null 2>&1
+  -DAT_ENABLE_QUIC=ON -DAMEBAD_WOLFSSL_ARMASM=ON -DAMEBAD_XIP_PAD="$PAD" >/dev/null 2>&1
 ninja -C "$REPO/build/km4" target_img2_km4 >/dev/null 2>&1
 python3 "$REPO/component/amebad/image_tool/build_image_all.py" \
   --out "$REPO/build/amebad/Image_All.bin" >/dev/null 2>&1

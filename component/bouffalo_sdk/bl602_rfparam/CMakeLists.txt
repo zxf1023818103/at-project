@@ -6,11 +6,14 @@
 # Deps:
 #   bl602_std    — bl602_aon.h, bl602_hbn.h
 #   bl602_phyrf  — phy_trpc.h, wl_api.h
-#   bflb_log     — log.h
+#   rxi_log     — log.h
 #   FreeRTOS     — FreeRTOS.h, portable.h (rfparam_adapter.c needs these
 #                  at COMPILE time, so we have to link a FreeRTOS target
 #                  here — non-RTOS builds of bl602_rfparam aren't real,
 #                  the SDK's own use of this lib is RTOS-only).
+
+# rfparam_adapter.c logs via bflb_log_compat.h -> rxi; collapse __FILE__ to a basename.
+add_compile_options("-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=")
 
 add_library(bl602_rfparam STATIC
     rfparam_adapter.c
@@ -24,8 +27,8 @@ target_include_directories(bl602_rfparam PUBLIC
 target_link_libraries(bl602_rfparam PUBLIC
     bl602_std
     bl602_phyrf
-    bflb_log
-    bflb_freertos_port
+    rxi_log
+    freertos_port
 )
 
 if(CONFIG_RFPARAM_TLV_FIXED_ADDRESS)

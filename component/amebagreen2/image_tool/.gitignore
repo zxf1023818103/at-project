@@ -1,0 +1,2 @@
+# Upstream ImageTool ships this helper as bytecode; it is an input, not a cache.
+!/MP_ImageTool_1_N/combine_images.pyc

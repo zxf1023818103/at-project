@@ -213,3 +213,9 @@ SECTIONS
  * NS heap must stop at 0x10077000 or it faults — app_km4/CMakeLists.txt passes
  * --defsym=__tz_sram_top__=0x10077000 in that build to clamp it here. */
 __sram_end__ = DEFINED(__tz_sram_top__) ? __tz_sram_top__ : (ORIGIN(BD_RAM_NS) + LENGTH(BD_RAM_NS));
+
+/* Common heap-symbol aliases for the shared ram_heap_init() (freertos-kernel_config/ram_heap.c):
+ * KM4's one heap IS the NS FreeRTOS region __bfsram_end__..__sram_end__ (byte-for-byte unchanged).
+ * No secondary heap here -> leave _heap_wram_* undefined (weak -> 0 -> skipped by ram_heap_init). */
+__HeapBase  = __bfsram_end__;
+__HeapLimit = __sram_end__;

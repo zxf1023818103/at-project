@@ -1,0 +1,3025 @@
+{
+  "repository": "https://github.com/zxf1023818103/ameba-rtos.git",
+  "commit": "4b964de6cbaa08c95d37ff3c1d52805e69f430d3",
+  "description": "Files required by the standalone AmebaDplus images, extracted into AmebaD-style component directories. No external SDK checkout is required.",
+  "files": [
+    {
+      "path": "component/amebadplus/LICENSE.realtek",
+      "source": "LICENSE",
+      "upstream_sha256": "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd",
+      "sha256": "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd"
+    },
+    {
+      "path": "component/amebadplus/cmsis_rom/cmsis_compiler.h",
+      "source": "component/soc/common/include/cmsis/cmsis_compiler.h",
+      "upstream_sha256": "edbd3b70deacd3701ca981bf7e2fe3db93f2bf526876dc8f0fd11a30a71a73ca",
+      "sha256": "edbd3b70deacd3701ca981bf7e2fe3db93f2bf526876dc8f0fd11a30a71a73ca"
+    },
+    {
+      "path": "component/amebadplus/cmsis_rom/cmsis_gcc.h",
+      "source": "component/soc/common/include/cmsis/cmsis_gcc.h",
+      "upstream_sha256": "43bfd1fe69fbbc2ca70aaf7d43cc3e20f16e0c7f66e1bdef9b51af6dc14b2617",
+      "sha256": "43bfd1fe69fbbc2ca70aaf7d43cc3e20f16e0c7f66e1bdef9b51af6dc14b2617"
+    },
+    {
+      "path": "component/amebadplus/cmsis_rom/cmsis_version.h",
+      "source": "component/soc/common/include/cmsis/cmsis_version.h",
+      "upstream_sha256": "184c19fd3ee73632edf35a0b4d49cd48be75fbf49e6ccb19d9db05fa83bea4b3",
+      "sha256": "184c19fd3ee73632edf35a0b4d49cd48be75fbf49e6ccb19d9db05fa83bea4b3"
+    },
+    {
+      "path": "component/amebadplus/cmsis_rom/core_cm23_km0.h",
+      "source": "component/soc/common/include/cmsis/core_cm23_km0.h",
+      "upstream_sha256": "688726f021f7c75d8cac84ce205897fc22373bd2ebf210668e0e0f00858d95bf",
+      "sha256": "688726f021f7c75d8cac84ce205897fc22373bd2ebf210668e0e0f00858d95bf"
+    },
+    {
+      "path": "component/amebadplus/cmsis_rom/core_cm55.h",
+      "source": "component/soc/common/include/cmsis/core_cm55.h",
+      "upstream_sha256": "86ad0ca36dd6460624327910fc6b67876f62295257d2a38897eebc086e4f938b",
+      "sha256": "86ad0ca36dd6460624327910fc6b67876f62295257d2a38897eebc086e4f938b"
+    },
+    {
+      "path": "component/amebadplus/cmsis_rom/m-profile/armv7m_cachel1.h",
+      "source": "component/soc/common/include/cmsis/m-profile/armv7m_cachel1.h",
+      "upstream_sha256": "8336b5720c2467bcd9fcd6476003ba690ebac96fa8e820d4d05a654461ff0661",
+      "sha256": "8336b5720c2467bcd9fcd6476003ba690ebac96fa8e820d4d05a654461ff0661"
+    },
+    {
+      "path": "component/amebadplus/cmsis_rom/m-profile/armv8m_mpu.h",
+      "source": "component/soc/common/include/cmsis/m-profile/armv8m_mpu.h",
+      "upstream_sha256": "2c7d22a344cedcc1e35380d1f76f0e6c55da5e3101e6a41fd85497d1841fe8c9",
+      "sha256": "2c7d22a344cedcc1e35380d1f76f0e6c55da5e3101e6a41fd85497d1841fe8c9"
+    },
+    {
+      "path": "component/amebadplus/cmsis_rom/m-profile/armv8m_pmu.h",
+      "source": "component/soc/common/include/cmsis/m-profile/armv8m_pmu.h",
+      "upstream_sha256": "cea8c105c5f41ba831fe4d9e8e39758068cd4c414383348dc2835d6be447cca0",
+      "sha256": "cea8c105c5f41ba831fe4d9e8e39758068cd4c414383348dc2835d6be447cca0"
+    },
+    {
+      "path": "component/amebadplus/dlist/dlist.h",
+      "source": "component/os/os_wrapper/include/dlist.h",
+      "upstream_sha256": "6ab002f1075b7c6b185fc9d45e2ccc36fe811326f90a970a2e972a240fe58669",
+      "sha256": "6ab002f1075b7c6b185fc9d45e2ccc36fe811326f90a970a2e972a240fe58669"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/COPYING",
+      "source": "component/lwip/lwip_v2.1.2/COPYING",
+      "upstream_sha256": "8fb15ebdb19eb669e1d37fcd8e57a44c477fcc0e93a9ab0d181760965f94d5ed",
+      "sha256": "8fb15ebdb19eb669e1d37fcd8e57a44c477fcc0e93a9ab0d181760965f94d5ed"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/arch/cc.h",
+      "source": "component/lwip/lwip_v2.1.2/port/realtek/arch/cc.h",
+      "upstream_sha256": "81609a9a2bf2d55fdb79213ecabca56f244ab95e6554442b47f567c35a4665b5",
+      "sha256": "81609a9a2bf2d55fdb79213ecabca56f244ab95e6554442b47f567c35a4665b5"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/arch/sys_arch.h",
+      "source": "component/lwip/lwip_v2.1.2/port/realtek/arch/sys_arch.h",
+      "upstream_sha256": "0f1fcba329f2923ca4cb3e8ce25f00f72a144963efcdd82b0ba2f8d8d1aba02f",
+      "sha256": "0f1fcba329f2923ca4cb3e8ce25f00f72a144963efcdd82b0ba2f8d8d1aba02f"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/ethernetif.h",
+      "source": "component/lwip/lwip_v2.1.2/port/realtek/freertos/ethernetif.h",
+      "upstream_sha256": "fe6ceedf7fad0bb899184183df94bcc760157b413e8dbe76c6addb4e3967e346",
+      "sha256": "fe6ceedf7fad0bb899184183df94bcc760157b413e8dbe76c6addb4e3967e346"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/api.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/api.h",
+      "upstream_sha256": "c6cff3c23beacacb82d2feb90d320134b2baad4d627fa0a5b73ce8d6c368e65e",
+      "sha256": "c6cff3c23beacacb82d2feb90d320134b2baad4d627fa0a5b73ce8d6c368e65e"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/apps/sntp.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/apps/sntp.h",
+      "upstream_sha256": "2c3d461a79a29db2697a2f0e2f034301af859b878019a317d25360cde378da68",
+      "sha256": "2c3d461a79a29db2697a2f0e2f034301af859b878019a317d25360cde378da68"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/apps/sntp_opts.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/apps/sntp_opts.h",
+      "upstream_sha256": "c923bce684987e99775d122b513f0f7755f034ace14c66240d7afc599fcd2e07",
+      "sha256": "c923bce684987e99775d122b513f0f7755f034ace14c66240d7afc599fcd2e07"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/arch.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/arch.h",
+      "upstream_sha256": "8838d1716b807694c23338116374bf84354cb99878277dff8a7978f295bc215a",
+      "sha256": "8838d1716b807694c23338116374bf84354cb99878277dff8a7978f295bc215a"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/autoip.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/autoip.h",
+      "upstream_sha256": "420426a799f805d970f0efec4d612a3cd601fcf434378f2f24dbdfe4a8f4429c",
+      "sha256": "420426a799f805d970f0efec4d612a3cd601fcf434378f2f24dbdfe4a8f4429c"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/debug.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/debug.h",
+      "upstream_sha256": "26e83dd085c4a82195810689f2065f9ea0912ca282d238d23c976221b1f01954",
+      "sha256": "26e83dd085c4a82195810689f2065f9ea0912ca282d238d23c976221b1f01954"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/def.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/def.h",
+      "upstream_sha256": "3af6e0c03878220fa3bf2c6da2f214e563376a50f1a97cb28e82dddcdea185c0",
+      "sha256": "3af6e0c03878220fa3bf2c6da2f214e563376a50f1a97cb28e82dddcdea185c0"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/dhcp.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/dhcp.h",
+      "upstream_sha256": "abaee7167b893d9bc5c9963e1c2ebc19a844a3d90206ddf542bbe2d6cf534f20",
+      "sha256": "abaee7167b893d9bc5c9963e1c2ebc19a844a3d90206ddf542bbe2d6cf534f20"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/dns.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/dns.h",
+      "upstream_sha256": "644a1743ffa10617ea4a4ee466b53851be71b79acdca99311631d1de4a920244",
+      "sha256": "644a1743ffa10617ea4a4ee466b53851be71b79acdca99311631d1de4a920244"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/err.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/err.h",
+      "upstream_sha256": "af26b573fc5c6a31877fdcde35e15382ac0c8b01f35af3f5a4429f9cf5dd323d",
+      "sha256": "af26b573fc5c6a31877fdcde35e15382ac0c8b01f35af3f5a4429f9cf5dd323d"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/errno.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/errno.h",
+      "upstream_sha256": "028b9e9fdf46c6ed093c0bb4a124fd80f37ec2283ae02f19c345125f1ca1df8f",
+      "sha256": "028b9e9fdf46c6ed093c0bb4a124fd80f37ec2283ae02f19c345125f1ca1df8f"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/etharp.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/etharp.h",
+      "upstream_sha256": "e54c34b112096a3ebea3f0aa3f9031203210e0d91ecbe39936db5d6be3a4ae1c",
+      "sha256": "e54c34b112096a3ebea3f0aa3f9031203210e0d91ecbe39936db5d6be3a4ae1c"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/ethip6.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/ethip6.h",
+      "upstream_sha256": "7a7e744ae373a720261be3651adaa0f35ff00ebb1bcf38e5330e371ddfd162b7",
+      "sha256": "7a7e744ae373a720261be3651adaa0f35ff00ebb1bcf38e5330e371ddfd162b7"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/icmp.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/icmp.h",
+      "upstream_sha256": "84f63c9fbc6f6d66ef437f834279c25c20bfa78834eb0ee347c70377f7f8d8c8",
+      "sha256": "84f63c9fbc6f6d66ef437f834279c25c20bfa78834eb0ee347c70377f7f8d8c8"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/igmp.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/igmp.h",
+      "upstream_sha256": "6be8abc4317411f00db81bbd3725f35101dfa1ff4a75bbcad3f1131682c79c7d",
+      "sha256": "6be8abc4317411f00db81bbd3725f35101dfa1ff4a75bbcad3f1131682c79c7d"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/inet.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/inet.h",
+      "upstream_sha256": "0b47c86a43d0415dd4e6403b38de41de014ab672a8df115e64407900fd31ef11",
+      "sha256": "0b47c86a43d0415dd4e6403b38de41de014ab672a8df115e64407900fd31ef11"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/inet_chksum.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/inet_chksum.h",
+      "upstream_sha256": "4f99b8325be79c66937a496576ee3ede1f67a44132be35b33582bf15dbb91207",
+      "sha256": "4f99b8325be79c66937a496576ee3ede1f67a44132be35b33582bf15dbb91207"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/init.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/init.h",
+      "upstream_sha256": "5a27cd6b48bd361b9b9dc04a43f9f9ddf3fcab21be0e396f67fa0d3fca056579",
+      "sha256": "5a27cd6b48bd361b9b9dc04a43f9f9ddf3fcab21be0e396f67fa0d3fca056579"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/ip.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/ip.h",
+      "upstream_sha256": "9589862a8cd3d22ad06ac291231d4b0335cb15e2d0e5bcbd1f870808d9f85828",
+      "sha256": "9589862a8cd3d22ad06ac291231d4b0335cb15e2d0e5bcbd1f870808d9f85828"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/ip4.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/ip4.h",
+      "upstream_sha256": "d15ed11a5551d6968d536f5bba63d53c95214668002b12342e6bcf3b840e612e",
+      "sha256": "d15ed11a5551d6968d536f5bba63d53c95214668002b12342e6bcf3b840e612e"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/ip4_addr.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/ip4_addr.h",
+      "upstream_sha256": "373faa87a644cedd25874acfbaeea0349b34448fc2dafa5d0853d945e46a6fe8",
+      "sha256": "373faa87a644cedd25874acfbaeea0349b34448fc2dafa5d0853d945e46a6fe8"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/ip6.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/ip6.h",
+      "upstream_sha256": "7681c2948f700aa565c387ca20654f7322991ca15de7fd4e8f342a8ce44abe57",
+      "sha256": "7681c2948f700aa565c387ca20654f7322991ca15de7fd4e8f342a8ce44abe57"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/ip6_addr.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/ip6_addr.h",
+      "upstream_sha256": "7358a015908451456af8b8893edb23653471b28a9e7b3653f750906bdd4c70d6",
+      "sha256": "7358a015908451456af8b8893edb23653471b28a9e7b3653f750906bdd4c70d6"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/ip_addr.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/ip_addr.h",
+      "upstream_sha256": "0b5fc0b5d521235a610c79bb3ba82c4e27364856650e7a473ac7d15e21b23ca5",
+      "sha256": "0b5fc0b5d521235a610c79bb3ba82c4e27364856650e7a473ac7d15e21b23ca5"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/mem.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/mem.h",
+      "upstream_sha256": "416f961f338a0cba460494ebfe2527b7cc1fc5c18f489711e66af7dd76b7a223",
+      "sha256": "416f961f338a0cba460494ebfe2527b7cc1fc5c18f489711e66af7dd76b7a223"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/memp.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/memp.h",
+      "upstream_sha256": "79dfd019219330cf08deb1360483eb7d1da7a1a7a304034ef65ad52feefba1ef",
+      "sha256": "79dfd019219330cf08deb1360483eb7d1da7a1a7a304034ef65ad52feefba1ef"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/netbuf.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/netbuf.h",
+      "upstream_sha256": "1aa92014d8919c5073b5123c92881e00b0c507ca485667ccdebbf31afa214ff3",
+      "sha256": "1aa92014d8919c5073b5123c92881e00b0c507ca485667ccdebbf31afa214ff3"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/netdb.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/netdb.h",
+      "upstream_sha256": "582518497fefd57cd1d227947965c71b1dc16846add471af0fddfbb461c7aca0",
+      "sha256": "582518497fefd57cd1d227947965c71b1dc16846add471af0fddfbb461c7aca0"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/netif.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/netif.h",
+      "upstream_sha256": "a0d2caf68fc8e87065d401a14bc735c3d6d6fda209dca0805703abacf4c2cbb0",
+      "sha256": "a0d2caf68fc8e87065d401a14bc735c3d6d6fda209dca0805703abacf4c2cbb0"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/netifapi.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/netifapi.h",
+      "upstream_sha256": "2c087eac81246ac74e3ba2c3922de0612890587f0cca7c1360f379a57ab45518",
+      "sha256": "2c087eac81246ac74e3ba2c3922de0612890587f0cca7c1360f379a57ab45518"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/opt.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/opt.h",
+      "upstream_sha256": "8eb80f8689ce4c4ee630c8f5a724a66c1d852eedffa2c9b45ec7808242cc25cd",
+      "sha256": "8eb80f8689ce4c4ee630c8f5a724a66c1d852eedffa2c9b45ec7808242cc25cd"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/pbuf.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/pbuf.h",
+      "upstream_sha256": "43143bd08995da21c7d9258dc3544e4debd54418b34879d2cdd6f42763e39963",
+      "sha256": "43143bd08995da21c7d9258dc3544e4debd54418b34879d2cdd6f42763e39963"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/priv/api_msg.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/priv/api_msg.h",
+      "upstream_sha256": "e2458063868f0813bc26f41709bbf78d994760e72667b646b88f15e16e235f48",
+      "sha256": "e2458063868f0813bc26f41709bbf78d994760e72667b646b88f15e16e235f48"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/priv/mem_priv.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/priv/mem_priv.h",
+      "upstream_sha256": "c90c9b64c8ea95c05d5b8b10d706acb53b6cc124166e8dd85b397698679f7920",
+      "sha256": "c90c9b64c8ea95c05d5b8b10d706acb53b6cc124166e8dd85b397698679f7920"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/priv/memp_priv.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/priv/memp_priv.h",
+      "upstream_sha256": "37aff2894bbe25f1888e43b96be80f4c1a43a24867c0fc9aceb4093328682937",
+      "sha256": "37aff2894bbe25f1888e43b96be80f4c1a43a24867c0fc9aceb4093328682937"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/priv/memp_std.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/priv/memp_std.h",
+      "upstream_sha256": "86cdf1d80f2716a07011dc763e5fa614cd2b555382cb7d6750176116def67a0f",
+      "sha256": "86cdf1d80f2716a07011dc763e5fa614cd2b555382cb7d6750176116def67a0f"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/priv/tcpip_priv.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/priv/tcpip_priv.h",
+      "upstream_sha256": "aeb6e4ed4cb0833ca8007ef35c2dbfa75969bfbb6042df50ad698a7a56b12a16",
+      "sha256": "aeb6e4ed4cb0833ca8007ef35c2dbfa75969bfbb6042df50ad698a7a56b12a16"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/prot/etharp.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/prot/etharp.h",
+      "upstream_sha256": "06145c7efe942660ade493ca5bac8002cb4d1e2656d51df09ad29851b24f66ec",
+      "sha256": "06145c7efe942660ade493ca5bac8002cb4d1e2656d51df09ad29851b24f66ec"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/prot/ethernet.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/prot/ethernet.h",
+      "upstream_sha256": "42fbc05a563d3ad242663b7d82601bbae6c6d9c16a6da5b35b51a02799206303",
+      "sha256": "42fbc05a563d3ad242663b7d82601bbae6c6d9c16a6da5b35b51a02799206303"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/prot/iana.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/prot/iana.h",
+      "upstream_sha256": "745c2d70a5d4839e3df5a34f7e37b83bcc7fe58f39eba1d2f5e238242d74c878",
+      "sha256": "745c2d70a5d4839e3df5a34f7e37b83bcc7fe58f39eba1d2f5e238242d74c878"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/prot/icmp.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/prot/icmp.h",
+      "upstream_sha256": "931d46a3e775efcd6076263e23eb564b612913b7c11f7b5d009e94fefeb20f28",
+      "sha256": "931d46a3e775efcd6076263e23eb564b612913b7c11f7b5d009e94fefeb20f28"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/prot/ieee.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/prot/ieee.h",
+      "upstream_sha256": "ec85a505aba178178743b34429f463a41ac43d3750d63901c7e1273dcd0a2ba6",
+      "sha256": "ec85a505aba178178743b34429f463a41ac43d3750d63901c7e1273dcd0a2ba6"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/prot/ip.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/prot/ip.h",
+      "upstream_sha256": "eb5371e5ac58467253d813bc58726e317f91abadb10336497de0d64645ec01cd",
+      "sha256": "eb5371e5ac58467253d813bc58726e317f91abadb10336497de0d64645ec01cd"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/prot/ip4.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/prot/ip4.h",
+      "upstream_sha256": "033570c0b7657f5475959f7b74d9e23c6f8e81498495d5b23d8c2eeb0640d7a7",
+      "sha256": "033570c0b7657f5475959f7b74d9e23c6f8e81498495d5b23d8c2eeb0640d7a7"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/prot/udp.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/prot/udp.h",
+      "upstream_sha256": "b56daa8ff1e8e52cdd4f720297f07af2a96feea254db86768e20e157d7ce2784",
+      "sha256": "b56daa8ff1e8e52cdd4f720297f07af2a96feea254db86768e20e157d7ce2784"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/raw.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/raw.h",
+      "upstream_sha256": "4485e6dddc930401193e380852ea7af121339fcc340114ba11b18b1e51c3440b",
+      "sha256": "4485e6dddc930401193e380852ea7af121339fcc340114ba11b18b1e51c3440b"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/sockets.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/sockets.h",
+      "upstream_sha256": "9f4ade57bb205e9d08b710883e7d2f8061b60b60e850fb6e66aab4329cf8eb1f",
+      "sha256": "9f4ade57bb205e9d08b710883e7d2f8061b60b60e850fb6e66aab4329cf8eb1f"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/stats.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/stats.h",
+      "upstream_sha256": "295e3f2f9be188c05a90c2bb7e57a250a07e5ca7c54bdd31a50309da82cc5874",
+      "sha256": "295e3f2f9be188c05a90c2bb7e57a250a07e5ca7c54bdd31a50309da82cc5874"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/sys.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/sys.h",
+      "upstream_sha256": "7795af8f25907588a9f53567755c6d63a6fc87aa1118f764e71d368cc3d63f6e",
+      "sha256": "7795af8f25907588a9f53567755c6d63a6fc87aa1118f764e71d368cc3d63f6e"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/tcp.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/tcp.h",
+      "upstream_sha256": "73c7c6b0c301be9fc81f43975ea44325ef20aa915fe5f9ddfd62157370321e00",
+      "sha256": "73c7c6b0c301be9fc81f43975ea44325ef20aa915fe5f9ddfd62157370321e00"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/tcpbase.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/tcpbase.h",
+      "upstream_sha256": "cc99fcf9a85b548157dc0631922edf5ebac82c431d463683d10bfc584971a42e",
+      "sha256": "cc99fcf9a85b548157dc0631922edf5ebac82c431d463683d10bfc584971a42e"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/tcpip.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/tcpip.h",
+      "upstream_sha256": "b73bf326ed7bbb78c137a0354e107cd89cf6c1919f808ce9d9914a5149443aa5",
+      "sha256": "b73bf326ed7bbb78c137a0354e107cd89cf6c1919f808ce9d9914a5149443aa5"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/timeouts.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/timeouts.h",
+      "upstream_sha256": "1007f53fedcec281f8c38339ed717fe4e067459b1ba0ff65c1c21cb573992515",
+      "sha256": "1007f53fedcec281f8c38339ed717fe4e067459b1ba0ff65c1c21cb573992515"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip/udp.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/lwip/udp.h",
+      "upstream_sha256": "eea3f8e8b66c0424c47c852abc52ab206901572b7758ac6ca18b60fc01f57625",
+      "sha256": "eea3f8e8b66c0424c47c852abc52ab206901572b7758ac6ca18b60fc01f57625"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwip_netconf.h",
+      "source": "component/lwip/api/lwip_netconf.h",
+      "upstream_sha256": "2c4678c4087a1c1be9097fb797ad5cafe8b90fd6e20344dc7f4fe1ca1914c658",
+      "sha256": "2c4678c4087a1c1be9097fb797ad5cafe8b90fd6e20344dc7f4fe1ca1914c658"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwipconf.h",
+      "source": "component/lwip/api/lwipconf.h",
+      "upstream_sha256": "f2b9f57ce75d097d52248fd2d0e200120d85e40ec78bc02cfcee120faeae8816",
+      "sha256": "f2b9f57ce75d097d52248fd2d0e200120d85e40ec78bc02cfcee120faeae8816"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/lwipopts.h",
+      "source": "component/lwip/api/lwipopts.h",
+      "upstream_sha256": "cf2daa13296ab71971c6d9b4aa66dedf06bc977c0479fb885429c4cca99d1733",
+      "sha256": "cf2daa13296ab71971c6d9b4aa66dedf06bc977c0479fb885429c4cca99d1733"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/netif/ppp/ppp_impl.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/netif/ppp/ppp_impl.h",
+      "upstream_sha256": "c057f68d70435de90b7ab752b30ef6da3106773b6ecb3a20dd34fcd9b699be12",
+      "sha256": "c057f68d70435de90b7ab752b30ef6da3106773b6ecb3a20dd34fcd9b699be12"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/netif/ppp/ppp_opts.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/netif/ppp/ppp_opts.h",
+      "upstream_sha256": "fcedcc2e603d155bad124e837e119abf616f1acafbee5315dd2a55adcf13fe42",
+      "sha256": "fcedcc2e603d155bad124e837e119abf616f1acafbee5315dd2a55adcf13fe42"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/netif/ppp/pppapi.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/netif/ppp/pppapi.h",
+      "upstream_sha256": "f1520293792605ad0f0c78c93a5907d478affbebea8d6be1b0f8a8bdc9c4b427",
+      "sha256": "f1520293792605ad0f0c78c93a5907d478affbebea8d6be1b0f8a8bdc9c4b427"
+    },
+    {
+      "path": "component/amebadplus/freertos_tcp_port/lwip_compat/netif/ppp/pppoe.h",
+      "source": "component/lwip/lwip_v2.1.2/src/include/netif/ppp/pppoe.h",
+      "upstream_sha256": "c05ff231f10ac04e960ebd6b54a85c978e99209aa538f3156c7f5388195c62ad",
+      "sha256": "c05ff231f10ac04e960ebd6b54a85c978e99209aa538f3156c7f5388195c62ad"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba.h",
+      "upstream_sha256": "c4f0f46148ce429803add78ae3438cae131a422888b0cf2d9b79d98bb08817e1",
+      "sha256": "c4f0f46148ce429803add78ae3438cae131a422888b0cf2d9b79d98bb08817e1"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_adc.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_adc.c",
+      "upstream_sha256": "3e6b2741dbb219021aa0568de290158a3a185b965ffd14d3fa6dc881ecae511e",
+      "sha256": "3e6b2741dbb219021aa0568de290158a3a185b965ffd14d3fa6dc881ecae511e"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_adc.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_adc.h",
+      "upstream_sha256": "ebc4bcc2a8af3f9f538ab7367199dc4fed08ea21f850884372e9df43dd32aad1",
+      "sha256": "ebc4bcc2a8af3f9f538ab7367199dc4fed08ea21f850884372e9df43dd32aad1"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_aontimer.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_aontimer.c",
+      "upstream_sha256": "586168d42154191621d2bba6a903c0779b2a16bb88f9e10124b53bb8990f165b",
+      "sha256": "586168d42154191621d2bba6a903c0779b2a16bb88f9e10124b53bb8990f165b"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_aontimer.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_aontimer.h",
+      "upstream_sha256": "c8162ba9d8eb646568aba4de6643e83d90ade90ffefe6548a01727ef3342c5f2",
+      "sha256": "c8162ba9d8eb646568aba4de6643e83d90ade90ffefe6548a01727ef3342c5f2"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_arch.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_arch.c",
+      "upstream_sha256": "c53a1dc838d4061142fd766e2be5d0e8560102f88d9028bb8d59f275668848ee",
+      "sha256": "c53a1dc838d4061142fd766e2be5d0e8560102f88d9028bb8d59f275668848ee"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_arch.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_arch.h",
+      "upstream_sha256": "5cce5bd0ed06ad48611e4e6b9b1345a8e416a1e0e865e4ffa77b771a34abe178",
+      "sha256": "5cce5bd0ed06ad48611e4e6b9b1345a8e416a1e0e865e4ffa77b771a34abe178"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_audio.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_audio.h",
+      "upstream_sha256": "accf29a893e13e393e2c81d7bff5e5131d3c1dc23680dd2e1125c101ff9a89f9",
+      "sha256": "accf29a893e13e393e2c81d7bff5e5131d3c1dc23680dd2e1125c101ff9a89f9"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_audio_clock.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_audio_clock.c",
+      "upstream_sha256": "b87e0f32076365a0c7b49d02dbbe335244cc93b4eeb476024aa80b858a68ff3c",
+      "sha256": "b87e0f32076365a0c7b49d02dbbe335244cc93b4eeb476024aa80b858a68ff3c"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_audio_clock.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_audio_clock.h",
+      "upstream_sha256": "19075ac7d11a52e9bcacbacf3a9e0d33b8c1cfcb71df1c0255e65a6804ecc377",
+      "sha256": "19075ac7d11a52e9bcacbacf3a9e0d33b8c1cfcb71df1c0255e65a6804ecc377"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_backup_reg.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_backup_reg.h",
+      "upstream_sha256": "8a57cf3d529a80b22b064787946504922adb20b437324360169cf49cd80c151c",
+      "sha256": "8a57cf3d529a80b22b064787946504922adb20b437324360169cf49cd80c151c"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_boot.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_boot.h",
+      "upstream_sha256": "dd2f7aeb76d89f4ce50063a6baed1d3fb2d0ef3960e6dbb395fadb3987002081",
+      "sha256": "dd2f7aeb76d89f4ce50063a6baed1d3fb2d0ef3960e6dbb395fadb3987002081"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_bor.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_bor.c",
+      "upstream_sha256": "d7bee968fc560411dc28c2182cbd279086e57069ce3b78aa04b571bcf6c7b6a4",
+      "sha256": "d7bee968fc560411dc28c2182cbd279086e57069ce3b78aa04b571bcf6c7b6a4"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_bor.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_bor.h",
+      "upstream_sha256": "9b832fef5e512a27076da116379fed36f0cffd65bf0ebb393371ea9b068f0bbe",
+      "sha256": "9b832fef5e512a27076da116379fed36f0cffd65bf0ebb393371ea9b068f0bbe"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_cache.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_cache.h",
+      "upstream_sha256": "4f4bc077ea6c1f061e66329db55ed1ac402211858eeef540a20e6ae01808bf20",
+      "sha256": "4f4bc077ea6c1f061e66329db55ed1ac402211858eeef540a20e6ae01808bf20"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_captouch.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_captouch.c",
+      "upstream_sha256": "506675bf7f4a1d66620b968f0c7067c35b2076fe18e3fbb61a79c47e7ae2de31",
+      "sha256": "506675bf7f4a1d66620b968f0c7067c35b2076fe18e3fbb61a79c47e7ae2de31"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_captouch.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_captouch.h",
+      "upstream_sha256": "ab90eb4abe485e3b870a5351126017705e942296cd2ab20f8f733168bb2879c8",
+      "sha256": "ab90eb4abe485e3b870a5351126017705e942296cd2ab20f8f733168bb2879c8"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_chipinfo.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_chipinfo.h",
+      "upstream_sha256": "33ea1ac2a52fd52edf9e61ea1afad64f624e7549c8b139e7a09a360497fcc472",
+      "sha256": "33ea1ac2a52fd52edf9e61ea1afad64f624e7549c8b139e7a09a360497fcc472"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_clk.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_clk.c",
+      "upstream_sha256": "79169c9c41ad7995d514cd2b5b028e1fbef7a925b877a6f96f92be2d776b1007",
+      "sha256": "79169c9c41ad7995d514cd2b5b028e1fbef7a925b877a6f96f92be2d776b1007"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_clk.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_clk.h",
+      "upstream_sha256": "59d2886363cca583d932211c03a624684173debb3cc2b5bdb09fad329dfb71b7",
+      "sha256": "59d2886363cca583d932211c03a624684173debb3cc2b5bdb09fad329dfb71b7"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_codec.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_codec.c",
+      "upstream_sha256": "48be0a954539498985514ca40d8a2fb4039856143edc15a89f4f7d9c27c39bf1",
+      "sha256": "48be0a954539498985514ca40d8a2fb4039856143edc15a89f4f7d9c27c39bf1"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_comp.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_comp.h",
+      "upstream_sha256": "65fca1713ef8201512839211a783f0c3196048ffbcf7bb876b0a42e4ba58b25f",
+      "sha256": "65fca1713ef8201512839211a783f0c3196048ffbcf7bb876b0a42e4ba58b25f"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_comparator.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_comparator.c",
+      "upstream_sha256": "56575dd870be43800f7516e830cebbbe34fd83edabe649913af2cdc4ca15d79d",
+      "sha256": "56575dd870be43800f7516e830cebbbe34fd83edabe649913af2cdc4ca15d79d"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_crypto_api.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_crypto_api.h",
+      "upstream_sha256": "f7793e7e8cc1fdaf2e64af5c6d24b29bad642980521bf0bf541aca3f33e258c7",
+      "sha256": "f7793e7e8cc1fdaf2e64af5c6d24b29bad642980521bf0bf541aca3f33e258c7"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_data_flash.c",
+      "source": "component/soc/amebadplus/fwlib/ram_km4/ameba_data_flash.c",
+      "upstream_sha256": "32446447cb3fff9b1ff64824c009dea1125a5b2add82d04e2b81770ce298273c",
+      "sha256": "32446447cb3fff9b1ff64824c009dea1125a5b2add82d04e2b81770ce298273c"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_data_flash.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_data_flash.h",
+      "upstream_sha256": "94ca8bc2bb1eefac8bc6e6deb03acdf8e3fd953127f6663334f09974b9b11541",
+      "sha256": "94ca8bc2bb1eefac8bc6e6deb03acdf8e3fd953127f6663334f09974b9b11541"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_data_flashclk.c",
+      "source": "component/soc/amebadplus/fwlib/ram_km4/ameba_data_flashclk.c",
+      "upstream_sha256": "f4f2913ed74a9c45496674e724198b0271cee3ac0c8730f61019015ef2623171",
+      "sha256": "f4f2913ed74a9c45496674e724198b0271cee3ac0c8730f61019015ef2623171"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_debugtimer.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_debugtimer.h",
+      "upstream_sha256": "feccd2ddfca112dfc2155c06fd27f6fa72c10e88ced2231d3773665807c22551",
+      "sha256": "feccd2ddfca112dfc2155c06fd27f6fa72c10e88ced2231d3773665807c22551"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_delay.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_delay.h",
+      "upstream_sha256": "37fb97117d12c2af91193cb31bcd04c91ab8b548c5f73a3d87516c0eb4785a6e",
+      "sha256": "37fb97117d12c2af91193cb31bcd04c91ab8b548c5f73a3d87516c0eb4785a6e"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_fault_handle.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_fault_handle.c",
+      "upstream_sha256": "954b2bbfbc4065ab29b4b9385b1c4a7d636a6fe83109b4bf06bacd1d937a7c74",
+      "sha256": "954b2bbfbc4065ab29b4b9385b1c4a7d636a6fe83109b4bf06bacd1d937a7c74"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_fault_handle.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_fault_handle.h",
+      "upstream_sha256": "e66f02a8cda9745ada9b6e3ec41b82d9aa19c1e03e6cf1307ca406b282727af8",
+      "sha256": "e66f02a8cda9745ada9b6e3ec41b82d9aa19c1e03e6cf1307ca406b282727af8"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_flash_ram.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_flash_ram.c",
+      "upstream_sha256": "2ea0fc1c0ca3c1783bacd1eda891d3f462d71652f7e91cd0a74f9f1fca883d3f",
+      "sha256": "2ea0fc1c0ca3c1783bacd1eda891d3f462d71652f7e91cd0a74f9f1fca883d3f"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_flashclk.c",
+      "source": "component/soc/amebadplus/fwlib/ram_km4/ameba_flashclk.c",
+      "upstream_sha256": "eee3b65f53a67fabb3db816c3e57d9ebeabf763e3cd40e0ca996006a8213adcc",
+      "sha256": "eee3b65f53a67fabb3db816c3e57d9ebeabf763e3cd40e0ca996006a8213adcc"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_flashclk.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_flashclk.h",
+      "upstream_sha256": "183a31b3fb71b0d2db8ca5fcb9b0638047dd91600f634fff49da4f4a498739e8",
+      "sha256": "183a31b3fb71b0d2db8ca5fcb9b0638047dd91600f634fff49da4f4a498739e8"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_gdma.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_gdma.h",
+      "upstream_sha256": "7b294ce5e6cffbb8fb8be9b536c36af8da3536677875d3b885fe9233833c8ef0",
+      "sha256": "7b294ce5e6cffbb8fb8be9b536c36af8da3536677875d3b885fe9233833c8ef0"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_gdma_ram.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_gdma_ram.c",
+      "upstream_sha256": "56ba6d480be531aba13a9946287815f1291f348f78fea0cf97b7984417da8447",
+      "sha256": "56ba6d480be531aba13a9946287815f1291f348f78fea0cf97b7984417da8447"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_gpio.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_gpio.c",
+      "upstream_sha256": "348c3ef15a95b8fd9d243dd1f9d84a2a4465ffce20e3148461ca09ef3f73d363",
+      "sha256": "348c3ef15a95b8fd9d243dd1f9d84a2a4465ffce20e3148461ca09ef3f73d363"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_gpio.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_gpio.h",
+      "upstream_sha256": "8c05c2e1c8856106eba662b41232c30c84c5abd09bb90a0bd20f9e6401c6bd86",
+      "sha256": "8c05c2e1c8856106eba662b41232c30c84c5abd09bb90a0bd20f9e6401c6bd86"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_i2c.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_i2c.c",
+      "upstream_sha256": "82adc193e6564419e8f518d8d8c9ed3428b002a9ecc3c0b72ef7068512175e48",
+      "sha256": "82adc193e6564419e8f518d8d8c9ed3428b002a9ecc3c0b72ef7068512175e48"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_i2c.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_i2c.h",
+      "upstream_sha256": "458c4ab28aed0ad4679dec6ca8978c8ad3db1c7ea008ddd2063adb4eaae7bde1",
+      "sha256": "458c4ab28aed0ad4679dec6ca8978c8ad3db1c7ea008ddd2063adb4eaae7bde1"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_inic.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_inic.h",
+      "upstream_sha256": "116b124d8a85bac85ad50a2c6f0746b2e55cfd9f0156f121e13ffabfe1cffcc6",
+      "sha256": "116b124d8a85bac85ad50a2c6f0746b2e55cfd9f0156f121e13ffabfe1cffcc6"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_ipc.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_ipc.h",
+      "upstream_sha256": "14ddb77e94ad4be034816c361e902f3d8153e70b67a4b034b68e6cad29c66abb",
+      "sha256": "14ddb77e94ad4be034816c361e902f3d8153e70b67a4b034b68e6cad29c66abb"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_ipc_api.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_ipc_api.c",
+      "upstream_sha256": "9faf7f7fee6ba91ff2945b499373cffcc2623d8e0a5c0a5f589c87b998424d01",
+      "sha256": "9faf7f7fee6ba91ff2945b499373cffcc2623d8e0a5c0a5f589c87b998424d01"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_ipc_api.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_ipc_api.h",
+      "upstream_sha256": "6fa1b101d925ec47fdf79a2fa3bac3f5b8b6cb00466264d9f3ca8d0b3110aa59",
+      "sha256": "6fa1b101d925ec47fdf79a2fa3bac3f5b8b6cb00466264d9f3ca8d0b3110aa59"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_ipc_ram.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_ipc_ram.c",
+      "upstream_sha256": "c6d91d0d5336dd01437998909ba84d908d5a56ef825124bab57f544881d742dd",
+      "sha256": "c6d91d0d5336dd01437998909ba84d908d5a56ef825124bab57f544881d742dd"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_ipccfg.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_ipccfg.h",
+      "upstream_sha256": "32428a40a9e4ddbec6e7cadea7817b48c4ffb9b7cf65037729205b46d2c0fa92",
+      "sha256": "32428a40a9e4ddbec6e7cadea7817b48c4ffb9b7cf65037729205b46d2c0fa92"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_ipsec.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_ipsec.h",
+      "upstream_sha256": "c59c272d4e859fb62d255fbc9e8c9f5a3e607cfc96019dcf2152ab5e55007992",
+      "sha256": "c59c272d4e859fb62d255fbc9e8c9f5a3e607cfc96019dcf2152ab5e55007992"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_ir.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_ir.c",
+      "upstream_sha256": "fd77a839a29c28b347867a874794a664e67a1b77674064267a13cc78f427f00b",
+      "sha256": "fd77a839a29c28b347867a874794a664e67a1b77674064267a13cc78f427f00b"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_ir.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_ir.h",
+      "upstream_sha256": "2c399700c695fbe1825b64fbfc9871d28192a65ff05a966927e8e51b160ae9f9",
+      "sha256": "2c399700c695fbe1825b64fbfc9871d28192a65ff05a966927e8e51b160ae9f9"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_keyscan.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_keyscan.c",
+      "upstream_sha256": "1962fe10e23cae17f54ae42d5c4c3a02986ff471b82759d48eafc5dd73b4e72b",
+      "sha256": "1962fe10e23cae17f54ae42d5c4c3a02986ff471b82759d48eafc5dd73b4e72b"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_kscan.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_kscan.h",
+      "upstream_sha256": "8c197e4918b971b89f75ba42be790703d8bfb93c9749cabdf654ce9c8786d29e",
+      "sha256": "8c197e4918b971b89f75ba42be790703d8bfb93c9749cabdf654ce9c8786d29e"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_ldo.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_ldo.c",
+      "upstream_sha256": "22a07fcf8bb4a9dfd5027c299a5313b5d8fac493f154439291a83eb761107e6b",
+      "sha256": "22a07fcf8bb4a9dfd5027c299a5313b5d8fac493f154439291a83eb761107e6b"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_ledc.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_ledc.c",
+      "upstream_sha256": "6b1a7da3cf1e70ae2252fa0127b38c6854c5fadc492ba5cc76d4446e59a62b69",
+      "sha256": "6b1a7da3cf1e70ae2252fa0127b38c6854c5fadc492ba5cc76d4446e59a62b69"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_ledc.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_ledc.h",
+      "upstream_sha256": "003786b98327bc8da49f3fde0144c4cfe4ae48e6d31bb8b56c1e56e47e323e33",
+      "sha256": "003786b98327bc8da49f3fde0144c4cfe4ae48e6d31bb8b56c1e56e47e323e33"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_loguart.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_loguart.c",
+      "upstream_sha256": "34bc6af07b2770553b7477cda85aae547a702d77b3f2c701f2e3707aef141a40",
+      "sha256": "34bc6af07b2770553b7477cda85aae547a702d77b3f2c701f2e3707aef141a40"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_loguart.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_loguart.h",
+      "upstream_sha256": "537d0a0073f877cf9aa65e292e603a14d922289dcfefdee1f1dbd14531514fe4",
+      "sha256": "537d0a0073f877cf9aa65e292e603a14d922289dcfefdee1f1dbd14531514fe4"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_mpu_ram.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_mpu_ram.c",
+      "upstream_sha256": "63a538cf6547f5190d3686b2adc1c76ca98d30254309d1a942794531b7fdf3c9",
+      "sha256": "63a538cf6547f5190d3686b2adc1c76ca98d30254309d1a942794531b7fdf3c9"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_npcap.c",
+      "source": "component/soc/amebadplus/fwlib/ram_km0/ameba_npcap.c",
+      "upstream_sha256": "1c2d84eb3386f9de0740f6781d27fafa573064f4959c78c1a930c56ee94e2816",
+      "sha256": "1c2d84eb3386f9de0740f6781d27fafa573064f4959c78c1a930c56ee94e2816"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_ota.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_ota.h",
+      "upstream_sha256": "9353d353a29c793982dc50d56ae25e7b7bcfb680d2d19e68912f99dc60b278f4",
+      "sha256": "9353d353a29c793982dc50d56ae25e7b7bcfb680d2d19e68912f99dc60b278f4"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_otpc.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_otpc.h",
+      "upstream_sha256": "2036fccc63ac4c01f9b6eb4bca9b98336320a8bbd149ad32ed4ee4bf55929ef8",
+      "sha256": "2036fccc63ac4c01f9b6eb4bca9b98336320a8bbd149ad32ed4ee4bf55929ef8"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_pinmap.c",
+      "source": "component/soc/amebadplus/fwlib/ram_km0/ameba_pinmap.c",
+      "upstream_sha256": "1faaafc66b358dd17a46d992b93907e9c2339a544f2b0301bf2160e2b7783727",
+      "sha256": "1faaafc66b358dd17a46d992b93907e9c2339a544f2b0301bf2160e2b7783727"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_pinmap.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_pinmap.h",
+      "upstream_sha256": "7633723cc466f0912c0cac85e66ecb1250dcd116f8d4cc2d7787c34fd56c7f51",
+      "sha256": "7633723cc466f0912c0cac85e66ecb1250dcd116f8d4cc2d7787c34fd56c7f51"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_pinmux.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_pinmux.h",
+      "upstream_sha256": "01ee9b7a35bfd36eb54a2ee8a3c71f41cc90e212467f098d07415a453ce43320",
+      "sha256": "01ee9b7a35bfd36eb54a2ee8a3c71f41cc90e212467f098d07415a453ce43320"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_pll.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_pll.c",
+      "upstream_sha256": "4bbf0c1b91e507965bd2e1f8f786376ca8d7f717b9ddbe00cff76770bc2b558b",
+      "sha256": "4bbf0c1b91e507965bd2e1f8f786376ca8d7f717b9ddbe00cff76770bc2b558b"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_pmc.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_pmc.h",
+      "upstream_sha256": "79e3cfb34fba380b3b472eb207c84f1bb1fa11e114e19649d33de2633d958b87",
+      "sha256": "79e3cfb34fba380b3b472eb207c84f1bb1fa11e114e19649d33de2633d958b87"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_pmctimer.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_pmctimer.h",
+      "upstream_sha256": "86e587c463967c803c9f710fbd65a6b4ebca30ddd6088f5511814af60f75fbdc",
+      "sha256": "86e587c463967c803c9f710fbd65a6b4ebca30ddd6088f5511814af60f75fbdc"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_ppe.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_ppe.c",
+      "upstream_sha256": "c2094c6f09ddd06a7c8f4f1f6ed91e5e30cc20a607f7e7be5d5451d5f93d8b09",
+      "sha256": "c2094c6f09ddd06a7c8f4f1f6ed91e5e30cc20a607f7e7be5d5451d5f93d8b09"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_ppe.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_ppe.h",
+      "upstream_sha256": "fab224895e6706d4808500556c1f81cfa08fceb835b0ef7fc184870fde1e5424",
+      "sha256": "fab224895e6706d4808500556c1f81cfa08fceb835b0ef7fc184870fde1e5424"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_psphy.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_psphy.h",
+      "upstream_sha256": "7422ba69acd99b5bcb6bc970803818eab2ff53132a47b2434d05194e9fc98325",
+      "sha256": "7422ba69acd99b5bcb6bc970803818eab2ff53132a47b2434d05194e9fc98325"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_psram.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_psram.c",
+      "upstream_sha256": "51fe080e1acec01ced358b876d82d81a8ac862ddd40213bcaddfbe1f0720be0f",
+      "sha256": "51fe080e1acec01ced358b876d82d81a8ac862ddd40213bcaddfbe1f0720be0f"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_psram.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_psram.h",
+      "upstream_sha256": "19707cd5d6ebe78f99dd55089b5d5edd3fce4145d3e21840dbdd63df301f82c1",
+      "sha256": "19707cd5d6ebe78f99dd55089b5d5edd3fce4145d3e21840dbdd63df301f82c1"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_pwmtimer.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_pwmtimer.h",
+      "upstream_sha256": "f1734ab238d14e330dd3b7429d72fc84a4d97abec9e870f9fa4f81aef6916032",
+      "sha256": "f1734ab238d14e330dd3b7429d72fc84a4d97abec9e870f9fa4f81aef6916032"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_qspi.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_qspi.c",
+      "upstream_sha256": "d779985f55af335fdc0c77ed719fbe4c8b3b2607c547345b6de7b53b0746b12a",
+      "sha256": "d779985f55af335fdc0c77ed719fbe4c8b3b2607c547345b6de7b53b0746b12a"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_qspi.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_qspi.h",
+      "upstream_sha256": "0a1cc67ac5bc8c2f600e5e866dd1dfedbc1dc191415e05041f8bb9f71308234a",
+      "sha256": "0a1cc67ac5bc8c2f600e5e866dd1dfedbc1dc191415e05041f8bb9f71308234a"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_rcc.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_rcc.h",
+      "upstream_sha256": "27cb4519386574773d47599f431947ae8db22f84467ed1cef16e799aa55854a9",
+      "sha256": "27cb4519386574773d47599f431947ae8db22f84467ed1cef16e799aa55854a9"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_reset.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_reset.c",
+      "upstream_sha256": "b10644194d441384908dd2bdba264b8dc108f731691e425dec3942bbcdc72837",
+      "sha256": "b10644194d441384908dd2bdba264b8dc108f731691e425dec3942bbcdc72837"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_reset.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_reset.h",
+      "upstream_sha256": "c136c7d32975d5282c0b160354cb2954f1222e3a755bcc4fee382f6b05c32903",
+      "sha256": "c136c7d32975d5282c0b160354cb2954f1222e3a755bcc4fee382f6b05c32903"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_rom_patch.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_rom_patch.h",
+      "upstream_sha256": "2110d03dd06aeacd136170787adb921eb1ae02be841ee186bb5a08399d59da6d",
+      "sha256": "2110d03dd06aeacd136170787adb921eb1ae02be841ee186bb5a08399d59da6d"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_rsip.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_rsip.h",
+      "upstream_sha256": "4aa8edd48a481af48060e8c25fdbf118274291135bf50e47af612732f0fe2dc3",
+      "sha256": "4aa8edd48a481af48060e8c25fdbf118274291135bf50e47af612732f0fe2dc3"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_rtc.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_rtc.c",
+      "upstream_sha256": "be04c6a7d63b6c76506a8025c39ca713880c816b16ddab8eb9336bb73b1ac14d",
+      "sha256": "be04c6a7d63b6c76506a8025c39ca713880c816b16ddab8eb9336bb73b1ac14d"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_rtc.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_rtc.h",
+      "upstream_sha256": "20dcea09b9c179f997077f06fbbf18160c630ad4f858efeea0e3b5a2bab72f43",
+      "sha256": "20dcea09b9c179f997077f06fbbf18160c630ad4f858efeea0e3b5a2bab72f43"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_rtc_io.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_rtc_io.c",
+      "upstream_sha256": "b5f2b12c65936dd86950ae96b4887afe7cf426d1633f3b2eee23e2eed192a0f7",
+      "sha256": "b5f2b12c65936dd86950ae96b4887afe7cf426d1633f3b2eee23e2eed192a0f7"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_rtc_io.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_rtc_io.h",
+      "upstream_sha256": "1d56f8c5a1adedcd0423ffe515d68dbd68098edf3a04361dcc755f6b2d3628d3",
+      "sha256": "1d56f8c5a1adedcd0423ffe515d68dbd68098edf3a04361dcc755f6b2d3628d3"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_rxi300.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_rxi300.h",
+      "upstream_sha256": "27141520479de0e2163c281a93b4bbf6c90005a7f12c7a7dc1130eef44b2ae99",
+      "sha256": "27141520479de0e2163c281a93b4bbf6c90005a7f12c7a7dc1130eef44b2ae99"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_sdio.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_sdio.c",
+      "upstream_sha256": "22dfdfbea6a9dfaf2a1ce2701d0a8f245a3f63146c45e19911edaa6c176e4b0f",
+      "sha256": "22dfdfbea6a9dfaf2a1ce2701d0a8f245a3f63146c45e19911edaa6c176e4b0f"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_sdio.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_sdio.h",
+      "upstream_sha256": "1656f43310467d7e0616fd4c0731d952217ecad6a9c695b27d27957f60c95128",
+      "sha256": "1656f43310467d7e0616fd4c0731d952217ecad6a9c695b27d27957f60c95128"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_secure_boot.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_secure_boot.h",
+      "upstream_sha256": "1fd8b0fa791193a25811d62e8a0086bac6834558e865e8d3c8724c3b5ac8f4e0",
+      "sha256": "1fd8b0fa791193a25811d62e8a0086bac6834558e865e8d3c8724c3b5ac8f4e0"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_sema_rom.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_sema_rom.h",
+      "upstream_sha256": "39cd7871e5ac8909a93364826d454237d11d142e648e0b920755a123c8f2160d",
+      "sha256": "39cd7871e5ac8909a93364826d454237d11d142e648e0b920755a123c8f2160d"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_soc.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_soc.h",
+      "upstream_sha256": "ae907c9e99f1902f04eb0629ae0703ba7550f37d5b3fff4a00b9d82e6de726a3",
+      "sha256": "ae907c9e99f1902f04eb0629ae0703ba7550f37d5b3fff4a00b9d82e6de726a3"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_soc_ps.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_soc_ps.h",
+      "upstream_sha256": "25fa5b0a07fbb8e431a11449df0ce531904d27517dc3dc3281c6f4269dea45ef",
+      "sha256": "25fa5b0a07fbb8e431a11449df0ce531904d27517dc3dc3281c6f4269dea45ef"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_spi.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_spi.c",
+      "upstream_sha256": "c17148e6ce6b45100cfae7a378ba0d2ca56f1515cc49fae325b8cdda68baf621",
+      "sha256": "c17148e6ce6b45100cfae7a378ba0d2ca56f1515cc49fae325b8cdda68baf621"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_spi.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_spi.h",
+      "upstream_sha256": "b4fd6cc1072051ced740a40fb171367a5d115df811ba7101fda54c4c02c72254",
+      "sha256": "b4fd6cc1072051ced740a40fb171367a5d115df811ba7101fda54c4c02c72254"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_spic.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_spic.h",
+      "upstream_sha256": "a975331b0a6c00f385e8de72a32579c89015e606fcd56c6fe772e8921302ccf2",
+      "sha256": "a975331b0a6c00f385e8de72a32579c89015e606fcd56c6fe772e8921302ccf2"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_sport.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_sport.c",
+      "upstream_sha256": "fccdb4bf2a56d3d62209812e32f9e5b883ebb1ce404ff31efed81ff3bdc94e4f",
+      "sha256": "fccdb4bf2a56d3d62209812e32f9e5b883ebb1ce404ff31efed81ff3bdc94e4f"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_sport.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_sport.h",
+      "upstream_sha256": "37a7cf37c3001f04c215bba9738657fea9bbf971017a483ca420a1e092807416",
+      "sha256": "37a7cf37c3001f04c215bba9738657fea9bbf971017a483ca420a1e092807416"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_syscfg.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_syscfg.h",
+      "upstream_sha256": "d1eb53e7f2178de84482aba4b5748bf93bf07636110a2745ad037059e0c36098",
+      "sha256": "d1eb53e7f2178de84482aba4b5748bf93bf07636110a2745ad037059e0c36098"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_tim.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_tim.c",
+      "upstream_sha256": "a3525fc0c7058c85b227ee9b4d04f76d475c47930e07202c4ca8950003636f24",
+      "sha256": "a3525fc0c7058c85b227ee9b4d04f76d475c47930e07202c4ca8950003636f24"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_trng.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_trng.h",
+      "upstream_sha256": "7595bebde6b14dd00ce477eb0edf57b802dd8c4b58b4fd16259a908c41094bb4",
+      "sha256": "7595bebde6b14dd00ce477eb0edf57b802dd8c4b58b4fd16259a908c41094bb4"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_trustzone.c",
+      "source": "component/soc/amebadplus/fwlib/ram_km4/ameba_trustzone.c",
+      "upstream_sha256": "caaecc5d88ea231ceb8a49996c0ac4faf35c17b5a298027732b426129a4f8f95",
+      "sha256": "caaecc5d88ea231ceb8a49996c0ac4faf35c17b5a298027732b426129a4f8f95"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_trustzone.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_trustzone.h",
+      "upstream_sha256": "5112361063228b18311df9bb588fa96df8eb92834933b7808030ccd4942f1f20",
+      "sha256": "5112361063228b18311df9bb588fa96df8eb92834933b7808030ccd4942f1f20"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_uart.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_uart.c",
+      "upstream_sha256": "ce1210dbb39f990c3eefcac1d42b80ac6efeb0a54b3d6f2d36aa9e34712c656a",
+      "sha256": "ce1210dbb39f990c3eefcac1d42b80ac6efeb0a54b3d6f2d36aa9e34712c656a"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_uart.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_uart.h",
+      "upstream_sha256": "a351d9ec385a165980df4563b79c59f1b9e8a3b50b5de937b03575c561064116",
+      "sha256": "a351d9ec385a165980df4563b79c59f1b9e8a3b50b5de937b03575c561064116"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_ups.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_ups.c",
+      "upstream_sha256": "588bb7fdf417d962525d29882e8e6aeb320c59b2d8d3cfd4ae5927d4519054a5",
+      "sha256": "588bb7fdf417d962525d29882e8e6aeb320c59b2d8d3cfd4ae5927d4519054a5"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_ups.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_ups.h",
+      "upstream_sha256": "e24e9e3ed18b3c6e6277571dafb77d0798c21c5b1d2eac8a7db5283c92706063",
+      "sha256": "e24e9e3ed18b3c6e6277571dafb77d0798c21c5b1d2eac8a7db5283c92706063"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_usb.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_usb.h",
+      "upstream_sha256": "d2cb0940cb563c339dc4cd411303aff5dc8a88e9730a393c8d485f3f817e1913",
+      "sha256": "d2cb0940cb563c339dc4cd411303aff5dc8a88e9730a393c8d485f3f817e1913"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_vector.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_vector.h",
+      "upstream_sha256": "75f496e39462e0e193bd7e1f155a64b500033e0970308a4c1e7aba108407f086",
+      "sha256": "75f496e39462e0e193bd7e1f155a64b500033e0970308a4c1e7aba108407f086"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_vector_table.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_vector_table.h",
+      "upstream_sha256": "a9ab2fab8d7ee685ab61fb76ee24d3b7dff6cacbd481c30906461e8977d69477",
+      "sha256": "a9ab2fab8d7ee685ab61fb76ee24d3b7dff6cacbd481c30906461e8977d69477"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_wakepin.c",
+      "source": "component/soc/amebadplus/fwlib/ram_common/ameba_wakepin.c",
+      "upstream_sha256": "6503b13e388d6a483dc3c87e79b02424cd60c667f0d9206e511ab7007cdc51dc",
+      "sha256": "6503b13e388d6a483dc3c87e79b02424cd60c667f0d9206e511ab7007cdc51dc"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_wakepin.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_wakepin.h",
+      "upstream_sha256": "02881c9be902a5188177414d27bd45c080b4c36d652c624c8f566763e3b1281f",
+      "sha256": "02881c9be902a5188177414d27bd45c080b4c36d652c624c8f566763e3b1281f"
+    },
+    {
+      "path": "component/amebadplus/fwlib/ameba_wdg.h",
+      "source": "component/soc/amebadplus/fwlib/include/ameba_wdg.h",
+      "upstream_sha256": "a2739fcc52a7a4350b9a1af53a8d55d36e161750a8c585c510d9760f6ee2490a",
+      "sha256": "a2739fcc52a7a4350b9a1af53a8d55d36e161750a8c585c510d9760f6ee2490a"
+    },
+    {
+      "path": "component/amebadplus/fwlib/basic_types.h",
+      "source": "component/soc/amebadplus/fwlib/include/basic_types.h",
+      "upstream_sha256": "e2d2e577c7fc92aeaff86b1d3cb5eb56a5f0f4065a773d6fbed0346512c96c8a",
+      "sha256": "e2d2e577c7fc92aeaff86b1d3cb5eb56a5f0f4065a773d6fbed0346512c96c8a"
+    },
+    {
+      "path": "component/amebadplus/fwlib/cmsis.h",
+      "source": "component/soc/amebadplus/fwlib/include/cmsis.h",
+      "upstream_sha256": "6ab0bdb32d55868a176f4ce2c1932af8fa8723ddcb39d7b6b725790db8d3841b",
+      "sha256": "6ab0bdb32d55868a176f4ce2c1932af8fa8723ddcb39d7b6b725790db8d3841b"
+    },
+    {
+      "path": "component/amebadplus/fwlib/cmsis_cpu.h",
+      "source": "component/soc/amebadplus/fwlib/include/cmsis_cpu.h",
+      "upstream_sha256": "858475505b724d7cc01cd549821c2be4d654874802de19ae4d6b5f7510c0e6d5",
+      "sha256": "858475505b724d7cc01cd549821c2be4d654874802de19ae4d6b5f7510c0e6d5"
+    },
+    {
+      "path": "component/amebadplus/fwlib/cmsis_ridr.h",
+      "source": "component/soc/amebadplus/fwlib/include/cmsis_ridr.h",
+      "upstream_sha256": "cd2191e9d70e93a41076d842cbc3c596f84c3147c0224d614ca07f6df58550f8",
+      "sha256": "cd2191e9d70e93a41076d842cbc3c596f84c3147c0224d614ca07f6df58550f8"
+    },
+    {
+      "path": "component/amebadplus/fwlib/hal_platform.h",
+      "source": "component/soc/amebadplus/fwlib/include/hal_platform.h",
+      "upstream_sha256": "6bc35876c7a4e3ffcd91b3fa20ecbc96caee53272a6413e7e92c0317ddfe26d4",
+      "sha256": "6bc35876c7a4e3ffcd91b3fa20ecbc96caee53272a6413e7e92c0317ddfe26d4"
+    },
+    {
+      "path": "component/amebadplus/fwlib/lib_chipinfo_km0.a",
+      "source": "component/soc/amebadplus/project/project_km0/lib/soc/lib_chipinfo.a",
+      "upstream_sha256": "78a17644bb7459feb9977af2ebec673e5852c9e0faa47efed98bcd62c32c94d9",
+      "sha256": "78a17644bb7459feb9977af2ebec673e5852c9e0faa47efed98bcd62c32c94d9"
+    },
+    {
+      "path": "component/amebadplus/fwlib/lib_chipinfo_km4.a",
+      "source": "component/soc/amebadplus/project/project_km4/lib/soc/lib_chipinfo.a",
+      "upstream_sha256": "e72506b4fd0ce167515dea5cba93bd310dba7b001cba66b984abc1664104beb1",
+      "sha256": "e72506b4fd0ce167515dea5cba93bd310dba7b001cba66b984abc1664104beb1"
+    },
+    {
+      "path": "component/amebadplus/fwlib/mpu_config.h",
+      "source": "component/soc/amebadplus/fwlib/include/mpu_config.h",
+      "upstream_sha256": "5a48d63ec55f9000fb9797d393eb2c3f8dd12ac04ed605c8325e1dab4e1dc976",
+      "sha256": "5a48d63ec55f9000fb9797d393eb2c3f8dd12ac04ed605c8325e1dab4e1dc976"
+    },
+    {
+      "path": "component/amebadplus/fwlib/rtk_assert.c",
+      "source": "component/soc/common/rtk_assert/rtk_assert.c",
+      "upstream_sha256": "d3d85d345ec39e3fecb62e67586b731edf9a5db7eb04831a544496b3ecccfaed",
+      "sha256": "d3d85d345ec39e3fecb62e67586b731edf9a5db7eb04831a544496b3ecccfaed"
+    },
+    {
+      "path": "component/amebadplus/fwlib/rtk_assert.h",
+      "source": "component/soc/common/include/rtk_assert.h",
+      "upstream_sha256": "800d7b06fc947a3b985180bf2cc1f0d71baf45de95d57fb00337629cad597748",
+      "sha256": "800d7b06fc947a3b985180bf2cc1f0d71baf45de95d57fb00337629cad597748"
+    },
+    {
+      "path": "component/amebadplus/fwlib/rtk_compiler.h",
+      "source": "component/soc/common/include/rtk_compiler.h",
+      "upstream_sha256": "57b763f9ab586ecde508d6fae2423ae4b26c132de06d37b0188de3ee9d5cf49c",
+      "sha256": "57b763f9ab586ecde508d6fae2423ae4b26c132de06d37b0188de3ee9d5cf49c"
+    },
+    {
+      "path": "component/amebadplus/fwlib/rtk_status.h",
+      "source": "component/soc/common/include/rtk_status.h",
+      "upstream_sha256": "5d3402ea69d2273ea217740456a89830ccfe2d494cc1e5c69586ee89c46d207f",
+      "sha256": "5d3402ea69d2273ea217740456a89830ccfe2d494cc1e5c69586ee89c46d207f"
+    },
+    {
+      "path": "component/amebadplus/fwlib/section_config.h",
+      "source": "component/soc/amebadplus/fwlib/include/section_config.h",
+      "upstream_sha256": "b465cf02be9e503ced539e647c1aed866eb5e8d29ab459ff56e7ff62c5796ce8",
+      "sha256": "b465cf02be9e503ced539e647c1aed866eb5e8d29ab459ff56e7ff62c5796ce8"
+    },
+    {
+      "path": "component/amebadplus/fwlib/sysreg.h",
+      "source": "component/soc/amebadplus/fwlib/include/sysreg.h",
+      "upstream_sha256": "2521ccb375c7fa8051af65b3eb35698beaa83ae5afe25870b3b180519dcd24aa",
+      "sha256": "2521ccb375c7fa8051af65b3eb35698beaa83ae5afe25870b3b180519dcd24aa"
+    },
+    {
+      "path": "component/amebadplus/fwlib/sysreg_aon.h",
+      "source": "component/soc/amebadplus/fwlib/include/sysreg_aon.h",
+      "upstream_sha256": "5b59bcc451266a5453b1460b7344963c8b88c3522e8604590c801ec0704beb8a",
+      "sha256": "5b59bcc451266a5453b1460b7344963c8b88c3522e8604590c801ec0704beb8a"
+    },
+    {
+      "path": "component/amebadplus/fwlib/sysreg_apll.h",
+      "source": "component/soc/amebadplus/fwlib/include/sysreg_apll.h",
+      "upstream_sha256": "dd092c5fef73aae501687d96b540dd88cea489908b9f4ff6d58f68fdf1797371",
+      "sha256": "dd092c5fef73aae501687d96b540dd88cea489908b9f4ff6d58f68fdf1797371"
+    },
+    {
+      "path": "component/amebadplus/fwlib/sysreg_ldo.h",
+      "source": "component/soc/amebadplus/fwlib/include/sysreg_ldo.h",
+      "upstream_sha256": "07171d55a83e84461ef846daa9858f81185d12a7ee365afe7bafc32c5e28c605",
+      "sha256": "07171d55a83e84461ef846daa9858f81185d12a7ee365afe7bafc32c5e28c605"
+    },
+    {
+      "path": "component/amebadplus/fwlib/sysreg_lsys.h",
+      "source": "component/soc/amebadplus/fwlib/include/sysreg_lsys.h",
+      "upstream_sha256": "4c91f4e7ff838e5ecba04a581af1c63c94ebe7c626d3562e570b314c38d589e3",
+      "sha256": "4c91f4e7ff838e5ecba04a581af1c63c94ebe7c626d3562e570b314c38d589e3"
+    },
+    {
+      "path": "component/amebadplus/fwlib/sysreg_mem_ctrl.h",
+      "source": "component/soc/amebadplus/fwlib/include/sysreg_mem_ctrl.h",
+      "upstream_sha256": "b3738ac16832be82b91a506bd6233eaf4fe0acb81950a5c952037bb8169180a2",
+      "sha256": "b3738ac16832be82b91a506bd6233eaf4fe0acb81950a5c952037bb8169180a2"
+    },
+    {
+      "path": "component/amebadplus/fwlib/sysreg_pad.h",
+      "source": "component/soc/amebadplus/fwlib/include/sysreg_pad.h",
+      "upstream_sha256": "80d1fcbb9aa349ee37cd6730737e2977c221f7bbe6476337b30a64c46c5119ca",
+      "sha256": "80d1fcbb9aa349ee37cd6730737e2977c221f7bbe6476337b30a64c46c5119ca"
+    },
+    {
+      "path": "component/amebadplus/fwlib/sysreg_pll.h",
+      "source": "component/soc/amebadplus/fwlib/include/sysreg_pll.h",
+      "upstream_sha256": "be5ca70f4a8b085d23ea97f89e4aaa0d16f980c1686789a75376aaf3765450fd",
+      "sha256": "be5ca70f4a8b085d23ea97f89e4aaa0d16f980c1686789a75376aaf3765450fd"
+    },
+    {
+      "path": "component/amebadplus/fwlib/sysreg_pmc.h",
+      "source": "component/soc/amebadplus/fwlib/include/sysreg_pmc.h",
+      "upstream_sha256": "5feeb23d80c03e55ecd5861701b0d13f098ef7f9521d893dd976dd86f972b8b3",
+      "sha256": "5feeb23d80c03e55ecd5861701b0d13f098ef7f9521d893dd976dd86f972b8b3"
+    },
+    {
+      "path": "component/amebadplus/fwlib/sysreg_sdm.h",
+      "source": "component/soc/amebadplus/fwlib/include/sysreg_sdm.h",
+      "upstream_sha256": "414c5190a5d62b5ce33be820227234c0755acbfc94755ae44ce5c2e26940960c",
+      "sha256": "414c5190a5d62b5ce33be820227234c0755acbfc94755ae44ce5c2e26940960c"
+    },
+    {
+      "path": "component/amebadplus/fwlib/sysreg_sec.h",
+      "source": "component/soc/amebadplus/fwlib/include/sysreg_sec.h",
+      "upstream_sha256": "e6fcdd2131790005aec635db2c9ba6ec18e9628b41bbdbfb3c8298c6aa9b97c9",
+      "sha256": "e6fcdd2131790005aec635db2c9ba6ec18e9628b41bbdbfb3c8298c6aa9b97c9"
+    },
+    {
+      "path": "component/amebadplus/fwlib/sysreg_swr.h",
+      "source": "component/soc/amebadplus/fwlib/include/sysreg_swr.h",
+      "upstream_sha256": "ddc08070517e24eb19c38b6991f9ae53b4168d7026b0668733b25b8aaa3079d3",
+      "sha256": "ddc08070517e24eb19c38b6991f9ae53b4168d7026b0668733b25b8aaa3079d3"
+    },
+    {
+      "path": "component/amebadplus/fwlib/sysreg_wlafe.h",
+      "source": "component/soc/amebadplus/fwlib/include/sysreg_wlafe.h",
+      "upstream_sha256": "687ffdd5b1be3c3ed77df739ba6e29704d4960b99ea11c4156b47c07116a8073",
+      "sha256": "687ffdd5b1be3c3ed77df739ba6e29704d4960b99ea11c4156b47c07116a8073"
+    },
+    {
+      "path": "component/amebadplus/fwlib/sysreg_xtal.h",
+      "source": "component/soc/amebadplus/fwlib/include/sysreg_xtal.h",
+      "upstream_sha256": "19b469df54a2ee18bcae1200edbcfcb1f78c137d8e9e0adaf9fcd0291d17121f",
+      "sha256": "19b469df54a2ee18bcae1200edbcfcb1f78c137d8e9e0adaf9fcd0291d17121f"
+    },
+    {
+      "path": "component/amebadplus/hci/bt_api_config.h",
+      "source": "component/bluetooth/api/include/bt_api_config.h",
+      "upstream_sha256": "b2dff849ec575261f8b61af5cd2b7d2e62501f13213067b2aea2e6274682c5d0",
+      "sha256": "b2dff849ec575261f8b61af5cd2b7d2e62501f13213067b2aea2e6274682c5d0"
+    },
+    {
+      "path": "component/amebadplus/hci/bt_debug.c",
+      "source": "component/bluetooth/osif/bt_debug.c",
+      "upstream_sha256": "1a775a615d00199d13ccac045f99250a20097998421d853a4c374d796c47023f",
+      "sha256": "1a775a615d00199d13ccac045f99250a20097998421d853a4c374d796c47023f"
+    },
+    {
+      "path": "component/amebadplus/hci/bt_debug.h",
+      "source": "component/bluetooth/osif/bt_debug.h",
+      "upstream_sha256": "33f83aa66429775711950415fc9ca2b3519dfd61c1fb309e136965f37b8c3af0",
+      "sha256": "33f83aa66429775711950415fc9ca2b3519dfd61c1fb309e136965f37b8c3af0"
+    },
+    {
+      "path": "component/amebadplus/hci/bt_mp_patch.c",
+      "source": "component/bluetooth/driver/platform/amebadplus/hci/bt_mp_patch.c",
+      "upstream_sha256": "c52eed5ac627d964bf2fc36f390066c4d7e1d72d9c01b85299a537705c180f02",
+      "sha256": "c52eed5ac627d964bf2fc36f390066c4d7e1d72d9c01b85299a537705c180f02"
+    },
+    {
+      "path": "component/amebadplus/hci/bt_normal_patch.c",
+      "source": "component/bluetooth/driver/platform/amebadplus/hci/bt_normal_patch.c",
+      "upstream_sha256": "c58c4e4c31bf604da260a425935ba17d3e055af02135810b11f7b990cfdff285",
+      "sha256": "c58c4e4c31bf604da260a425935ba17d3e055af02135810b11f7b990cfdff285"
+    },
+    {
+      "path": "component/amebadplus/hci/hci_common.c",
+      "source": "component/bluetooth/driver/hci/hci_common.c",
+      "upstream_sha256": "f32ad82a3e14f2070e8bbdcb6f4331324e3d5f2c3eed303c01e06a4a497d2e43",
+      "sha256": "f32ad82a3e14f2070e8bbdcb6f4331324e3d5f2c3eed303c01e06a4a497d2e43"
+    },
+    {
+      "path": "component/amebadplus/hci/hci_common.h",
+      "source": "component/bluetooth/driver/inc/hci/hci_common.h",
+      "upstream_sha256": "8f156a11a3519629dc32006685b76a66e25a1456ea3f7861eeec3b7297b1dd26",
+      "sha256": "8f156a11a3519629dc32006685b76a66e25a1456ea3f7861eeec3b7297b1dd26"
+    },
+    {
+      "path": "component/amebadplus/hci/hci_controller.c",
+      "source": "component/bluetooth/driver/hci/hci_process/hci_controller.c",
+      "upstream_sha256": "e32f0a7684a996f1e11c67e05de4aa790efa125b1b4304449cde2ad827ade0c4",
+      "sha256": "e32f0a7684a996f1e11c67e05de4aa790efa125b1b4304449cde2ad827ade0c4"
+    },
+    {
+      "path": "component/amebadplus/hci/hci_controller.h",
+      "source": "component/bluetooth/driver/inc/hci/hci_controller.h",
+      "upstream_sha256": "330b7c98d2c06a6e31bf0939e681982167e6515b727cef4887c9d6e3d74b0d47",
+      "sha256": "330b7c98d2c06a6e31bf0939e681982167e6515b727cef4887c9d6e3d74b0d47"
+    },
+    {
+      "path": "component/amebadplus/hci/hci_download_v1.c",
+      "source": "component/bluetooth/driver/hci/hci_process/hci_download_v1.c",
+      "upstream_sha256": "5dd00b654cefedb13b055f933984cb3135973ef3bee1e7c1100cf8217f18cb88",
+      "sha256": "5dd00b654cefedb13b055f933984cb3135973ef3bee1e7c1100cf8217f18cb88"
+    },
+    {
+      "path": "component/amebadplus/hci/hci_download_v2.c",
+      "source": "component/bluetooth/driver/hci/hci_process/hci_download_v2.c",
+      "upstream_sha256": "6fd27fa13f62a2ad917328e1d22d840a71e101cd62e8bb25c2ec4ff2b9c1bec1",
+      "sha256": "6fd27fa13f62a2ad917328e1d22d840a71e101cd62e8bb25c2ec4ff2b9c1bec1"
+    },
+    {
+      "path": "component/amebadplus/hci/hci_download_v3.c",
+      "source": "component/bluetooth/driver/hci/hci_process/hci_download_v3.c",
+      "upstream_sha256": "f23501464ffcec0138def1c1c4e9a130b9b6ef992c28b9b9bc3c81c92bdc863a",
+      "sha256": "f23501464ffcec0138def1c1c4e9a130b9b6ef992c28b9b9bc3c81c92bdc863a"
+    },
+    {
+      "path": "component/amebadplus/hci/hci_h4.c",
+      "source": "component/bluetooth/driver/hci/hci_transport/hci_h4.c",
+      "upstream_sha256": "be4eb6ae304b44a77433ec2dd2fa0b37e278c8ad9294bb76c381ca8a250f407e",
+      "sha256": "be4eb6ae304b44a77433ec2dd2fa0b37e278c8ad9294bb76c381ca8a250f407e"
+    },
+    {
+      "path": "component/amebadplus/hci/hci_platform.c",
+      "source": "component/bluetooth/driver/platform/amebadplus/hci/hci_platform.c",
+      "upstream_sha256": "2e99f51ffd7a8f4e6b6dab7d5e8a384bfeb2cc23b26f699f8c88c9ce45a1f8e0",
+      "sha256": "2e99f51ffd7a8f4e6b6dab7d5e8a384bfeb2cc23b26f699f8c88c9ce45a1f8e0"
+    },
+    {
+      "path": "component/amebadplus/hci/hci_platform.h",
+      "source": "component/bluetooth/driver/platform/amebadplus/inc/hci_platform.h",
+      "upstream_sha256": "5f7582909b0a94794d22244a9850e2443692e71cb0fd4dc8b2e0c8351586b488",
+      "sha256": "5f7582909b0a94794d22244a9850e2443692e71cb0fd4dc8b2e0c8351586b488"
+    },
+    {
+      "path": "component/amebadplus/hci/hci_process.c",
+      "source": "component/bluetooth/driver/hci/hci_process/hci_process.c",
+      "upstream_sha256": "fe39b6ea3639e64e15fb00ed4d2c39828fc42ab6b8e3e75ac8433a351a1ac07f",
+      "sha256": "fe39b6ea3639e64e15fb00ed4d2c39828fc42ab6b8e3e75ac8433a351a1ac07f"
+    },
+    {
+      "path": "component/amebadplus/hci/hci_standalone.c",
+      "source": "component/bluetooth/driver/hci/hci_process/hci_standalone.c",
+      "upstream_sha256": "d90e3d69409dd9d536adc9c309662170bc926945bf1e176120ef0486580f2951",
+      "sha256": "d90e3d69409dd9d536adc9c309662170bc926945bf1e176120ef0486580f2951"
+    },
+    {
+      "path": "component/amebadplus/hci/hci_transport.h",
+      "source": "component/bluetooth/driver/inc/hci/hci_transport.h",
+      "upstream_sha256": "1561e6b625c2994c2a2d37b23c5500ede86610c0e0d1dcbfa401b2526ee8f9ec",
+      "sha256": "1561e6b625c2994c2a2d37b23c5500ede86610c0e0d1dcbfa401b2526ee8f9ec"
+    },
+    {
+      "path": "component/amebadplus/hci/hci_uart.c",
+      "source": "component/bluetooth/driver/platform/amebadplus/hci/hci_uart.c",
+      "upstream_sha256": "9a273db4e08710b1ae7801fe1bb0337740e090527d20a55d22bddf2c0d4faee8",
+      "sha256": "9a273db4e08710b1ae7801fe1bb0337740e090527d20a55d22bddf2c0d4faee8"
+    },
+    {
+      "path": "component/amebadplus/hci/hci_uart.h",
+      "source": "component/bluetooth/driver/platform/amebadplus/inc/hci_uart.h",
+      "upstream_sha256": "cca39ac3ecbd320da5afd35cc9b87af9ad3db2e4c02d41c51af74877a4155607",
+      "sha256": "cca39ac3ecbd320da5afd35cc9b87af9ad3db2e4c02d41c51af74877a4155607"
+    },
+    {
+      "path": "component/amebadplus/hci/mem_types.h",
+      "source": "component/bluetooth/osif/mem_types.h",
+      "upstream_sha256": "3d4454e40b619775a762e2d5a7c2ef1881c9f0e2526217be1fb9ff5d7ce98118",
+      "sha256": "3d4454e40b619775a762e2d5a7c2ef1881c9f0e2526217be1fb9ff5d7ce98118"
+    },
+    {
+      "path": "component/amebadplus/hci/osif.c",
+      "source": "component/bluetooth/osif/osif.c",
+      "upstream_sha256": "e64e30bf78ac31ac88a140dabd7421b2e32e122a4c41eec8b422515f6ad30247",
+      "sha256": "e64e30bf78ac31ac88a140dabd7421b2e32e122a4c41eec8b422515f6ad30247"
+    },
+    {
+      "path": "component/amebadplus/hci/osif.h",
+      "source": "component/bluetooth/osif/osif.h",
+      "upstream_sha256": "a49220ed22cef81f507bc3797e8f89757d5f044e33513c22eb131f19062ae620",
+      "sha256": "a49220ed22cef81f507bc3797e8f89757d5f044e33513c22eb131f19062ae620"
+    },
+    {
+      "path": "component/amebadplus/hci/rtk_bt_gap.h",
+      "source": "component/bluetooth/api/include/rtk_bt_gap.h",
+      "upstream_sha256": "c66e7513783a568bffe890d0125bc7e38813baa65c0f1bebe397d69c4f9370dd",
+      "sha256": "c66e7513783a568bffe890d0125bc7e38813baa65c0f1bebe397d69c4f9370dd"
+    },
+    {
+      "path": "component/amebadplus/hci/rtk_coex.c",
+      "source": "component/bluetooth/rtk_coex/rtk_coex.c",
+      "upstream_sha256": "10056de582b6a0851ed66c68bba2cce3d3217465c84fe12b958d7e0509080a8d",
+      "sha256": "10056de582b6a0851ed66c68bba2cce3d3217465c84fe12b958d7e0509080a8d"
+    },
+    {
+      "path": "component/amebadplus/hci/rtk_coex.h",
+      "source": "component/bluetooth/rtk_coex/rtk_coex.h",
+      "upstream_sha256": "3644ef50862ac9cb0d417d27446cbc33ac76252aa735577b832dc1244b6afa1e",
+      "sha256": "3644ef50862ac9cb0d417d27446cbc33ac76252aa735577b832dc1244b6afa1e"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/Ameba_1-N_MP_ImageTool.exe",
+      "source": "tools/ameba/MP_ImageTool_1_N/Ameba_1-N_MP_ImageTool.exe",
+      "upstream_sha256": "ffce8deb484b2c2d61f1b38684aa6557f2cbaa94f5b3d914c966c6531c078d75",
+      "sha256": "ffce8deb484b2c2d61f1b38684aa6557f2cbaa94f5b3d914c966c6531c078d75"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/ChangeLog.txt",
+      "source": "tools/ameba/MP_ImageTool_1_N/ChangeLog.txt",
+      "upstream_sha256": "e3d45a499eb3da711fe7a8e2fe3d456f303c602c306dbeab5dbede2867e34fad",
+      "sha256": "e3d45a499eb3da711fe7a8e2fe3d456f303c602c306dbeab5dbede2867e34fad"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/CommandLine.dll",
+      "source": "tools/ameba/MP_ImageTool_1_N/CommandLine.dll",
+      "upstream_sha256": "985720ea997b8682942f9345ca62815925173a72133ddb17cb25a2c289a5f8b1",
+      "sha256": "985720ea997b8682942f9345ca62815925173a72133ddb17cb25a2c289a5f8b1"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/Devices/Floaders/floader_amebad.bin",
+      "source": "tools/ameba/MP_ImageTool_1_N/Devices/Floaders/floader_amebad.bin",
+      "upstream_sha256": "f5ddae38ddea3df303532efce9f448870513d5a227024a6d74ef428cc1b64036",
+      "sha256": "f5ddae38ddea3df303532efce9f448870513d5a227024a6d74ef428cc1b64036"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/Devices/Floaders/floader_amebadplus.bin",
+      "source": "tools/ameba/MP_ImageTool_1_N/Devices/Floaders/floader_amebadplus.bin",
+      "upstream_sha256": "25779da636b19eb4065cf3349adecbbbbb266d7ad9e06bbb240bcdd95139bfae",
+      "sha256": "25779da636b19eb4065cf3349adecbbbbb266d7ad9e06bbb240bcdd95139bfae"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/Devices/Floaders/floader_amebalite.bin",
+      "source": "tools/ameba/MP_ImageTool_1_N/Devices/Floaders/floader_amebalite.bin",
+      "upstream_sha256": "ea89e934e584cb0bcddbab6d6b9a9b7899e8fc1a44a8fb26be994e43c16a58f2",
+      "sha256": "ea89e934e584cb0bcddbab6d6b9a9b7899e8fc1a44a8fb26be994e43c16a58f2"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/Devices/Floaders/floader_amebasmart.bin",
+      "source": "tools/ameba/MP_ImageTool_1_N/Devices/Floaders/floader_amebasmart.bin",
+      "upstream_sha256": "14d78f55a954e1fa1eb266cb7b79bfc7e20ee2c4fd761e42b2fc1c72c776e244",
+      "sha256": "14d78f55a954e1fa1eb266cb7b79bfc7e20ee2c4fd761e42b2fc1c72c776e244"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/Devices/Floaders/floader_amebaz.bin",
+      "source": "tools/ameba/MP_ImageTool_1_N/Devices/Floaders/floader_amebaz.bin",
+      "upstream_sha256": "60e97096ac7fc91a2f83846b2686fbb4d1cb8dcc214f346ff90ea849a72dee0f",
+      "sha256": "60e97096ac7fc91a2f83846b2686fbb4d1cb8dcc214f346ff90ea849a72dee0f"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/Devices/Profiles/AmebaD_FreeRTOS_NOR.rdev",
+      "source": "tools/ameba/MP_ImageTool_1_N/Devices/Profiles/AmebaD_FreeRTOS_NOR.rdev",
+      "upstream_sha256": "c3552c80fbe8627fd930444e4d24c8f4c5e268d0b0a5025ce7139bb55f9d7dd1",
+      "sha256": "c3552c80fbe8627fd930444e4d24c8f4c5e268d0b0a5025ce7139bb55f9d7dd1"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/Devices/Profiles/AmebaDplus_FreeRTOS_NOR.rdev",
+      "source": "tools/ameba/MP_ImageTool_1_N/Devices/Profiles/AmebaDplus_FreeRTOS_NOR.rdev",
+      "upstream_sha256": "364cf687b3d3164d4b95f6d8c4d392bb8e7487d8b1849770dd5d1efce4127d21",
+      "sha256": "364cf687b3d3164d4b95f6d8c4d392bb8e7487d8b1849770dd5d1efce4127d21"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/Devices/Profiles/AmebaGreen2_FreeRTOS_NOR.rdev",
+      "source": "tools/ameba/MP_ImageTool_1_N/Devices/Profiles/AmebaGreen2_FreeRTOS_NOR.rdev",
+      "upstream_sha256": "dc152506adccb6b75e986daa70a76a687932298262db2ecfac9c47c2797229ac",
+      "sha256": "dc152506adccb6b75e986daa70a76a687932298262db2ecfac9c47c2797229ac"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/Devices/Profiles/AmebaLite_FreeRTOS_NOR.rdev",
+      "source": "tools/ameba/MP_ImageTool_1_N/Devices/Profiles/AmebaLite_FreeRTOS_NOR.rdev",
+      "upstream_sha256": "e729c1f7077d9e3a5c86a725656773112a674f78b69f8cb8a2713642ff08a7ca",
+      "sha256": "e729c1f7077d9e3a5c86a725656773112a674f78b69f8cb8a2713642ff08a7ca"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/Devices/Profiles/AmebaSmart_FreeRTOS_NAND.rdev",
+      "source": "tools/ameba/MP_ImageTool_1_N/Devices/Profiles/AmebaSmart_FreeRTOS_NAND.rdev",
+      "upstream_sha256": "0d8e2198ee88819b58a52f7df4c3a5fc8cb65beca7c6278d9d02f47ae28bea59",
+      "sha256": "0d8e2198ee88819b58a52f7df4c3a5fc8cb65beca7c6278d9d02f47ae28bea59"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/Devices/Profiles/AmebaSmart_FreeRTOS_NOR.rdev",
+      "source": "tools/ameba/MP_ImageTool_1_N/Devices/Profiles/AmebaSmart_FreeRTOS_NOR.rdev",
+      "upstream_sha256": "3f43e6ab7c0d39b68dd5f4689d6035c6816995d8ec7da6cd8e32bdc6c369efee",
+      "sha256": "3f43e6ab7c0d39b68dd5f4689d6035c6816995d8ec7da6cd8e32bdc6c369efee"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/Devices/Profiles/AmebaSmart_Linux_NAND_128MB.rdev",
+      "source": "tools/ameba/MP_ImageTool_1_N/Devices/Profiles/AmebaSmart_Linux_NAND_128MB.rdev",
+      "upstream_sha256": "143e7feea288da6fecd7f62812e01850b71d183f6213ea11c203b91150c76969",
+      "sha256": "143e7feea288da6fecd7f62812e01850b71d183f6213ea11c203b91150c76969"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/Devices/Profiles/AmebaSmart_Linux_NAND_256MB.rdev",
+      "source": "tools/ameba/MP_ImageTool_1_N/Devices/Profiles/AmebaSmart_Linux_NAND_256MB.rdev",
+      "upstream_sha256": "b5e454607ffd29e2d6b74c03cf8456874ec3aa1fb7b86525fd33eaba2cfc6b7f",
+      "sha256": "b5e454607ffd29e2d6b74c03cf8456874ec3aa1fb7b86525fd33eaba2cfc6b7f"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/Devices/Profiles/AmebaSmart_Linux_NOR_32MB.rdev",
+      "source": "tools/ameba/MP_ImageTool_1_N/Devices/Profiles/AmebaSmart_Linux_NOR_32MB.rdev",
+      "upstream_sha256": "f505b234be4fa249a9caa1d58073e3a975fc130669bdacf3f74d69b8067e5ed2",
+      "sha256": "f505b234be4fa249a9caa1d58073e3a975fc130669bdacf3f74d69b8067e5ed2"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/Devices/Profiles/AmebaZ_FreeRTOS_NOR.rdev",
+      "source": "tools/ameba/MP_ImageTool_1_N/Devices/Profiles/AmebaZ_FreeRTOS_NOR.rdev",
+      "upstream_sha256": "5ceb479dd5e0f3b0b1b1f9c3afacb2b4eb824144ac1e72c49de613f23a92bf42",
+      "sha256": "5ceb479dd5e0f3b0b1b1f9c3afacb2b4eb824144ac1e72c49de613f23a92bf42"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/MigrationGuide.txt",
+      "source": "tools/ameba/MP_ImageTool_1_N/MigrationGuide.txt",
+      "upstream_sha256": "a4d149f0d92378ce8edd3da5a1903345d82a395d83b63b5da985d263cb604553",
+      "sha256": "a4d149f0d92378ce8edd3da5a1903345d82a395d83b63b5da985d263cb604553"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/MigrationGuide_rtl872xc.txt",
+      "source": "tools/ameba/MP_ImageTool_1_N/MigrationGuide_rtl872xc.txt",
+      "upstream_sha256": "3fe77f2158bc01cb8cdbea2e78d06d37696a22fa8f19a9b609daa80e4de3c849",
+      "sha256": "3fe77f2158bc01cb8cdbea2e78d06d37696a22fa8f19a9b609daa80e4de3c849"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/Newtonsoft.Json.dll",
+      "source": "tools/ameba/MP_ImageTool_1_N/Newtonsoft.Json.dll",
+      "upstream_sha256": "9165e595b3a0de91ac91a38e742597e12ebb2a5a8fa53058d964a06ceaef7735",
+      "sha256": "9165e595b3a0de91ac91a38e742597e12ebb2a5a8fa53058d964a06ceaef7735"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/RtkUsbCdcAcmSetup.INF",
+      "source": "tools/ameba/MP_ImageTool_1_N/RtkUsbCdcAcmSetup.INF",
+      "upstream_sha256": "1348de6f45fb4cfb35089dc934fbb3833ba4b0e0875dd161ddac212947af7913",
+      "sha256": "1348de6f45fb4cfb35089dc934fbb3833ba4b0e0875dd161ddac212947af7913"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/RtkUtils.dll",
+      "source": "tools/ameba/MP_ImageTool_1_N/RtkUtils.dll",
+      "upstream_sha256": "82c80a9afb9f4bdd501ea981ee06b1ac7b85193056ed3c980f529c28d8ee90de",
+      "sha256": "82c80a9afb9f4bdd501ea981ee06b1ac7b85193056ed3c980f529c28d8ee90de"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/ShellProgressBar.dll",
+      "source": "tools/ameba/MP_ImageTool_1_N/ShellProgressBar.dll",
+      "upstream_sha256": "0084dc2118ff33833fcb8593a48457e989601ca44113c2cb17a46e63492cdad6",
+      "sha256": "0084dc2118ff33833fcb8593a48457e989601ca44113c2cb17a46e63492cdad6"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/combine_images.pyc",
+      "source": "tools/ameba/MP_ImageTool_1_N/combine_images.pyc",
+      "upstream_sha256": "45f1fd4d8a572c09a525d3c1e8d4ff2a9e32b7f1691cca6b3b2940a7c120bb14",
+      "sha256": "45f1fd4d8a572c09a525d3c1e8d4ff2a9e32b7f1691cca6b3b2940a7c120bb14"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/combine_images.readme",
+      "source": "tools/ameba/MP_ImageTool_1_N/combine_images.readme",
+      "upstream_sha256": "82b127d3fc9119aa029a68fd2cae0fabb654ff9d7d85c6b8aa1f47a6dce92341",
+      "sha256": "82b127d3fc9119aa029a68fd2cae0fabb654ff9d7d85c6b8aa1f47a6dce92341"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/id_image/0.bin",
+      "source": "tools/ameba/MP_ImageTool_1_N/id_image/0.bin",
+      "upstream_sha256": "78c5017e9cac1ce1807b838a3c168c10e8ab1776354b7e68abdaaa1b10cd8545",
+      "sha256": "78c5017e9cac1ce1807b838a3c168c10e8ab1776354b7e68abdaaa1b10cd8545"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/id_image/1.bin",
+      "source": "tools/ameba/MP_ImageTool_1_N/id_image/1.bin",
+      "upstream_sha256": "d1a02a3ef655e30fd9b320470cb68a6abf69a5eacc0705b53f8b5f4aa3786ab0",
+      "sha256": "d1a02a3ef655e30fd9b320470cb68a6abf69a5eacc0705b53f8b5f4aa3786ab0"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/id_image/10.bin",
+      "source": "tools/ameba/MP_ImageTool_1_N/id_image/10.bin",
+      "upstream_sha256": "45542742f69caf0a1b71d0907ce61e5d5c2fcc3f3b475d949f1f61628be736cb",
+      "sha256": "45542742f69caf0a1b71d0907ce61e5d5c2fcc3f3b475d949f1f61628be736cb"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/id_image/11.bin",
+      "source": "tools/ameba/MP_ImageTool_1_N/id_image/11.bin",
+      "upstream_sha256": "c9cb09ba644ed37841579b44f5dfeb06a686eff67c6f7287a924de00231a3e78",
+      "sha256": "c9cb09ba644ed37841579b44f5dfeb06a686eff67c6f7287a924de00231a3e78"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/id_image/12.bin",
+      "source": "tools/ameba/MP_ImageTool_1_N/id_image/12.bin",
+      "upstream_sha256": "a241fedf5f9dedb43bd25f37c4efdb9dfbc106e1b55dbdf3fa2b3b9eed8c6a38",
+      "sha256": "a241fedf5f9dedb43bd25f37c4efdb9dfbc106e1b55dbdf3fa2b3b9eed8c6a38"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/id_image/13.bin",
+      "source": "tools/ameba/MP_ImageTool_1_N/id_image/13.bin",
+      "upstream_sha256": "558cc3805506b095af44f2aa0e414eb0dca0fe9f111ad408f21e63b0153add90",
+      "sha256": "558cc3805506b095af44f2aa0e414eb0dca0fe9f111ad408f21e63b0153add90"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/id_image/14.bin",
+      "source": "tools/ameba/MP_ImageTool_1_N/id_image/14.bin",
+      "upstream_sha256": "6866d456b092af16376ddd95e1472f410e8d34c0af5a079fbf8837a0a8408c0d",
+      "sha256": "6866d456b092af16376ddd95e1472f410e8d34c0af5a079fbf8837a0a8408c0d"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/id_image/15.bin",
+      "source": "tools/ameba/MP_ImageTool_1_N/id_image/15.bin",
+      "upstream_sha256": "d6622eaee0b75f6bfe7564b90511fb70c08119f9b86df67110e7fe821b9d257d",
+      "sha256": "d6622eaee0b75f6bfe7564b90511fb70c08119f9b86df67110e7fe821b9d257d"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/id_image/16.bin",
+      "source": "tools/ameba/MP_ImageTool_1_N/id_image/16.bin",
+      "upstream_sha256": "a08d21fa0bca9fa8add7cd5a5efd806111fb287a2b941e077f8bd40b249bfed6",
+      "sha256": "a08d21fa0bca9fa8add7cd5a5efd806111fb287a2b941e077f8bd40b249bfed6"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/id_image/17.bin",
+      "source": "tools/ameba/MP_ImageTool_1_N/id_image/17.bin",
+      "upstream_sha256": "96bc8edc25455c119cce7d9b000d7478749e45d42fd3a8ea4c50f61cfeca177d",
+      "sha256": "96bc8edc25455c119cce7d9b000d7478749e45d42fd3a8ea4c50f61cfeca177d"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/id_image/18.bin",
+      "source": "tools/ameba/MP_ImageTool_1_N/id_image/18.bin",
+      "upstream_sha256": "56fc828bedaad94bd04137d83fbc648c82ed20bfd41b80587be802cd9ac6dcd5",
+      "sha256": "56fc828bedaad94bd04137d83fbc648c82ed20bfd41b80587be802cd9ac6dcd5"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/id_image/19.bin",
+      "source": "tools/ameba/MP_ImageTool_1_N/id_image/19.bin",
+      "upstream_sha256": "608c0fc67e2179641bc6a0fd8687b94b9292f841e58b9db989515bfdb4483b0e",
+      "sha256": "608c0fc67e2179641bc6a0fd8687b94b9292f841e58b9db989515bfdb4483b0e"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/id_image/2.bin",
+      "source": "tools/ameba/MP_ImageTool_1_N/id_image/2.bin",
+      "upstream_sha256": "92948939a0fc9ae85d6abdf69f9f803dd7752b02d0a38c8a42eadeeb1c878bfd",
+      "sha256": "92948939a0fc9ae85d6abdf69f9f803dd7752b02d0a38c8a42eadeeb1c878bfd"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/id_image/20.bin",
+      "source": "tools/ameba/MP_ImageTool_1_N/id_image/20.bin",
+      "upstream_sha256": "608c0fc67e2179641bc6a0fd8687b94b9292f841e58b9db989515bfdb4483b0e",
+      "sha256": "608c0fc67e2179641bc6a0fd8687b94b9292f841e58b9db989515bfdb4483b0e"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/id_image/3.bin",
+      "source": "tools/ameba/MP_ImageTool_1_N/id_image/3.bin",
+      "upstream_sha256": "4af93b3afe9b8e088d646156003d81aa94fc3e50fd14771719ddf638a931006c",
+      "sha256": "4af93b3afe9b8e088d646156003d81aa94fc3e50fd14771719ddf638a931006c"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/id_image/4.bin",
+      "source": "tools/ameba/MP_ImageTool_1_N/id_image/4.bin",
+      "upstream_sha256": "103be035815f1d49cd6dcce8d16d0df3184d6ea3504f4c71a2322ee124316736",
+      "sha256": "103be035815f1d49cd6dcce8d16d0df3184d6ea3504f4c71a2322ee124316736"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/id_image/5.bin",
+      "source": "tools/ameba/MP_ImageTool_1_N/id_image/5.bin",
+      "upstream_sha256": "0ef46c1bd8f5ce850452a99a97edc1dd8697ee00c618ebe35acb5c257324a0cd",
+      "sha256": "0ef46c1bd8f5ce850452a99a97edc1dd8697ee00c618ebe35acb5c257324a0cd"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/id_image/6.bin",
+      "source": "tools/ameba/MP_ImageTool_1_N/id_image/6.bin",
+      "upstream_sha256": "48dcac5d6f6f5330a371b173e7a0549130b7d3bffeebebe6a4adec12915dcb59",
+      "sha256": "48dcac5d6f6f5330a371b173e7a0549130b7d3bffeebebe6a4adec12915dcb59"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/id_image/7.bin",
+      "source": "tools/ameba/MP_ImageTool_1_N/id_image/7.bin",
+      "upstream_sha256": "22d1b60f0879a3fc102b4e1580060ac079a0ae9dc1fd45cca8b5eaf75273714e",
+      "sha256": "22d1b60f0879a3fc102b4e1580060ac079a0ae9dc1fd45cca8b5eaf75273714e"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/id_image/8.bin",
+      "source": "tools/ameba/MP_ImageTool_1_N/id_image/8.bin",
+      "upstream_sha256": "06102dac2d00bfc411fc04fc5036eae73db70863979c32898340e532aaa59b6e",
+      "sha256": "06102dac2d00bfc411fc04fc5036eae73db70863979c32898340e532aaa59b6e"
+    },
+    {
+      "path": "component/amebadplus/image_tool/MP_ImageTool_1_N/id_image/9.bin",
+      "source": "tools/ameba/MP_ImageTool_1_N/id_image/9.bin",
+      "upstream_sha256": "f76f201a41caf3a5f54f6991761e04fe503198a348ee718b0a59658bf6ca0e33",
+      "sha256": "f76f201a41caf3a5f54f6991761e04fe503198a348ee718b0a59658bf6ca0e33"
+    },
+    {
+      "path": "component/amebadplus/image_tool/axf2bin.py",
+      "source": "tools/scripts/axf2bin.py",
+      "upstream_sha256": "38843b868af915bfe7b423d65b0cab7c69da4b9b88a47641465c21f25e48816d",
+      "sha256": "38843b868af915bfe7b423d65b0cab7c69da4b9b88a47641465c21f25e48816d"
+    },
+    {
+      "path": "component/amebadplus/image_tool/image_process/ameba_enums.py",
+      "source": "tools/scripts/image_process/ameba_enums.py",
+      "upstream_sha256": "f4985168162c1f970f08803528b293a1a546d023943f87ef7ceae2928b53e56a",
+      "sha256": "f4985168162c1f970f08803528b293a1a546d023943f87ef7ceae2928b53e56a"
+    },
+    {
+      "path": "component/amebadplus/image_tool/image_process/context.py",
+      "source": "tools/scripts/image_process/context.py",
+      "upstream_sha256": "70ef0dd16f158c36480b323c1cbfd1a329786bae1152600eab135dde6a7d3ab1",
+      "sha256": "98ebb8780fcc3ba1ff5f71f0fd1bbefcfff7b82aa64a96fe089d7db766a2b971"
+    },
+    {
+      "path": "component/amebadplus/image_tool/image_process/manifest_manager.py",
+      "source": "tools/scripts/image_process/manifest_manager.py",
+      "upstream_sha256": "1a5b0441fa63939d4356e5fc71b88b51367b9fbaf533b6ec05e50f893bb9e810",
+      "sha256": "1a5b0441fa63939d4356e5fc71b88b51367b9fbaf533b6ec05e50f893bb9e810"
+    },
+    {
+      "path": "component/amebadplus/image_tool/image_process/op_base.py",
+      "source": "tools/scripts/image_process/op_base.py",
+      "upstream_sha256": "b38035d98e4c1b154770866e3fa3988a3d18451faa67096c99cdef03e054dd60",
+      "sha256": "b38035d98e4c1b154770866e3fa3988a3d18451faa67096c99cdef03e054dd60"
+    },
+    {
+      "path": "component/amebadplus/image_tool/image_process/op_compress.py",
+      "source": "tools/scripts/image_process/op_compress.py",
+      "upstream_sha256": "c76dd3e31e855fe1709af93964812290a1330aed2987b94c9f6c9be6a3133d6a",
+      "sha256": "c76dd3e31e855fe1709af93964812290a1330aed2987b94c9f6c9be6a3133d6a"
+    },
+    {
+      "path": "component/amebadplus/image_tool/image_process/op_cut.py",
+      "source": "tools/scripts/image_process/op_cut.py",
+      "upstream_sha256": "8da1ee45213c0fa563946c5c479228fdc3d15b233b7eec7f5faa3f4c2f8e84d9",
+      "sha256": "8da1ee45213c0fa563946c5c479228fdc3d15b233b7eec7f5faa3f4c2f8e84d9"
+    },
+    {
+      "path": "component/amebadplus/image_tool/image_process/op_encrypt.py",
+      "source": "tools/scripts/image_process/op_encrypt.py",
+      "upstream_sha256": "ffeac1f5331e033158dad9c9c0ba15ad4fa522ecd60c2fc95bc0d8c0031404e5",
+      "sha256": "ffeac1f5331e033158dad9c9c0ba15ad4fa522ecd60c2fc95bc0d8c0031404e5"
+    },
+    {
+      "path": "component/amebadplus/image_tool/image_process/op_firmware_package.py",
+      "source": "tools/scripts/image_process/op_firmware_package.py",
+      "upstream_sha256": "11cf9286dfdd705c89e201d9a05cc2ed55b8871f421b3866933d5c3bbb12390d",
+      "sha256": "11cf9286dfdd705c89e201d9a05cc2ed55b8871f421b3866933d5c3bbb12390d"
+    },
+    {
+      "path": "component/amebadplus/image_tool/image_process/op_helper.py",
+      "source": "tools/scripts/image_process/op_helper.py",
+      "upstream_sha256": "a242e793cb6441af2edd0b25183509ea48ed0df368bc33683a5f4d40a25e6a39",
+      "sha256": "a242e793cb6441af2edd0b25183509ea48ed0df368bc33683a5f4d40a25e6a39"
+    },
+    {
+      "path": "component/amebadplus/image_tool/image_process/op_ota_prepend_header.py",
+      "source": "tools/scripts/image_process/op_ota_prepend_header.py",
+      "upstream_sha256": "7f560f34128522b9e7af8cf167dfe18fa018b1eea96562de29afbf39f167788b",
+      "sha256": "7f560f34128522b9e7af8cf167dfe18fa018b1eea96562de29afbf39f167788b"
+    },
+    {
+      "path": "component/amebadplus/image_tool/image_process/op_pad.py",
+      "source": "tools/scripts/image_process/op_pad.py",
+      "upstream_sha256": "9bc165b99aee67f7c015da345de65bd9a998333c00b08fed46d577835853d0a9",
+      "sha256": "9bc165b99aee67f7c015da345de65bd9a998333c00b08fed46d577835853d0a9"
+    },
+    {
+      "path": "component/amebadplus/image_tool/image_process/op_pad_binary.py",
+      "source": "tools/scripts/image_process/op_pad_binary.py",
+      "upstream_sha256": "f6da2e223ebbf1d8bc3d71074454791aafcb59794b9ddc43aaa58e7eabcd376f",
+      "sha256": "f6da2e223ebbf1d8bc3d71074454791aafcb59794b9ddc43aaa58e7eabcd376f"
+    },
+    {
+      "path": "component/amebadplus/image_tool/image_process/op_prepend_header.py",
+      "source": "tools/scripts/image_process/op_prepend_header.py",
+      "upstream_sha256": "c82bd4209765df9e25291b596cbeb7659a3d8cd35c5321e24223d65f67c8f437",
+      "sha256": "c82bd4209765df9e25291b596cbeb7659a3d8cd35c5321e24223d65f67c8f437"
+    },
+    {
+      "path": "component/amebadplus/image_tool/image_process/op_rdp.py",
+      "source": "tools/scripts/image_process/op_rdp.py",
+      "upstream_sha256": "17f43cea777c4e4f33172a3a88d9477860ef79e3c17def44b3a785cf7c763e8a",
+      "sha256": "17f43cea777c4e4f33172a3a88d9477860ef79e3c17def44b3a785cf7c763e8a"
+    },
+    {
+      "path": "component/amebadplus/image_tool/image_process/op_rsip.py",
+      "source": "tools/scripts/image_process/op_rsip.py",
+      "upstream_sha256": "a1caf297855ee62908afb317af384b3c7672ff9231c84d9e1663ac417c0be96a",
+      "sha256": "a1caf297855ee62908afb317af384b3c7672ff9231c84d9e1663ac417c0be96a"
+    },
+    {
+      "path": "component/amebadplus/image_tool/image_process/security.py",
+      "source": "tools/scripts/image_process/security.py",
+      "upstream_sha256": "adebfbb82945b72bde4599832f55ffb852d2fdb3c74aa6800e460b4c62250e22",
+      "sha256": "adebfbb82945b72bde4599832f55ffb852d2fdb3c74aa6800e460b4c62250e22"
+    },
+    {
+      "path": "component/amebadplus/image_tool/image_process/utility.py",
+      "source": "tools/scripts/image_process/utility.py",
+      "upstream_sha256": "64507b6a3ce0e13ef57319ead3202ca80be4305060eb468db58d143f8bf266bf",
+      "sha256": "b9a6fc256eec0f28e070d5fff9a35c56c13fd21c26b38953cc47f12aeea4ccd7"
+    },
+    {
+      "path": "component/amebadplus/mbed/PeripheralNames.h",
+      "source": "component/soc/amebadplus/hal/src/PeripheralNames.h",
+      "upstream_sha256": "508eb3f32e5016321695964ad05008a48d5cd086835dcbd13885eb9c9bf84319",
+      "sha256": "508eb3f32e5016321695964ad05008a48d5cd086835dcbd13885eb9c9bf84319"
+    },
+    {
+      "path": "component/amebadplus/mbed/PinNames.h",
+      "source": "component/soc/amebadplus/hal/src/PinNames.h",
+      "upstream_sha256": "68e544b74e976738a680b2c79241e803930ab3f46a68ca52f463bb167152f045",
+      "sha256": "68e544b74e976738a680b2c79241e803930ab3f46a68ca52f463bb167152f045"
+    },
+    {
+      "path": "component/amebadplus/mbed/PortNames.h",
+      "source": "component/soc/amebadplus/hal/src/PortNames.h",
+      "upstream_sha256": "07d109498ab78c65621f3d3a9fa74c480cac4b24f2efb4d87465ba7fb49663d9",
+      "sha256": "07d109498ab78c65621f3d3a9fa74c480cac4b24f2efb4d87465ba7fb49663d9"
+    },
+    {
+      "path": "component/amebadplus/mbed/analogin_api.c",
+      "source": "component/soc/amebadplus/hal/src/analogin_api.c",
+      "upstream_sha256": "064a6d0fa60fb6934a5701a77dc7fbb9f765237dee2731e3aca8840ea1688720",
+      "sha256": "064a6d0fa60fb6934a5701a77dc7fbb9f765237dee2731e3aca8840ea1688720"
+    },
+    {
+      "path": "component/amebadplus/mbed/analogin_api.h",
+      "source": "component/soc/amebadplus/hal/include/analogin_api.h",
+      "upstream_sha256": "91b2b26831b68c0d8ea31f6fa0ce7b3ce8d05f0aa67f76eefc9db0d77a935654",
+      "sha256": "91b2b26831b68c0d8ea31f6fa0ce7b3ce8d05f0aa67f76eefc9db0d77a935654"
+    },
+    {
+      "path": "component/amebadplus/mbed/captouch_api.c",
+      "source": "component/soc/amebadplus/hal/src/captouch_api.c",
+      "upstream_sha256": "2a1f44ea6dcbe60c9427cc7e766750061d4e3545a3568c7161b068323cf74711",
+      "sha256": "2a1f44ea6dcbe60c9427cc7e766750061d4e3545a3568c7161b068323cf74711"
+    },
+    {
+      "path": "component/amebadplus/mbed/captouch_api.h",
+      "source": "component/soc/amebadplus/hal/include/captouch_api.h",
+      "upstream_sha256": "212911689537dd35557964c8f6596a38665fa41344dd3e7442638b6880684ae0",
+      "sha256": "212911689537dd35557964c8f6596a38665fa41344dd3e7442638b6880684ae0"
+    },
+    {
+      "path": "component/amebadplus/mbed/device.h",
+      "source": "component/soc/amebadplus/hal/src/device.h",
+      "upstream_sha256": "7adcac1615d64e7a56ace2a4520a6a2dde1683967eee2f7992e2764eddcc3a59",
+      "sha256": "7adcac1615d64e7a56ace2a4520a6a2dde1683967eee2f7992e2764eddcc3a59"
+    },
+    {
+      "path": "component/amebadplus/mbed/dma_api.c",
+      "source": "component/soc/amebadplus/hal/src/dma_api.c",
+      "upstream_sha256": "1a1582adeda0f8ea0af6dc4125be0f67e234b8938e60cf6c407159ea96806839",
+      "sha256": "1a1582adeda0f8ea0af6dc4125be0f67e234b8938e60cf6c407159ea96806839"
+    },
+    {
+      "path": "component/amebadplus/mbed/dma_api.h",
+      "source": "component/soc/amebadplus/hal/include/dma_api.h",
+      "upstream_sha256": "960098c5e256fa5eba16cbb6dfa17f14308169be0cb1c69abd6ba90348c8ae54",
+      "sha256": "960098c5e256fa5eba16cbb6dfa17f14308169be0cb1c69abd6ba90348c8ae54"
+    },
+    {
+      "path": "component/amebadplus/mbed/efuse_api.c",
+      "source": "component/soc/amebadplus/hal/src/efuse_api.c",
+      "upstream_sha256": "ac04c62e1d99ab2f42e47452a75d3434084e525cefdc5274d2c4f1b6c9d4805d",
+      "sha256": "ac04c62e1d99ab2f42e47452a75d3434084e525cefdc5274d2c4f1b6c9d4805d"
+    },
+    {
+      "path": "component/amebadplus/mbed/flash_api.c",
+      "source": "component/soc/amebadplus/hal/src/flash_api.c",
+      "upstream_sha256": "a9940f10adfa13f2b3301ef19dd93a9fdb3171492792f1b55e8db31693e30efd",
+      "sha256": "a9940f10adfa13f2b3301ef19dd93a9fdb3171492792f1b55e8db31693e30efd"
+    },
+    {
+      "path": "component/amebadplus/mbed/flash_api.h",
+      "source": "component/soc/amebadplus/hal/include/flash_api.h",
+      "upstream_sha256": "5714610eb774c617dc3ea13e1ce2b9f13009d3c829f1a9ebe2a4071aaac739b6",
+      "sha256": "5714610eb774c617dc3ea13e1ce2b9f13009d3c829f1a9ebe2a4071aaac739b6"
+    },
+    {
+      "path": "component/amebadplus/mbed/gpio_api.c",
+      "source": "component/soc/amebadplus/hal/src/gpio_api.c",
+      "upstream_sha256": "b60b470233cc17651b47c416502a30e202b3e4fbb941ecd5410510fd505b2b7f",
+      "sha256": "b60b470233cc17651b47c416502a30e202b3e4fbb941ecd5410510fd505b2b7f"
+    },
+    {
+      "path": "component/amebadplus/mbed/gpio_api.h",
+      "source": "component/soc/amebadplus/hal/include/gpio_api.h",
+      "upstream_sha256": "3f5efbc1e3492ea48444a6328cd974f0fb9fbf44336d3ea437c73837767fa452",
+      "sha256": "3f5efbc1e3492ea48444a6328cd974f0fb9fbf44336d3ea437c73837767fa452"
+    },
+    {
+      "path": "component/amebadplus/mbed/gpio_irq_api.c",
+      "source": "component/soc/amebadplus/hal/src/gpio_irq_api.c",
+      "upstream_sha256": "1ce56390cd49ea67d82790c20220d73cc1a473dd303859dc97c66b736e0e9ef1",
+      "sha256": "1ce56390cd49ea67d82790c20220d73cc1a473dd303859dc97c66b736e0e9ef1"
+    },
+    {
+      "path": "component/amebadplus/mbed/gpio_irq_api.h",
+      "source": "component/soc/amebadplus/hal/include/gpio_irq_api.h",
+      "upstream_sha256": "c6073b79f70e39545fb7cb6d502b8d2e0ffbc150b40b0c51521ee6542edbcf44",
+      "sha256": "c6073b79f70e39545fb7cb6d502b8d2e0ffbc150b40b0c51521ee6542edbcf44"
+    },
+    {
+      "path": "component/amebadplus/mbed/i2c_api.c",
+      "source": "component/soc/amebadplus/hal/src/i2c_api.c",
+      "upstream_sha256": "df9c34865cb8893d87c91208e24bf1002c3343e79010c13ce0c153b392eff032",
+      "sha256": "df9c34865cb8893d87c91208e24bf1002c3343e79010c13ce0c153b392eff032"
+    },
+    {
+      "path": "component/amebadplus/mbed/i2c_api.h",
+      "source": "component/soc/amebadplus/hal/include/i2c_api.h",
+      "upstream_sha256": "44e3bfbd6db040b17ff10ef461148bc1a24ee47977281642c2c9fccd33ef1a50",
+      "sha256": "44e3bfbd6db040b17ff10ef461148bc1a24ee47977281642c2c9fccd33ef1a50"
+    },
+    {
+      "path": "component/amebadplus/mbed/objects.h",
+      "source": "component/soc/amebadplus/hal/src/objects.h",
+      "upstream_sha256": "2bb6a9b7c71de4386f6634d31be6f99450c42c340afdc2a3f7684f52e9dd4561",
+      "sha256": "2bb6a9b7c71de4386f6634d31be6f99450c42c340afdc2a3f7684f52e9dd4561"
+    },
+    {
+      "path": "component/amebadplus/mbed/pinmap.c",
+      "source": "component/soc/amebadplus/hal/src/pinmap.c",
+      "upstream_sha256": "8deeed87f2e4cddfda77b97accd76f1bbbf1baf80ffb8704e4e6b468b959be4c",
+      "sha256": "8deeed87f2e4cddfda77b97accd76f1bbbf1baf80ffb8704e4e6b468b959be4c"
+    },
+    {
+      "path": "component/amebadplus/mbed/pinmap.h",
+      "source": "component/soc/amebadplus/hal/include/pinmap.h",
+      "upstream_sha256": "cb96b80132a785dae9c32665bd6cdf340ff1e5850e16b80a9aab0a8600235e13",
+      "sha256": "cb96b80132a785dae9c32665bd6cdf340ff1e5850e16b80a9aab0a8600235e13"
+    },
+    {
+      "path": "component/amebadplus/mbed/pinmap_common.c",
+      "source": "component/soc/amebadplus/hal/src/pinmap_common.c",
+      "upstream_sha256": "58f4e673beb69799dfd48be5a409515a20271d971d6e7c0dd91d7b8a45a915f7",
+      "sha256": "58f4e673beb69799dfd48be5a409515a20271d971d6e7c0dd91d7b8a45a915f7"
+    },
+    {
+      "path": "component/amebadplus/mbed/port_api.c",
+      "source": "component/soc/amebadplus/hal/src/port_api.c",
+      "upstream_sha256": "d9677bf3be430ed9d739c8f14e90461322691146b3fd9a5e6a19c56aba5e1fea",
+      "sha256": "d9677bf3be430ed9d739c8f14e90461322691146b3fd9a5e6a19c56aba5e1fea"
+    },
+    {
+      "path": "component/amebadplus/mbed/port_api.h",
+      "source": "component/soc/amebadplus/hal/include/port_api.h",
+      "upstream_sha256": "50a9acdcf4efd6fe24c759eb9620c5441209fc7544c50158c134add4fe456f71",
+      "sha256": "50a9acdcf4efd6fe24c759eb9620c5441209fc7544c50158c134add4fe456f71"
+    },
+    {
+      "path": "component/amebadplus/mbed/pwmout_api.c",
+      "source": "component/soc/amebadplus/hal/src/pwmout_api.c",
+      "upstream_sha256": "911b0d36d21bbf709a391543a95ff4cedaf555d7ced91cad40a43e6c130c0cca",
+      "sha256": "911b0d36d21bbf709a391543a95ff4cedaf555d7ced91cad40a43e6c130c0cca"
+    },
+    {
+      "path": "component/amebadplus/mbed/pwmout_api.h",
+      "source": "component/soc/amebadplus/hal/include/pwmout_api.h",
+      "upstream_sha256": "a2ccbe57a3288f80ac6e252d60ada501b5d88f4014ceaa0d88bc0865285b28a2",
+      "sha256": "a2ccbe57a3288f80ac6e252d60ada501b5d88f4014ceaa0d88bc0865285b28a2"
+    },
+    {
+      "path": "component/amebadplus/mbed/rtc_api.c",
+      "source": "component/soc/amebadplus/hal/src/rtc_api.c",
+      "upstream_sha256": "7cfc190672a7b08504f728a2d2e2c1b3027d5e18735d47d0d56d32f4e970e29f",
+      "sha256": "7cfc190672a7b08504f728a2d2e2c1b3027d5e18735d47d0d56d32f4e970e29f"
+    },
+    {
+      "path": "component/amebadplus/mbed/rtc_api.h",
+      "source": "component/soc/amebadplus/hal/include/rtc_api.h",
+      "upstream_sha256": "d6f6897d16b64d8dca0a19a139d4a2386e7b4941b7d24e065e99219159fcd441",
+      "sha256": "d6f6897d16b64d8dca0a19a139d4a2386e7b4941b7d24e065e99219159fcd441"
+    },
+    {
+      "path": "component/amebadplus/mbed/serial_api.c",
+      "source": "component/soc/amebadplus/hal/src/serial_api.c",
+      "upstream_sha256": "a5a4e6d707fce55204e2f90baa1ced456935966cb85bb154430cf25f44e4b8cd",
+      "sha256": "a5a4e6d707fce55204e2f90baa1ced456935966cb85bb154430cf25f44e4b8cd"
+    },
+    {
+      "path": "component/amebadplus/mbed/serial_api.h",
+      "source": "component/soc/amebadplus/hal/include/serial_api.h",
+      "upstream_sha256": "5a727110077487efbec1ebe3767ae7820fe02d0522f44c4556a09d61f276a744",
+      "sha256": "5a727110077487efbec1ebe3767ae7820fe02d0522f44c4556a09d61f276a744"
+    },
+    {
+      "path": "component/amebadplus/mbed/serial_ex_api.h",
+      "source": "component/soc/amebadplus/hal/include/serial_ex_api.h",
+      "upstream_sha256": "8650ca0df93757c09205dc87b3d695f07bd44a835b9cdfd1c2e8178fbe412d30",
+      "sha256": "8650ca0df93757c09205dc87b3d695f07bd44a835b9cdfd1c2e8178fbe412d30"
+    },
+    {
+      "path": "component/amebadplus/mbed/spdio_api.c",
+      "source": "component/soc/amebadplus/hal/src/spdio_api.c",
+      "upstream_sha256": "987e31d1a02fbde2fa509890731ea8ae02e4b24f2f2d0bb39fa11442f5584c22",
+      "sha256": "987e31d1a02fbde2fa509890731ea8ae02e4b24f2f2d0bb39fa11442f5584c22"
+    },
+    {
+      "path": "component/amebadplus/mbed/spdio_api.h",
+      "source": "component/soc/amebadplus/hal/include/spdio_api.h",
+      "upstream_sha256": "3a9ac6ed47f2873a4d69421141dc81f7a659acb28506f8bf34ce806024992af9",
+      "sha256": "3a9ac6ed47f2873a4d69421141dc81f7a659acb28506f8bf34ce806024992af9"
+    },
+    {
+      "path": "component/amebadplus/mbed/spi_api.c",
+      "source": "component/soc/amebadplus/hal/src/spi_api.c",
+      "upstream_sha256": "22ee1241e9a96f858d0c850310176394f95164c8fcb39c52d9d6a14bfaa228b4",
+      "sha256": "22ee1241e9a96f858d0c850310176394f95164c8fcb39c52d9d6a14bfaa228b4"
+    },
+    {
+      "path": "component/amebadplus/mbed/spi_api.h",
+      "source": "component/soc/amebadplus/hal/include/spi_api.h",
+      "upstream_sha256": "19d0e9e1a931adfe2e19b44886b0b4f59dd425017c8d3b9aa01551229614ba05",
+      "sha256": "19d0e9e1a931adfe2e19b44886b0b4f59dd425017c8d3b9aa01551229614ba05"
+    },
+    {
+      "path": "component/amebadplus/mbed/spi_ex_api.h",
+      "source": "component/soc/amebadplus/hal/include/spi_ex_api.h",
+      "upstream_sha256": "c5fae2d88e957293960a96e529bd51ac43b648bb19e6773e9131606ea66468f6",
+      "sha256": "c5fae2d88e957293960a96e529bd51ac43b648bb19e6773e9131606ea66468f6"
+    },
+    {
+      "path": "component/amebadplus/mbed/sys_api.c",
+      "source": "component/soc/amebadplus/hal/src/sys_api.c",
+      "upstream_sha256": "a6242841859bdc6a054a924b67e244b40ca0e61a5f5b92216d6209f63a8e1fda",
+      "sha256": "a6242841859bdc6a054a924b67e244b40ca0e61a5f5b92216d6209f63a8e1fda"
+    },
+    {
+      "path": "component/amebadplus/mbed/sys_api.h",
+      "source": "component/soc/amebadplus/hal/include/sys_api.h",
+      "upstream_sha256": "151b04e4575a58458456ebda13cdf0fc604615a658bbb32c56102ad5a00caad8",
+      "sha256": "151b04e4575a58458456ebda13cdf0fc604615a658bbb32c56102ad5a00caad8"
+    },
+    {
+      "path": "component/amebadplus/mbed/timer_api.c",
+      "source": "component/soc/amebadplus/hal/src/timer_api.c",
+      "upstream_sha256": "38f6259e3101e6ac6dee3f9fe67660d3b29d8e0356afd18c7424f55747bc3960",
+      "sha256": "38f6259e3101e6ac6dee3f9fe67660d3b29d8e0356afd18c7424f55747bc3960"
+    },
+    {
+      "path": "component/amebadplus/mbed/timer_api.h",
+      "source": "component/soc/amebadplus/hal/include/timer_api.h",
+      "upstream_sha256": "e1fa993142dd32ae193d4f4ac25c4fcb5cf4e69d1c9c01c5abb707cdcd77600b",
+      "sha256": "e1fa993142dd32ae193d4f4ac25c4fcb5cf4e69d1c9c01c5abb707cdcd77600b"
+    },
+    {
+      "path": "component/amebadplus/mbed/us_ticker.c",
+      "source": "component/soc/amebadplus/hal/src/us_ticker.c",
+      "upstream_sha256": "fae4ed7550031f78cd9c12148407ab3e0d2796adce84c677b91c5dec732d5eb5",
+      "sha256": "fae4ed7550031f78cd9c12148407ab3e0d2796adce84c677b91c5dec732d5eb5"
+    },
+    {
+      "path": "component/amebadplus/mbed/us_ticker_api.c",
+      "source": "component/soc/amebadplus/hal/src/us_ticker_api.c",
+      "upstream_sha256": "be6160fb3aec66fddb240c2028b4d72cb8f5ec9153b58b55ae4cd28dfd5608c2",
+      "sha256": "be6160fb3aec66fddb240c2028b4d72cb8f5ec9153b58b55ae4cd28dfd5608c2"
+    },
+    {
+      "path": "component/amebadplus/mbed/us_ticker_api.h",
+      "source": "component/soc/amebadplus/hal/include/us_ticker_api.h",
+      "upstream_sha256": "35128a2dfb9153ed3a4768559e82bc3e43cfc5d6c32ce1c7c54f160e2cba5df9",
+      "sha256": "35128a2dfb9153ed3a4768559e82bc3e43cfc5d6c32ce1c7c54f160e2cba5df9"
+    },
+    {
+      "path": "component/amebadplus/mbed/wait_api.c",
+      "source": "component/soc/amebadplus/hal/src/wait_api.c",
+      "upstream_sha256": "4c1c2c4a1991356f5c2bbffa2cb8c03d0ad84c18b46b742be5f0af43372c551d",
+      "sha256": "4c1c2c4a1991356f5c2bbffa2cb8c03d0ad84c18b46b742be5f0af43372c551d"
+    },
+    {
+      "path": "component/amebadplus/mbed/wait_api.h",
+      "source": "component/soc/amebadplus/hal/include/wait_api.h",
+      "upstream_sha256": "d54a9fbd8ffb1b9cd977ab2d56cbb68e5a0d571c57a2acae41f6f40f105acdf0",
+      "sha256": "d54a9fbd8ffb1b9cd977ab2d56cbb68e5a0d571c57a2acae41f6f40f105acdf0"
+    },
+    {
+      "path": "component/amebadplus/mbed/wdt_api.c",
+      "source": "component/soc/amebadplus/hal/src/wdt_api.c",
+      "upstream_sha256": "55752daea5fe977c528f074d5c781977faabe5dd26b35cf76d541732318d5fc5",
+      "sha256": "55752daea5fe977c528f074d5c781977faabe5dd26b35cf76d541732318d5fc5"
+    },
+    {
+      "path": "component/amebadplus/mbed/wdt_api.h",
+      "source": "component/soc/amebadplus/hal/include/wdt_api.h",
+      "upstream_sha256": "3c33ea9ac0309398ff467ce0c6e6e3c5edcc6b2351f9ee34743b13704db0b067",
+      "sha256": "3c33ea9ac0309398ff467ce0c6e6e3c5edcc6b2351f9ee34743b13704db0b067"
+    },
+    {
+      "path": "component/amebadplus/monitor_port/ameba_diagnose.h",
+      "source": "component/soc/common/diagnose/ameba_diagnose.h",
+      "upstream_sha256": "364b2119d83112dcaaabadb8f6b726fe7af046dcff1cd9c44a238e83afb4ffac",
+      "sha256": "364b2119d83112dcaaabadb8f6b726fe7af046dcff1cd9c44a238e83afb4ffac"
+    },
+    {
+      "path": "component/amebadplus/monitor_port/ameba_diagnose_customer.h",
+      "source": "component/soc/common/diagnose/ameba_diagnose_customer.h",
+      "upstream_sha256": "2ba631c704fc3caa46596e20712f92dac5af5e31008a7547ebb4dc5e3594c8e0",
+      "sha256": "2ba631c704fc3caa46596e20712f92dac5af5e31008a7547ebb4dc5e3594c8e0"
+    },
+    {
+      "path": "component/amebadplus/monitor_port/ameba_diagnose_format.h",
+      "source": "component/soc/common/diagnose/ameba_diagnose_format.h",
+      "upstream_sha256": "d5bd639185d0823037760761d909242f71a5e990884c49752fa94f8269c6050a",
+      "sha256": "d5bd639185d0823037760761d909242f71a5e990884c49752fa94f8269c6050a"
+    },
+    {
+      "path": "component/amebadplus/monitor_port/ameba_diagnose_types.h",
+      "source": "component/soc/common/diagnose/ameba_diagnose_types.h",
+      "upstream_sha256": "6acb03f7adf8035e08c6fae534e6f1728f17b107a817acc9384fda080fc758c1",
+      "sha256": "6acb03f7adf8035e08c6fae534e6f1728f17b107a817acc9384fda080fc758c1"
+    },
+    {
+      "path": "component/amebadplus/monitor_port/ameba_v8m_crashdump.h",
+      "source": "component/soc/common/crashdump/include/ameba_v8m_crashdump.h",
+      "upstream_sha256": "561b108d258aa915c0c0248cb5239fca094ae6612eb673f3236b3c306a9c103f",
+      "sha256": "561b108d258aa915c0c0248cb5239fca094ae6612eb673f3236b3c306a9c103f"
+    },
+    {
+      "path": "component/amebadplus/monitor_port/atcmd_service.h",
+      "source": "component/at_cmd/atcmd_service.h",
+      "upstream_sha256": "c97eee8178430ffd38a159519bc98a4d0bcc31cab36e92fdf62dd3c09093e59c",
+      "sha256": "c97eee8178430ffd38a159519bc98a4d0bcc31cab36e92fdf62dd3c09093e59c"
+    },
+    {
+      "path": "component/amebadplus/monitor_port/lib_crashdump_km0.a",
+      "source": "component/soc/amebadplus/project/project_km0/lib/soc/lib_crashdump.a",
+      "upstream_sha256": "1f52c9a2692ccddffba2e948b9d96472c60f6b2205627ba28b7eecc44a3c8e49",
+      "sha256": "1f52c9a2692ccddffba2e948b9d96472c60f6b2205627ba28b7eecc44a3c8e49"
+    },
+    {
+      "path": "component/amebadplus/monitor_port/lib_crashdump_km4.a",
+      "source": "component/soc/amebadplus/project/project_km4/lib/soc/lib_crashdump.a",
+      "upstream_sha256": "a2425bea4a32bb13d3d802160de003addcec621ee44e902ec1aea02e3d4a31be",
+      "sha256": "a2425bea4a32bb13d3d802160de003addcec621ee44e902ec1aea02e3d4a31be"
+    },
+    {
+      "path": "component/amebadplus/monitor_port/monitor_rom.h",
+      "source": "component/soc/amebadplus/app/monitor/include/monitor_rom.h",
+      "upstream_sha256": "94cd6c50d13dfedc27e11b3f6871bdd0e37704e0e1354a76542966914038c488",
+      "sha256": "94cd6c50d13dfedc27e11b3f6871bdd0e37704e0e1354a76542966914038c488"
+    },
+    {
+      "path": "component/amebadplus/monitor_port/shell.h",
+      "source": "component/soc/amebadplus/app/monitor/include/shell.h",
+      "upstream_sha256": "abf7a4e5bd3f1b96255efa4cf5c8519de27ba4a604c6f02b50774f5933658940",
+      "sha256": "abf7a4e5bd3f1b96255efa4cf5c8519de27ba4a604c6f02b50774f5933658940"
+    },
+    {
+      "path": "component/amebadplus/osdep/os_wrapper.h",
+      "source": "component/os/os_wrapper/include/os_wrapper.h",
+      "upstream_sha256": "e1bf966c5b8f41dafec754fcc8cda93a91205e7827af7f308634916394d5f732",
+      "sha256": "e1bf966c5b8f41dafec754fcc8cda93a91205e7827af7f308634916394d5f732"
+    },
+    {
+      "path": "component/amebadplus/osdep/os_wrapper_critical.c",
+      "source": "component/os/freertos/os_wrapper/os_wrapper_critical.c",
+      "upstream_sha256": "01aa2e5d22dc208b93868d157aa9bc01b8dd2ebae615f63f4be00712b639057d",
+      "sha256": "01aa2e5d22dc208b93868d157aa9bc01b8dd2ebae615f63f4be00712b639057d"
+    },
+    {
+      "path": "component/amebadplus/osdep/os_wrapper_critical.h",
+      "source": "component/os/os_wrapper/include/os_wrapper_critical.h",
+      "upstream_sha256": "403d9a0a891d755d7e32301cfa64c7030fffe44a9b05d9bcb036abe4ec193f4a",
+      "sha256": "403d9a0a891d755d7e32301cfa64c7030fffe44a9b05d9bcb036abe4ec193f4a"
+    },
+    {
+      "path": "component/amebadplus/osdep/os_wrapper_event_groups.c",
+      "source": "component/os/freertos/os_wrapper/os_wrapper_event_groups.c",
+      "upstream_sha256": "87035318eee653b2f889b758a1dd692ffcfd492e80c775c35849f6144027d976",
+      "sha256": "87035318eee653b2f889b758a1dd692ffcfd492e80c775c35849f6144027d976"
+    },
+    {
+      "path": "component/amebadplus/osdep/os_wrapper_event_groups.h",
+      "source": "component/os/os_wrapper/include/os_wrapper_event_groups.h",
+      "upstream_sha256": "12cbf17a5fec8d7e106c42cf649953e8a5e8d0708de13396a4abe3baa1d26918",
+      "sha256": "12cbf17a5fec8d7e106c42cf649953e8a5e8d0708de13396a4abe3baa1d26918"
+    },
+    {
+      "path": "component/amebadplus/osdep/os_wrapper_memory.h",
+      "source": "component/os/os_wrapper/include/os_wrapper_memory.h",
+      "upstream_sha256": "7c999a6c32ca22864e2d3707fbec19028b4b43a0a508f64e0fa7e56afff61ac9",
+      "sha256": "7c999a6c32ca22864e2d3707fbec19028b4b43a0a508f64e0fa7e56afff61ac9"
+    },
+    {
+      "path": "component/amebadplus/osdep/os_wrapper_mutex.c",
+      "source": "component/os/freertos/os_wrapper/os_wrapper_mutex.c",
+      "upstream_sha256": "87c3329948a649ceafe138e94bd5f59fa3fd38658840c3a897f0e6547786b6e4",
+      "sha256": "87c3329948a649ceafe138e94bd5f59fa3fd38658840c3a897f0e6547786b6e4"
+    },
+    {
+      "path": "component/amebadplus/osdep/os_wrapper_mutex.h",
+      "source": "component/os/os_wrapper/include/os_wrapper_mutex.h",
+      "upstream_sha256": "1e33053953f3397a94b930e56ec3bbbe6eeb2428240f0ba6bd6c6cb3c283f49e",
+      "sha256": "1e33053953f3397a94b930e56ec3bbbe6eeb2428240f0ba6bd6c6cb3c283f49e"
+    },
+    {
+      "path": "component/amebadplus/osdep/os_wrapper_queue.c",
+      "source": "component/os/freertos/os_wrapper/os_wrapper_queue.c",
+      "upstream_sha256": "9c13ae03c80ff2aaf12374387995452c90a8d9e330c6feb32de1b862bf94c72d",
+      "sha256": "9c13ae03c80ff2aaf12374387995452c90a8d9e330c6feb32de1b862bf94c72d"
+    },
+    {
+      "path": "component/amebadplus/osdep/os_wrapper_queue.h",
+      "source": "component/os/os_wrapper/include/os_wrapper_queue.h",
+      "upstream_sha256": "a0f7788e88c6337ac36cd5a86fb4600757c2f738146505df27e0785a5ca0c7c2",
+      "sha256": "a0f7788e88c6337ac36cd5a86fb4600757c2f738146505df27e0785a5ca0c7c2"
+    },
+    {
+      "path": "component/amebadplus/osdep/os_wrapper_semaphore.c",
+      "source": "component/os/freertos/os_wrapper/os_wrapper_semaphore.c",
+      "upstream_sha256": "097c77ce9e47ce807a77e16c5785e9d951b47a0f14a2774d585c7dd113757e59",
+      "sha256": "097c77ce9e47ce807a77e16c5785e9d951b47a0f14a2774d585c7dd113757e59"
+    },
+    {
+      "path": "component/amebadplus/osdep/os_wrapper_semaphore.h",
+      "source": "component/os/os_wrapper/include/os_wrapper_semaphore.h",
+      "upstream_sha256": "aa4b2ac573064d001a7b5cc8bdd4d069a6070af1dbe05ea76a5ed2cd5c226715",
+      "sha256": "aa4b2ac573064d001a7b5cc8bdd4d069a6070af1dbe05ea76a5ed2cd5c226715"
+    },
+    {
+      "path": "component/amebadplus/osdep/os_wrapper_specific.h",
+      "source": "component/os/freertos/os_wrapper/include/os_wrapper_specific.h",
+      "upstream_sha256": "a4fcd978c9de08802527726705a5d75113cb5102245d36957106d5b360219748",
+      "sha256": "a4fcd978c9de08802527726705a5d75113cb5102245d36957106d5b360219748"
+    },
+    {
+      "path": "component/amebadplus/osdep/os_wrapper_static_functions.c",
+      "source": "component/os/freertos/os_wrapper/os_wrapper_static_functions.c",
+      "upstream_sha256": "44cbb2d4caf57c3224636e945b58cd28191f0a09bd65da6510daaac9ac81b02a",
+      "sha256": "44cbb2d4caf57c3224636e945b58cd28191f0a09bd65da6510daaac9ac81b02a"
+    },
+    {
+      "path": "component/amebadplus/osdep/os_wrapper_static_functions.h",
+      "source": "component/os/os_wrapper/include/os_wrapper_static_functions.h",
+      "upstream_sha256": "3471204fd3963c90eba2edaa0c0a3cd73cfec0e73dec0643700fb4362203db31",
+      "sha256": "3471204fd3963c90eba2edaa0c0a3cd73cfec0e73dec0643700fb4362203db31"
+    },
+    {
+      "path": "component/amebadplus/osdep/os_wrapper_task.c",
+      "source": "component/os/freertos/os_wrapper/os_wrapper_task.c",
+      "upstream_sha256": "ccc5dc95df93e1b1eb2b1953cd41c80a895182d62ad1af3490122da60a773ea9",
+      "sha256": "ccc5dc95df93e1b1eb2b1953cd41c80a895182d62ad1af3490122da60a773ea9"
+    },
+    {
+      "path": "component/amebadplus/osdep/os_wrapper_task.h",
+      "source": "component/os/os_wrapper/include/os_wrapper_task.h",
+      "upstream_sha256": "2ac83f127ef349a7b8565bda2b704a40b1e18152d8e777b841717a3b7d19303d",
+      "sha256": "2ac83f127ef349a7b8565bda2b704a40b1e18152d8e777b841717a3b7d19303d"
+    },
+    {
+      "path": "component/amebadplus/osdep/os_wrapper_time.c",
+      "source": "component/os/freertos/os_wrapper/os_wrapper_time.c",
+      "upstream_sha256": "b2eabc275ab2a5f78d84f8afe81af0999f17fcc8ee2d49afaebc40121003d791",
+      "sha256": "b2eabc275ab2a5f78d84f8afe81af0999f17fcc8ee2d49afaebc40121003d791"
+    },
+    {
+      "path": "component/amebadplus/osdep/os_wrapper_time.h",
+      "source": "component/os/os_wrapper/include/os_wrapper_time.h",
+      "upstream_sha256": "81f9d7f743a1c2a81cba1b3261e0d110c05cd9a2aa6ba9047398bd82cd748d8e",
+      "sha256": "81f9d7f743a1c2a81cba1b3261e0d110c05cd9a2aa6ba9047398bd82cd748d8e"
+    },
+    {
+      "path": "component/amebadplus/osdep/os_wrapper_timer.c",
+      "source": "component/os/freertos/os_wrapper/os_wrapper_timer.c",
+      "upstream_sha256": "97a1e560c7482f8c4e2e427458f28b0dc9fab0acb4c46449bdbb9a3b44f204e3",
+      "sha256": "97a1e560c7482f8c4e2e427458f28b0dc9fab0acb4c46449bdbb9a3b44f204e3"
+    },
+    {
+      "path": "component/amebadplus/osdep/os_wrapper_timer.h",
+      "source": "component/os/os_wrapper/include/os_wrapper_timer.h",
+      "upstream_sha256": "2268c38209639a98e16e70860ef9149262c6dffe3421e19040c682976b80554a",
+      "sha256": "2268c38209639a98e16e70860ef9149262c6dffe3421e19040c682976b80554a"
+    },
+    {
+      "path": "component/amebadplus/ota_flash_port/ameba_ota.c",
+      "source": "component/soc/amebadplus/misc/ameba_ota.c",
+      "upstream_sha256": "7e88d38481465f4917979f62700e69c6321370cc288810fce2d0e3cdfb74608d",
+      "sha256": "7e88d38481465f4917979f62700e69c6321370cc288810fce2d0e3cdfb74608d"
+    },
+    {
+      "path": "component/amebadplus/platform_stdlib/platform_stdlib.h",
+      "source": "component/os/os_wrapper/include/platform_stdlib.h",
+      "upstream_sha256": "cda4c33c1294404028da5e2885e8305b7c5e04822c241bddc60a17b8bb99aa01",
+      "sha256": "cda4c33c1294404028da5e2885e8305b7c5e04822c241bddc60a17b8bb99aa01"
+    },
+    {
+      "path": "component/amebadplus/pmu/ameba_pmu.c",
+      "source": "component/soc/amebadplus/misc/ameba_pmu.c",
+      "upstream_sha256": "d3457a2edcc3ccbde312464fc610ac3d9cbd0cb9e1ef08df5f0c427f8927d151",
+      "sha256": "d3457a2edcc3ccbde312464fc610ac3d9cbd0cb9e1ef08df5f0c427f8927d151"
+    },
+    {
+      "path": "component/amebadplus/pmu/ameba_pmu.h",
+      "source": "component/soc/amebadplus/misc/ameba_pmu.h",
+      "upstream_sha256": "2a20623763be4e2deea6445efe0416cade271efa8dcc690dd90205be13d6c611",
+      "sha256": "2a20623763be4e2deea6445efe0416cade271efa8dcc690dd90205be13d6c611"
+    },
+    {
+      "path": "component/amebadplus/pmu/lib_pmc_km0.a",
+      "source": "component/soc/amebadplus/project/project_km0/lib/soc/lib_pmc.a",
+      "upstream_sha256": "43dcc03684c9f77cc4871d4cc01471e7969327558dcf4c30793a289a5fe0e810",
+      "sha256": "43dcc03684c9f77cc4871d4cc01471e7969327558dcf4c30793a289a5fe0e810"
+    },
+    {
+      "path": "component/amebadplus/pmu/lib_pmc_km4.a",
+      "source": "component/soc/amebadplus/project/project_km4/lib/soc/lib_pmc.a",
+      "upstream_sha256": "4fa669178931fbe4054869a203e020b0f39770a16d880273305aa39dd0d30d8b",
+      "sha256": "4fa669178931fbe4054869a203e020b0f39770a16d880273305aa39dd0d30d8b"
+    },
+    {
+      "path": "component/amebadplus/string_rom/diag.h",
+      "source": "component/soc/amebadplus/swlib/diag.h",
+      "upstream_sha256": "44a9af49fc1e2b9db093a960975aa9f58aaab42a1ea1d2a7c4afab0f2e073e0f",
+      "sha256": "44a9af49fc1e2b9db093a960975aa9f58aaab42a1ea1d2a7c4afab0f2e073e0f"
+    },
+    {
+      "path": "component/amebadplus/string_rom/log.c",
+      "source": "component/soc/amebadplus/swlib/log.c",
+      "upstream_sha256": "57d7d6163088603a43d636476961f4be3758bee4f4f211d256f50a087a9eb886",
+      "sha256": "57d7d6163088603a43d636476961f4be3758bee4f4f211d256f50a087a9eb886"
+    },
+    {
+      "path": "component/amebadplus/string_rom/log.h",
+      "source": "component/soc/amebadplus/swlib/log.h",
+      "upstream_sha256": "159ecfa46152da5fdb75287aac9de1e03ae507e4f006dcf6c0046ffb3d7249dd",
+      "sha256": "159ecfa46152da5fdb75287aac9de1e03ae507e4f006dcf6c0046ffb3d7249dd"
+    },
+    {
+      "path": "component/amebadplus/string_rom/memproc.h",
+      "source": "component/soc/amebadplus/swlib/memproc.h",
+      "upstream_sha256": "b5939872d43153f125147246b23a0ec2ff52cefda779e268bd75932b4ed2d13e",
+      "sha256": "b5939872d43153f125147246b23a0ec2ff52cefda779e268bd75932b4ed2d13e"
+    },
+    {
+      "path": "component/amebadplus/string_rom/rand.h",
+      "source": "component/soc/amebadplus/swlib/rand.h",
+      "upstream_sha256": "003dabbab5b8a71f6656cbef01cffa991b6d5891cb8a44f689142d086ac13477",
+      "sha256": "003dabbab5b8a71f6656cbef01cffa991b6d5891cb8a44f689142d086ac13477"
+    },
+    {
+      "path": "component/amebadplus/string_rom/sscanf_minimal.c",
+      "source": "component/soc/amebadplus/swlib/sscanf_minimal.c",
+      "upstream_sha256": "f5e74fc984ee4c211aa833e1533d77557f474d43b91113d6ab85e460a51c17c3",
+      "sha256": "f5e74fc984ee4c211aa833e1533d77557f474d43b91113d6ab85e460a51c17c3"
+    },
+    {
+      "path": "component/amebadplus/string_rom/sscanf_minimal.h",
+      "source": "component/soc/amebadplus/swlib/sscanf_minimal.h",
+      "upstream_sha256": "a485528dd5d244f1babff3de789e80b41dad817ee9e3df3b675b39b222154789",
+      "sha256": "a485528dd5d244f1babff3de789e80b41dad817ee9e3df3b675b39b222154789"
+    },
+    {
+      "path": "component/amebadplus/string_rom/strproc.h",
+      "source": "component/soc/amebadplus/swlib/strproc.h",
+      "upstream_sha256": "ddf2630d54df642eb155378408c8fa7ed717f77d2acb1d6e74d63307a57383e0",
+      "sha256": "ddf2630d54df642eb155378408c8fa7ed717f77d2acb1d6e74d63307a57383e0"
+    },
+    {
+      "path": "component/amebadplus/usrcfg/ameba_boot_trustzonecfg.c",
+      "source": "component/soc/usrcfg/amebadplus/ameba_boot_trustzonecfg.c",
+      "upstream_sha256": "8094a71b5890ae081028632917e53ac29f6f8bb92fc0a61d3bbe2df45860ba54",
+      "sha256": "8094a71b5890ae081028632917e53ac29f6f8bb92fc0a61d3bbe2df45860ba54"
+    },
+    {
+      "path": "component/amebadplus/usrcfg/ameba_boot_trustzonecfg.h",
+      "source": "component/soc/usrcfg/amebadplus/include/ameba_boot_trustzonecfg.h",
+      "upstream_sha256": "251a91fb5645e52bbccda68f71d5200b356bbb0b40df5433799eb67c48f39d98",
+      "sha256": "251a91fb5645e52bbccda68f71d5200b356bbb0b40df5433799eb67c48f39d98"
+    },
+    {
+      "path": "component/amebadplus/usrcfg/ameba_bootcfg.c",
+      "source": "component/soc/usrcfg/amebadplus/ameba_bootcfg.c",
+      "upstream_sha256": "65bdc9c8ba8a28d67a90d37e5328deb3699d1614a579fc98b6c808290f795817",
+      "sha256": "65bdc9c8ba8a28d67a90d37e5328deb3699d1614a579fc98b6c808290f795817"
+    },
+    {
+      "path": "component/amebadplus/usrcfg/ameba_bootcfg.h",
+      "source": "component/soc/usrcfg/amebadplus/include/ameba_bootcfg.h",
+      "upstream_sha256": "a061f637f5cc0b0b552d4eb44245220bc4caa59c6ce101d1af0e3432b8612a4e",
+      "sha256": "a061f637f5cc0b0b552d4eb44245220bc4caa59c6ce101d1af0e3432b8612a4e"
+    },
+    {
+      "path": "component/amebadplus/usrcfg/ameba_flashcfg.c",
+      "source": "component/soc/usrcfg/amebadplus/ameba_flashcfg.c",
+      "upstream_sha256": "6c301ed1c1f87ccb449f9c85e47ca9c24fa86e4d2f96ba93532b07886ad45d81",
+      "sha256": "6c301ed1c1f87ccb449f9c85e47ca9c24fa86e4d2f96ba93532b07886ad45d81"
+    },
+    {
+      "path": "component/amebadplus/usrcfg/ameba_flashcfg.h",
+      "source": "component/soc/usrcfg/amebadplus/include/ameba_flashcfg.h",
+      "upstream_sha256": "673aa949e1dc6ac82c2ad81bcff7de9026e0c5c5771bde754c677063f07eca39",
+      "sha256": "673aa949e1dc6ac82c2ad81bcff7de9026e0c5c5771bde754c677063f07eca39"
+    },
+    {
+      "path": "component/amebadplus/usrcfg/ameba_intfcfg.c",
+      "source": "component/soc/usrcfg/amebadplus/ameba_intfcfg.c",
+      "upstream_sha256": "d60e32e4f288b289575c4e17d961a9439d5033a1cdd9736188681fc502bd9d1e",
+      "sha256": "d60e32e4f288b289575c4e17d961a9439d5033a1cdd9736188681fc502bd9d1e"
+    },
+    {
+      "path": "component/amebadplus/usrcfg/ameba_intfcfg.h",
+      "source": "component/soc/usrcfg/amebadplus/include/ameba_intfcfg.h",
+      "upstream_sha256": "8fb5626b8a5feb0cd4bcba4c93e10e5f7655805c24991af661eb101c7993e0ad",
+      "sha256": "8fb5626b8a5feb0cd4bcba4c93e10e5f7655805c24991af661eb101c7993e0ad"
+    },
+    {
+      "path": "component/amebadplus/usrcfg/ameba_pinmapcfg.c",
+      "source": "component/soc/usrcfg/amebadplus/ameba_pinmapcfg.c",
+      "upstream_sha256": "66b7abb8441d532f8e89da5cf857d555b6cbaba4b389e24aef333ba5b28cae84",
+      "sha256": "66b7abb8441d532f8e89da5cf857d555b6cbaba4b389e24aef333ba5b28cae84"
+    },
+    {
+      "path": "component/amebadplus/usrcfg/ameba_pinmapcfg.h",
+      "source": "component/soc/usrcfg/amebadplus/include/ameba_pinmapcfg.h",
+      "upstream_sha256": "3ce0b054197a350e19ec3af056804c07565c347147e678ac400528fe5a87612d",
+      "sha256": "3ce0b054197a350e19ec3af056804c07565c347147e678ac400528fe5a87612d"
+    },
+    {
+      "path": "component/amebadplus/usrcfg/ameba_sleepcfg.c",
+      "source": "component/soc/usrcfg/amebadplus/ameba_sleepcfg.c",
+      "upstream_sha256": "b5fc863d00806a6a73455ea4023070ff7d1902794905d3cf8d58d60c1e4460f8",
+      "sha256": "b5fc863d00806a6a73455ea4023070ff7d1902794905d3cf8d58d60c1e4460f8"
+    },
+    {
+      "path": "component/amebadplus/usrcfg/ameba_sleepcfg.h",
+      "source": "component/soc/usrcfg/amebadplus/include/ameba_sleepcfg.h",
+      "upstream_sha256": "e3527d02e1086fb8b9e583901e239b3e9e2e9086e8481455a7bd4a511666d03f",
+      "sha256": "e3527d02e1086fb8b9e583901e239b3e9e2e9086e8481455a7bd4a511666d03f"
+    },
+    {
+      "path": "component/amebadplus/usrcfg/ameba_userheapcfg.h",
+      "source": "component/soc/usrcfg/amebadplus/include/ameba_userheapcfg.h",
+      "upstream_sha256": "46b2ade3c0ac727e74e44fbdefcd5985477b79c9feb0faeeb8e6d41ac2d212bd",
+      "sha256": "46b2ade3c0ac727e74e44fbdefcd5985477b79c9feb0faeeb8e6d41ac2d212bd"
+    },
+    {
+      "path": "component/amebadplus/usrcfg/ameba_usrcfg.h",
+      "source": "component/soc/usrcfg/amebadplus/include/ameba_usrcfg.h",
+      "upstream_sha256": "592a722af831dae61a4e553a61fd5c4433532d918b3d1f17b3bd306c059b4e39",
+      "sha256": "592a722af831dae61a4e553a61fd5c4433532d918b3d1f17b3bd306c059b4e39"
+    },
+    {
+      "path": "component/amebadplus/usrcfg/ameba_wifi_country_code_table_usrcfg.c",
+      "source": "component/soc/usrcfg/amebadplus/ameba_wifi_country_code_table_usrcfg.c",
+      "upstream_sha256": "c13b9493f460bd8e80f9937921161890fd425fc19536410a4078275afde9ee25",
+      "sha256": "c13b9493f460bd8e80f9937921161890fd425fc19536410a4078275afde9ee25"
+    },
+    {
+      "path": "component/amebadplus/usrcfg/ameba_wifi_power_table_usrcfg.c",
+      "source": "component/soc/usrcfg/amebadplus/ameba_wifi_power_table_usrcfg.c",
+      "upstream_sha256": "d23b58ddd65223c8ae255aef971b464c5fb153a019c104aaa65a0ddba59b7147",
+      "sha256": "d23b58ddd65223c8ae255aef971b464c5fb153a019c104aaa65a0ddba59b7147"
+    },
+    {
+      "path": "component/amebadplus/usrcfg/ameba_wifi_power_table_usrcfg_1v8.c",
+      "source": "component/soc/usrcfg/amebadplus/ameba_wifi_power_table_usrcfg_1v8.c",
+      "upstream_sha256": "6041ab9427bb1c8309419c5b888f3895f48eee2200b7c9c6b484bbc64b1ddeca",
+      "sha256": "6041ab9427bb1c8309419c5b888f3895f48eee2200b7c9c6b484bbc64b1ddeca"
+    },
+    {
+      "path": "component/amebadplus/usrcfg/ameba_wifi_power_table_usrcfg_3v3_1v25.c",
+      "source": "component/soc/usrcfg/amebadplus/ameba_wifi_power_table_usrcfg_3v3_1v25.c",
+      "upstream_sha256": "609f22859a537bca727bda2b4541f64e853b5c14ed2faf4ef1e16ffeeaef3630",
+      "sha256": "609f22859a537bca727bda2b4541f64e853b5c14ed2faf4ef1e16ffeeaef3630"
+    },
+    {
+      "path": "component/amebadplus/usrcfg/ameba_wificfg.c",
+      "source": "component/soc/usrcfg/amebadplus/ameba_wificfg.c",
+      "upstream_sha256": "b1fc5618cda311f82dcb30704cabeb83e34c53a5f86300c777b83edcf1135a17",
+      "sha256": "b1fc5618cda311f82dcb30704cabeb83e34c53a5f86300c777b83edcf1135a17"
+    },
+    {
+      "path": "component/amebadplus/usrcfg/ameba_wificfg_common.h",
+      "source": "component/soc/usrcfg/common/ameba_wificfg_common.h",
+      "upstream_sha256": "96ed611e12f057638b73ce36f9583409eb91ef40d85b5682296f93c8db83d5a5",
+      "sha256": "96ed611e12f057638b73ce36f9583409eb91ef40d85b5682296f93c8db83d5a5"
+    },
+    {
+      "path": "component/amebadplus/wifi/wifi_api.h",
+      "source": "component/wifi/api/wifi_api.h",
+      "upstream_sha256": "bb2b14b12942e557995d10bfff9dcf9bd9b5e575aa1c1fee4fa11cde7cdf6cea",
+      "sha256": "bb2b14b12942e557995d10bfff9dcf9bd9b5e575aa1c1fee4fa11cde7cdf6cea"
+    },
+    {
+      "path": "component/amebadplus/wifi/wifi_api_event.h",
+      "source": "component/wifi/api/wifi_api_event.h",
+      "upstream_sha256": "34a34e6bae5480b13abd3fcc5938feb943d8eb63df8c7e7b698735043b5b73a9",
+      "sha256": "34a34e6bae5480b13abd3fcc5938feb943d8eb63df8c7e7b698735043b5b73a9"
+    },
+    {
+      "path": "component/amebadplus/wifi/wifi_api_ext.h",
+      "source": "component/wifi/api/wifi_api_ext.h",
+      "upstream_sha256": "6fd87416de1e70f7c006488101f7c76e3eb345c0c0fe12df109a5bbb841d90c6",
+      "sha256": "6fd87416de1e70f7c006488101f7c76e3eb345c0c0fe12df109a5bbb841d90c6"
+    },
+    {
+      "path": "component/amebadplus/wifi/wifi_api_types.h",
+      "source": "component/wifi/api/wifi_api_types.h",
+      "upstream_sha256": "3f30a8d62673ffe247609ba79cf6ae409a2038076033d2ad4454c386b798778c",
+      "sha256": "3f30a8d62673ffe247609ba79cf6ae409a2038076033d2ad4454c386b798778c"
+    },
+    {
+      "path": "component/amebadplus/wifi/wifi_api_wtn.h",
+      "source": "component/wifi/api/wifi_api_wtn.h",
+      "upstream_sha256": "062818e9ed47f716dc269e868cfdf62717681fbcb621ef1364232ac2fb107082",
+      "sha256": "062818e9ed47f716dc269e868cfdf62717681fbcb621ef1364232ac2fb107082"
+    },
+    {
+      "path": "component/amebadplus/wifi/wifi_auto_reconnect.h",
+      "source": "component/wifi/rtk_app/wifi_auto_reconnect/wifi_auto_reconnect.h",
+      "upstream_sha256": "0eaa2729d4748542a85851c652d42e4bfedae540834d011a94b4fd25734cbad9",
+      "sha256": "0eaa2729d4748542a85851c652d42e4bfedae540834d011a94b4fd25734cbad9"
+    },
+    {
+      "path": "component/amebadplus/wifi/wifi_feature_dis_antdiv.c",
+      "source": "component/wifi/rtk_app/wifi_feature_disable/wifi_feature_dis_antdiv.c",
+      "upstream_sha256": "feb46fb1c6a93c522d516909e0ac801c7cd37d2b941dc7e4a9d6c29d30105f8b",
+      "sha256": "feb46fb1c6a93c522d516909e0ac801c7cd37d2b941dc7e4a9d6c29d30105f8b"
+    },
+    {
+      "path": "component/amebadplus/wifi/wifi_feature_dis_csi.c",
+      "source": "component/wifi/rtk_app/wifi_feature_disable/wifi_feature_dis_csi.c",
+      "upstream_sha256": "c24c33c33943cde0eb401a3d2fe6ba7993e76660bdb52dff56f8356eeb06f74c",
+      "sha256": "c24c33c33943cde0eb401a3d2fe6ba7993e76660bdb52dff56f8356eeb06f74c"
+    },
+    {
+      "path": "component/amebadplus/wifi/wifi_feature_dis_eap.c",
+      "source": "component/wifi/rtk_app/wifi_feature_disable/wifi_feature_dis_eap.c",
+      "upstream_sha256": "b9b0b9a5df85f600e31c96549092e58b1fb3878694f32a79194ab44857aec25a",
+      "sha256": "b9b0b9a5df85f600e31c96549092e58b1fb3878694f32a79194ab44857aec25a"
+    },
+    {
+      "path": "component/amebadplus/wifi/wifi_feature_dis_kvr.c",
+      "source": "component/wifi/rtk_app/wifi_feature_disable/wifi_feature_dis_kvr.c",
+      "upstream_sha256": "af73ca2c99e61866271408170725cc4ff9217dd618e7e5073632d6d54cdf9e77",
+      "sha256": "af73ca2c99e61866271408170725cc4ff9217dd618e7e5073632d6d54cdf9e77"
+    },
+    {
+      "path": "component/amebadplus/wifi/wifi_feature_dis_mcc.c",
+      "source": "component/wifi/rtk_app/wifi_feature_disable/wifi_feature_dis_mcc.c",
+      "upstream_sha256": "843f2a1075ecf23f4e68ad92d008db2dac5b47849b619b8a9cc66975864c30a1",
+      "sha256": "843f2a1075ecf23f4e68ad92d008db2dac5b47849b619b8a9cc66975864c30a1"
+    },
+    {
+      "path": "component/amebadplus/wifi/wifi_feature_dis_p2p.c",
+      "source": "component/wifi/rtk_app/wifi_feature_disable/wifi_feature_dis_p2p.c",
+      "upstream_sha256": "f789082bd641e2bcbf8d871aa941c30216c8c8cfa449e8e634adf0cd815ce868",
+      "sha256": "f789082bd641e2bcbf8d871aa941c30216c8c8cfa449e8e634adf0cd815ce868"
+    },
+    {
+      "path": "component/amebadplus/wifi/wifi_feature_dis_radar.c",
+      "source": "component/wifi/rtk_app/wifi_feature_disable/wifi_feature_dis_radar.c",
+      "upstream_sha256": "59dbb5f7f47a40476f156067df694bcf858caede73b1ef683fda55b223bca986",
+      "sha256": "59dbb5f7f47a40476f156067df694bcf858caede73b1ef683fda55b223bca986"
+    },
+    {
+      "path": "component/amebadplus/wifi/wifi_feature_dis_speaker.c",
+      "source": "component/wifi/rtk_app/wifi_feature_disable/wifi_feature_dis_speaker.c",
+      "upstream_sha256": "c2d5416186a22d37d03060931006825591b611c4d9f5ca48164f5a144914988e",
+      "sha256": "c2d5416186a22d37d03060931006825591b611c4d9f5ca48164f5a144914988e"
+    },
+    {
+      "path": "component/amebadplus/wifi/wifi_feature_dis_wtn.c",
+      "source": "component/wifi/rtk_app/wifi_feature_disable/wifi_feature_dis_wtn.c",
+      "upstream_sha256": "e3d4a94f6c21df10e36917565ce4d87b6cd9241248c156b5dd9f80a7acc8a5ee",
+      "sha256": "e3d4a94f6c21df10e36917565ce4d87b6cd9241248c156b5dd9f80a7acc8a5ee"
+    },
+    {
+      "path": "component/amebadplus/wifi/wifi_init.c",
+      "source": "component/wifi/rtk_app/wifi_init/wifi_init.c",
+      "upstream_sha256": "b3252e8b052b4b70e0d0065e017d0cb866ed917b701320565ecad7c64db8861b",
+      "sha256": "b3252e8b052b4b70e0d0065e017d0cb866ed917b701320565ecad7c64db8861b"
+    },
+    {
+      "path": "component/amebadplus/wlan/autoconf_8721da.h",
+      "source": "component/wifi/driver/include/autoconf_8721da.h",
+      "upstream_sha256": "0ed71bab019a26804e439d44f19298577c67d9be50a348caa98f827461665e9e",
+      "sha256": "0ed71bab019a26804e439d44f19298577c67d9be50a348caa98f827461665e9e"
+    },
+    {
+      "path": "component/amebadplus/wlan/autoconf_eap.h",
+      "source": "component/wifi/driver/include/autoconf_eap.h",
+      "upstream_sha256": "05dcd66c8546c60c5d646222477f8b7c46037f30d9bf565d4788aa2fd9deb8f6",
+      "sha256": "05dcd66c8546c60c5d646222477f8b7c46037f30d9bf565d4788aa2fd9deb8f6"
+    },
+    {
+      "path": "component/amebadplus/wlan/lib_coex.a",
+      "source": "component/soc/amebadplus/project/project_km0/lib/application/lib_coex.a",
+      "upstream_sha256": "9fdd8a991d7328960ba82bf98b9412fe08398d6f8e8efad9bcf677dd06b24b5c",
+      "sha256": "9fdd8a991d7328960ba82bf98b9412fe08398d6f8e8efad9bcf677dd06b24b5c"
+    },
+    {
+      "path": "component/amebadplus/wlan/lib_wifi_com_sec.a",
+      "source": "component/soc/amebadplus/project/project_km4/lib/application/lib_wifi_com_sec.a",
+      "upstream_sha256": "97dfa39fb27cf182fb0abce4974c48fa2416164df8c94d723935ca0d7b4aeadf",
+      "sha256": "97dfa39fb27cf182fb0abce4974c48fa2416164df8c94d723935ca0d7b4aeadf"
+    },
+    {
+      "path": "component/amebadplus/wlan/lib_wifi_common.a",
+      "source": "component/soc/amebadplus/project/project_km0/lib/application/lib_wifi_common.a",
+      "upstream_sha256": "d0731d914a965c2e30c40d9a6acd86b16c14462cf59dc754d0e351046d92f036",
+      "sha256": "d0731d914a965c2e30c40d9a6acd86b16c14462cf59dc754d0e351046d92f036"
+    },
+    {
+      "path": "component/amebadplus/wlan/lib_wifi_rtk_app.a",
+      "source": "component/soc/amebadplus/project/project_km4/lib/application/lib_wifi_rtk_app.a",
+      "upstream_sha256": "125c35766aa429e2c296f60b1f116a20ee755b3f976be747d1232dbea911fd42",
+      "sha256": "125c35766aa429e2c296f60b1f116a20ee755b3f976be747d1232dbea911fd42"
+    },
+    {
+      "path": "component/amebadplus/wlan/lib_wifi_whc_ap.a",
+      "source": "component/soc/amebadplus/project/project_km4/lib/application/lib_wifi_whc_ap.a",
+      "upstream_sha256": "002256d3c81801114a66d9dd65809ba6fdcf17b8d7b80d706bde3cf7111e720b",
+      "sha256": "002256d3c81801114a66d9dd65809ba6fdcf17b8d7b80d706bde3cf7111e720b"
+    },
+    {
+      "path": "component/amebadplus/wlan/lib_wifi_whc_np.a",
+      "source": "component/soc/amebadplus/project/project_km0/lib/application/lib_wifi_whc_np.a",
+      "upstream_sha256": "698c9af9ef1b31319efa0ca636109b1f6bd3403179718defd189936fb519bc06",
+      "sha256": "698c9af9ef1b31319efa0ca636109b1f6bd3403179718defd189936fb519bc06"
+    },
+    {
+      "path": "component/amebadplus/wlan/rtw_atomic.h",
+      "source": "component/wifi/common/rtw_atomic.h",
+      "upstream_sha256": "f0c8357094c1af3d1307d823d7662e92f482218369c274a45db410a001e7adbf",
+      "sha256": "f0c8357094c1af3d1307d823d7662e92f482218369c274a45db410a001e7adbf"
+    },
+    {
+      "path": "component/amebadplus/wlan/rtw_autoconf.h",
+      "source": "component/wifi/driver/include/rtw_autoconf.h",
+      "upstream_sha256": "835c10a934b2c37b122ef5669d743241a9aaa93e7aac598aa00a8d1b6d7aa2e9",
+      "sha256": "835c10a934b2c37b122ef5669d743241a9aaa93e7aac598aa00a8d1b6d7aa2e9"
+    },
+    {
+      "path": "component/amebadplus/wlan/rtw_byteorder.h",
+      "source": "component/wifi/driver/include/rtw_byteorder.h",
+      "upstream_sha256": "c92598d86e9423a6237c9238fc598d219d5f682267ddfb5c9ebe0e495b2cf74a",
+      "sha256": "c92598d86e9423a6237c9238fc598d219d5f682267ddfb5c9ebe0e495b2cf74a"
+    },
+    {
+      "path": "component/amebadplus/wlan/rtw_coex_api_ext.h",
+      "source": "component/rtk_coex/rtw_coex_api_ext.h",
+      "upstream_sha256": "d26532fd43f89df3498bb67db21cb6b48517181bcb9a97a53efba5820112156e",
+      "sha256": "d26532fd43f89df3498bb67db21cb6b48517181bcb9a97a53efba5820112156e"
+    },
+    {
+      "path": "component/amebadplus/wlan/rtw_coex_host_api.h",
+      "source": "component/rtk_coex/rtw_coex_host_api.h",
+      "upstream_sha256": "999112c9cc63622dcc657020e435d611db9be522d5e69d58c8cd981377eb0441",
+      "sha256": "999112c9cc63622dcc657020e435d611db9be522d5e69d58c8cd981377eb0441"
+    },
+    {
+      "path": "component/amebadplus/wlan/rtw_coex_host_api_bt.c",
+      "source": "component/rtk_coex/rtw_coex_host_api_bt.c",
+      "upstream_sha256": "04a64ad96d16e844e4b9df3cf943793af7320b119b7da0c7c2c52fa3cc54c184",
+      "sha256": "04a64ad96d16e844e4b9df3cf943793af7320b119b7da0c7c2c52fa3cc54c184"
+    },
+    {
+      "path": "component/amebadplus/wlan/rtw_coex_host_api_com.c",
+      "source": "component/rtk_coex/rtw_coex_host_api_com.c",
+      "upstream_sha256": "fe5c31acf0d01092591b827abd971554b22d448264d8a29207cdbae5bf7b6c6b",
+      "sha256": "fe5c31acf0d01092591b827abd971554b22d448264d8a29207cdbae5bf7b6c6b"
+    },
+    {
+      "path": "component/amebadplus/wlan/rtw_coex_host_api_ext.c",
+      "source": "component/rtk_coex/rtw_coex_host_api_ext.c",
+      "upstream_sha256": "7717312f5543286f25d7d7e5e1cdad664089e2fa01c285786245f0ac7e019461",
+      "sha256": "7717312f5543286f25d7d7e5e1cdad664089e2fa01c285786245f0ac7e019461"
+    },
+    {
+      "path": "component/amebadplus/wlan/rtw_coex_host_api_wp.c",
+      "source": "component/rtk_coex/rtw_coex_host_api_wp.c",
+      "upstream_sha256": "c64590fd183019f9acb748c3360b385f709c6376de2648447aa895de9ca8a612",
+      "sha256": "c64590fd183019f9acb748c3360b385f709c6376de2648447aa895de9ca8a612"
+    },
+    {
+      "path": "component/amebadplus/wlan/rtw_coex_ipc.h",
+      "source": "component/rtk_coex/rtw_coex_ipc.h",
+      "upstream_sha256": "e6ffde435dd44b784b6a4e4914f1b662231e02d3b266c8923d5f4bc450f0edbd",
+      "sha256": "e6ffde435dd44b784b6a4e4914f1b662231e02d3b266c8923d5f4bc450f0edbd"
+    },
+    {
+      "path": "component/amebadplus/wlan/rtw_coex_ipc_cfg.h",
+      "source": "component/rtk_coex/rtw_coex_ipc_cfg.h",
+      "upstream_sha256": "226b071efcbbb1df69ee1b0d51423b07d07182b4f59771a1ea63122dddc2b8ea",
+      "sha256": "226b071efcbbb1df69ee1b0d51423b07d07182b4f59771a1ea63122dddc2b8ea"
+    },
+    {
+      "path": "component/amebadplus/wlan/rtw_coex_ipc_def.h",
+      "source": "component/rtk_coex/rtw_coex_ipc_def.h",
+      "upstream_sha256": "233f209857060777cb0f351a1537f071f7c66930039fc3ee4c124e2021e32ada",
+      "sha256": "233f209857060777cb0f351a1537f071f7c66930039fc3ee4c124e2021e32ada"
+    },
+    {
+      "path": "component/amebadplus/wlan/rtw_coex_ipc_host.c",
+      "source": "component/rtk_coex/rtw_coex_ipc_host.c",
+      "upstream_sha256": "fb99889d9378a26b61a02551796cadc534386635aee66e7ea355d922b86a82f9",
+      "sha256": "fb99889d9378a26b61a02551796cadc534386635aee66e7ea355d922b86a82f9"
+    },
+    {
+      "path": "component/amebadplus/wlan/rtw_coex_ipc_host_api.c",
+      "source": "component/rtk_coex/rtw_coex_ipc_host_api.c",
+      "upstream_sha256": "0520e4f24d4b4e0ff2315a4e63d6735c76e7137b9d2bb848adecc675b398f204",
+      "sha256": "0520e4f24d4b4e0ff2315a4e63d6735c76e7137b9d2bb848adecc675b398f204"
+    },
+    {
+      "path": "component/amebadplus/wlan/rtw_event.c",
+      "source": "component/wifi/common/rtw_event.c",
+      "upstream_sha256": "7db11bf0c42599d2e10aa6b6751815ea89363ad7cbc78d5db6b6ec086af1535f",
+      "sha256": "d0deee77f9a925075282aa433e9523967abe0d31ae5b83f7766f08df035eec9c"
+    },
+    {
+      "path": "component/amebadplus/wlan/rtw_inic_common.h",
+      "source": "component/wifi/common/rtw_inic_common.h",
+      "upstream_sha256": "501424e76535be15538687a11938857694018f09fdb80a1b3156c92e31d8ffc8",
+      "sha256": "501424e76535be15538687a11938857694018f09fdb80a1b3156c92e31d8ffc8"
+    },
+    {
+      "path": "component/amebadplus/wlan/rtw_misc.h",
+      "source": "component/wifi/common/rtw_misc.h",
+      "upstream_sha256": "73ab0722417f215b7922bfc00edc808c4c18bc5579cbd5d93f29c864afc69817",
+      "sha256": "73ab0722417f215b7922bfc00edc808c4c18bc5579cbd5d93f29c864afc69817"
+    },
+    {
+      "path": "component/amebadplus/wlan/rtw_queue.h",
+      "source": "component/wifi/common/rtw_queue.h",
+      "upstream_sha256": "47fbdfc90871faff7945fb25ccca3a8df789b9889f4f946301420a6421736b1c",
+      "sha256": "47fbdfc90871faff7945fb25ccca3a8df789b9889f4f946301420a6421736b1c"
+    },
+    {
+      "path": "component/amebadplus/wlan/rtw_skbuff.h",
+      "source": "component/wifi/common/rtw_skbuff.h",
+      "upstream_sha256": "47713340b0b2c103bd268e515e56f4aa01c98da0dcbbcb3901d82456483f9e93",
+      "sha256": "47713340b0b2c103bd268e515e56f4aa01c98da0dcbbcb3901d82456483f9e93"
+    },
+    {
+      "path": "component/amebadplus/wlan/rtw_timer.h",
+      "source": "component/wifi/common/rtw_timer.h",
+      "upstream_sha256": "7a53e998edf0cb6ff2d8b41ef8a422d3b3cf40b7125615778820b9e7ab7e26f9",
+      "sha256": "7a53e998edf0cb6ff2d8b41ef8a422d3b3cf40b7125615778820b9e7ab7e26f9"
+    },
+    {
+      "path": "component/amebadplus/wlan/rtw_wifi_common.h",
+      "source": "component/wifi/common/rtw_wifi_common.h",
+      "upstream_sha256": "01c388c0e4c854886cdd906059888da5271898d557ac6612ef640fdc425b3609",
+      "sha256": "01c388c0e4c854886cdd906059888da5271898d557ac6612ef640fdc425b3609"
+    },
+    {
+      "path": "component/amebadplus/wlan/whc_def.h",
+      "source": "component/wifi/whc/whc_def.h",
+      "upstream_sha256": "96b66363619d12d257124a411fef0b732a4601eae2bf2ed9df345e92edde28f3",
+      "sha256": "96b66363619d12d257124a411fef0b732a4601eae2bf2ed9df345e92edde28f3"
+    },
+    {
+      "path": "component/amebadplus/wlan/whc_ipc.h",
+      "source": "component/wifi/whc/whc_ipc.h",
+      "upstream_sha256": "1f16499f596825cccc930fa849311f9230278d0b527f905b64c144b2d48151cb",
+      "sha256": "1f16499f596825cccc930fa849311f9230278d0b527f905b64c144b2d48151cb"
+    },
+    {
+      "path": "component/amebadplus/wlan/whc_ipc_cfg.h",
+      "source": "component/wifi/whc/whc_ipc_cfg.h",
+      "upstream_sha256": "d3d5a5128b3f21cdf1afd0ef5b698facbf93c35882b3d6d86ef92034576ffd84",
+      "sha256": "d3d5a5128b3f21cdf1afd0ef5b698facbf93c35882b3d6d86ef92034576ffd84"
+    },
+    {
+      "path": "component/amebadplus/wlan/whc_ipc_host_trx.h",
+      "source": "component/wifi/whc/whc_host_rtos/ipc/whc_ipc_host_trx.h",
+      "upstream_sha256": "567177d493c58b03d26fc06c8825cf4fa8872162b3a38ce745a745f81e0a8710",
+      "sha256": "567177d493c58b03d26fc06c8825cf4fa8872162b3a38ce745a745f81e0a8710"
+    },
+    {
+      "path": "component/amebadplus/wlan/whc_ipc_msg_queue.h",
+      "source": "component/wifi/whc/whc_ipc_msg_queue.h",
+      "upstream_sha256": "157dd499d883f56ee4586d56a8e0bc1b481f4ad19f36e1410729923fd825d0e2",
+      "sha256": "157dd499d883f56ee4586d56a8e0bc1b481f4ad19f36e1410729923fd825d0e2"
+    },
+    {
+      "path": "component/amebadplus/wlan/wifi_intf_drv_to_app_internal.h",
+      "source": "component/wifi/driver/intf/wifi_intf_drv_to_app_internal.h",
+      "upstream_sha256": "d919f9fd5f388567f17193d93bd2750140769b60c4449a13469039a0cb169315",
+      "sha256": "d919f9fd5f388567f17193d93bd2750140769b60c4449a13469039a0cb169315"
+    },
+    {
+      "path": "component/amebadplus/wlan/wifi_intf_drv_to_upper.h",
+      "source": "component/wifi/driver/intf/wifi_intf_drv_to_upper.h",
+      "upstream_sha256": "d79120376d808dea774fd3eb4605f5c72474c040c7a908e85b972b07d3f5bbea",
+      "sha256": "d79120376d808dea774fd3eb4605f5c72474c040c7a908e85b972b07d3f5bbea"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/lib_eap.a",
+      "source": "component/soc/amebadplus/project/project_km4/lib/application/lib_eap.a",
+      "upstream_sha256": "7c4f0c316403ca01c29c96ee59af07fae03e37596ab0becad09f64f1c512505b",
+      "sha256": "7c4f0c316403ca01c29c96ee59af07fae03e37596ab0becad09f64f1c512505b"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/lib_p2p.a",
+      "source": "component/soc/amebadplus/project/project_km4/lib/application/lib_p2p.a",
+      "upstream_sha256": "c257c9452e80055429bc8fb014a8d3626f68fb0dd4642c96e6af62ceab18ec57",
+      "sha256": "c257c9452e80055429bc8fb014a8d3626f68fb0dd4642c96e6af62ceab18ec57"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/lib_wpa_lite.a",
+      "source": "component/soc/amebadplus/project/project_km4/lib/application/lib_wpa_lite.a",
+      "upstream_sha256": "6f09afdd21c71656349b29dfa838c3f95a20031712de05a787bbb98aac3e4880",
+      "sha256": "6f09afdd21c71656349b29dfa838c3f95a20031712de05a787bbb98aac3e4880"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/lib_wps.a",
+      "source": "component/soc/amebadplus/project/project_km4/lib/application/lib_wps.a",
+      "upstream_sha256": "a5f9b1b4db86f50219e25902b902c0d46170b33060a5ec6ae66c1743f0ce62bc",
+      "sha256": "a5f9b1b4db86f50219e25902b902c0d46170b33060a5ec6ae66c1743f0ce62bc"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/src/common/defs.h",
+      "source": "component/wifi/wpa_supplicant/src/common/defs.h",
+      "upstream_sha256": "350f2e34f86ce9a183a3cf7dab3fe85de173b01ff974f0830a3879048fd95ffe",
+      "sha256": "350f2e34f86ce9a183a3cf7dab3fe85de173b01ff974f0830a3879048fd95ffe"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/src/crypto/tls.h",
+      "source": "component/wifi/wpa_supplicant/src/crypto/tls.h",
+      "upstream_sha256": "03bf16bceaa04a2c3abae2f498effa0b9f3507140b87de110725186cbc157530",
+      "sha256": "03bf16bceaa04a2c3abae2f498effa0b9f3507140b87de110725186cbc157530"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/src/crypto/tls_polarssl.c",
+      "source": "component/wifi/wpa_supplicant/src/crypto/tls_polarssl.c",
+      "upstream_sha256": "6707830f8d7632c80c07f3c3406bdcc1ca85adfbfe2645a727d59ea12b3b4354",
+      "sha256": "6707830f8d7632c80c07f3c3406bdcc1ca85adfbfe2645a727d59ea12b3b4354"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/src/eap_common/eap_common.h",
+      "source": "component/wifi/wpa_supplicant/src/eap_common/eap_common.h",
+      "upstream_sha256": "c06ce45b79242d8487a45ffb5ecc7a63a5c31198b6ad37f5731d149b96ab8cb4",
+      "sha256": "c06ce45b79242d8487a45ffb5ecc7a63a5c31198b6ad37f5731d149b96ab8cb4"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/src/eap_common/eap_defs.h",
+      "source": "component/wifi/wpa_supplicant/src/eap_common/eap_defs.h",
+      "upstream_sha256": "7b0c649a3eefa941c5b340fa22137576424dfc34b76fa0ef14559ea4523d7dea",
+      "sha256": "7b0c649a3eefa941c5b340fa22137576424dfc34b76fa0ef14559ea4523d7dea"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/src/eap_common/eap_wsc_common.h",
+      "source": "component/wifi/wpa_supplicant/src/eap_common/eap_wsc_common.h",
+      "upstream_sha256": "94dd266f99c927711fedbab50658d98f0e4f85c029ce003ae198069a9a4783d5",
+      "sha256": "94dd266f99c927711fedbab50658d98f0e4f85c029ce003ae198069a9a4783d5"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/src/eap_peer/eap.h",
+      "source": "component/wifi/wpa_supplicant/src/eap_peer/eap.h",
+      "upstream_sha256": "683f7ee0c904ddbd3860eff0ea3e99e30eb6bbdc45116a1267f344719bdbbe74",
+      "sha256": "683f7ee0c904ddbd3860eff0ea3e99e30eb6bbdc45116a1267f344719bdbbe74"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/src/eap_peer/eap_i.h",
+      "source": "component/wifi/wpa_supplicant/src/eap_peer/eap_i.h",
+      "upstream_sha256": "6c52abfc76bfbb92b277cabb17a09aad23fa03471aab28b17aee8e13b2355bd8",
+      "sha256": "6c52abfc76bfbb92b277cabb17a09aad23fa03471aab28b17aee8e13b2355bd8"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/src/eap_peer/eap_methods.h",
+      "source": "component/wifi/wpa_supplicant/src/eap_peer/eap_methods.h",
+      "upstream_sha256": "2bb27badb2a93a968bc0c80b7f2ea689bdfc9fbf0b8cdd9b8a00d73a43e45e70",
+      "sha256": "2bb27badb2a93a968bc0c80b7f2ea689bdfc9fbf0b8cdd9b8a00d73a43e45e70"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/src/eap_peer/eap_wsc.h",
+      "source": "component/wifi/wpa_supplicant/src/eap_peer/eap_wsc.h",
+      "upstream_sha256": "2a7d29c827e4094ff8af608b716bf2afce77cd77b6df6f4354e1d175478bf7ac",
+      "sha256": "2a7d29c827e4094ff8af608b716bf2afce77cd77b6df6f4354e1d175478bf7ac"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/src/eap_server/eap_server_wsc.h",
+      "source": "component/wifi/wpa_supplicant/src/eap_server/eap_server_wsc.h",
+      "upstream_sha256": "c5eeac0c332fce1199fe611b83ef57508ecbcffc626d9aba62b390ce9d347824",
+      "sha256": "c5eeac0c332fce1199fe611b83ef57508ecbcffc626d9aba62b390ce9d347824"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/src/utils/common.h",
+      "source": "component/wifi/wpa_supplicant/src/utils/common.h",
+      "upstream_sha256": "1f77536572e91a427acafe7925a4d9428db6064fb858c2e1476abf28069d7ccc",
+      "sha256": "1f77536572e91a427acafe7925a4d9428db6064fb858c2e1476abf28069d7ccc"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/src/utils/includes.h",
+      "source": "component/wifi/wpa_supplicant/src/utils/includes.h",
+      "upstream_sha256": "bb0087966255bcf50e2647a97ee0c8fabcc2f17e274237fad3b65d1f81dfee00",
+      "sha256": "bb0087966255bcf50e2647a97ee0c8fabcc2f17e274237fad3b65d1f81dfee00"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/src/utils/os.h",
+      "source": "component/wifi/wpa_supplicant/src/utils/os.h",
+      "upstream_sha256": "af840d896fe71160dc1ae2eb5f3aef59d4322fa4b70e22ffade2f2fc90c118ac",
+      "sha256": "af840d896fe71160dc1ae2eb5f3aef59d4322fa4b70e22ffade2f2fc90c118ac"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/src/utils/rom/rom_wps_os.h",
+      "source": "component/wifi/wpa_supplicant/src/utils/rom/rom_wps_os.h",
+      "upstream_sha256": "636b5f75c10ceeae809f8ba34ef9be14234863c34b03b947af99c7eb0d916d20",
+      "sha256": "636b5f75c10ceeae809f8ba34ef9be14234863c34b03b947af99c7eb0d916d20"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/src/utils/uuid.h",
+      "source": "component/wifi/wpa_supplicant/src/utils/uuid.h",
+      "upstream_sha256": "05640af467af85e556b4c5116d1d412c8afe689feb1889ffe1eb3118fcaf4be0",
+      "sha256": "05640af467af85e556b4c5116d1d412c8afe689feb1889ffe1eb3118fcaf4be0"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/src/utils/wpa_debug.h",
+      "source": "component/wifi/wpa_supplicant/src/utils/wpa_debug.h",
+      "upstream_sha256": "89c2bdf2f8552a43ec676f81f994a6795f43dab41b208c8b78fa042dc1b57b11",
+      "sha256": "89c2bdf2f8552a43ec676f81f994a6795f43dab41b208c8b78fa042dc1b57b11"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/src/utils/wpabuf.h",
+      "source": "component/wifi/wpa_supplicant/src/utils/wpabuf.h",
+      "upstream_sha256": "43a03ad17c643d2f9a27022793a232b578fd303ee4b6008b9d8eda7d5e22e970",
+      "sha256": "43a03ad17c643d2f9a27022793a232b578fd303ee4b6008b9d8eda7d5e22e970"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/src/wps/wps.h",
+      "source": "component/wifi/wpa_supplicant/src/wps/wps.h",
+      "upstream_sha256": "9f54a474510842278e0ffdefb49532727a1a437935c2e01782ea059163ac8d99",
+      "sha256": "9f54a474510842278e0ffdefb49532727a1a437935c2e01782ea059163ac8d99"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/src/wps/wps_attr_parse.h",
+      "source": "component/wifi/wpa_supplicant/src/wps/wps_attr_parse.h",
+      "upstream_sha256": "3c82e5c64b0fefc1afec0f0b41aa620f1a47cb9133d3860f98aa4f7b29cc0fb7",
+      "sha256": "3c82e5c64b0fefc1afec0f0b41aa620f1a47cb9133d3860f98aa4f7b29cc0fb7"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/src/wps/wps_defs.h",
+      "source": "component/wifi/wpa_supplicant/src/wps/wps_defs.h",
+      "upstream_sha256": "878677acaf5afae500b5a251cd97ab8e3534ccd81c404fe4c01c6546bc3ae1f0",
+      "sha256": "878677acaf5afae500b5a251cd97ab8e3534ccd81c404fe4c01c6546bc3ae1f0"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/src/wps/wps_i.h",
+      "source": "component/wifi/wpa_supplicant/src/wps/wps_i.h",
+      "upstream_sha256": "8671c6ab0474b9c210465ce0419d02a8d26dfe669a067635797f0ead062344e9",
+      "sha256": "8671c6ab0474b9c210465ce0419d02a8d26dfe669a067635797f0ead062344e9"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/wpa_lite/rom/rom_wpa_lite_intf.h",
+      "source": "component/wifi/wpa_supplicant/wpa_lite/rom/rom_wpa_lite_intf.h",
+      "upstream_sha256": "515c4483df1eebd9239110ff20eb10e70ff1943a6af20a67a526a9de68e5aa5c",
+      "sha256": "515c4483df1eebd9239110ff20eb10e70ff1943a6af20a67a526a9de68e5aa5c"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/wpa_lite/wpa_lite_intf.h",
+      "source": "component/wifi/wpa_supplicant/wpa_lite/wpa_lite_intf.h",
+      "upstream_sha256": "90b241b07701c7f112d1df425ef83e2ef2764ee91bb81c621725316f1e31306e",
+      "sha256": "90b241b07701c7f112d1df425ef83e2ef2764ee91bb81c621725316f1e31306e"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/wpa_supplicant/eap_protocol_handler.h",
+      "source": "component/wifi/wpa_supplicant/wpa_supplicant/eap_protocol_handler.h",
+      "upstream_sha256": "2b2654e17569bd1cc3cdc0e76b851d32955e6c5ae82a47956e3332bd1509176a",
+      "sha256": "2b2654e17569bd1cc3cdc0e76b851d32955e6c5ae82a47956e3332bd1509176a"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/wpa_supplicant/wifi_eap_config.c",
+      "source": "component/wifi/wpa_supplicant/wpa_supplicant/wifi_eap_config.c",
+      "upstream_sha256": "8899b2543850d7f7d4ca16ecf6c0050ae054b19fc56eff259b085634b75320f5",
+      "sha256": "8899b2543850d7f7d4ca16ecf6c0050ae054b19fc56eff259b085634b75320f5"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/wpa_supplicant/wifi_wps_config.c",
+      "source": "component/wifi/wpa_supplicant/wpa_supplicant/wifi_wps_config.c",
+      "upstream_sha256": "2f25664c6d0aedea5057f0ce8b75261c62454c7ce2e3baf4730baaf34dab27a6",
+      "sha256": "2f25664c6d0aedea5057f0ce8b75261c62454c7ce2e3baf4730baaf34dab27a6"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/wpa_supplicant/wifi_wps_config.h",
+      "source": "component/wifi/wpa_supplicant/wpa_supplicant/wifi_wps_config.h",
+      "upstream_sha256": "290cdfc6be35770a50b8869508bc109b4f127de35c32fe2253ea8f411e3f1c0a",
+      "sha256": "290cdfc6be35770a50b8869508bc109b4f127de35c32fe2253ea8f411e3f1c0a"
+    },
+    {
+      "path": "component/amebadplus/wpa_supplicant/wpa_supplicant/wps_protocol_handler.h",
+      "source": "component/wifi/wpa_supplicant/wpa_supplicant/wps_protocol_handler.h",
+      "upstream_sha256": "0b87b6c200b1dca3cfd1b0ceaa42b4cf830cd62d367909c12e8448d23e8f400e",
+      "sha256": "0b87b6c200b1dca3cfd1b0ceaa42b4cf830cd62d367909c12e8448d23e8f400e"
+    },
+    {
+      "path": "project/amebadplus/app_km0/lib_wifi_fw.a",
+      "source": "component/soc/amebadplus/project/project_km0/lib/application/lib_wifi_fw.a",
+      "upstream_sha256": "daa15dbe84cf36f541dbc6582f1c1effd0e9f36ce8a1a4c390a3c737634e878f",
+      "sha256": "daa15dbe84cf36f541dbc6582f1c1effd0e9f36ce8a1a4c390a3c737634e878f"
+    },
+    {
+      "path": "project/amebadplus/bootloader_km4/lib_bootloader.a",
+      "source": "component/soc/amebadplus/project/project_km4/lib/soc/lib_bootloader.a",
+      "upstream_sha256": "7762a19a962845a8abfdbed3828e607bd37a9915b3b367aa1ce36f4dd52f734d",
+      "sha256": "7762a19a962845a8abfdbed3828e607bd37a9915b3b367aa1ce36f4dd52f734d"
+    }
+  ]
+}

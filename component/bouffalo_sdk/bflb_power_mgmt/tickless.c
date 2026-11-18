@@ -22,7 +22,12 @@
 
 #include "wifi_mgmr_ext.h"
 #include "macsw.h"
+#include "tickless.h"
 #include "tickless_hook.h"
+
+/* Where each sleep attempt ended — see tickless.h; `tickless stats` (lp_cli.c) prints them.
+ * The idle/ints-off context can't printf (console write path faults), so counters it is. */
+struct tickless_stats tickless_stats;
 
 #ifdef TICKLESS_DEBUG
 #define tickless_debugf(fmt, ...) printf("[TICKLESS]: " fmt "\r\n", ##__VA_ARGS__)
@@ -36,6 +41,12 @@ extern int macswl_connected_enter_ops(void);
 extern void macswl_regs_save_ops(void);
 
 static int enable_tickless = 0;
+
+/* RTC hard deadline for timed runs (`tickless <dtim> <secs>`, lp_cli.c sets it): checked at every
+ * sleep attempt against the HBN RTC — the RTC provably runs across PDS15 cycles (it IS the wake
+ * source), unlike kernel timers whose delivery is not guaranteed mid-cycling. Lives here (not in
+ * the tickless_hooks slot) so it can't be clobbered by / clobber the BLE arbitration hooks. */
+uint64_t tickless_deadline_rtc; /* 0 = none; absolute 32768 Hz count */
 
 int pds_wakeup_overhead = 0;
 static uint64_t ulLowPowerTimeEnterFunction;
@@ -107,11 +118,13 @@ static bool check_system_ready_for_LowPower(uint32_t connected)
 {
     /* common wifi status, which will prevent sleep, mainly TX/RX */
     if (macswl_ps_sleep_common_check() != 0) {
+        tickless_stats.r_common++;
         tickless_debugf("Sleep Abort!, macswl ps sleep common check\r\n");
         return false;
     }
 
     if (!tickless_ringbuffer_is_empty()) {
+        tickless_stats.r_ringbuf++;
         tickless_debugf("Sleep Abort! ringbuffer is not empty\r\n");
         return false;
     }
@@ -119,34 +132,40 @@ static bool check_system_ready_for_LowPower(uint32_t connected)
     if (connected) {
         /* 32k clock and trim check */
         if (bl_lp_get_32k_clock_ready() == 0 || bl_lp_get_32k_trim_ready() == 0) {
+            tickless_stats.r_32k++;
             tickless_debugf("Sleep Abort!, lpfw 32k_trim not ready!\r\n");
             return false;
         }
 
         if (bl_lp_get_bcn_delay_ready() == 0) {
+            tickless_stats.r_bcn++;
             tickless_debugf("Sleep Abort!, bcn offset calculate not ready!\r\n");
             return false;
         }
 
         if (bl_pm_event_get() || (xTaskGetHandle("CONNECT") != NULL)) {
+            tickless_stats.r_event++;
             tickless_debugf("Sleep Abort! %d", __LINE__);
             return false;
         }
 
         /* check wifi PS state */
         if (macswl_ps_sleep_check() != 0) {
+            tickless_stats.r_ps++;
             tickless_debugf("Sleep Abort! ps_sleep_check %d", __LINE__);
             return false;
         }
 
         macswl_connected_enter_ops();
         if (bl_pm_wifi_config_get(&lpfw_cfg) != 0) {
+            tickless_stats.r_cfg++;
             tickless_debugf("Sleep Abort! wifi_config %d", __LINE__);
             return false;
         }
 
 #if defined(BL616)
         if (bl_lp_fw_enter_check_allow() == 0) {
+            tickless_stats.r_cfg++;
             tickless_debugf("Sleep Abort! bcn_dtim check %d", __LINE__);
             return false;
         }
@@ -154,6 +173,7 @@ static bool check_system_ready_for_LowPower(uint32_t connected)
     } else {
         /* 32k clock check */
         if (bl_lp_get_32k_clock_ready() == 0) {
+            tickless_stats.r_32k++;
             tickless_debugf("Sleep Abort!, lpfw 32k_clock not ready!\r\n");
             return false;
         }
@@ -163,6 +183,7 @@ static bool check_system_ready_for_LowPower(uint32_t connected)
                     xTaskGetTickCount());
 
     if (bl_pm_event_get() || (xTaskGetHandle("CONNECT") != NULL)) {
+        tickless_stats.r_event++;
         tickless_debugf("Sleep Abort! %d", __LINE__);
         return false;
     }
@@ -189,7 +210,15 @@ void vApplicationSleep(TickType_t xExpectedIdleTime)
      * out of sleep mode. */
     portDISABLE_INTERRUPTS();
 
+    tickless_stats.attempt++;
     ulLowPowerTimeEnterFunction = bflb_rtc_get_time(NULL);
+
+    if (tickless_deadline_rtc != 0 && ulLowPowerTimeEnterFunction >= tickless_deadline_rtc) {
+        tickless_deadline_rtc = 0;
+        enable_tickless = 0;
+        portENABLE_INTERRUPTS();
+        return;
+    }
 
     /* Ensure it is still ok to enter the sleep mode. */
     eSleepStatus = eTaskConfirmSleepModeStatus();
@@ -199,6 +228,7 @@ void vApplicationSleep(TickType_t xExpectedIdleTime)
          * executed, or a context siwth is being held pending.  Do not enter a
          * sleep state.  Restart the tick and exit the critical section. */
         /* fixup mtimecmp */
+        tickless_stats.abort_confirm++;
         portENABLE_INTERRUPTS();
 
         tickless_debugf("Sleep Abort!, reason: %d", debug_abort_tickless);
@@ -219,6 +249,7 @@ void vApplicationSleep(TickType_t xExpectedIdleTime)
 
     is_ready = check_system_ready_for_LowPower(wifi_connected);
     if (is_ready == false) {
+        tickless_stats.abort_ready++;
         // __WFI();
         return;
     } else {
@@ -242,26 +273,36 @@ void vApplicationSleep(TickType_t xExpectedIdleTime)
 
     macswl_regs_save_ops();
 
-    bl_lpfw_ram_load();
-    lpfw_cfg.lpfw_copy = 0;
+    /* EXPERIMENT(accurate-parity): the vendor-verified tickless_accurate.c path uses lpfw_copy=1
+     * (bl_lp_fw_enter copies+verifies the blob itself) and an ABSOLUTE rtc_wakeup_cmp_cnt instead
+     * of the pre-load + relative rtc_timeout_us this minimal path shipped with. */
+    lpfw_cfg.lpfw_copy = 1;
     lpfw_cfg.lpfw_verify = 0;
-    lpfw_cfg.rtc_wakeup_cmp_cnt = 0;
+    if (lpfw_cfg.rtc_timeout_us) {
+        lpfw_cfg.rtc_wakeup_cmp_cnt = ulLowPowerTimeEnterFunction + ((lpfw_cfg.rtc_timeout_us * 32768ULL) / 1000000ULL);
+        lpfw_cfg.rtc_timeout_us = 0;
+    } else {
+        lpfw_cfg.rtc_wakeup_cmp_cnt = 0;
+    }
     lpfw_cfg.mtimer_timeout_mini_us = 4500;
     lpfw_cfg.mtimer_timeout_max_us = 12000;
     lpfw_cfg.dtim_num = lpfw_cfg.dtim_origin;
 
     if (hooks->allow_enter != NULL && !hooks->allow_enter(hooks->allow_enter_arg)) {
+        tickless_stats.abort_hook++;
         tickless_abort_wait_for_interrupt();
         return;
     }
 
     /* Recheck after the early screening in case ringbuffer data arrives during the setup window. */
     if (!tickless_ringbuffer_is_empty()) {
+        tickless_stats.abort_ringbuf++;
         tickless_abort_wait_for_interrupt();
         return;
     }
 
     if (hooks->prepare_enter != NULL && !hooks->prepare_enter(hooks->prepare_enter_arg)) {
+        tickless_stats.abort_hook++;
         tickless_debugf("Sleep Abort! prepare_enter");
         tickless_abort_wait_for_interrupt();
         return;
@@ -269,10 +310,12 @@ void vApplicationSleep(TickType_t xExpectedIdleTime)
 
     int ret = bl_lp_fw_enter(&lpfw_cfg);
     if (ret < 0) {
+        tickless_stats.enter_fail++;
         tickless_debugf("Sleep Abort! bl_lp_fw_enter ret=%d", ret);
         portENABLE_INTERRUPTS();
         return;
     }
+    tickless_stats.slept++;
 
     ulLowPowerTimeAfterSleep = bflb_rtc_get_time(NULL);
     real_rtc_tick = (int32_t)rtc_diff_to_tick(ulLowPowerTimeEnterFunction, ulLowPowerTimeAfterSleep);

@@ -19,10 +19,6 @@
 	path = component/freertos-kernel_config/freertos-kernel
 	url = https://github.com/zxf1023818103/FreeRTOS-Kernel.git
 	branch = bouffalo-port
-[submodule "component/lwip"]
-	path = component/lwip_config/lwip
-	url = https://github.com/zxf1023818103/lwip.git
-	branch = bouffalo-port
 [submodule "component/cjson"]
 	path = component/cjson_config/cjson
 	url = https://github.com/DaveGamble/cJSON.git
@@ -98,7 +94,8 @@
 	url = https://github.com/aws/Jobs-for-AWS-IoT-embedded-sdk.git
 [submodule "component/ota_config/ota"]
 	path = component/ota_config/ota
-	url = https://github.com/aws/ota-for-aws-iot-embedded-sdk.git
+	url = https://github.com/zxf1023818103/ota-for-aws-iot-embedded-sdk.git
+	branch = at-project
 [submodule "component/corejson_config/corejson"]
 	path = component/corejson_config/corejson
 	url = https://github.com/FreeRTOS/coreJSON.git
@@ -116,3 +113,12 @@
 	path = component/mcumgr_config/mcumgr
 	url = https://github.com/zxf1023818103/mynewt-mcumgr.git
 	branch = at-project
+[submodule "platform/bouffalo_sdk_bl618dg"]
+	path = platform/bouffalo_sdk_bl618dg
+	url = https://github.com/zxf1023818103/bouffalo_sdk.git
+[submodule "component/bluedroid_config/esp-idf"]
+	path = component/bluedroid_config/esp-idf
+	url = https://github.com/zxf1023818103/esp-idf.git
+[submodule "component/lvgl_config/lvgl"]
+	path = component/lvgl_config/lvgl
+	url = https://github.com/lvgl/lvgl.git

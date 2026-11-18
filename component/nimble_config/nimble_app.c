@@ -1,18 +1,26 @@
 /*
- * nimble_app.c — NimBLE host bring-up + a sample GATT peripheral for AmebaD KM4.
+ * nimble_app.c — NimBLE host bring-up + a sample GATT peripheral, SHARED across
+ * platforms (AmebaD KM4 + Bouffalo BL602/BL616/BL616CL).
  *
- * amebad_nimble_start() (called from app_km4/main.c under AT_PROJECT_NIMBLE, after
- * wifi_on):
- *   1. bt_dtm_bringup()  — controller up over our HCI (patch download + HCI reset)
- *   2. nimble_port_init() — NimBLE port + sysinit (-> ble_transport_ll_init)
- *   3. register GAP/GATT services + a sample custom service
- *   4. start the HCI RX task + the host task
- * On host sync we start connectable advertising as "amebad-nimble". A phone
- * (nRF Connect) can scan, connect, and read/write the sample characteristic.
+ * nimble_start() (called from each platform's main after the scheduler is up):
+ *   1. amebad_nimble_sm_crypto_selftest() — SM AES/CMAC/ECDH KAT (mbedtls_sm_glue.c)
+ *   2. nimble_platform_controller_bringup() — platform hook (AmebaD: bt_dtm_bringup;
+ *      Bouffalo: no-op, its on-chip controller comes up in ble_transport_ll_init)
+ *   3. nimble_port_init() — NimBLE port + sysinit (-> ble_transport_ll_init)
+ *   4. ble_store_lfs_init() — shared LittleFS bond store
+ *   5. register GAP/GATT + a sample custom service, set the device name
+ *   6. platform coex + transport-rx hooks, then start the host task
+ * On host sync we start connectable advertising. A phone / nRF Connect / bleak can
+ * scan, connect, and read/write the sample characteristic.
  *
- * P4 will add BLE Mesh; P5 the WiFi/BT coex glue.
+ * Platform specifics live behind __weak hooks (default bodies below); a platform's
+ * nimble_port provides strong overrides (AmebaD: nimble_platform_amebad.c). Bouffalo
+ * needs no override — the defaults (no-op bring-up/coex/rx, NIMBLE_DEV_NAME)
+ * already fit its on-chip, callback-driven transport.
  */
+#include "ble_store_littlefs.h"
 #include <string.h>
+#include <stdio.h>
 #include "FreeRTOS.h"
 #include "task.h"
 #include "nimble/nimble_port.h"
@@ -21,26 +29,59 @@
 #include "host/util/util.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
-#include <stdio.h>   /* printf */
+int ble_store_lfs_init(void);
+#ifdef AT_NIMBLE_COC
+#include "ble_coc_nimble.h"
+#include <stdarg.h>
+static void coc_log(const char *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
+    printf("\r\n");
+}
+#elif defined(AT_NIMBLE_GATT)
+#include "ble_gatt_bench.h"
+#else
+#include "ble_throughput.h"
+#endif
 
-extern void amebad_nimble_coex_init(void);
-extern void amebad_nimble_coex_set_conn(int connected); /* coex_amebad.c: BLE-active hint -> WiFi */
-extern void bt_dtm_bringup(void);                   /* hci_dtm.c: controller bring-up */
-extern void nimble_amebad_transport_start_rx(void); /* transport_amebad.c: HCI RX task */
-extern void nimble_amebad_transport_stop_rx(void);  /* transport_amebad.c: delete HCI RX task */
-extern void amebad_nimble_sm_crypto_selftest(void); /* wolfcrypt_sm_glue.c: SM crypto KAT */
-extern void ble_store_lfs_init(void);               /* ble_store_lfs.c: LittleFS-persistent BLE store */
-/* realtek_netif.c (FreeRTOS+TCP): the WiFi hostname — $HOSTNAME (KV-backed) or "amebad_<BLE-MAC last
- * 3 bytes>". Reused as the BLE device name so the chip shows one identity on WiFi (mDNS) and BLE.
- * Declared here because the upstream prototype is gated behind ipconfigDHCP_REGISTER_HOSTNAME (off). */
-extern const char *pcApplicationHostnameHook(void);
+extern void amebad_nimble_sm_crypto_selftest(void); /* mbedtls_sm_glue.c: SM crypto KAT */
 
 #ifdef AT_PROJECT_MCUMGR
 extern int  smp_bt_register(void);     /* mcumgr_port/smp_bt.c: register the SMP GATT service */
-extern void smp_img_ota_init(void);    /* app_km4/smp_img_ota.c: register img + os command groups */
+extern void smp_img_ota_init(void);    /* mcumgr_config/smp_img_ota.c: register img + os + fs command groups */
 #endif
 
-#define NIMBLE_DEV_NAME   "amebad-nimble"   /* fallback only (hook always returns non-empty) */
+#ifndef NIMBLE_DEV_NAME
+#define NIMBLE_DEV_NAME   "at-nimble"   /* fallback only, if the hostname is somehow empty */
+#endif
+
+/* The default BLE advert name is the device hostname (bt-mac-derived "<chip>_<mac>" or the HOSTNAME
+ * override), so BLE, DHCP and mDNS all present the same identity. at_netif_hostname() is self-
+ * contained (component/freertos-plus-tcp_config/at_netif.c) -- no ops/network needed -- so it is
+ * safe here even though BLE can come up before the WiFi netif is registered. */
+extern const char *at_netif_hostname(void);
+
+/* ===== Platform hooks — __weak defaults; a platform's nimble_port overrides ===== */
+__attribute__((weak)) void nimble_platform_controller_bringup(void) { }
+__attribute__((weak)) void nimble_platform_coex_init(void) { }
+__attribute__((weak)) void nimble_platform_coex_set_conn(int connected) { (void)connected; }
+__attribute__((weak)) void nimble_platform_transport_start_rx(void) { }
+__attribute__((weak)) void nimble_platform_transport_stop_rx(void) { }
+
+__attribute__((weak)) const char *nimble_platform_device_name(void)
+{
+#ifdef AT_NIMBLE_COC
+    return "BL618DG-CoC";
+#elif defined(AT_NIMBLE_GATT)
+    return "BL618DG-GATT-NB";
+#else
+    const char *n = at_netif_hostname();
+    return (n != NULL && n[0] != '\0') ? n : NIMBLE_DEV_NAME;
+#endif
+}
 
 /* Sample 128-bit service 0x59462f12-9543-9999-12c8-58b459a2712d with one
  * read/write characteristic (...2d -> ...2e). */
@@ -53,7 +94,7 @@ static const ble_uuid128_t chr_uuid =
 
 static uint8_t sample_val;
 static uint8_t own_addr_type;
-static TaskHandle_t s_host_task_h;   /* the "ble" host task, so amebad_nimble_stop() can free its stack */
+static TaskHandle_t s_host_task_h;   /* the "ble" host task, so nimble_stop() can free its stack */
 
 static void nimble_advertise(void);
 
@@ -92,20 +133,29 @@ static const struct ble_gatt_svc_def gatt_svcs[] = {
     { 0 }
 };
 
+/* mcumgr's smp_bt provides the strong version (clears its reassembly buffer); weak no-op when
+ * mcumgr isn't linked into the image. Reset on connect/disconnect so a fresh SMP connection never
+ * inherits a partial packet from a dropped/aborted upload. */
+__attribute__((weak)) void smp_bt_reset_rx(void) { }
+
 static int
 nimble_gap_event(struct ble_gap_event *event, void *arg)
 {
     (void)arg;
+#ifdef AT_NIMBLE_COC
+    ble_coc_nimble_gap_event(event);
+#elif defined(AT_NIMBLE_GATT)
+    ble_gatt_bench_event(event);
+#else
+    ble_tp_peripheral_event(event);   /* throughput test: start/stop the notify blast on subscribe */
+#endif
     switch (event->type) {
     case BLE_GAP_EVENT_CONNECT:
         printf("[NimBLE] connect %s (handle %d)\n\r",
                    event->connect.status == 0 ? "OK" : "FAIL", event->connect.conn_handle);
         if (event->connect.status == 0) {
-            amebad_nimble_coex_set_conn(1);   /* BLE link up -> hint WiFi coex */
-            /* NOTE: do NOT kick a connection-parameter update here - issuing it right at connect
-             * collides with the central's ATT MTU exchange and some stacks (go-ble) then time out
-             * the MTU request, never reaching SMP. The bigger KM0 park timeout keeps per-sector
-             * write blocks short enough that the default supervision timeout survives. */
+            smp_bt_reset_rx();                  /* fresh connection -> clean SMP reassembly buffer */
+            nimble_platform_coex_set_conn(1);   /* BLE link up -> hint WiFi coex */
         } else {
             nimble_advertise();   /* failed — keep advertising */
         }
@@ -113,11 +163,21 @@ nimble_gap_event(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_DISCONNECT:
         printf("[NimBLE] disconnect (reason 0x%x) - re-advertising\n\r",
                    event->disconnect.reason);
-        amebad_nimble_coex_set_conn(0);       /* BLE idle -> hint WiFi coex */
+        smp_bt_reset_rx();                       /* drop any partial packet from this connection */
+        nimble_platform_coex_set_conn(0);       /* BLE idle -> hint WiFi coex */
         nimble_advertise();
         return 0;
     case BLE_GAP_EVENT_ADV_COMPLETE:
         nimble_advertise();
+        return 0;
+    case BLE_GAP_EVENT_ENC_CHANGE:
+        /* SMP does not propagate every store-write failure. Apply the same
+         * durable-bond requirement on every platform using this application. */
+        if (!ble_store_littlefs_ready()) {
+            printf("[NimBLE] persistent storage failed; disconnecting\n\r");
+            (void)ble_gap_terminate(event->enc_change.conn_handle,
+                                    BLE_ERR_REM_USER_CONN_TERM);
+        }
         return 0;
     default:
         return 0;
@@ -132,14 +192,43 @@ nimble_advertise(void)
     const char *name;
     int rc;
 
+    if (!ble_store_littlefs_ready()) {
+        printf("[NimBLE] advertising stopped: persistent storage failed\n\r");
+        return;
+    }
+
+#ifdef AT_NIMBLE_COC
+    const ble_uuid128_t coc_marker=ble_coc_nimble_uuid;
+#elif defined(AT_NIMBLE_GATT)
+    static const ble_uuid128_t coc_marker=BLE_UUID128_INIT(0xf0,0x92,0xcd,0xb3,0xaf,0x91,0xf4,0xba,0x38,0x4e,0xb3,0x97,0x00,0x20,0xf0,0xb1);
+#else
+    static const ble_uuid16_t tp_marker = BLE_UUID16_INIT(BLE_TP_ADV_UUID16);
+#endif
+
     memset(&fields, 0, sizeof fields);
     fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
     fields.tx_pwr_lvl_is_present = 1;
     fields.tx_pwr_lvl = BLE_HS_ADV_TX_PWR_LVL_AUTO;
+    /* 16-bit marker so a `bletp central` peer can find us (see ble_throughput.h). */
+#if defined(AT_NIMBLE_COC) || defined(AT_NIMBLE_GATT)
+    fields.uuids128=(ble_uuid128_t *)&coc_marker;
+    fields.num_uuids128=1;fields.uuids128_is_complete=1;
+#else
+    fields.uuids16 = (ble_uuid16_t *)&tp_marker;
+    fields.num_uuids16 = 1;
+    fields.uuids16_is_complete = 1;
+#endif
     name = ble_svc_gap_device_name();
+#if defined(AT_NIMBLE_COC) || defined(AT_NIMBLE_GATT)
+    struct ble_hs_adv_fields scan_rsp={0};
+    scan_rsp.name=(uint8_t *)name;scan_rsp.name_len=strlen(name);scan_rsp.name_is_complete=1;
+    rc=ble_gap_adv_rsp_set_fields(&scan_rsp);
+    if(rc) {printf("[CoC] scan response rc=%d\r\n",rc);return;}
+#else
     fields.name = (uint8_t *)name;
     fields.name_len = strlen(name);
     fields.name_is_complete = 1;
+#endif
 
     rc = ble_gap_adv_set_fields(&fields);
     if (rc != 0) {
@@ -159,6 +248,10 @@ nimble_advertise(void)
     printf("[NimBLE] advertising as '%s'\n\r", name);
 }
 
+/* Accessors for the throughput module (ble_throughput.c). */
+uint8_t nimble_own_addr_type(void) { return own_addr_type; }
+void    nimble_restart_advertise(void) { nimble_advertise(); }
+
 static void
 nimble_on_sync(void)
 {
@@ -172,6 +265,10 @@ nimble_on_sync(void)
         printf("[NimBLE] infer_auto rc=%d\n\r", rc);
         return;
     }
+    if (ble_store_littlefs_on_sync()) {
+        printf("[NimBLE] persistent GATT state failed\n\r");
+        return;
+    }
     printf("[NimBLE] host synced - controller ready\n\r");
     nimble_advertise();
 }
@@ -179,6 +276,9 @@ nimble_on_sync(void)
 static void
 nimble_on_reset(int reason)
 {
+#ifdef AT_NIMBLE_COC
+    ble_coc_nimble_reset();
+#endif
     printf("[NimBLE] host reset, reason=%d\n\r", reason);
 }
 
@@ -186,33 +286,37 @@ static void
 nimble_host_task(void *param)
 {
     (void)param;
-    s_host_task_h = xTaskGetCurrentTaskHandle();   /* let amebad_nimble_stop() delete us */
+    s_host_task_h = xTaskGetCurrentTaskHandle();   /* let nimble_stop() delete us */
     printf("[NimBLE] host task: nimble_port_run()\n\r");
     nimble_port_run();   /* runs the host eventq forever */
 }
 
 void
-amebad_nimble_start(void)
+nimble_start(void)
 {
     int rc;
+    const char *devname;
 
-    /* 0. verify the wolfCrypt-backed SM crypto (AES + AES-CMAC + ECDH P-256) before the host runs */
+    /* 0. verify the mbedTLS-backed SM crypto (AES + AES-CMAC + ECDH P-256) before the host runs */
+#ifndef AT_NIMBLE_COC_STANDALONE
     amebad_nimble_sm_crypto_selftest();
+#endif
 
-    /* 1. controller up over our HCI (gnt_bt + trace + patch download + HCI reset) */
-    printf("\n\r[NimBLE] controller bring-up (bt_dtm_bringup) ...\n\r");
-    bt_dtm_bringup();
+    /* 1. controller bring-up (platform hook). AmebaD: bt_dtm_bringup over our HCI.
+     *    Bouffalo: no-op — its on-chip controller comes up in ble_transport_ll_init(). */
+    printf("\n\r[NimBLE] controller bring-up ...\n\r");
+    nimble_platform_controller_bringup();
 
-    /* 2. NimBLE port + sysinit (-> ble_transport_ll_init inits our H4 SM) */
+    /* 2. NimBLE port + sysinit (-> ble_transport_ll_init) */
     printf("[NimBLE] nimble_port_init ...\n\r");
     nimble_port_init();
 
-    /* 2b. Register the LittleFS-persistent BLE store. Mynewt would register a
-     * store via sysinit (BLE_STORE_*_SYSINIT_STAGE); our CMake build must call
-     * it explicitly, else ble_hs_cfg.store_read_cb stays NULL and IRK restore
-     * fails with BLE_HS_ENOTSUP (8). This backend persists bonds to LFS so
-     * pairings survive reboot. */
-    ble_store_lfs_init();
+    /* 2b. Shared LittleFS bond store; no platform-specific storage callback. Must run before the host task, else ble_hs_cfg.store_read_cb stays
+     * NULL and IRK restore fails with BLE_HS_ENOTSUP (8). */
+    if (ble_store_lfs_init()) {
+        printf("[NimBLE] persistent store unavailable; host startup stopped\r\n");
+        return;
+    }
 
     /* 3. services: standard GAP/GATT + our sample service, set the device name */
     ble_svc_gap_init();
@@ -224,41 +328,45 @@ amebad_nimble_start(void)
     if (rc != 0) {
         printf("[NimBLE] gatt svc register rc=%d\n\r", rc);
     }
+#ifdef AT_NIMBLE_COC
+    rc = ble_coc_nimble_init(coc_log);
+#elif defined(AT_NIMBLE_GATT)
+    rc = ble_gatt_bench_init();
+#else
+    rc = ble_tp_gatt_register();          /* throughput-test NOTIFY service */
+#endif
+    if (rc != 0) {
+        printf("[NimBLE] tp svc register rc=%d\n\r", rc);
+    }
 #ifdef AT_PROJECT_MCUMGR
     /* Register the SMP GATT service (mcumgr BLE DFU) alongside the sample service, then the
      * img + os command groups. Must happen before the host task starts. */
     smp_bt_register();
     smp_img_ota_init();
 #endif
-    {
-        /* Reuse the WiFi hostname as the BLE device name (one identity across radios). */
-        const char *devname = pcApplicationHostnameHook();
-        if (devname == NULL || devname[0] == '\0') {
-            devname = NIMBLE_DEV_NAME;
-        }
-        ble_svc_gap_device_name_set(devname);
+    devname = nimble_platform_device_name();
+    if (devname == NULL || devname[0] == '\0') {
+        devname = NIMBLE_DEV_NAME;
     }
+    ble_svc_gap_device_name_set(devname);
 
     ble_hs_cfg.sync_cb  = nimble_on_sync;
     ble_hs_cfg.reset_cb = nimble_on_reset;
 
-    amebad_nimble_coex_init();
+    nimble_platform_coex_init();
 
-    /* 4. HCI RX task + host task */
-    nimble_amebad_transport_start_rx();
+    /* 4. transport RX (platform hook; AmebaD: HCI RX task. Bouffalo: no-op —
+     *    callback-driven RX) + the host task */
+    nimble_platform_transport_start_rx();
     nimble_port_freertos_init(nimble_host_task);
     printf("[NimBLE] host task created\n\r");
 }
 
-/* Tear BLE down to reclaim heap for the OTA HTTPS data-plane TLS (~16.6 KB picotls
- * reserve). With NimBLE up, steady free heap is ~40 KB and the second TLS handshake
- * OOMs (free dips to ~15.5 KB). Called once when an OTA download is about to open its
- * HTTPS connection (ota_app.c). Stops advertising, then deletes the host + HCI-RX
- * tasks to free their stacks (~7 KB). One-way: a successful OTA reboots (BLE returns
- * fresh); a failed OTA leaves BLE off until the next reboot (NimBLE 1.9.0 has no clean
- * port-deinit/re-init path). The on-chip controller keeps running but is idle. */
+/* Tear BLE down to reclaim heap (e.g. for the OTA HTTPS data-plane TLS on AmebaD).
+ * Stops advertising, then deletes the host + HCI-RX tasks to free their stacks.
+ * One-way: a successful OTA reboots (BLE returns fresh). */
 void
-amebad_nimble_stop(void)
+nimble_stop(void)
 {
     static int stopped = 0;
     if (stopped) {
@@ -266,14 +374,14 @@ amebad_nimble_stop(void)
     }
     stopped = 1;
 
-    printf("[NimBLE] stopping for OTA (free heap before %u)\n\r",
+    printf("[NimBLE] stopping (free heap before %u)\n\r",
            (unsigned)xPortGetFreeHeapSize());
 
-    (void)ble_gap_adv_stop();          /* stop the radio + the adv state machine (blocks for HCI ack) */
-    amebad_nimble_coex_set_conn(0);    /* tell WiFi coex BLE is idle */
-    nimble_amebad_transport_stop_rx(); /* delete the HCI RX task (after adv-stop's ack is drained) */
+    (void)ble_gap_adv_stop();               /* stop the radio + the adv state machine */
+    nimble_platform_coex_set_conn(0);       /* tell WiFi coex BLE is idle */
+    nimble_platform_transport_stop_rx();    /* delete the HCI RX task (AmebaD) */
     if (s_host_task_h != NULL) {
-        vTaskDelete(s_host_task_h);    /* delete the host task -> frees its stack */
+        vTaskDelete(s_host_task_h);         /* delete the host task -> frees its stack */
         s_host_task_h = NULL;
     }
 

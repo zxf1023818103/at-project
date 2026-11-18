@@ -10,7 +10,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <utils_list.h>
-#include <lwip/pbuf.h>
 
 #include "ipc_host.h"
 #include "reg_ipc_app.h"

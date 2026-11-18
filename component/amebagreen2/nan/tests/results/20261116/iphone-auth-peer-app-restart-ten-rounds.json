@@ -1,0 +1,483 @@
+{
+  "scenario": "One connection after each of ten app process restarts; module continues running",
+  "cases": [
+    {
+      "case": "auth-peer-app-restart-1",
+      "module_rts_reset": false,
+      "phone_report": {
+        "cancelled": false,
+        "completedCount": 1,
+        "continuous": false,
+        "disconnectGapSeconds": 0,
+        "finished": true,
+        "part": 1,
+        "requested": 1,
+        "rounds": [
+          {
+            "discoverySeconds": 0.49877241667127237,
+            "elapsedSeconds": 2.14253449998796,
+            "number": 1,
+            "readySeconds": 2.137007208308205,
+            "startedAt": "2026-11-16T10:13:30Z",
+            "success": true
+          }
+        ],
+        "startedAt": "2026-11-16T10:13:30Z",
+        "successCount": 1,
+        "timeoutSeconds": 30
+      },
+      "uart_observations": {
+        "case": "auth-peer-app-restart-1",
+        "reset": false,
+        "startedAt": "2026-11-16T10:13:30Z",
+        "early_peer_created": 0,
+        "early_peer_alloc_failed": 0,
+        "missing_peer_warnings": 0,
+        "station_add_failures": 0,
+        "PKE_self_test_passes": 0,
+        "tcp_pong_count": 1,
+        "ap_heap_samples": [
+          132068
+        ],
+        "protocol_aborts": 0,
+        "queue_counters": [],
+        "successes": 1,
+        "rounds": 1,
+        "ready_seconds": [
+          2.137007208308205
+        ],
+        "pass": true
+      }
+    },
+    {
+      "case": "auth-peer-app-restart-2",
+      "module_rts_reset": false,
+      "phone_report": {
+        "cancelled": false,
+        "completedCount": 1,
+        "continuous": false,
+        "disconnectGapSeconds": 0,
+        "finished": true,
+        "part": 1,
+        "requested": 1,
+        "rounds": [
+          {
+            "discoverySeconds": 0.24769775004824623,
+            "elapsedSeconds": 1.881967291701585,
+            "number": 1,
+            "readySeconds": 1.8775752083747648,
+            "startedAt": "2026-11-16T10:13:42Z",
+            "success": true
+          }
+        ],
+        "startedAt": "2026-11-16T10:13:42Z",
+        "successCount": 1,
+        "timeoutSeconds": 30
+      },
+      "uart_observations": {
+        "case": "auth-peer-app-restart-2",
+        "reset": false,
+        "startedAt": "2026-11-16T10:13:42Z",
+        "early_peer_created": 0,
+        "early_peer_alloc_failed": 0,
+        "missing_peer_warnings": 0,
+        "station_add_failures": 0,
+        "PKE_self_test_passes": 0,
+        "tcp_pong_count": 1,
+        "ap_heap_samples": [
+          132068
+        ],
+        "protocol_aborts": 0,
+        "queue_counters": [],
+        "successes": 1,
+        "rounds": 1,
+        "ready_seconds": [
+          1.8775752083747648
+        ],
+        "pass": true
+      }
+    },
+    {
+      "case": "auth-peer-app-restart-3",
+      "module_rts_reset": false,
+      "phone_report": {
+        "cancelled": false,
+        "completedCount": 1,
+        "continuous": false,
+        "disconnectGapSeconds": 0,
+        "finished": true,
+        "part": 1,
+        "requested": 1,
+        "rounds": [
+          {
+            "discoverySeconds": 0.6479570000083186,
+            "elapsedSeconds": 1.9044671666924842,
+            "number": 1,
+            "readySeconds": 1.896559500019066,
+            "startedAt": "2026-11-16T10:13:54Z",
+            "success": true
+          }
+        ],
+        "startedAt": "2026-11-16T10:13:54Z",
+        "successCount": 1,
+        "timeoutSeconds": 30
+      },
+      "uart_observations": {
+        "case": "auth-peer-app-restart-3",
+        "reset": false,
+        "startedAt": "2026-11-16T10:13:54Z",
+        "early_peer_created": 0,
+        "early_peer_alloc_failed": 0,
+        "missing_peer_warnings": 0,
+        "station_add_failures": 0,
+        "PKE_self_test_passes": 0,
+        "tcp_pong_count": 1,
+        "ap_heap_samples": [
+          132068
+        ],
+        "protocol_aborts": 0,
+        "queue_counters": [],
+        "successes": 1,
+        "rounds": 1,
+        "ready_seconds": [
+          1.896559500019066
+        ],
+        "pass": true
+      }
+    },
+    {
+      "case": "auth-peer-app-restart-4",
+      "module_rts_reset": false,
+      "phone_report": {
+        "cancelled": false,
+        "completedCount": 1,
+        "continuous": false,
+        "disconnectGapSeconds": 0,
+        "finished": true,
+        "part": 1,
+        "requested": 1,
+        "rounds": [
+          {
+            "discoverySeconds": 0.7008169583277777,
+            "elapsedSeconds": 1.9476369166513905,
+            "number": 1,
+            "readySeconds": 1.9428444999502972,
+            "startedAt": "2026-11-16T10:14:08Z",
+            "success": true
+          }
+        ],
+        "startedAt": "2026-11-16T10:14:08Z",
+        "successCount": 1,
+        "timeoutSeconds": 30
+      },
+      "uart_observations": {
+        "case": "auth-peer-app-restart-4",
+        "reset": false,
+        "startedAt": "2026-11-16T10:14:08Z",
+        "early_peer_created": 0,
+        "early_peer_alloc_failed": 0,
+        "missing_peer_warnings": 0,
+        "station_add_failures": 0,
+        "PKE_self_test_passes": 0,
+        "tcp_pong_count": 1,
+        "ap_heap_samples": [
+          132068
+        ],
+        "protocol_aborts": 0,
+        "queue_counters": [],
+        "successes": 1,
+        "rounds": 1,
+        "ready_seconds": [
+          1.9428444999502972
+        ],
+        "pass": true
+      }
+    },
+    {
+      "case": "auth-peer-app-restart-5",
+      "module_rts_reset": false,
+      "phone_report": {
+        "cancelled": false,
+        "completedCount": 1,
+        "continuous": false,
+        "disconnectGapSeconds": 0,
+        "finished": true,
+        "part": 1,
+        "requested": 1,
+        "rounds": [
+          {
+            "discoverySeconds": 0.6707821666495875,
+            "elapsedSeconds": 2.297039208293427,
+            "number": 1,
+            "readySeconds": 2.2859825833002105,
+            "startedAt": "2026-11-16T10:14:21Z",
+            "success": true
+          }
+        ],
+        "startedAt": "2026-11-16T10:14:21Z",
+        "successCount": 1,
+        "timeoutSeconds": 30
+      },
+      "uart_observations": {
+        "case": "auth-peer-app-restart-5",
+        "reset": false,
+        "startedAt": "2026-11-16T10:14:21Z",
+        "early_peer_created": 0,
+        "early_peer_alloc_failed": 0,
+        "missing_peer_warnings": 0,
+        "station_add_failures": 0,
+        "PKE_self_test_passes": 0,
+        "tcp_pong_count": 1,
+        "ap_heap_samples": [
+          132068
+        ],
+        "protocol_aborts": 0,
+        "queue_counters": [],
+        "successes": 1,
+        "rounds": 1,
+        "ready_seconds": [
+          2.2859825833002105
+        ],
+        "pass": true
+      }
+    },
+    {
+      "case": "auth-peer-app-restart-6",
+      "module_rts_reset": false,
+      "phone_report": {
+        "cancelled": false,
+        "completedCount": 1,
+        "continuous": false,
+        "disconnectGapSeconds": 0,
+        "finished": true,
+        "part": 1,
+        "requested": 1,
+        "rounds": [
+          {
+            "discoverySeconds": 0.6646011249977164,
+            "elapsedSeconds": 2.340840750024654,
+            "number": 1,
+            "readySeconds": 2.305540833331179,
+            "startedAt": "2026-11-16T10:14:33Z",
+            "success": true
+          }
+        ],
+        "startedAt": "2026-11-16T10:14:33Z",
+        "successCount": 1,
+        "timeoutSeconds": 30
+      },
+      "uart_observations": {
+        "case": "auth-peer-app-restart-6",
+        "reset": false,
+        "startedAt": "2026-11-16T10:14:33Z",
+        "early_peer_created": 0,
+        "early_peer_alloc_failed": 0,
+        "missing_peer_warnings": 0,
+        "station_add_failures": 0,
+        "PKE_self_test_passes": 0,
+        "tcp_pong_count": 1,
+        "ap_heap_samples": [
+          132060
+        ],
+        "protocol_aborts": 0,
+        "queue_counters": [],
+        "successes": 1,
+        "rounds": 1,
+        "ready_seconds": [
+          2.305540833331179
+        ],
+        "pass": true
+      }
+    },
+    {
+      "case": "auth-peer-app-restart-7",
+      "module_rts_reset": false,
+      "phone_report": {
+        "cancelled": false,
+        "completedCount": 1,
+        "continuous": false,
+        "disconnectGapSeconds": 0,
+        "finished": true,
+        "part": 1,
+        "requested": 1,
+        "rounds": [
+          {
+            "discoverySeconds": 0.5626571250031702,
+            "elapsedSeconds": 2.211433958320413,
+            "number": 1,
+            "readySeconds": 2.206144374969881,
+            "startedAt": "2026-11-16T10:14:44Z",
+            "success": true
+          }
+        ],
+        "startedAt": "2026-11-16T10:14:44Z",
+        "successCount": 1,
+        "timeoutSeconds": 30
+      },
+      "uart_observations": {
+        "case": "auth-peer-app-restart-7",
+        "reset": false,
+        "startedAt": "2026-11-16T10:14:44Z",
+        "early_peer_created": 0,
+        "early_peer_alloc_failed": 0,
+        "missing_peer_warnings": 0,
+        "station_add_failures": 0,
+        "PKE_self_test_passes": 0,
+        "tcp_pong_count": 1,
+        "ap_heap_samples": [
+          132068
+        ],
+        "protocol_aborts": 0,
+        "queue_counters": [],
+        "successes": 1,
+        "rounds": 1,
+        "ready_seconds": [
+          2.206144374969881
+        ],
+        "pass": true
+      }
+    },
+    {
+      "case": "auth-peer-app-restart-8",
+      "module_rts_reset": false,
+      "phone_report": {
+        "cancelled": false,
+        "completedCount": 1,
+        "continuous": false,
+        "disconnectGapSeconds": 0,
+        "finished": true,
+        "part": 1,
+        "requested": 1,
+        "rounds": [
+          {
+            "discoverySeconds": 0.7028388333274052,
+            "elapsedSeconds": 2.4814690416678786,
+            "number": 1,
+            "readySeconds": 2.4746707499725744,
+            "startedAt": "2026-11-16T10:14:57Z",
+            "success": true
+          }
+        ],
+        "startedAt": "2026-11-16T10:14:57Z",
+        "successCount": 1,
+        "timeoutSeconds": 30
+      },
+      "uart_observations": {
+        "case": "auth-peer-app-restart-8",
+        "reset": false,
+        "startedAt": "2026-11-16T10:14:57Z",
+        "early_peer_created": 0,
+        "early_peer_alloc_failed": 0,
+        "missing_peer_warnings": 0,
+        "station_add_failures": 0,
+        "PKE_self_test_passes": 0,
+        "tcp_pong_count": 1,
+        "ap_heap_samples": [
+          132068
+        ],
+        "protocol_aborts": 0,
+        "queue_counters": [],
+        "successes": 1,
+        "rounds": 1,
+        "ready_seconds": [
+          2.4746707499725744
+        ],
+        "pass": true
+      }
+    },
+    {
+      "case": "auth-peer-app-restart-9",
+      "module_rts_reset": false,
+      "phone_report": {
+        "cancelled": false,
+        "completedCount": 1,
+        "continuous": false,
+        "disconnectGapSeconds": 0,
+        "finished": true,
+        "part": 1,
+        "requested": 1,
+        "rounds": [
+          {
+            "discoverySeconds": 0.7411248332937248,
+            "elapsedSeconds": 2.5262085833237506,
+            "number": 1,
+            "readySeconds": 2.521080583333969,
+            "startedAt": "2026-11-16T10:15:10Z",
+            "success": true
+          }
+        ],
+        "startedAt": "2026-11-16T10:15:10Z",
+        "successCount": 1,
+        "timeoutSeconds": 30
+      },
+      "uart_observations": {
+        "case": "auth-peer-app-restart-9",
+        "reset": false,
+        "startedAt": "2026-11-16T10:15:10Z",
+        "early_peer_created": 0,
+        "early_peer_alloc_failed": 0,
+        "missing_peer_warnings": 0,
+        "station_add_failures": 0,
+        "PKE_self_test_passes": 0,
+        "tcp_pong_count": 1,
+        "ap_heap_samples": [
+          132068
+        ],
+        "protocol_aborts": 0,
+        "queue_counters": [],
+        "successes": 1,
+        "rounds": 1,
+        "ready_seconds": [
+          2.521080583333969
+        ],
+        "pass": true
+      }
+    },
+    {
+      "case": "auth-peer-app-restart-10",
+      "module_rts_reset": false,
+      "phone_report": {
+        "cancelled": false,
+        "completedCount": 1,
+        "continuous": false,
+        "disconnectGapSeconds": 0,
+        "finished": true,
+        "part": 1,
+        "requested": 1,
+        "rounds": [
+          {
+            "discoverySeconds": 0.5164452083408833,
+            "elapsedSeconds": 2.161955500021577,
+            "number": 1,
+            "readySeconds": 2.1551659167162143,
+            "startedAt": "2026-11-16T10:15:22Z",
+            "success": true
+          }
+        ],
+        "startedAt": "2026-11-16T10:15:22Z",
+        "successCount": 1,
+        "timeoutSeconds": 30
+      },
+      "uart_observations": {
+        "case": "auth-peer-app-restart-10",
+        "reset": false,
+        "startedAt": "2026-11-16T10:15:22Z",
+        "early_peer_created": 0,
+        "early_peer_alloc_failed": 0,
+        "missing_peer_warnings": 0,
+        "station_add_failures": 0,
+        "PKE_self_test_passes": 0,
+        "tcp_pong_count": 1,
+        "ap_heap_samples": [],
+        "protocol_aborts": 0,
+        "queue_counters": [],
+        "successes": 1,
+        "rounds": 1,
+        "ready_seconds": [
+          2.1551659167162143
+        ],
+        "pass": true
+      }
+    }
+  ]
+}

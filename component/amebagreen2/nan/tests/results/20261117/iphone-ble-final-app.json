@@ -1,0 +1,35 @@
+{
+  "test": "ble-assisted-nan-pin",
+  "id": "43255C07-A680-4233-AFE3-A19BBB50CA6A",
+  "startedAt": "2026-11-17T01:56:16Z",
+  "stages": [
+    {
+      "stage": "scan_requested",
+      "time": "2026-11-17T01:56:16Z"
+    },
+    {
+      "stage": "discovered",
+      "time": "2026-11-17T01:56:17Z"
+    },
+    {
+      "stage": "connecting",
+      "time": "2026-11-17T01:56:17Z"
+    },
+    {
+      "stage": "ble_connected",
+      "time": "2026-11-17T01:56:17Z"
+    },
+    {
+      "stage": "requesting_pin",
+      "time": "2026-11-17T01:56:18Z"
+    },
+    {
+      "stage": "request_accepted",
+      "time": "2026-11-17T01:56:18Z"
+    },
+    {
+      "stage": "credential_received",
+      "time": "2026-11-17T01:56:18Z"
+    }
+  ]
+}

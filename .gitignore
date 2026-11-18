@@ -1,6 +1,16 @@
 /build/
 /test/bouffalo_toolchain/build/
+# Cross toolchains, all installed out-of-band: the AmebaD ASDK (asdk-*/) and the
+# Nuclei RISC-V GCC 14 + newlib that BL618DG B0 builds with
+# (nuclei_riscv_newlibc_<version>/, 3.7 GB, via
+# scripts/install_nuclei_riscv_toolchain.sh). Upstream ships release tarballs
+# only, so unlike platform/toolchain_gcc_t-head_linux neither can be a submodule.
 /toolchain/
+# Zephyr SDK riscv64-zephyr-elf. 1.1 GB. No longer used to build anything — it is
+# needed only to re-run scripts/delto_bl618dg_wireless.sh (Nuclei's GCC reads
+# zlib LTO only, the vendor bytecode is zstd), so install it via
+# scripts/install_zephyr_riscv_toolchain.sh just when the vendor libs change.
+/platform/toolchain_gcc_zephyr_linux/
 /.venv-tfm/
 
 # Realtek NDA / confidential docs (datasheets, ANs, MP guides, pinmux — local reference only,
@@ -13,3 +23,23 @@
 /doc/realtek_an/*.doc
 project/amebad/app_km4/aws_iot_creds.h
 __pycache__/
+
+# BL618DG validation and local build artifacts
+/project/**/build/
+/project/bouffalo/build_*/
+/project/.lfs_build/
+/project/lfs.bin
+/component/bouffalo_sdk/bflb_image_tool/bflb_tools/bouffalo_flash_cube/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+.venv/
+.venv-*/
+venv/
+*.py[cod]
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db

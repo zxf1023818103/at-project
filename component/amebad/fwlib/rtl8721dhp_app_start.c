@@ -429,8 +429,8 @@ void app_start(void)
 #ifdef AMEBAD_TZ_DEMO_DBG
 	DBG_PRINTF(MODULE_BOOT, LEVEL_ERROR,"ZZ-APP-A2(post-sysirq)\n");
 	/* Secure-world (IMG3) demo: NS -> Secure veneer calls. Done here, before
-	 * os_heap_init, so the secret-read result is observable even though the full
-	 * driver app currently hangs later at os_heap_init under TrustZone. The
+	 * ram_heap_init, so the secret-read result is observable even though the full
+	 * driver app currently hangs later at ram_heap_init under TrustZone. The
 	 * veneers live in BD_RAM_NSC (0x1007B000); cmse_implib.lib resolves them. */
 	{
 		extern u32 rdp_protection_entry(u32 idx);   /* NSC veneer @0x1007b000 */
@@ -459,7 +459,7 @@ void app_start(void)
 #ifdef AMEBAD_TZ_DEMO_DBG
 	DBG_PRINTF(MODULE_BOOT, LEVEL_ERROR,"ZZ-APP-A3(pre-heap)\n");
 #endif
-	os_heap_init();
+	ram_heap_init();
 #ifdef AMEBAD_TZ_DEMO_DBG
 	DBG_PRINTF(MODULE_BOOT, LEVEL_ERROR,"ZZ-APP-B(post-heap)\n");
 #endif

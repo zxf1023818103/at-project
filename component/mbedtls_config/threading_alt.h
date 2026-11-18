@@ -2,7 +2,7 @@
  * threading_alt.h — MBEDTLS_THREADING_ALT mutex type (FreeRTOS, platform-agnostic).
  *
  * mbedtls/threading.h #includes this (bare name, found on the include path a platform port
- * adds — e.g. amebad_mbedtls_cfg) when MBEDTLS_THREADING_ALT is set. It must define
+ * adds — e.g. mbedtls_cfg) when MBEDTLS_THREADING_ALT is set. It must define
  * mbedtls_threading_mutex_t; the callbacks live in mbedtls_threading_alt.c (this dir).
  */
 #ifndef MBEDTLS_THREADING_ALT_H

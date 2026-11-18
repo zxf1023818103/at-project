@@ -43,11 +43,19 @@
 # target defined below in this file (the .c sources all live in this dir).
 add_compile_options("-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=")
 
+# Header-only view of this dir (transport_tls.h / transport_https.h / transport_interface.h / the
+# NetworkContext seam) for consumers that need the transport headers but MUST NOT pull a concrete
+# transport archive — the TLS_FreeRTOS_* symbols resolve at the final image link. Link this instead
+# of reaching into component/network_transport by path.
+add_library(network_transport_headers INTERFACE)
+target_include_directories(network_transport_headers SYSTEM INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
+
 # --- sockets layer: TCP_Sockets_* over FreeRTOS-Plus-TCP -----------------------------------
 # The base every transport sits on. tcp_sockets_wrapper.c calls FreeRTOS_socket / _connect /
 # _recv / _send / DNS directly (self-contained — it does NOT use the legacy sockets_wrapper).
 add_library(network_transport_sockets STATIC EXCLUDE_FROM_ALL
     tcp_sockets_wrapper.c
+    transport_https.c   # shared Https_Connect() — backend-agnostic; TLS_FreeRTOS_Connect resolves at image link
 )
 target_include_directories(network_transport_sockets SYSTEM PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(network_transport_sockets PUBLIC freertos-plus-tcp_config freertos_config)
@@ -112,21 +120,21 @@ target_compile_definitions(network_transport_picotls PUBLIC TLS_BACKEND_PICOTLS)
 
 # Optional picotls handshake heap tracing (Makefile TLS_HEAP_TRACE=ON). Logs free heap at the
 # connect / handshake / disconnect milestones via the gated TLS_HEAP_MARK in transport_picotls.c.
-if(AMEBAD_TLS_HEAP_TRACE STREQUAL "ON")
-    target_compile_definitions(network_transport_picotls PRIVATE AMEBAD_TLS_HEAP_TRACE)
+if(AT_TLS_HEAP_TRACE STREQUAL "ON")
+    target_compile_definitions(network_transport_picotls PRIVATE AT_PROJECT_TLS_HEAP_TRACE)
 endif()
 
 # --- compressed CA root bundle (CRT_BUNDLE=ON) ----------------------------------------------
-# When enabled (threaded from the Makefile as AMEBAD_ENABLE_CRT_BUNDLE), both TLS transports
+# When enabled (threaded from the Makefile as AT_PROJECT_CRT_BUNDLE), both TLS transports
 # verify the server cert against the embedded Mozilla root bundle (esp_crt_bundle) instead of the
 # single pinned root in NetworkCredentials_t.pRootCa. The transport sources gate this on the
-# AMEBAD_ENABLE_CRT_BUNDLE macro and call into esp_crt_bundle.h (linked PUBLIC for the headers;
+# AT_PROJECT_CRT_BUNDLE macro and call into esp_crt_bundle.h (linked PUBLIC for the headers;
 # the actual archive rides app_km4's _aws_grp link group). PUBLIC def so the consuming app TUs
 # (aws_iot_demo.c / ota_*.c) that set creds.useCrtBundle see the same macro.
-if(AMEBAD_ENABLE_CRT_BUNDLE STREQUAL "ON")
+if(AT_ENABLE_CRT_BUNDLE STREQUAL "ON")
     foreach(_tls network_transport_mbedtls network_transport_picotls)
         target_link_libraries(${_tls} PUBLIC esp_crt_bundle_config)
-        target_compile_definitions(${_tls} PUBLIC AMEBAD_ENABLE_CRT_BUNDLE)
+        target_compile_definitions(${_tls} PUBLIC AT_PROJECT_CRT_BUNDLE)
     endforeach()
 endif()
 
@@ -136,18 +144,18 @@ endif()
 # TLS_FreeRTOS_* symbols renamed (picotls_* / mbedtls_*) so they don't collide; transport_fallback.c
 # calls the renamed sets. The app links network_transport_fallback (which exports the public
 # TLS_FreeRTOS_* + TLS_BACKEND_FALLBACK for transport_tls.h).
-if(AMEBAD_TLS_BACKEND STREQUAL "fallback")
+if(TLS_BACKEND STREQUAL "fallback")
     target_compile_definitions(network_transport_picotls PRIVATE TLS_TRANSPORT_RENAME_PICOTLS)
     target_compile_definitions(network_transport_mbedtls PRIVATE TLS_TRANSPORT_RENAME_MBEDTLS)
 
     # The mbedTLS SSL stack is only the TLS-1.2 fallback path here (1.3 peers ride picotls). Strip
-    # TLS 1.3 from it (mbedtls_amebad_user_config.h gates on AMEBAD_MBEDTLS_TLS12_ONLY) so we can also
+    # TLS 1.3 from it (mbedtls_user_config.h gates on MBEDTLS_TLS12_ONLY) so we can also
     # drop KEEP_PEER_CERTIFICATE (free the peer cert post-handshake). PUBLIC + on all three upstream
     # archives so every TU sees one consistent mbedTLS config (shared struct layouts). picotls's
     # TLS 1.3 is unaffected — it's its own stack over mbedcrypto, not the mbedTLS SSL layer.
     foreach(_mt mbedcrypto mbedx509 mbedtls)
         if(TARGET ${_mt})
-            target_compile_definitions(${_mt} PUBLIC AMEBAD_MBEDTLS_TLS12_ONLY)
+            target_compile_definitions(${_mt} PUBLIC MBEDTLS_TLS12_ONLY)
         endif()
     endforeach()
 

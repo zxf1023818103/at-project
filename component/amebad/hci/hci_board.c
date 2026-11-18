@@ -667,7 +667,7 @@ bool hci_board_init()
     
 
 
-    hci_board_debug("\r\nBT BUILD Date: %s \r\n",UTS_VERSION);
+    hci_board_debug("\r\nBT BUILD Date: %s \r\n", __DATE__ " " __TIME__);
     bt_read_efuse();
 
     return true;

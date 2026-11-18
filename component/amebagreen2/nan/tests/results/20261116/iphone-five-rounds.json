@@ -1,0 +1,58 @@
+{
+  "cancelled": false,
+  "completedCount": 5,
+  "continuous": false,
+  "disconnectGapSeconds": 0,
+  "finished": true,
+  "part": 1,
+  "requested": 5,
+  "rounds": [
+    {
+      "discoverySeconds": 0.9752165416139178,
+      "elapsedSeconds": 4.218131041619927,
+      "number": 1,
+      "readySeconds": 4.193372499954421,
+      "startedAt": "2026-11-16T02:49:34Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 1.480253750050906,
+      "elapsedSeconds": 4.202451916702557,
+      "interRoundGapSeconds": 0.0022063333308324218,
+      "number": 2,
+      "readySeconds": 4.176649625005666,
+      "startedAt": "2026-11-16T02:49:38Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 0.9377797499764711,
+      "elapsedSeconds": 5.177412541641388,
+      "interRoundGapSeconds": 0.003771708346903324,
+      "number": 3,
+      "readySeconds": 5.142788458324503,
+      "startedAt": "2026-11-16T02:49:42Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 1.0036437917151488,
+      "elapsedSeconds": 4.251592500018887,
+      "interRoundGapSeconds": 0.0034764583106152713,
+      "number": 4,
+      "readySeconds": 4.210149583348539,
+      "startedAt": "2026-11-16T02:49:48Z",
+      "success": true
+    },
+    {
+      "discoverySeconds": 1.4916510416660458,
+      "elapsedSeconds": 3.6489160416531377,
+      "interRoundGapSeconds": 0.0028866250067949295,
+      "number": 5,
+      "readySeconds": 3.617103958327789,
+      "startedAt": "2026-11-16T02:49:52Z",
+      "success": true
+    }
+  ],
+  "startedAt": "2026-11-16T02:49:34Z",
+  "successCount": 5,
+  "timeoutSeconds": 30
+}

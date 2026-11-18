@@ -22,6 +22,9 @@
 #include <cstdio>           /* printf */
 #include <iostream>
 #include <fstream>
+#ifdef AT_CPP_SELFTEST_NONINTERACTIVE
+#include <sstream>
+#endif
 #include <string>
 #include <system_error>
 #include <filesystem>
@@ -44,6 +47,13 @@ extern "C" void cpp_selftest(void)
     /* --- A) iostreams: std::cout/std::cin over LPUART, std::cerr over LOGUART --- */
     std::cerr << "[CPP] (this line is std::cerr -> LOGUART)\r\n" << std::flush;
 
+#ifdef AT_CPP_SELFTEST_NONINTERACTIVE
+    std::istringstream input("iostream parsing ok\n");
+    std::string line;
+    std::getline(input, line);
+    std::cout << "[CPP] stringstream getline -> "
+              << (line == "iostream parsing ok" ? "PASS" : "FAIL") << "\r\n" << std::flush;
+#else
     std::cout << "\r\n[CPP] std::cout -> LPUART (COM7). Type a line + Enter: "
               << std::flush;
     std::string line;
@@ -51,6 +61,7 @@ extern "C" void cpp_selftest(void)
     std::cout << "[CPP] you typed: \"" << line << "\"\r\n" << std::flush;
     printf("[CPP] cout/cin over LPUART -> %s\n\r",
                line.empty() ? "FAIL (empty)" : "PASS");
+#endif
 
     /* --- DIAG) raw POSIX open() to isolate the _open VFS path from libstdc++ --- */
     {

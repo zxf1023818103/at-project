@@ -1,4 +1,5 @@
 #include "lfs_config.h"
+#include "../ble_store_config/lfs_blank.h"
 
 #include "FreeRTOS.h"
 #include "semphr.h"
@@ -22,13 +23,8 @@ static SemaphoreHandle_t s_lfs_mutex;
 static int lfs_cfg_lock(const struct lfs_config *c)
 {
     (void)c;
-    if (s_lfs_mutex == NULL) {
-        s_lfs_mutex = xSemaphoreCreateMutex();
-    }
-    if (s_lfs_mutex != NULL) {
-        xSemaphoreTake(s_lfs_mutex, portMAX_DELAY);
-    }
-    return LFS_ERR_OK;
+    if (!s_lfs_mutex) return LFS_ERR_NOMEM;
+    return xSemaphoreTake(s_lfs_mutex,portMAX_DELAY)==pdTRUE ? 0 : LFS_ERR_IO;
 }
 
 static int lfs_cfg_unlock(const struct lfs_config *c)
@@ -68,22 +64,16 @@ lfs_t *lfs_config_mount(const struct lfs_diskio *io)
     if (s_mounted) {
         return &s_lfs;
     }
+    if (!s_lfs_mutex) s_lfs_mutex=xSemaphoreCreateMutex();
+    if (!s_lfs_mutex) return NULL;
     build_config(io);
 
     err = lfs_mount(&s_lfs, &s_cfg);
-    if (err != LFS_ERR_OK) {
-        /* Blank or corrupt medium (firmware-only image, no lfs.bin) — format
-         * once and retry. A valid pre-flashed lfs.bin mounts on the first try
-         * and never reaches here. */
-        err = lfs_format(&s_lfs, &s_cfg);
-        if (err != LFS_ERR_OK) {
-            return NULL;
-        }
-        err = lfs_mount(&s_lfs, &s_cfg);
-        if (err != LFS_ERR_OK) {
-            return NULL;
-        }
+    if (err == LFS_ERR_CORRUPT && lfs_region_is_blank(&s_cfg)==1) {
+        err=lfs_format(&s_lfs,&s_cfg);
+        if (!err) err=lfs_mount(&s_lfs,&s_cfg);
     }
+    if (err) return NULL;
     s_mounted = 1;
     return &s_lfs;
 }
@@ -100,8 +90,11 @@ int lfs_config_format(void)
 {
     int err;
 
-    /* Requires a prior successful mount: s_cfg holds the geometry + diskio captured
-     * by build_config() at mount time (mkfs runs at runtime, long after boot mount). */
+    /* A prior mount attempt prepares s_cfg even if the medium is corrupt.
+     * Reject an uninitialized config before littlefs dereferences its callbacks. */
+    if (!s_cfg.read || !s_cfg.prog || !s_cfg.erase || !s_cfg.sync) {
+        return LFS_ERR_INVAL;
+    }
     if (s_mounted) {
         lfs_unmount(&s_lfs);
         s_mounted = 0;

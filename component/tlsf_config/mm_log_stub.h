@@ -7,11 +7,20 @@
  * tlsf_allocator.c. Named uniquely (NOT "log.h") so it can't shadow other components' log.h
  * (e.g. rxi_log_config's) on the shared include path.
  */
-#define LOG_E(...) ((void)0)
-#define LOG_W(...) ((void)0)
-#define LOG_I(...) ((void)0)
-#define LOG_D(...) ((void)0)
-#define LOG_L(...) ((void)0)
-#define LOG_R(...) ((void)0)
+#define LOG_F(...)  ((void)0)
+#define LOG_E(...)  ((void)0)
+#define LOG_W(...)  ((void)0)
+#define LOG_I(...)  ((void)0)
+#define LOG_D(...)  ((void)0)
+#define LOG_T(...)  ((void)0)
+#define LOG_L(...)  ((void)0)
+#define LOG_R(...)  ((void)0)
+#define LOG_RF(...) ((void)0)
+#define LOG_RE(...) ((void)0)
+#define LOG_RW(...) ((void)0)
+#define LOG_RI(...) ((void)0)
+#define LOG_RD(...) ((void)0)
+#define LOG_RT(...) ((void)0)
+#define LOG_FLUSH() ((void)0)
 
 #endif /* TLSF_MM_LOG_STUB_H */

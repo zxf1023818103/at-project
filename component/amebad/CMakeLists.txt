@@ -27,8 +27,9 @@
 #                    (rtl8721dlp_* — KM0 flash/intf/pinmap/sleep), usrcfg_hp
 #                    (rtl8721dhp_* — KM4 trustzone/interface).
 #
-#   freertos_port    The AmebaD heap_5 memory-map glue lib `freertos_port`
-#                    (freertos_heap5_config.c -> vPortDefineHeapRegions). The upstream
+#   (heap)           Heap registration is the shared ram_heap_init()
+#                    (component/freertos-kernel_config/ram_heap.c), driven by the app's linker
+#                    symbols; the AmebaD-only freertos_port heap_5 glue lib is gone. The upstream
 #                    FreeRTOS-Kernel (-> `FreeRTOS`) + per-core port/heap is built by
 #                    component/freertos-kernel_config; the kernel/glue header bundle +
 #                    the freertos_config <- amebad_sdk_includes attach are inline below.
@@ -85,7 +86,7 @@ option(AMEBAD_TFM_STORAGE "Enable TF-M PSA Internal Trusted Storage + Protected 
 # POSIX-fd VFS self-test (syscalls/newlib_syscalls.c): fopen/open + socket-fd over LittleFS +
 # FreeRTOS+TCP. OFF by default (the VFS is otherwise gc-stripped when no consumer references it).
 # Consumed by lfs_port (the vfs_selftest fn) + app_km4 (the call) below.
-option(AMEBAD_VFS_SELFTEST "Build + run the POSIX-fd VFS self-test (fopen/open/socket over LFS+sockets)" OFF)
+option(AT_VFS_SELFTEST "Build + run the POSIX-fd VFS self-test (fopen/open/socket over LFS+sockets)" OFF)
 
 # Ed25519 secure-boot self-test (make SBOOT=ON). build_image_all.py signs image2 in the boot-ROM's
 # SBOOT format; sboot_cli.c verifies the running signed image with the boot ROM's ed25519 verify.
@@ -140,11 +141,9 @@ add_subdirectory(platform_stdlib)    # header-only libc-retarget header (amebad_
 # main.h) is now in-tree, owned by the app component: app_km0 (KM0) /
 # app_km4 (KM4). Chip-gated below via _proj_cfg_inc.
 
-# amebad_freertos_headers — the FreeRTOS HEADER bundle for AmebaD (moved here from
-# component/amebad/freertos_port, which is now just the heap_5 glue lib): the upstream kernel's
-# FreeRTOS.h (include/) + portmacro.h (per-core port dir) + the freertos_port glue headers
-# (freertos_service.h / freertos_heap5_config.h). INTERFACE so it carries only include dirs —
-# linking the kernel STATIC would cycle back via freertos_config. Per-core port path
+# amebad_freertos_headers — the FreeRTOS HEADER bundle for AmebaD: the upstream kernel's
+# FreeRTOS.h (include/) + portmacro.h (per-core port dir). INTERFACE so it carries only include
+# dirs — linking the kernel STATIC would cycle back via freertos_config. Per-core port path
 # (km0 = ARMv6-M CM0; km4 image2 = ARMv8-M CM33, no-TrustZone non-secure).
 if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
     set(_frt_port_path "GCC/ARM_CM0")
@@ -154,7 +153,6 @@ endif()
 set(_frt_src "${AT_ROOT}/component/freertos-kernel_config/freertos-kernel")
 add_library(amebad_freertos_headers INTERFACE)
 target_include_directories(amebad_freertos_headers SYSTEM INTERFACE
-    "${AT_ROOT}/component/amebad/freertos_port"   # freertos_service.h / freertos_heap5_config.h
     "${_frt_src}/include"
     "${_frt_src}/portable/${_frt_port_path}")
 
@@ -255,8 +253,14 @@ if(TARGET freertos_config)
 endif()
 # ----------------------------------------- end folded sdk_headers -----------------------------
 add_subdirectory(usrcfg)             # chip-gated: usrcfg_common (+ _lp on KM0 / _hp on KM4)
-add_subdirectory(freertos_port)      # AmebaD heap_5 memory-map glue lib `freertos_port` (kernel built by freertos-kernel_config)
-add_subdirectory(monitor)            # chip-gated (image2 shell/monitor)
+# (freertos_port removed: its only lib was the heap_5 glue; heap registration is now the shared
+#  ram_heap_init() in component/freertos-kernel_config/ram_heap.c)
+add_subdirectory(monitor_port)       # chip-gated: AmebaD port for the shared console engine (component/monitor_config)
+add_subdirectory(board_flash_port)   # KM4-gated: board_flash_protect/read_status (flash write-protect impl)
+add_subdirectory(board_dsleep_port)  # KM4-gated: board_dsleep_enter (SleepCG retention) for the shared `dsleep` command
+add_subdirectory(80211d_port)        # KM4-gated: 802.11d country auto-detect port (extended-country scan + channel plan)
+add_subdirectory(rtc_time_port)      # KM4-gated: rtc_time_store/seed over the Realtek RTC (shared rtc_time seam)
+add_subdirectory(ota_flash_port)     # KM4-gated: the OTA slot writer (shared ota_flash.h contract)
 add_subdirectory(osdep)              # KM4-gated internally (osdep/os abstraction)
 add_subdirectory(mbed)               # KM4-gated: flattened mbed HAL (amebad_mbed: flash_api.c + headers), consumed by wifi
 add_subdirectory(mbedtls_rom)        # KM4-gated: headers to call ROM mbedTLS 2.4.0 as SW (no build)
@@ -266,27 +270,26 @@ add_subdirectory(mbedtls_port)            # KM4-gated: AmebaD port of upstream m
 # port (in-tree) that links it. The port also owns the netif_shim ABI header (INTERFACE
 # target amebad_netif_shim).
 add_subdirectory(freertos_tcp_port)  # KM4-gated: Realtek WiFi <-> stack bridge (`amebad_freertos_tcp`, DHCP bring-up, EXCLUDE)
-add_subdirectory(cares_port)         # synchronous c-ares resolver front-end (`cares_port`); compiled only when app_km4 links it (CARES=ON)
+# (cares_port merged into the cross-platform component/c-ares_config; no platform-HAL code)
 add_subdirectory(pmu)                # chip-gated: prebuilt PMC lib (lib_pmc_lp/hp.a) + pmu headers
 add_subdirectory(wlan)               # KM4-gated: host WiFi driver libs (lib_wlan*.a) + API headers
 add_subdirectory(wpa_supplicant)     # KM4-gated: supplicant cores (lib_wps.a + lib_eap.a) + config/glue source + headers
 add_subdirectory(wifi)               # KM4-gated: host WiFi API + bring-up (amebad_wifi, EXCLUDE)
 # The cross-platform config dirs (freertos-plus-tcp_config / ngtcp2_config / coremqtt_config /
 # picotls_config / mbedtls_config / ...) are added by the parent component/CMakeLists.txt; the in-tree
-# consumers below (app_km4, the ngtcp2 QUIC self-test gated by AMEBAD_ENABLE_QUIC, ...) just link the
+# consumers below (app_km4, the ngtcp2 QUIC self-test gated by AT_ENABLE_QUIC, ...) just link the
 # resulting targets.
-add_subdirectory(build_info)         # INTERFACE: UTS_VERSION banner -D (replaces the vendored build_info.h shim)
 add_subdirectory(hci)                # KM4-gated: BLE controller bring-up + HCI transport + bridge (no btgap.a)
 # NimBLE: the config + header surface (nimble_config) is added by the parent
 # component/CMakeLists.txt; here we add the AmebaD port (in-tree, KM4-gated; links
 # nimble_config + amebad_hci).
 add_subdirectory(nimble_port)        # KM4-gated: NimBLE host stack (`nimble` lib) on amebad_hci; SM crypto on mbedTLS
-add_subdirectory(mcumgr_port)        # KM4 + MCUMGR-gated: SMP-over-BLE transport (`mcumgr_port` lib) bridging NimBLE GATT <-> mcumgr core
+# (mcumgr_port / smp_bt merged into the cross-platform component/mcumgr_config; no platform-HAL code)
 # newlib retarget: the cross-platform core (syscall_config OBJECT lib: VFS + malloc +
 # byte-order) is added by the parent component/CMakeLists.txt; here we add the AmebaD
 # console backend (in-tree). Both OBJECT libs, linked into the image by app_km4.
 add_subdirectory(syscall_port)       # KM4-gated: AmebaD console backend (amebad_syscall_port OBJECT lib: console_loguart/lpuart) + vfs_lfs_mount via lfs_port
-add_subdirectory(lfs_port)           # KM4-gated: AmebaD flash adapter for LittleFS (amebad_lfs_port; diskio over flash_api + mount) + attaches the AmebaD LittleFS self-test gates onto lfs_config
+add_subdirectory(lfs_port)           # KM4-gated: AmebaD flash adapter for LittleFS (lfs_port; diskio over flash_api + mount) + attaches the AmebaD LittleFS self-test gates onto lfs_config
 
 add_subdirectory(image_tool)         # defines amebad_make_{boot,image2}_all_bin*(...) + amebad_make_image_all_bin()
                                      #   (-> target amebad_image_all, wraps build_image_all.py). Build HELPER

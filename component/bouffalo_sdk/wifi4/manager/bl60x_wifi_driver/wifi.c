@@ -1,10 +1,5 @@
 #include <string.h>
-#include <netif/etharp.h>
-#include <lwip/dns.h>
-
-#ifdef BL602_MATTER_SUPPORT
-#include <lwip/ethip6.h>
-#endif
+/* lwIP removed — TX/RX go through component/bouffalo_sdk/freertos_tcp_port/bl602_netif.c. */
 
 #include <wifi_pkt_hooks.h>
 
@@ -38,8 +33,6 @@
  ****************************************************************************************
  */
 
-static BL_TaskHandle_t taskHandle_output = NULL;
-
 extern int bl_main_rtthread_start(struct bl_hw **bl_hw);
 
 struct net_device
@@ -49,13 +42,15 @@ struct net_device
 
 static struct net_device bl606a0_sta;
 
+#if 0  /* lwIP netif linkoutput (wifi_tx / taskHandle_output / bl_tx_notify) — replaced
+        * by the FreeRTOS-Plus-TCP NetworkInterface prvOutput -> bl602_ll_output in
+        * component/bouffalo_sdk/freertos_tcp_port/bl602_netif.c */
+static BL_TaskHandle_t taskHandle_output = NULL;
 static void bl_tx_notify(void *cb_arg, bool tx_ok)
 {
-    //TODO static alloc taskHandle_output, no if else anymore
     if (taskHandle_output) {
         bflb_os_task_notify(taskHandle_output);
     }
-
     return;
 }
 
@@ -221,55 +216,14 @@ static err_t wifi_tx(struct netif *netif, struct pbuf* p)
     return bl_output(bl606a0_sta.bl_hw, (0 == wlan->mode), p, &custom_cfm);
 }
 #endif
+#endif  /* #if 0: lwIP wifi_tx linkoutput */
 
-int bl_wifi_eth_tx(struct pbuf *p, bool is_sta, struct bl_tx_cfm *custom_cfm)
+/* EAPOL / raw ethernet TX for the supplicant (bl_wpa_main.c wpa_sendto_wrapper) —
+ * one linear frame straight to the firmware TX path (the lwIP pbuf wrappers are gone).
+ * custom_cfm is an optional (struct bl_tx_cfm *) tx-done callback (NULL = none). */
+int bl_wifi_eth_tx(void *frame, uint16_t len, bool is_sta, void *custom_cfm)
 {
-    err_t ret;
-#ifdef CFG_NETBUS_WIFI_ENABLE
-    ret = bl_output(bl606a0_sta.bl_hw, is_sta, p, custom_cfm, 1);
-#else
-    ret = bl_output(bl606a0_sta.bl_hw, is_sta, p, custom_cfm);
-#endif
-    if (ret == ERR_OK) {
-        return 0;
-    } else {
-        return -1;
-    }
-}
-
-static void netif_status_callback(struct netif *netif)
-{
-    bflb_os_printf("[lwip] netif status callback\r\n"
-                "  IP: %s\r\n", ip4addr_ntoa(netif_ip4_addr(netif)));
-    bflb_os_printf("  MK: %s\r\n", ip4addr_ntoa(netif_ip4_netmask(netif)));
-    bflb_os_printf("  GW: %s\r\n", ip4addr_ntoa(netif_ip4_gw(netif)));
-    if (ip4_addr_isany(netif_ip4_addr(netif))) {
-        wifi_mgmr_api_ip_update();
-    } else {
-        wifi_mgmr_api_ip_got();
-    }
-}
-
-err_t bl606a0_wifi_netif_init(struct netif *netif)
-{
-#if LWIP_NETIF_HOSTNAME
-    netif->hostname = wifiMgmr.hostname;
-#endif
-    netif->hwaddr_len = ETHARP_HWADDR_LEN;
-    /* set netif maximum transfer unit */
-    netif->mtu = 1500;
-    /* Accept broadcast address and ARP traffic */
-#ifdef BL602_MATTER_SUPPORT
-    netif->flags = NETIF_FLAG_BROADCAST | NETIF_FLAG_ETHARP | NETIF_FLAG_ETHERNET | NETIF_FLAG_IGMP | NETIF_FLAG_MLD6;
-    netif->output_ip6 = ethip6_output;
-#else
-    netif->flags = NETIF_FLAG_BROADCAST | NETIF_FLAG_ETHARP | NETIF_FLAG_IGMP;
-#endif
-    netif->output = etharp_output;
-    netif->linkoutput = wifi_tx;
-    netif_set_status_callback(netif, netif_status_callback);
-
-    return 0;
+    return (bl602_ll_output(is_sta, frame, len, custom_cfm) == 0) ? 0 : -1;
 }
 
 int bl606a0_wifi_init(wifi_conf_t *conf)

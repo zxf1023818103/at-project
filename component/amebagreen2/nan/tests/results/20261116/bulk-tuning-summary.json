@@ -1,0 +1,67 @@
+{
+  "date": "2026-11-16",
+  "device": "AmebaGreen2 COM5",
+  "peer": "iPhone 13 Pro / Flash Studio",
+  "firmware": {
+    "bytes": 898080,
+    "sha256": "b4ba784fae5618451857801a8975e9cbf0545f45c78732a473057cab5274ace5",
+    "nan_net_diag": false
+  },
+  "profile": {
+    "configured_mss": 1460,
+    "peer_mss": 1024,
+    "tx_buffer_mss": 40,
+    "rx_buffer_mss": 24,
+    "tx_window_mss": 32,
+    "rx_window_mss": 16,
+    "tx_window_bytes": 46720,
+    "tcp_segment_records": 96,
+    "network_descriptors": 32,
+    "ap_skb": 40,
+    "np_skb": 32,
+    "rx_ampdu": 16,
+    "tx_ampdu": 32,
+    "tcp_task_priority": 2
+  },
+  "reports": [
+    "throughput-bulk-release-30s-1.json",
+    "throughput-bulk-release-30s-2.json"
+  ],
+  "receiver_mean_mbps": {
+    "upload": 12.623249799050662,
+    "download": 21.53010857376329
+  },
+  "payload_counters_match": true,
+  "firmware_rx_queue_drops": 0,
+  "firmware_tx_queue_drops": 0,
+  "ap_free_heap_samples_during_transfer_bytes": [
+    36300,
+    37420
+  ],
+  "heap_minimum_tracking_enabled": false,
+  "tcp_stack_unused_words": 648,
+  "reconnect": {
+    "report": "iphone-bulk-release-twenty-rounds.json",
+    "success": 18,
+    "total": 20,
+    "failed_rounds": [
+      1,
+      6
+    ],
+    "failure": "30-second timeout before TCP ready; subsequent round recovered"
+  },
+  "checks": {
+    "native_asan_ubsan": "4/4 passed",
+    "nan_off_build": "passed",
+    "uart_readback": "byte-for-byte passed"
+  },
+  "limitations": [
+    "Upload below the Linux 20–30 Mbps comparison",
+    "Cold discovery and reconnection still sometimes time out"
+  ],
+  "rejected_experiments": [
+    "ACK every second data packet",
+    "TCP task priority 8"
+  ],
+  "post_reflash_check": "throughput-bulk-reflash-10s.json"
+}

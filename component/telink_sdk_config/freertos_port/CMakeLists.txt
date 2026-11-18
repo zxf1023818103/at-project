@@ -1,0 +1,6 @@
+add_library(freertos_kernel_port_headers INTERFACE)
+target_include_directories(freertos_kernel_port_headers INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(freertos_kernel_port_headers INTERFACE freertos_config)
+add_library(freertos_kernel_port OBJECT port.c portASM.S)
+target_link_libraries(freertos_kernel_port PRIVATE freertos_kernel_port_headers freertos_kernel_include)
+target_compile_options(freertos_kernel_port PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wall;-Wextra;-Werror>)

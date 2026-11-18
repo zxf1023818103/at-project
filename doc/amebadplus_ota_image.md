@@ -1,10 +1,12 @@
 # Ameba Dplus / Green2 `ota_all.bin` 生成流程
 
+> 本文下方保留的是原 SDK `ameba.py` 管线分析和当时的示例大小。当前 Dplus 已改为六个独立 CMake 目录，入口是 `project/amebadplus/Makefile`，打包器为 `component/amebadplus/image_tool/build_image.py`。支持 TF-M IMG3、签名、RSIP 及设备 OTA；当前布局和用法以 [项目 README](../project/amebadplus/README.md) 为准，实测见 [VALIDATION](../project/amebadplus/VALIDATION.md)。Green2 保留 SDK 管线。
+
 针对 `platform/ameba-rtos`（新 SDK）下 amebadplus / amebagreen2 的 OTA 升级镜像 `ota_all.bin` 是怎么从 KM0 + KM4 两核的中间产物拼出来的。Green2 流程基本一致，只是核改名 `km4tz/km4ns`，下面以 amebadplus 为主线。
 
 # 最终产物
 
-`project/ameba/build_RTL8711Dx/ota_all.bin` —— 用本工程当前配置（`CONFIG_TRUSTZONE=n`、`CONFIG_UPGRADE_BOOTLOADER=n`、`CONFIG_COMPRESS_OTA_IMG=n`）实测：
+`build/amebadplus/ota_all.bin` —— 用本工程当前配置（`CONFIG_TRUSTZONE=n`、`CONFIG_UPGRADE_BOOTLOADER=n`、`CONFIG_COMPRESS_OTA_IMG=n`）实测：
 
 ```
 km0_km4_app.bin   1,106,912 B
@@ -152,12 +154,12 @@ postbuild.cmake 最后两步（`platform/ameba-rtos/component/soc/amebadplus/pro
 # 删中间产物
 remove tmp_app.bin / tmp_app_ns.bin
 
-# 拷到上层 FINAL_IMAGE_DIR （= project/ameba/build_RTL8711Dx/）
+# 拷到上层 FINAL_IMAGE_DIR （= build/amebadplus/）
 copy ota_all.bin     → ${FINAL_IMAGE_DIR}
 copy km0_km4_app.bin → ${FINAL_IMAGE_DIR}
 ```
 
-这样 `project/ameba/build_RTL8711Dx/ota_all.bin` 就齐了。
+这样 `build/amebadplus/ota_all.bin` 就齐了。
 
 # 入口
 

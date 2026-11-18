@@ -1,0 +1,22 @@
+diff --git a/components/wireless/wifi6/CMakeLists.txt b/components/wireless/wifi6/CMakeLists.txt
+index c4074621..90fe3470 100644
+--- a/components/wireless/wifi6/CMakeLists.txt
++++ b/components/wireless/wifi6/CMakeLists.txt
+@@ -4 +4,7 @@ add_subdirectory(wpa_supplicant)
+-add_subdirectory(wifi6_lwip_adapter)
++# Applications may supply a different network-stack adaptation layer.
++if(WIFI6_NET_AL_DIR)
++    sdk_add_compile_definitions(-DCONFIG_FREERTOS_TCP)
++    add_subdirectory(${WIFI6_NET_AL_DIR} ${CMAKE_CURRENT_BINARY_DIR}/net_al)
++else()
++    add_subdirectory(wifi6_lwip_adapter)
++endif()
+diff --git a/components/wireless/wifi6/wpa_supplicant/src/utils/includes.h b/components/wireless/wifi6/wpa_supplicant/src/utils/includes.h
+index a61784be..ddbb7a22 100644
+--- a/components/wireless/wifi6/wpa_supplicant/src/utils/includes.h
++++ b/components/wireless/wifi6/wpa_supplicant/src/utils/includes.h
+@@ -55 +55,3 @@ uint32_t dbg_vsnprintf_offset(char *buffer, uint32_t size, uint32_t offset, cons
+-#ifdef CONFIG_LWIP
++#if defined(CONFIG_FREERTOS_TCP)
++#include "wifi_inet.h"
++#elif defined(CONFIG_LWIP)

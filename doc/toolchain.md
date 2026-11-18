@@ -48,4 +48,4 @@ T-Head 提供的 RISC-V newlib 工具链，作为 git submodule 放在 `platform
 
 - 所有平台 C++ 已统一到 `-std=gnu++17`。[src/Common.h](../src/Common.h) 顶部 `static_assert(__cplusplus >= 201703L)` 兜底，SDK 默认值哪天又被改回 C++11/14 会编译失败而不是静默回归。
 - Green2 工具链是 GCC 12.3，**比** Dplus / D 的 10.3 / Bouffalo 的 10.2 都新。诊断信息和警告会更严，迁移代码到 Green2 时可能见到老编译器没报过的 `-Wxxx`。
-- `/opt/rtk-toolchain/` 下的两套 ASDK 是 `source project/ameba/env.sh` 第一次跑时按需下载的，跟 SDK 仓库无强绑定 —— 换机器要重做一次。
+- `/opt/rtk-toolchain/` 下的两套 ASDK 是 `source platform/ameba-rtos/env.sh` 第一次跑时按需下载的，跟 SDK 仓库无强绑定 —— 换机器要重做一次。

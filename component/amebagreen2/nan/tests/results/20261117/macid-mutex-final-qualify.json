@@ -1,0 +1,3718 @@
+{
+  "case": "macid-mutex-final-qualify",
+  "warnings": {
+    "macid_pool_full": 0,
+    "missing_peer": 0,
+    "station_add_failures": 0,
+    "malloc_failures": 0,
+    "hard_faults": 0,
+    "stack_overflows": 0,
+    "boots": 1,
+    "watchdog_boots": 0,
+    "protocol_aborts": 0,
+    "unreleased_mutex": 0
+  },
+  "phases": [
+    {
+      "phase": "block1_restart1",
+      "watchdog": false,
+      "seconds": 4.5,
+      "startedAt": "2026-11-17T07:33:35Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        3.4392169999773614
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "block1_restart2",
+      "watchdog": false,
+      "seconds": 4.5,
+      "startedAt": "2026-11-17T07:33:43Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.2761265416629612
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "block1_restart3",
+      "watchdog": false,
+      "seconds": 4.5,
+      "startedAt": "2026-11-17T07:33:51Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.048585833341349
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "block1_restart4",
+      "watchdog": false,
+      "seconds": 4.5,
+      "startedAt": "2026-11-17T07:33:59Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        1.9998980833333917
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "block1_restart5",
+      "watchdog": false,
+      "seconds": 4.4,
+      "startedAt": "2026-11-17T07:34:07Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.3598684582975693
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "block1_restart6",
+      "watchdog": false,
+      "seconds": 4.7,
+      "startedAt": "2026-11-17T07:34:15Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.2098054583766498
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "block1_restart7",
+      "watchdog": false,
+      "seconds": 4.5,
+      "startedAt": "2026-11-17T07:34:24Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.3700824583065696
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "block1_restart8",
+      "watchdog": false,
+      "seconds": 4.4,
+      "startedAt": "2026-11-17T07:34:32Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.2071306250290945
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "block2_restart1",
+      "watchdog": false,
+      "seconds": 4.5,
+      "startedAt": "2026-11-17T07:35:20Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.156584041658789
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "block2_restart2",
+      "watchdog": false,
+      "seconds": 4.6,
+      "startedAt": "2026-11-17T07:35:28Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.552993958350271
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "block2_restart3",
+      "watchdog": false,
+      "seconds": 4.5,
+      "startedAt": "2026-11-17T07:35:37Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.1927099999738857
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "block2_restart4",
+      "watchdog": false,
+      "seconds": 4.5,
+      "startedAt": "2026-11-17T07:35:45Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.491047458315734
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "block2_restart5",
+      "watchdog": false,
+      "seconds": 4.5,
+      "startedAt": "2026-11-17T07:35:53Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.2946205832995474
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "block2_restart6",
+      "watchdog": false,
+      "seconds": 4.4,
+      "startedAt": "2026-11-17T07:36:01Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.0517170417006128
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "block2_restart7",
+      "watchdog": false,
+      "seconds": 4.7,
+      "startedAt": "2026-11-17T07:36:09Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.4195597916841507
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "block2_restart8",
+      "watchdog": false,
+      "seconds": 4.5,
+      "startedAt": "2026-11-17T07:36:17Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.021302041655872
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "block3_restart1",
+      "watchdog": false,
+      "seconds": 4.5,
+      "startedAt": "2026-11-17T07:37:06Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.0062982499948703
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "block3_restart2",
+      "watchdog": false,
+      "seconds": 4.5,
+      "startedAt": "2026-11-17T07:37:14Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.2701607082854025
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "block3_restart3",
+      "watchdog": false,
+      "seconds": 4.7,
+      "startedAt": "2026-11-17T07:37:22Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.4833179583074525
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "block3_restart4",
+      "watchdog": false,
+      "seconds": 4.5,
+      "startedAt": "2026-11-17T07:37:31Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.0788468333194032
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "block3_restart5",
+      "watchdog": false,
+      "seconds": 4.5,
+      "startedAt": "2026-11-17T07:37:39Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.368674583325628
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "block3_restart6",
+      "watchdog": false,
+      "seconds": 4.4,
+      "startedAt": "2026-11-17T07:37:47Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.1437547499663197
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "block3_restart7",
+      "watchdog": false,
+      "seconds": 4.5,
+      "startedAt": "2026-11-17T07:37:55Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.360864666639827
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "block3_restart8",
+      "watchdog": false,
+      "seconds": 4.5,
+      "startedAt": "2026-11-17T07:38:03Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.2203269583405927
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "stress100",
+      "watchdog": false,
+      "seconds": 87.4,
+      "startedAt": "2026-11-17T07:38:54Z",
+      "firmware_fault": false,
+      "rounds": 100,
+      "successes": 100,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.0966853333520703,
+        2.087954208313022,
+        2.613149125012569,
+        0.8412036250228994,
+        0.47625320829683915,
+        0.5101739583187737,
+        0.5051245000213385,
+        0.6434108749963343,
+        0.5136930833687074,
+        1.0317629166529514,
+        0.9950061666895635,
+        1.0598056666203775,
+        1.0187347083701752,
+        1.0395156666636467,
+        1.035809250024613,
+        1.038726291677449,
+        1.0681660833652131,
+        1.008202666649595,
+        1.0405933749862015,
+        1.044079041632358,
+        0.5098420833237469,
+        0.5555082082864828,
+        0.44015970831969753,
+        1.0383456666604616,
+        1.0339295833255164,
+        1.03642687498359,
+        1.03388791665202,
+        1.0384642083081417,
+        1.07150708331028,
+        1.0599749166867696,
+        0.8535108332871459,
+        0.5454093749867752,
+        1.1383287083590403,
+        1.0358549583470449,
+        1.0326654999516904,
+        1.0460041666519828,
+        0.5138523749774322,
+        0.5111394166597165,
+        0.5074750416679308,
+        0.9896615000325255,
+        1.0356222083210014,
+        1.002803374954965,
+        0.5714666667045094,
+        0.4621015416341834,
+        0.9181803333340213,
+        1.1512070000171661,
+        1.036991291679442,
+        1.0396663750289008,
+        1.041318041679915,
+        1.0371609583380632,
+        1.0339845000416972,
+        1.0342779167112894,
+        1.0452525416621938,
+        1.088856875023339,
+        0.46450445835944265,
+        0.5090584583231248,
+        0.4782139166491106,
+        0.5523497083340771,
+        0.46104449999984354,
+        0.5107176666497253,
+        0.5416749166324735,
+        0.4957870416692458,
+        0.509915083355736,
+        0.5143910000333562,
+        1.0164792083087377,
+        0.5123858749866486,
+        0.5039015416405164,
+        0.47187866672175005,
+        0.5149321249919012,
+        0.5047369583044201,
+        0.4959227916551754,
+        0.5086074583232403,
+        0.5138463333132677,
+        0.9049291667179205,
+        0.6387959999847226,
+        0.49077245831722394,
+        0.5124149166513234,
+        0.5246873333235271,
+        0.9983772083069198,
+        1.0145234166411683,
+        1.563709750014823,
+        1.0327483749715611,
+        1.0337490833480842,
+        1.0441413749940693,
+        1.0322495000436902,
+        0.9497253333684057,
+        0.49730591668048874,
+        0.6169346250244416,
+        0.5612571249948815,
+        0.43541195831494406,
+        0.5423077917075716,
+        0.49734658328816295,
+        0.5024377916706726,
+        1.0361339166411199,
+        1.035534041642677,
+        1.0348644583136775,
+        1.033449999988079,
+        1.0342064583091997,
+        1.0370377500075847,
+        0.9384132082923315
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "throughput30",
+      "watchdog": false,
+      "seconds": 65.2,
+      "startedAt": "2026-11-17T07:40:25Z",
+      "firmware_fault": false,
+      "rounds": 0,
+      "successes": 0,
+      "results": [
+        {
+          "bytes": 46071808,
+          "direction": "upload",
+          "mbps": 12.24784714053102,
+          "peerBytes": 46071808,
+          "receiverSeconds": 30.093,
+          "senderSeconds": 30.01304600003641
+        },
+        {
+          "bytes": 70123520,
+          "direction": "download",
+          "mbps": 18.69441103930581,
+          "peerBytes": 70123520,
+          "receiverSeconds": 30.008335583319422,
+          "senderSeconds": 30.011
+        }
+      ],
+      "cancelled": false,
+      "ready_seconds": [
+        2.2555844583548605
+      ],
+      "failed_rounds": []
+    },
+    {
+      "phase": "post_idle_saved_pair",
+      "watchdog": false,
+      "seconds": 4.5,
+      "startedAt": "2026-11-17T07:42:15Z",
+      "firmware_fault": false,
+      "rounds": 1,
+      "successes": 1,
+      "results": [],
+      "cancelled": false,
+      "ready_seconds": [
+        2.104439749964513
+      ],
+      "failed_rounds": []
+    }
+  ],
+  "np_heap_samples": [
+    {
+      "bytes": 60748,
+      "used": 0,
+      "capacity": 12
+    },
+    {
+      "bytes": 53788,
+      "used": 2,
+      "capacity": 12
+    },
+    {
+      "bytes": 50724,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "bytes": 46736,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "bytes": 42596,
+      "used": 6,
+      "capacity": 12
+    },
+    {
+      "bytes": 45048,
+      "used": 5,
+      "capacity": 12
+    },
+    {
+      "bytes": 42424,
+      "used": 6,
+      "capacity": 12
+    },
+    {
+      "bytes": 39564,
+      "used": 7,
+      "capacity": 12
+    },
+    {
+      "bytes": 53284,
+      "used": 2,
+      "capacity": 12
+    },
+    {
+      "bytes": 50660,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "bytes": 47804,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "bytes": 45156,
+      "used": 5,
+      "capacity": 12
+    },
+    {
+      "bytes": 47788,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "bytes": 45164,
+      "used": 5,
+      "capacity": 12
+    },
+    {
+      "bytes": 42264,
+      "used": 6,
+      "capacity": 12
+    },
+    {
+      "bytes": 53208,
+      "used": 2,
+      "capacity": 12
+    },
+    {
+      "bytes": 50584,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "bytes": 46560,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "bytes": 52124,
+      "used": 2,
+      "capacity": 12
+    },
+    {
+      "bytes": 52124,
+      "used": 2,
+      "capacity": 12
+    },
+    {
+      "bytes": 54748,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 55792,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 55792,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 58628,
+      "used": 0,
+      "capacity": 12
+    },
+    {
+      "bytes": 51952,
+      "used": 2,
+      "capacity": 12
+    },
+    {
+      "bytes": 47892,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "bytes": 42416,
+      "used": 6,
+      "capacity": 12
+    },
+    {
+      "bytes": 49108,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "bytes": 44992,
+      "used": 5,
+      "capacity": 12
+    },
+    {
+      "bytes": 44748,
+      "used": 5,
+      "capacity": 12
+    },
+    {
+      "bytes": 39504,
+      "used": 7,
+      "capacity": 12
+    },
+    {
+      "bytes": 50168,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "bytes": 44916,
+      "used": 5,
+      "capacity": 12
+    },
+    {
+      "bytes": 47688,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "bytes": 47488,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "bytes": 55572,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 55572,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 58404,
+      "used": 0,
+      "capacity": 12
+    },
+    {
+      "bytes": 58404,
+      "used": 0,
+      "capacity": 12
+    },
+    {
+      "bytes": 58404,
+      "used": 0,
+      "capacity": 12
+    },
+    {
+      "bytes": 55752,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 52872,
+      "used": 2,
+      "capacity": 12
+    },
+    {
+      "bytes": 46452,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "bytes": 39300,
+      "used": 6,
+      "capacity": 12
+    },
+    {
+      "bytes": 50028,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "bytes": 43352,
+      "used": 5,
+      "capacity": 12
+    },
+    {
+      "bytes": 39296,
+      "used": 7,
+      "capacity": 12
+    },
+    {
+      "bytes": 46184,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "bytes": 42104,
+      "used": 6,
+      "capacity": 12
+    },
+    {
+      "bytes": 49976,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "bytes": 44696,
+      "used": 5,
+      "capacity": 12
+    },
+    {
+      "bytes": 39248,
+      "used": 7,
+      "capacity": 12
+    },
+    {
+      "bytes": 46132,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "bytes": 46252,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "bytes": 54328,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 54328,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 55372,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 55372,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 52732,
+      "used": 2,
+      "capacity": 12
+    },
+    {
+      "bytes": 49824,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "bytes": 45812,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "bytes": 48580,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "bytes": 48548,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "bytes": 54236,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 54204,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 54236,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 54084,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 54084,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 54116,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 54236,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 50044,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "bytes": 48644,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "bytes": 54096,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 53996,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 54100,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 54100,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 54100,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 54100,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 54220,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 54220,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 55272,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 55272,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "bytes": 48596,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "bytes": 52612,
+      "used": 2,
+      "capacity": 12
+    }
+  ],
+  "ap_heap_samples": [
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80236,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    20320,
+    20320,
+    19200,
+    20320,
+    20320,
+    20320,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248,
+    80248
+  ],
+  "queue_counters": [
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    },
+    {
+      "rxdrop": 0,
+      "txdrop": 0
+    }
+  ],
+  "peer_events": [
+    {
+      "ms": 152,
+      "event": "reset",
+      "value": "RTS"
+    },
+    {
+      "ms": 181,
+      "event": "phase",
+      "value": "preflight"
+    },
+    {
+      "ms": 181,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 218,
+      "event": "boot",
+      "previous_live": 0
+    },
+    {
+      "ms": 2230,
+      "event": "np_heap",
+      "bytes": 60748,
+      "used": 0,
+      "capacity": 12
+    },
+    {
+      "ms": 4063,
+      "event": "phase",
+      "value": "block1_restart1"
+    },
+    {
+      "ms": 4063,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 7212,
+      "event": "alloc",
+      "peer": "peer1",
+      "macid": 9,
+      "live": 1
+    },
+    {
+      "ms": 7841,
+      "event": "alloc",
+      "peer": "peer2",
+      "macid": 10,
+      "live": 2
+    },
+    {
+      "ms": 8240,
+      "event": "np_heap",
+      "bytes": 53788,
+      "used": 2,
+      "capacity": 12
+    },
+    {
+      "ms": 8862,
+      "event": "pong"
+    },
+    {
+      "ms": 9685,
+      "event": "phase",
+      "value": "block1_restart1 done"
+    },
+    {
+      "ms": 9686,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 12059,
+      "event": "phase",
+      "value": "block1_restart2"
+    },
+    {
+      "ms": 12059,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 13912,
+      "event": "alloc",
+      "peer": "peer3",
+      "macid": 11,
+      "live": 3
+    },
+    {
+      "ms": 14232,
+      "event": "np_heap",
+      "bytes": 50724,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "ms": 14275,
+      "event": "alloc",
+      "peer": "peer4",
+      "macid": 12,
+      "live": 4
+    },
+    {
+      "ms": 15682,
+      "event": "pong"
+    },
+    {
+      "ms": 16237,
+      "event": "np_heap",
+      "bytes": 46736,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "ms": 17706,
+      "event": "phase",
+      "value": "block1_restart2 done"
+    },
+    {
+      "ms": 17706,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 20135,
+      "event": "phase",
+      "value": "block1_restart3"
+    },
+    {
+      "ms": 20135,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 21794,
+      "event": "alloc",
+      "peer": "peer5",
+      "macid": 13,
+      "live": 5
+    },
+    {
+      "ms": 22131,
+      "event": "alloc",
+      "peer": "peer6",
+      "macid": 14,
+      "live": 6
+    },
+    {
+      "ms": 22236,
+      "event": "np_heap",
+      "bytes": 42596,
+      "used": 6,
+      "capacity": 12
+    },
+    {
+      "ms": 23538,
+      "event": "pong"
+    },
+    {
+      "ms": 24243,
+      "event": "free",
+      "peer": "peer1",
+      "lifetime_ms": 17031,
+      "live": 5
+    },
+    {
+      "ms": 24243,
+      "event": "np_heap",
+      "bytes": 45048,
+      "used": 5,
+      "capacity": 12
+    },
+    {
+      "ms": 25770,
+      "event": "phase",
+      "value": "block1_restart3 done"
+    },
+    {
+      "ms": 25770,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 28080,
+      "event": "phase",
+      "value": "block1_restart4"
+    },
+    {
+      "ms": 28081,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 29768,
+      "event": "alloc",
+      "peer": "peer7",
+      "macid": 9,
+      "live": 6
+    },
+    {
+      "ms": 30238,
+      "event": "np_heap",
+      "bytes": 42424,
+      "used": 6,
+      "capacity": 12
+    },
+    {
+      "ms": 30381,
+      "event": "alloc",
+      "peer": "peer8",
+      "macid": 15,
+      "live": 7
+    },
+    {
+      "ms": 31396,
+      "event": "pong"
+    },
+    {
+      "ms": 32244,
+      "event": "np_heap",
+      "bytes": 39564,
+      "used": 7,
+      "capacity": 12
+    },
+    {
+      "ms": 33648,
+      "event": "phase",
+      "value": "block1_restart4 done"
+    },
+    {
+      "ms": 33648,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 36142,
+      "event": "phase",
+      "value": "block1_restart5"
+    },
+    {
+      "ms": 36142,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 36252,
+      "event": "free",
+      "peer": "peer2",
+      "lifetime_ms": 28411,
+      "live": 6
+    },
+    {
+      "ms": 36252,
+      "event": "free",
+      "peer": "peer3",
+      "lifetime_ms": 22340,
+      "live": 5
+    },
+    {
+      "ms": 36252,
+      "event": "free",
+      "peer": "peer4",
+      "lifetime_ms": 21977,
+      "live": 4
+    },
+    {
+      "ms": 36252,
+      "event": "free",
+      "peer": "peer5",
+      "lifetime_ms": 14458,
+      "live": 3
+    },
+    {
+      "ms": 36252,
+      "event": "free",
+      "peer": "peer6",
+      "lifetime_ms": 14121,
+      "live": 2
+    },
+    {
+      "ms": 36252,
+      "event": "np_heap",
+      "bytes": 53284,
+      "used": 2,
+      "capacity": 12
+    },
+    {
+      "ms": 37683,
+      "event": "alloc",
+      "peer": "peer9",
+      "macid": 10,
+      "live": 3
+    },
+    {
+      "ms": 38254,
+      "event": "np_heap",
+      "bytes": 50660,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "ms": 38546,
+      "event": "alloc",
+      "peer": "peer10",
+      "macid": 11,
+      "live": 4
+    },
+    {
+      "ms": 39794,
+      "event": "pong"
+    },
+    {
+      "ms": 40257,
+      "event": "np_heap",
+      "bytes": 47804,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "ms": 41657,
+      "event": "phase",
+      "value": "block1_restart5 done"
+    },
+    {
+      "ms": 41657,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 44121,
+      "event": "phase",
+      "value": "block1_restart6"
+    },
+    {
+      "ms": 44121,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 45886,
+      "event": "alloc",
+      "peer": "peer11",
+      "macid": 12,
+      "live": 5
+    },
+    {
+      "ms": 46265,
+      "event": "np_heap",
+      "bytes": 45156,
+      "used": 5,
+      "capacity": 12
+    },
+    {
+      "ms": 46415,
+      "event": "alloc",
+      "peer": "peer12",
+      "macid": 13,
+      "live": 6
+    },
+    {
+      "ms": 47670,
+      "event": "pong"
+    },
+    {
+      "ms": 48249,
+      "event": "free",
+      "peer": "peer7",
+      "lifetime_ms": 18481,
+      "live": 5
+    },
+    {
+      "ms": 48249,
+      "event": "free",
+      "peer": "peer8",
+      "lifetime_ms": 17868,
+      "live": 4
+    },
+    {
+      "ms": 48249,
+      "event": "np_heap",
+      "bytes": 47788,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "ms": 49890,
+      "event": "phase",
+      "value": "block1_restart6 done"
+    },
+    {
+      "ms": 49891,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 52382,
+      "event": "phase",
+      "value": "block1_restart7"
+    },
+    {
+      "ms": 52383,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 53930,
+      "event": "alloc",
+      "peer": "peer13",
+      "macid": 9,
+      "live": 5
+    },
+    {
+      "ms": 54248,
+      "event": "np_heap",
+      "bytes": 45164,
+      "used": 5,
+      "capacity": 12
+    },
+    {
+      "ms": 54797,
+      "event": "alloc",
+      "peer": "peer14",
+      "macid": 14,
+      "live": 6
+    },
+    {
+      "ms": 56045,
+      "event": "pong"
+    },
+    {
+      "ms": 56251,
+      "event": "np_heap",
+      "bytes": 42264,
+      "used": 6,
+      "capacity": 12
+    },
+    {
+      "ms": 57928,
+      "event": "phase",
+      "value": "block1_restart7 done"
+    },
+    {
+      "ms": 57928,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 60248,
+      "event": "free",
+      "peer": "peer9",
+      "lifetime_ms": 22565,
+      "live": 5
+    },
+    {
+      "ms": 60248,
+      "event": "free",
+      "peer": "peer10",
+      "lifetime_ms": 21702,
+      "live": 4
+    },
+    {
+      "ms": 60248,
+      "event": "free",
+      "peer": "peer11",
+      "lifetime_ms": 14362,
+      "live": 3
+    },
+    {
+      "ms": 60248,
+      "event": "free",
+      "peer": "peer12",
+      "lifetime_ms": 13833,
+      "live": 2
+    },
+    {
+      "ms": 60248,
+      "event": "np_heap",
+      "bytes": 53208,
+      "used": 2,
+      "capacity": 12
+    },
+    {
+      "ms": 60382,
+      "event": "phase",
+      "value": "block1_restart8"
+    },
+    {
+      "ms": 60382,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 61937,
+      "event": "alloc",
+      "peer": "peer15",
+      "macid": 10,
+      "live": 3
+    },
+    {
+      "ms": 62254,
+      "event": "np_heap",
+      "bytes": 50584,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "ms": 62388,
+      "event": "alloc",
+      "peer": "peer16",
+      "macid": 11,
+      "live": 4
+    },
+    {
+      "ms": 63906,
+      "event": "pong"
+    },
+    {
+      "ms": 64255,
+      "event": "np_heap",
+      "bytes": 46560,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "ms": 65845,
+      "event": "phase",
+      "value": "block1_restart8 done"
+    },
+    {
+      "ms": 65846,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 65882,
+      "event": "phase",
+      "value": "block1 idle 40 seconds"
+    },
+    {
+      "ms": 65883,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 72249,
+      "event": "free",
+      "peer": "peer13",
+      "lifetime_ms": 18319,
+      "live": 3
+    },
+    {
+      "ms": 72249,
+      "event": "free",
+      "peer": "peer14",
+      "lifetime_ms": 17452,
+      "live": 2
+    },
+    {
+      "ms": 72249,
+      "event": "np_heap",
+      "bytes": 52124,
+      "used": 2,
+      "capacity": 12
+    },
+    {
+      "ms": 82256,
+      "event": "np_heap",
+      "bytes": 52124,
+      "used": 2,
+      "capacity": 12
+    },
+    {
+      "ms": 84252,
+      "event": "free",
+      "peer": "peer15",
+      "lifetime_ms": 22315,
+      "live": 1
+    },
+    {
+      "ms": 84252,
+      "event": "np_heap",
+      "bytes": 54748,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 94249,
+      "event": "np_heap",
+      "bytes": 55792,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 104249,
+      "event": "np_heap",
+      "bytes": 55792,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 108245,
+      "event": "free",
+      "peer": "peer16",
+      "lifetime_ms": 45857,
+      "live": 0
+    },
+    {
+      "ms": 108245,
+      "event": "np_heap",
+      "bytes": 58628,
+      "used": 0,
+      "capacity": 12
+    },
+    {
+      "ms": 109293,
+      "event": "phase",
+      "value": "block2_restart1"
+    },
+    {
+      "ms": 109293,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 110762,
+      "event": "alloc",
+      "peer": "peer17",
+      "macid": 9,
+      "live": 1
+    },
+    {
+      "ms": 111432,
+      "event": "alloc",
+      "peer": "peer18",
+      "macid": 10,
+      "live": 2
+    },
+    {
+      "ms": 112251,
+      "event": "np_heap",
+      "bytes": 51952,
+      "used": 2,
+      "capacity": 12
+    },
+    {
+      "ms": 112661,
+      "event": "pong"
+    },
+    {
+      "ms": 114725,
+      "event": "phase",
+      "value": "block2_restart1 done"
+    },
+    {
+      "ms": 114725,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 117172,
+      "event": "phase",
+      "value": "block2_restart2"
+    },
+    {
+      "ms": 117172,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 118897,
+      "event": "alloc",
+      "peer": "peer19",
+      "macid": 11,
+      "live": 3
+    },
+    {
+      "ms": 119654,
+      "event": "alloc",
+      "peer": "peer20",
+      "macid": 12,
+      "live": 4
+    },
+    {
+      "ms": 120255,
+      "event": "np_heap",
+      "bytes": 47892,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "ms": 121057,
+      "event": "pong"
+    },
+    {
+      "ms": 122890,
+      "event": "phase",
+      "value": "block2_restart2 done"
+    },
+    {
+      "ms": 122890,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 125373,
+      "event": "phase",
+      "value": "block2_restart3"
+    },
+    {
+      "ms": 125373,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 127140,
+      "event": "alloc",
+      "peer": "peer21",
+      "macid": 13,
+      "live": 5
+    },
+    {
+      "ms": 127668,
+      "event": "alloc",
+      "peer": "peer22",
+      "macid": 14,
+      "live": 6
+    },
+    {
+      "ms": 128263,
+      "event": "np_heap",
+      "bytes": 42416,
+      "used": 6,
+      "capacity": 12
+    },
+    {
+      "ms": 128922,
+      "event": "pong"
+    },
+    {
+      "ms": 130954,
+      "event": "phase",
+      "value": "block2_restart3 done"
+    },
+    {
+      "ms": 130954,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 132262,
+      "event": "free",
+      "peer": "peer17",
+      "lifetime_ms": 21500,
+      "live": 5
+    },
+    {
+      "ms": 132262,
+      "event": "free",
+      "peer": "peer18",
+      "lifetime_ms": 20830,
+      "live": 4
+    },
+    {
+      "ms": 132262,
+      "event": "free",
+      "peer": "peer19",
+      "lifetime_ms": 13365,
+      "live": 3
+    },
+    {
+      "ms": 132262,
+      "event": "np_heap",
+      "bytes": 49108,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "ms": 133442,
+      "event": "phase",
+      "value": "block2_restart4"
+    },
+    {
+      "ms": 133443,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 135147,
+      "event": "alloc",
+      "peer": "peer23",
+      "macid": 9,
+      "live": 4
+    },
+    {
+      "ms": 136073,
+      "event": "alloc",
+      "peer": "peer24",
+      "macid": 10,
+      "live": 5
+    },
+    {
+      "ms": 136262,
+      "event": "np_heap",
+      "bytes": 44992,
+      "used": 5,
+      "capacity": 12
+    },
+    {
+      "ms": 137310,
+      "event": "pong"
+    },
+    {
+      "ms": 138975,
+      "event": "phase",
+      "value": "block2_restart4 done"
+    },
+    {
+      "ms": 138975,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 141517,
+      "event": "phase",
+      "value": "block2_restart5"
+    },
+    {
+      "ms": 141517,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 143402,
+      "event": "alloc",
+      "peer": "peer25",
+      "macid": 11,
+      "live": 6
+    },
+    {
+      "ms": 143749,
+      "event": "alloc",
+      "peer": "peer26",
+      "macid": 15,
+      "live": 7
+    },
+    {
+      "ms": 144281,
+      "event": "free",
+      "peer": "peer20",
+      "lifetime_ms": 24627,
+      "live": 6
+    },
+    {
+      "ms": 144281,
+      "event": "free",
+      "peer": "peer21",
+      "lifetime_ms": 17141,
+      "live": 5
+    },
+    {
+      "ms": 145175,
+      "event": "pong"
+    },
+    {
+      "ms": 146278,
+      "event": "np_heap",
+      "bytes": 44748,
+      "used": 5,
+      "capacity": 12
+    },
+    {
+      "ms": 147121,
+      "event": "phase",
+      "value": "block2_restart5 done"
+    },
+    {
+      "ms": 147121,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 149633,
+      "event": "phase",
+      "value": "block2_restart6"
+    },
+    {
+      "ms": 149633,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 151217,
+      "event": "alloc",
+      "peer": "peer27",
+      "macid": 12,
+      "live": 6
+    },
+    {
+      "ms": 151623,
+      "event": "alloc",
+      "peer": "peer28",
+      "macid": 13,
+      "live": 7
+    },
+    {
+      "ms": 152283,
+      "event": "np_heap",
+      "bytes": 39504,
+      "used": 7,
+      "capacity": 12
+    },
+    {
+      "ms": 153037,
+      "event": "pong"
+    },
+    {
+      "ms": 155146,
+      "event": "phase",
+      "value": "block2_restart6 done"
+    },
+    {
+      "ms": 155146,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 156276,
+      "event": "free",
+      "peer": "peer22",
+      "lifetime_ms": 28608,
+      "live": 6
+    },
+    {
+      "ms": 156276,
+      "event": "free",
+      "peer": "peer23",
+      "lifetime_ms": 21129,
+      "live": 5
+    },
+    {
+      "ms": 156276,
+      "event": "free",
+      "peer": "peer24",
+      "lifetime_ms": 20203,
+      "live": 4
+    },
+    {
+      "ms": 156276,
+      "event": "free",
+      "peer": "peer25",
+      "lifetime_ms": 12874,
+      "live": 3
+    },
+    {
+      "ms": 156276,
+      "event": "np_heap",
+      "bytes": 50168,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "ms": 157704,
+      "event": "phase",
+      "value": "block2_restart7"
+    },
+    {
+      "ms": 157705,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 159630,
+      "event": "alloc",
+      "peer": "peer29",
+      "macid": 9,
+      "live": 4
+    },
+    {
+      "ms": 160173,
+      "event": "alloc",
+      "peer": "peer30",
+      "macid": 10,
+      "live": 5
+    },
+    {
+      "ms": 160273,
+      "event": "np_heap",
+      "bytes": 44916,
+      "used": 5,
+      "capacity": 12
+    },
+    {
+      "ms": 161415,
+      "event": "pong"
+    },
+    {
+      "ms": 163499,
+      "event": "phase",
+      "value": "block2_restart7 done"
+    },
+    {
+      "ms": 163499,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 165992,
+      "event": "phase",
+      "value": "block2_restart8"
+    },
+    {
+      "ms": 165992,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 167508,
+      "event": "alloc",
+      "peer": "peer31",
+      "macid": 11,
+      "live": 6
+    },
+    {
+      "ms": 167871,
+      "event": "alloc",
+      "peer": "peer32",
+      "macid": 14,
+      "live": 7
+    },
+    {
+      "ms": 168275,
+      "event": "free",
+      "peer": "peer26",
+      "lifetime_ms": 24526,
+      "live": 6
+    },
+    {
+      "ms": 168275,
+      "event": "free",
+      "peer": "peer27",
+      "lifetime_ms": 17058,
+      "live": 5
+    },
+    {
+      "ms": 168275,
+      "event": "free",
+      "peer": "peer28",
+      "lifetime_ms": 16652,
+      "live": 4
+    },
+    {
+      "ms": 168275,
+      "event": "np_heap",
+      "bytes": 47688,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "ms": 169283,
+      "event": "pong"
+    },
+    {
+      "ms": 171488,
+      "event": "phase",
+      "value": "block2_restart8 done"
+    },
+    {
+      "ms": 171489,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 171525,
+      "event": "phase",
+      "value": "block2 idle 40 seconds"
+    },
+    {
+      "ms": 171525,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 178292,
+      "event": "np_heap",
+      "bytes": 47488,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "ms": 180278,
+      "event": "free",
+      "peer": "peer29",
+      "lifetime_ms": 20648,
+      "live": 3
+    },
+    {
+      "ms": 180278,
+      "event": "free",
+      "peer": "peer30",
+      "lifetime_ms": 20105,
+      "live": 2
+    },
+    {
+      "ms": 180278,
+      "event": "free",
+      "peer": "peer31",
+      "lifetime_ms": 12770,
+      "live": 1
+    },
+    {
+      "ms": 180278,
+      "event": "np_heap",
+      "bytes": 55572,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 190278,
+      "event": "np_heap",
+      "bytes": 55572,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 192276,
+      "event": "free",
+      "peer": "peer32",
+      "lifetime_ms": 24405,
+      "live": 0
+    },
+    {
+      "ms": 192276,
+      "event": "np_heap",
+      "bytes": 58404,
+      "used": 0,
+      "capacity": 12
+    },
+    {
+      "ms": 202281,
+      "event": "np_heap",
+      "bytes": 58404,
+      "used": 0,
+      "capacity": 12
+    },
+    {
+      "ms": 212275,
+      "event": "np_heap",
+      "bytes": 58404,
+      "used": 0,
+      "capacity": 12
+    },
+    {
+      "ms": 214733,
+      "event": "phase",
+      "value": "block3_restart1"
+    },
+    {
+      "ms": 214734,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 216270,
+      "event": "alloc",
+      "peer": "peer33",
+      "macid": 9,
+      "live": 1
+    },
+    {
+      "ms": 216302,
+      "event": "np_heap",
+      "bytes": 55752,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 216620,
+      "event": "alloc",
+      "peer": "peer34",
+      "macid": 10,
+      "live": 2
+    },
+    {
+      "ms": 218043,
+      "event": "pong"
+    },
+    {
+      "ms": 218301,
+      "event": "np_heap",
+      "bytes": 52872,
+      "used": 2,
+      "capacity": 12
+    },
+    {
+      "ms": 220361,
+      "event": "phase",
+      "value": "block3_restart1 done"
+    },
+    {
+      "ms": 220361,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 222844,
+      "event": "phase",
+      "value": "block3_restart2"
+    },
+    {
+      "ms": 222844,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 224409,
+      "event": "alloc",
+      "peer": "peer35",
+      "macid": 11,
+      "live": 3
+    },
+    {
+      "ms": 224899,
+      "event": "alloc",
+      "peer": "peer36",
+      "macid": 12,
+      "live": 4
+    },
+    {
+      "ms": 226301,
+      "event": "np_heap",
+      "bytes": 46452,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "ms": 226432,
+      "event": "pong"
+    },
+    {
+      "ms": 228418,
+      "event": "phase",
+      "value": "block3_restart2 done"
+    },
+    {
+      "ms": 228419,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 230964,
+      "event": "phase",
+      "value": "block3_restart3"
+    },
+    {
+      "ms": 230964,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 232660,
+      "event": "alloc",
+      "peer": "peer37",
+      "macid": 13,
+      "live": 5
+    },
+    {
+      "ms": 233570,
+      "event": "alloc",
+      "peer": "peer38",
+      "macid": 14,
+      "live": 6
+    },
+    {
+      "ms": 234300,
+      "event": "np_heap",
+      "bytes": 39300,
+      "used": 6,
+      "capacity": 12
+    },
+    {
+      "ms": 234835,
+      "event": "pong"
+    },
+    {
+      "ms": 236818,
+      "event": "phase",
+      "value": "block3_restart3 done"
+    },
+    {
+      "ms": 236818,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 239312,
+      "event": "phase",
+      "value": "block3_restart4"
+    },
+    {
+      "ms": 239313,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 240298,
+      "event": "free",
+      "peer": "peer33",
+      "lifetime_ms": 24028,
+      "live": 5
+    },
+    {
+      "ms": 240298,
+      "event": "free",
+      "peer": "peer34",
+      "lifetime_ms": 23678,
+      "live": 4
+    },
+    {
+      "ms": 240298,
+      "event": "free",
+      "peer": "peer35",
+      "lifetime_ms": 15889,
+      "live": 3
+    },
+    {
+      "ms": 240298,
+      "event": "np_heap",
+      "bytes": 50028,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "ms": 240855,
+      "event": "alloc",
+      "peer": "peer39",
+      "macid": 9,
+      "live": 4
+    },
+    {
+      "ms": 241439,
+      "event": "alloc",
+      "peer": "peer40",
+      "macid": 10,
+      "live": 5
+    },
+    {
+      "ms": 242313,
+      "event": "np_heap",
+      "bytes": 43352,
+      "used": 5,
+      "capacity": 12
+    },
+    {
+      "ms": 242686,
+      "event": "pong"
+    },
+    {
+      "ms": 244877,
+      "event": "phase",
+      "value": "block3_restart4 done"
+    },
+    {
+      "ms": 244877,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 247333,
+      "event": "phase",
+      "value": "block3_restart5"
+    },
+    {
+      "ms": 247334,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 248913,
+      "event": "alloc",
+      "peer": "peer41",
+      "macid": 11,
+      "live": 6
+    },
+    {
+      "ms": 249831,
+      "event": "alloc",
+      "peer": "peer42",
+      "macid": 15,
+      "live": 7
+    },
+    {
+      "ms": 250319,
+      "event": "np_heap",
+      "bytes": 39296,
+      "used": 7,
+      "capacity": 12
+    },
+    {
+      "ms": 251075,
+      "event": "pong"
+    },
+    {
+      "ms": 252306,
+      "event": "free",
+      "peer": "peer36",
+      "lifetime_ms": 27407,
+      "live": 6
+    },
+    {
+      "ms": 252306,
+      "event": "free",
+      "peer": "peer37",
+      "lifetime_ms": 19646,
+      "live": 5
+    },
+    {
+      "ms": 252306,
+      "event": "free",
+      "peer": "peer38",
+      "lifetime_ms": 18736,
+      "live": 4
+    },
+    {
+      "ms": 252306,
+      "event": "np_heap",
+      "bytes": 46184,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "ms": 252932,
+      "event": "phase",
+      "value": "block3_restart5 done"
+    },
+    {
+      "ms": 252932,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 255443,
+      "event": "phase",
+      "value": "block3_restart6"
+    },
+    {
+      "ms": 255443,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 257161,
+      "event": "alloc",
+      "peer": "peer43",
+      "macid": 12,
+      "live": 5
+    },
+    {
+      "ms": 257540,
+      "event": "alloc",
+      "peer": "peer44",
+      "macid": 13,
+      "live": 6
+    },
+    {
+      "ms": 258311,
+      "event": "np_heap",
+      "bytes": 42104,
+      "used": 6,
+      "capacity": 12
+    },
+    {
+      "ms": 258903,
+      "event": "pong"
+    },
+    {
+      "ms": 260996,
+      "event": "phase",
+      "value": "block3_restart6 done"
+    },
+    {
+      "ms": 260996,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 263455,
+      "event": "phase",
+      "value": "block3_restart7"
+    },
+    {
+      "ms": 263455,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 264315,
+      "event": "free",
+      "peer": "peer39",
+      "lifetime_ms": 23460,
+      "live": 5
+    },
+    {
+      "ms": 264315,
+      "event": "free",
+      "peer": "peer40",
+      "lifetime_ms": 22876,
+      "live": 4
+    },
+    {
+      "ms": 264315,
+      "event": "free",
+      "peer": "peer41",
+      "lifetime_ms": 15402,
+      "live": 3
+    },
+    {
+      "ms": 264315,
+      "event": "np_heap",
+      "bytes": 49976,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "ms": 265187,
+      "event": "alloc",
+      "peer": "peer45",
+      "macid": 9,
+      "live": 4
+    },
+    {
+      "ms": 266080,
+      "event": "alloc",
+      "peer": "peer46",
+      "macid": 10,
+      "live": 5
+    },
+    {
+      "ms": 266311,
+      "event": "np_heap",
+      "bytes": 44696,
+      "used": 5,
+      "capacity": 12
+    },
+    {
+      "ms": 267293,
+      "event": "pong"
+    },
+    {
+      "ms": 269099,
+      "event": "phase",
+      "value": "block3_restart7 done"
+    },
+    {
+      "ms": 269099,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 271616,
+      "event": "phase",
+      "value": "block3_restart8"
+    },
+    {
+      "ms": 271616,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 273171,
+      "event": "alloc",
+      "peer": "peer47",
+      "macid": 11,
+      "live": 6
+    },
+    {
+      "ms": 273949,
+      "event": "alloc",
+      "peer": "peer48",
+      "macid": 14,
+      "live": 7
+    },
+    {
+      "ms": 274315,
+      "event": "np_heap",
+      "bytes": 39248,
+      "used": 7,
+      "capacity": 12
+    },
+    {
+      "ms": 275193,
+      "event": "pong"
+    },
+    {
+      "ms": 276315,
+      "event": "free",
+      "peer": "peer42",
+      "lifetime_ms": 26484,
+      "live": 6
+    },
+    {
+      "ms": 276315,
+      "event": "free",
+      "peer": "peer43",
+      "lifetime_ms": 19154,
+      "live": 5
+    },
+    {
+      "ms": 276315,
+      "event": "free",
+      "peer": "peer44",
+      "lifetime_ms": 18775,
+      "live": 4
+    },
+    {
+      "ms": 276315,
+      "event": "np_heap",
+      "bytes": 46132,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "ms": 277184,
+      "event": "phase",
+      "value": "block3_restart8 done"
+    },
+    {
+      "ms": 277185,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 277219,
+      "event": "phase",
+      "value": "block3 idle 40 seconds"
+    },
+    {
+      "ms": 277220,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 286314,
+      "event": "np_heap",
+      "bytes": 46252,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "ms": 288313,
+      "event": "free",
+      "peer": "peer45",
+      "lifetime_ms": 23126,
+      "live": 3
+    },
+    {
+      "ms": 288313,
+      "event": "free",
+      "peer": "peer46",
+      "lifetime_ms": 22233,
+      "live": 2
+    },
+    {
+      "ms": 288313,
+      "event": "free",
+      "peer": "peer47",
+      "lifetime_ms": 15142,
+      "live": 1
+    },
+    {
+      "ms": 288313,
+      "event": "np_heap",
+      "bytes": 54328,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 298315,
+      "event": "np_heap",
+      "bytes": 54328,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 308312,
+      "event": "np_heap",
+      "bytes": 55372,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 318313,
+      "event": "np_heap",
+      "bytes": 55372,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 322623,
+      "event": "phase",
+      "value": "stress100"
+    },
+    {
+      "ms": 322623,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 324187,
+      "event": "alloc",
+      "peer": "peer49",
+      "macid": 9,
+      "live": 2
+    },
+    {
+      "ms": 324313,
+      "event": "free",
+      "peer": "peer48",
+      "lifetime_ms": 50364,
+      "live": 1
+    },
+    {
+      "ms": 324536,
+      "event": "alloc",
+      "peer": "peer50",
+      "macid": 10,
+      "live": 2
+    },
+    {
+      "ms": 326040,
+      "event": "pong"
+    },
+    {
+      "ms": 326331,
+      "event": "np_heap",
+      "bytes": 52732,
+      "used": 2,
+      "capacity": 12
+    },
+    {
+      "ms": 326896,
+      "event": "alloc",
+      "peer": "peer51",
+      "macid": 11,
+      "live": 3
+    },
+    {
+      "ms": 328133,
+      "event": "pong"
+    },
+    {
+      "ms": 328332,
+      "event": "np_heap",
+      "bytes": 49824,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "ms": 328990,
+      "event": "alloc",
+      "peer": "peer52",
+      "macid": 12,
+      "live": 4
+    },
+    {
+      "ms": 330330,
+      "event": "np_heap",
+      "bytes": 45812,
+      "used": 4,
+      "capacity": 12
+    },
+    {
+      "ms": 330774,
+      "event": "pong"
+    },
+    {
+      "ms": 331681,
+      "event": "pong"
+    },
+    {
+      "ms": 332165,
+      "event": "pong"
+    },
+    {
+      "ms": 332687,
+      "event": "pong"
+    },
+    {
+      "ms": 333209,
+      "event": "pong"
+    },
+    {
+      "ms": 333861,
+      "event": "pong"
+    },
+    {
+      "ms": 334386,
+      "event": "pong"
+    },
+    {
+      "ms": 335478,
+      "event": "pong"
+    },
+    {
+      "ms": 336348,
+      "event": "free",
+      "peer": "peer49",
+      "lifetime_ms": 12161,
+      "live": 3
+    },
+    {
+      "ms": 336348,
+      "event": "np_heap",
+      "bytes": 48580,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "ms": 336486,
+      "event": "pong"
+    },
+    {
+      "ms": 337530,
+      "event": "pong"
+    },
+    {
+      "ms": 338574,
+      "event": "pong"
+    },
+    {
+      "ms": 339624,
+      "event": "pong"
+    },
+    {
+      "ms": 340678,
+      "event": "pong"
+    },
+    {
+      "ms": 341723,
+      "event": "pong"
+    },
+    {
+      "ms": 342773,
+      "event": "pong"
+    },
+    {
+      "ms": 343820,
+      "event": "pong"
+    },
+    {
+      "ms": 344872,
+      "event": "pong"
+    },
+    {
+      "ms": 345919,
+      "event": "pong"
+    },
+    {
+      "ms": 346343,
+      "event": "np_heap",
+      "bytes": 48548,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "ms": 346441,
+      "event": "pong"
+    },
+    {
+      "ms": 347012,
+      "event": "pong"
+    },
+    {
+      "ms": 347496,
+      "event": "pong"
+    },
+    {
+      "ms": 348362,
+      "event": "free",
+      "peer": "peer50",
+      "lifetime_ms": 23826,
+      "live": 2
+    },
+    {
+      "ms": 348362,
+      "event": "free",
+      "peer": "peer51",
+      "lifetime_ms": 21466,
+      "live": 1
+    },
+    {
+      "ms": 348362,
+      "event": "np_heap",
+      "bytes": 54236,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 348535,
+      "event": "pong"
+    },
+    {
+      "ms": 349584,
+      "event": "pong"
+    },
+    {
+      "ms": 350637,
+      "event": "pong"
+    },
+    {
+      "ms": 351681,
+      "event": "pong"
+    },
+    {
+      "ms": 352732,
+      "event": "pong"
+    },
+    {
+      "ms": 353789,
+      "event": "pong"
+    },
+    {
+      "ms": 354880,
+      "event": "pong"
+    },
+    {
+      "ms": 355747,
+      "event": "pong"
+    },
+    {
+      "ms": 356281,
+      "event": "pong"
+    },
+    {
+      "ms": 357453,
+      "event": "pong"
+    },
+    {
+      "ms": 358379,
+      "event": "np_heap",
+      "bytes": 54204,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 358508,
+      "event": "pong"
+    },
+    {
+      "ms": 359547,
+      "event": "pong"
+    },
+    {
+      "ms": 360599,
+      "event": "pong"
+    },
+    {
+      "ms": 361123,
+      "event": "pong"
+    },
+    {
+      "ms": 361649,
+      "event": "pong"
+    },
+    {
+      "ms": 362209,
+      "event": "pong"
+    },
+    {
+      "ms": 363222,
+      "event": "pong"
+    },
+    {
+      "ms": 364262,
+      "event": "pong"
+    },
+    {
+      "ms": 365321,
+      "event": "pong"
+    },
+    {
+      "ms": 365890,
+      "event": "pong"
+    },
+    {
+      "ms": 366367,
+      "event": "pong"
+    },
+    {
+      "ms": 367290,
+      "event": "pong"
+    },
+    {
+      "ms": 368395,
+      "event": "np_heap",
+      "bytes": 54236,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 368456,
+      "event": "pong"
+    },
+    {
+      "ms": 369510,
+      "event": "pong"
+    },
+    {
+      "ms": 370564,
+      "event": "pong"
+    },
+    {
+      "ms": 371602,
+      "event": "pong"
+    },
+    {
+      "ms": 372659,
+      "event": "pong"
+    },
+    {
+      "ms": 373703,
+      "event": "pong"
+    },
+    {
+      "ms": 374758,
+      "event": "pong"
+    },
+    {
+      "ms": 375796,
+      "event": "pong"
+    },
+    {
+      "ms": 376897,
+      "event": "pong"
+    },
+    {
+      "ms": 377375,
+      "event": "pong"
+    },
+    {
+      "ms": 377938,
+      "event": "pong"
+    },
+    {
+      "ms": 378419,
+      "event": "np_heap",
+      "bytes": 54084,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 378424,
+      "event": "pong"
+    },
+    {
+      "ms": 378995,
+      "event": "pong"
+    },
+    {
+      "ms": 379471,
+      "event": "pong"
+    },
+    {
+      "ms": 379999,
+      "event": "pong"
+    },
+    {
+      "ms": 380528,
+      "event": "pong"
+    },
+    {
+      "ms": 381054,
+      "event": "pong"
+    },
+    {
+      "ms": 381571,
+      "event": "pong"
+    },
+    {
+      "ms": 382114,
+      "event": "pong"
+    },
+    {
+      "ms": 383141,
+      "event": "pong"
+    },
+    {
+      "ms": 383671,
+      "event": "pong"
+    },
+    {
+      "ms": 384230,
+      "event": "pong"
+    },
+    {
+      "ms": 384713,
+      "event": "pong"
+    },
+    {
+      "ms": 385243,
+      "event": "pong"
+    },
+    {
+      "ms": 385764,
+      "event": "pong"
+    },
+    {
+      "ms": 386289,
+      "event": "pong"
+    },
+    {
+      "ms": 386815,
+      "event": "pong"
+    },
+    {
+      "ms": 387336,
+      "event": "pong"
+    },
+    {
+      "ms": 388263,
+      "event": "pong"
+    },
+    {
+      "ms": 388437,
+      "event": "np_heap",
+      "bytes": 54084,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 388937,
+      "event": "pong"
+    },
+    {
+      "ms": 389433,
+      "event": "pong"
+    },
+    {
+      "ms": 389960,
+      "event": "pong"
+    },
+    {
+      "ms": 390530,
+      "event": "pong"
+    },
+    {
+      "ms": 391527,
+      "event": "pong"
+    },
+    {
+      "ms": 392579,
+      "event": "pong"
+    },
+    {
+      "ms": 394149,
+      "event": "pong"
+    },
+    {
+      "ms": 395203,
+      "event": "pong"
+    },
+    {
+      "ms": 396256,
+      "event": "pong"
+    },
+    {
+      "ms": 397295,
+      "event": "pong"
+    },
+    {
+      "ms": 398343,
+      "event": "pong"
+    },
+    {
+      "ms": 398450,
+      "event": "np_heap",
+      "bytes": 54116,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 399272,
+      "event": "pong"
+    },
+    {
+      "ms": 399816,
+      "event": "pong"
+    },
+    {
+      "ms": 400448,
+      "event": "pong"
+    },
+    {
+      "ms": 401013,
+      "event": "pong"
+    },
+    {
+      "ms": 401493,
+      "event": "pong"
+    },
+    {
+      "ms": 402021,
+      "event": "pong"
+    },
+    {
+      "ms": 402542,
+      "event": "pong"
+    },
+    {
+      "ms": 403071,
+      "event": "pong"
+    },
+    {
+      "ms": 404111,
+      "event": "pong"
+    },
+    {
+      "ms": 405156,
+      "event": "pong"
+    },
+    {
+      "ms": 406206,
+      "event": "pong"
+    },
+    {
+      "ms": 407260,
+      "event": "pong"
+    },
+    {
+      "ms": 408309,
+      "event": "pong"
+    },
+    {
+      "ms": 408455,
+      "event": "np_heap",
+      "bytes": 54236,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 409350,
+      "event": "pong"
+    },
+    {
+      "ms": 410279,
+      "event": "pong"
+    },
+    {
+      "ms": 411154,
+      "event": "phase",
+      "value": "stress100 done"
+    },
+    {
+      "ms": 411154,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 413625,
+      "event": "phase",
+      "value": "throughput30"
+    },
+    {
+      "ms": 413625,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 415502,
+      "event": "alloc",
+      "peer": "peer53",
+      "macid": 9,
+      "live": 2
+    },
+    {
+      "ms": 415865,
+      "event": "alloc",
+      "peer": "peer54",
+      "macid": 10,
+      "live": 3
+    },
+    {
+      "ms": 416462,
+      "event": "np_heap",
+      "bytes": 50044,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "ms": 426461,
+      "event": "np_heap",
+      "bytes": 48644,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "ms": 432459,
+      "event": "free",
+      "peer": "peer52",
+      "lifetime_ms": 103469,
+      "live": 2
+    },
+    {
+      "ms": 432459,
+      "event": "free",
+      "peer": "peer53",
+      "lifetime_ms": 16957,
+      "live": 1
+    },
+    {
+      "ms": 432459,
+      "event": "np_heap",
+      "bytes": 54096,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 442460,
+      "event": "np_heap",
+      "bytes": 53996,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 452468,
+      "event": "np_heap",
+      "bytes": 54100,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 462457,
+      "event": "np_heap",
+      "bytes": 54100,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 472457,
+      "event": "np_heap",
+      "bytes": 54100,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 479969,
+      "event": "phase",
+      "value": "throughput30 done"
+    },
+    {
+      "ms": 479969,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 480004,
+      "event": "phase",
+      "value": "final idle 40 seconds"
+    },
+    {
+      "ms": 480005,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 482467,
+      "event": "np_heap",
+      "bytes": 54100,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 492465,
+      "event": "np_heap",
+      "bytes": 54220,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 502460,
+      "event": "np_heap",
+      "bytes": 54220,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 512461,
+      "event": "np_heap",
+      "bytes": 55272,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 522466,
+      "event": "np_heap",
+      "bytes": 55272,
+      "used": 1,
+      "capacity": 12
+    },
+    {
+      "ms": 523347,
+      "event": "phase",
+      "value": "post_idle_saved_pair"
+    },
+    {
+      "ms": 523347,
+      "event": "command",
+      "value": "nan status"
+    },
+    {
+      "ms": 525071,
+      "event": "alloc",
+      "peer": "peer55",
+      "macid": 9,
+      "live": 2
+    },
+    {
+      "ms": 525439,
+      "event": "alloc",
+      "peer": "peer56",
+      "macid": 11,
+      "live": 3
+    },
+    {
+      "ms": 526468,
+      "event": "np_heap",
+      "bytes": 48596,
+      "used": 3,
+      "capacity": 12
+    },
+    {
+      "ms": 526838,
+      "event": "pong"
+    },
+    {
+      "ms": 528467,
+      "event": "free",
+      "peer": "peer54",
+      "lifetime_ms": 112602,
+      "live": 2
+    },
+    {
+      "ms": 528467,
+      "event": "np_heap",
+      "bytes": 52612,
+      "used": 2,
+      "capacity": 12
+    },
+    {
+      "ms": 528961,
+      "event": "phase",
+      "value": "post_idle_saved_pair done"
+    },
+    {
+      "ms": 528961,
+      "event": "command",
+      "value": "nan status"
+    }
+  ],
+  "live_at_end_inferred": 2,
+  "clean": true
+}

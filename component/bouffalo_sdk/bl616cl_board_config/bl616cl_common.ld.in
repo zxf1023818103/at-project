@@ -201,6 +201,13 @@ SECTIONS
         INCLUDE run_in_ram_function.ld.in
 #endif
 
+        /* FreeRTOS trap/ISR hot path in RAM, not XIP — under sustained WiFi RX interrupt
+         * load the XIP instruction fetch returns corrupt words (HW-caught on bl616:
+         * illegal-instruction loop inside freertos_risc_v_trap_handler while the flash
+         * bytes were correct). Same pin as bl616_common.ld.in. */
+        *libfreertos_kernel_port.a:*.o*(.text*)
+        *libfreertos_kernel.a:tasks.c.o*(.text*)
+
         *(.tcm_code.*)
         *(.tcm_const.*)
         *(.sclock_rlt_code.*)
@@ -383,8 +390,10 @@ SECTIONS
       . = ALIGN(16);
     } > ram_wifi
 
-    PROVIDE( _heap_wifi_start = . );
-    PROVIDE( _heap_wifi_size = ORIGIN(ram_wifi) + LENGTH(ram_wifi) - _heap_wifi_start );
+    /* Secondary (WiFi-DMA WRAM) heap span. _heap_wram_* matches the shared
+     * ram_heap_init() contract + the MM_HEAP_WRAM_0 "WRAM" heap it feeds. */
+    PROVIDE( _heap_wram_start = . );
+    PROVIDE( _heap_wram_size = ORIGIN(ram_wifi) + LENGTH(ram_wifi) - _heap_wram_start );
     GROUP_END(ram_wifi)
 
     GROUP_START(hbn_memory)

@@ -118,7 +118,14 @@ static void bl616_load_hbn_ram(void)
 
 #define GET_OFFSET(_type, _member) ((unsigned long)(&((_type *)0)->_member))
 
-void lp_fw_save_cpu_para(uint32_t save_addr)
+/* noinline is load-bearing: the asm below hard-codes `a0` as the save-area base but declares no
+ * operand binding save_addr->a0, relying purely on the RISC-V ABI placing the first arg in a0 at
+ * function entry. At the project's -O3 GCC inlines this into bl_lp_fw_enter(), where a0 has just
+ * been clobbered by the preceding L1C_DCache_Clean_All() call (a0 is caller-saved) -> save_addr is
+ * lost, a0 reads 0, and `sw x0,0(a0)` stores to address 0 (Store access fault, mtval=0). The SDK
+ * ships this unguarded because its own build never inlines it. Same class of -O3 miscompile as the
+ * arch_memset boot bug. */
+void ATTR_TCM_SECTION __attribute__((noinline)) lp_fw_save_cpu_para(uint32_t save_addr)
 {
     __asm__ __volatile__(
         "sw      x0, 0(a0)\n\t"
@@ -154,7 +161,9 @@ void lp_fw_save_cpu_para(uint32_t save_addr)
         "sw      x30, 120(a0)\n\t"
         "sw      x31, 124(a0)\n\t");
 }
-void lp_fw_restore_cpu_para(uint32_t save_addr)
+/* noinline for the same a0-binding reason as lp_fw_save_cpu_para above; also its address is taken
+ * (iot2lp_para->app_entry) as the PDS wake-resume vector, so it must stay a real standalone function. */
+void ATTR_TCM_SECTION __attribute__((noinline)) lp_fw_restore_cpu_para(uint32_t save_addr)
 {
     __asm__ __volatile__(
         "lw      x0, 0(a0)\n\t"
@@ -816,8 +825,12 @@ int ATTR_TCM_SECTION bl_lp_fw_enter(bl_lp_fw_cfg_t *bl_lp_fw_cfg)
             BL_WR_REG(HBN_BASE, HBN_IRQ_CLR, 0x00000001 << 16);
             /* enable rtc wakeup source */
             BL_WR_REG(PDS_BASE, PDS_INT, BL_RD_REG(PDS_BASE, PDS_INT) | (0x00000001 << 11));
-            /* pds15 enter */
-            pm_pds_mode_enter(PM_PDS_LEVEL_15, 0);
+            /* pds15 enter. NOTE: upstream passes 0 here (rely purely on the HBN RTC compare IRQ), but on
+             * bl616 that never wakes PDS15 standalone — the wake is driven by the PDS internal 32k timer
+             * (2nd arg), same as the tim_wakeup paths above and the bare pmu/bl616/pds_rtc example. Use
+             * rtc_sleep_us (not pds_sleep_us, which the tim/beacon-error math above can drive to 0 when
+             * tim_wakeup_en==0) so a RTC-only sleep gets a valid PDS-timer count and actually wakes. */
+            pm_pds_mode_enter(PM_PDS_LEVEL_15, BL_US_TO_PDS_CNT(rtc_sleep_us));
         }
 
         iot2lp_para->wakeup_flag = 1;

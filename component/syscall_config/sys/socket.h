@@ -26,6 +26,10 @@ typedef uint32_t socklen_t;
 #endif
 typedef uint16_t sa_family_t;
 
+#include <netinet/in.h>   /* struct in_addr/sockaddr_in + INET_ADDRSTRLEN: lwIP's <sys/socket.h>
+                           * exposes the whole INET surface, and ported code (wpa_supplicant's
+                           * CONFIG_LWIP branch) relies on that. After sa_family_t (in.h uses it). */
+
 /* Address families */
 #define AF_UNSPEC   0
 #define AF_INET     2

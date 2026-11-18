@@ -15,7 +15,6 @@
 #ifndef BL_WIFI_DRIVER_H
 #define BL_WIFI_DRIVER_H
 
-#include <lwip/pbuf.h>
 #include <supplicant_api.h>
 
 #if defined(CONFIG_NEWLIB_NANO_FORMAT)
@@ -128,5 +127,6 @@ struct bl_custom_tx_cfm {
     void *cb_arg;
 };
 
-err_t bl_wifi_eth_tx(struct pbuf *p, bool is_sta, struct bl_custom_tx_cfm *custom_cfm);
+/* lwIP removed: flat frame instead of a pbuf (impl in wifi.c -> bl602_ll_output). */
+int bl_wifi_eth_tx(void *frame, uint16_t len, bool is_sta, void *custom_cfm);
 #endif /* BL_WIFI_DRIVER_H */

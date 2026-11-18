@@ -26,7 +26,15 @@ __RFTLV_HEAD1_L = (0x41524150); /* PAPA */
 MEMORY
 {
     fw_header_memory  (rx)  : ORIGIN = 0x23000000 - 0x1000, LENGTH = 4K
-    xip_memory  (rx)  : ORIGIN = 0x23000000, LENGTH = 1024K
+    /* XIP-executed code window. Bumped 1024K -> 1408K. The FW partition is 0x178000 (1.47 MB, see
+     * partition_cfg_4M.toml) so there is ample headroom; this is a linker region CAP, so a larger value
+     * costs nothing for images that don't use it. Drivers: the base image sat near the old 1024K cap;
+     * CARES=ON (c-ares .text) needs ~1152K; QUIC=ON (ngtcp2 + picotls, a diagnostic build -- see below)
+     * needs ~1260K. 1408K covers both with margin and stays < the 1504K partition.
+     * NB: bl602 QUIC is a DIAGNOSTIC build only -- it links here, but at runtime the QUIC task's 32 KB
+     * (QUIC_SMOKE) stack cannot be allocated from bl602's ~60 KB fragmented heap, so the self-test
+     * reports "task create FAILED" and does not run (bl616/bl616cl are the viable Bouffalo QUIC targets). */
+    xip_memory  (rx)  : ORIGIN = 0x23000000, LENGTH = 1408K
     itcm_memory (rx)  : ORIGIN = 0x22010000, LENGTH = 16K
     dtcm_memory (rx)  : ORIGIN = 0x42014000, LENGTH = 48K
     ram_memory  (!rx) : ORIGIN = 0x42020000, LENGTH = 176K
@@ -281,8 +289,18 @@ SECTIONS
       . = ALIGN(16);
     } > ram_wifi
 
-    PROVIDE( _heap_wifi_start = . );
-    PROVIDE( _heap_wifi_size = ORIGIN(ram_wifi) + LENGTH(ram_wifi) - _heap_wifi_start );
+    /* Secondary (WiFi-DMA WRAM) heap span. Named _heap_wram_* to match the shared
+     * ram_heap_init() contract + the MM_HEAP_WRAM_0 "WRAM" heap it feeds. */
+    PROVIDE( _heap_wram_start = . );
+    PROVIDE( _heap_wram_size = ORIGIN(ram_wifi) + LENGTH(ram_wifi) - _heap_wram_start );
+
+    /* Extra heap pool: TCM0 upper 16K (0x4200C000..0x42010000). The linker maps only TCM0's top 16K
+     * as ITCM (0x42010000+) and all of TCM1 as DTCM, leaving TCM0's bottom 32K unmapped. A boot canary
+     * showed the UPPER half of that (0x4200C000..0x42010000) survives WiFi + ROM SFlash + LFS + SNTP,
+     * while the lower 16K (0x42008000..) is ROM flash-call scratch. Hand the free upper 16K to the heap
+     * (ram_heap_init registers it as MM_HEAP_EM_0 "TCM0"). Reclaims ~16 KB for the tight bl602 heap. */
+    PROVIDE( _heap_tcm0_start = 0x4200C000 );
+    PROVIDE( _heap_tcm0_size  = 0x4000 );   /* 16K */
 
     .bss (NOLOAD) :
     {
@@ -322,7 +340,17 @@ SECTIONS
         __HeapLimit = .;
     } > ram_memory
 
-    __HeapLimit = ORIGIN(ram_memory) + LENGTH(ram_memory);
+    /* Cap the heap at the WiFi RAM region start, NOT the end of ram_memory.
+     * ram_wifi (the WiFi driver .wifibss / MAC TX-RX descriptors + firmware EM,
+     * __wifi_bss_start=0x42042000..0x4204c000) is carved out of the TOP of
+     * ram_memory. The upstream SDK sets __HeapLimit to the end of ram_memory,
+     * which makes the TLSF heap overlap the WiFi region — a latent bug the
+     * vendor reference apps never hit because their heap usage stays low. Our
+     * large app (mbedTLS + LittleFS + FreeRTOS-Plus-TCP + NimBLE + AT) grows the
+     * heap up into 0x42042000+, corrupting the WiFi MAC TX descriptors -> WiFi
+     * TX (auth/assoc) fails while RX (scan, runs early) still works. Cap at
+     * ORIGIN(ram_wifi) so allocations can never reach the WiFi region. */
+    __HeapLimit = ORIGIN(ram_wifi);
     ASSERT(__HeapLimit - __HeapBase >= HeapMinSize, "heap region overflow")
 
     /*CFG FW used in code*/

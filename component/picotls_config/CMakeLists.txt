@@ -32,7 +32,7 @@ target_include_directories(picotls_core SYSTEM PRIVATE "${CMAKE_CURRENT_SOURCE_D
 # (PTHREAD_MUTEX_INITIALIZER, gated out in this newlib) + in6addr_any, and is unused by the
 # QUIC handshake path. PUBLIC so the picotls build and consumers agree on the API/ABI.
 target_compile_definitions(picotls_core PUBLIC PTLS_HAVE_LOG=0)
-target_compile_options(picotls_core PRIVATE -w)
+target_compile_options(picotls_core PRIVATE -w -Wno-error=implicit-function-declaration -Wno-error=implicit-int)
 
 # mbedTLS/PSA backend.
 add_library(picotls_mbedtls STATIC EXCLUDE_FROM_ALL
@@ -41,7 +41,7 @@ add_library(picotls_mbedtls STATIC EXCLUDE_FROM_ALL
 )
 target_link_libraries(picotls_mbedtls PUBLIC picotls_core mbedcrypto)
 target_compile_definitions(picotls_mbedtls PUBLIC PTLS_HAVE_MBEDTLS=1)
-target_compile_options(picotls_mbedtls PRIVATE -w)
+target_compile_options(picotls_mbedtls PRIVATE -w -Wno-error=implicit-function-declaration -Wno-error=implicit-int)
 
 # Umbrella INTERFACE (伞形): consumers link `picotls_config` to get core + the mbedTLS backend.
 add_library(picotls_config INTERFACE)

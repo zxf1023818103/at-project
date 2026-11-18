@@ -9,7 +9,7 @@
 > 开源化 / 外发本仓前，确认本目录及其内容已清除。
 
 文件名已去掉下载站的 `(NNNNN)` 后缀。本项目主目标芯片是 **RTL8721D（AmebaD）**，
-次目标 **RTL8711Dx（AmebaDplus，`project/ameba`）**，故两者文档都留。
+次目标 **RTL8711Dx（AmebaDplus，`project/amebadplus`）**，故两者文档都留。
 
 ## 安全 / 启动（NDA — 核心机密）
 

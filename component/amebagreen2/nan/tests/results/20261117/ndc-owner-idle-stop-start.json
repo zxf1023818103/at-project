@@ -1,0 +1,22 @@
+{
+  "case": "ndc-owner-stop-cycles",
+  "start_results": [
+    0,
+    0,
+    0
+  ],
+  "running": [
+    1,
+    0,
+    1,
+    0,
+    1,
+    0,
+    1
+  ],
+  "fatal": false,
+  "owner_errors": 0,
+  "unexpected_boots": 0,
+  "pass": true,
+  "scope": "Idle module-only NAN stop/start. No phone reconnection and no active NDC owners were exercised by these hardware cycles."
+}

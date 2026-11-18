@@ -16,8 +16,11 @@
 #   make ROMKAT=ON       # ROM mbedTLS 2.4.0 + HW-crypto boot self-tests (no upstream mbedTLS; no md5sum/sha*sum)
 #   make TFM=ON          # in-tree TF-M secure world (SPE via ExternalProject; app_km4 = NSPE)
 #   make STORAGE=ON      # TF-M PSA secure storage (ITS + PS) + NS storage self-test (implies TFM=ON)
-#   make AWS=ON          # AWS IoT Core MQTT/TLS demo (coreMQTT + mbedTLS; cert/endpoint->LFS, key->TF-M PS; implies STORAGE=ON)
-#   make TLS_BACKEND=<fallback|picotls|mbedtls>  # TLS-over-TCP backend(s) for AWS. Default fallback:
+#   make AWS=ON          # lean AWS IoT telemetry client (coreMQTT; aws_telemetry.c, same as bl602's AWS=ON) +
+#                        # `aws` provisioning + `ota_http`; cert/endpoint->LFS, key->TF-M PS; implies STORAGE=ON
+#   make AWSOTA=ON       # full AWS IoT agent image (implies AWS=ON): coreMQTT-Agent + FreeRTOS OTA v3.3.0
+#                        # (aws_iot_demo.c) — same split as bl602's AWS/AWSOTA
+#   make TLS_BACKEND=<fallback|picotls|mbedtls>  # TLS-over-TCP backend(s) for AWS. Default picotls:
 #                        # links BOTH picotls (TLS 1.3) and mbedTLS (TLS 1.2), and each connection picks
 #                        # via NetworkCredentials_t.backendMode (AWS MQTT/OTA force picotls; ota_http uses
 #                        # fallback = picotls then mbedTLS). picotls = TLS 1.3 only, ~112 KB smaller flash
@@ -33,58 +36,59 @@
 
 .PHONY: all image bootloader_km0 bootloader_km0_2nd app_km0 bootloader_km4 app_km4 clean distclean
 
-# mcumgr SMP DFU rides the NimBLE host (smp_bt transport) and writes via ota_flash, so MCUMGR=ON
-# forces NIMBLE=ON regardless of the command line (NIMBLE is ?= so := overrides it).
-ifeq ($(MCUMGR),ON)
-override NIMBLE := ON
-endif
-
 REPO       := $(abspath $(CURDIR)/../..)
 GEN        := Ninja
 BUILD_TYPE := MinSizeRel
-NIMBLE     ?= OFF          # ON -> NimBLE host
-MCUMGR     ?= OFF          # ON -> mcumgr SMP-over-BLE (DFU via img_mgmt -> ota_flash + os_mgmt echo/reset); implies NIMBLE=ON
+
+# Shared feature-flag contract (defaults + implies + ON/OFF validation for
+# NIMBLE/MCUMGR/AWS/AWSOTA/TLS_BACKEND/CARES/CRT_BUNDLE/CRYPTO_SELFTESTS/
+# MINIMAL/FW_VERSION/APP_BUILD), single-sourced with project/bouffalo/Makefile.
+# Includes "MCUMGR=ON forces NIMBLE=ON" (SMP DFU rides the NimBLE host) and
+# "AWSOTA=ON implies AWS=ON".
+include ../common_flags.mk
+
 HCI        ?= OFF          # ON -> bare HCI/DTM
 QUIC       ?= OFF          # ON -> ngtcp2 QUIC client self-test (pulls full wolfSSL TLS1.3)
 PKCS11     ?= OFF          # ON -> corePKCS11 token self-test (upstream mbedTLS backend + LittleFS PAL)
 BENCH      ?= OFF          # ON -> upstream Mbed TLS v3.6.4 crypto microbenchmark ([MCB] scores)
-MINIMAL    ?= OFF          # ON -> strip diagnostics (iperf / KAT / HW-crypto bench); WiFi-connect only (pairs with TFM=ON)
+# MINIMAL (common_flags.mk): strip diagnostics (iperf / KAT / HW-crypto bench); WiFi-connect only (pairs with TFM=ON)
 ROMKAT     ?= OFF          # ON -> ROM mbedTLS 2.4.0 / HW-crypto self-tests (no upstream mbedTLS; drops fs_cli md5sum/sha*sum)
-IPERF      ?= OFF          # ON -> `iperf` console command over upstream iperf3 + BSD-sockets shim (syscall_config)
-CARES      ?= OFF          # ON -> resolve DNS via c-ares (select event loop) instead of the FreeRTOS+TCP resolver (AWS/SNTP/OTA)
+# IPERF: default resolved AFTER the AWS/AWSOTA block below (linked by default except AWS images,
+# matching bl602 -- iperf's ~16 KB .bss is reclaimed for the AWS TLS handshake heap there).
+# CARES (common_flags.mk, default ON): resolve DNS via c-ares (select event loop) instead of the FreeRTOS+TCP resolver (AWS/SNTP/OTA)
 WPS        ?= OFF          # ON -> `wps` console command (WPS PBC/PIN connect test; compiles wifi_wps_config.c, links lib_wps.a)
+EAP        ?= OFF          # ON -> `eap` console command (WPA2-Enterprise EAP-TLS connect; compiles wifi_eap_config.c + tls_polarssl.c bound to upstream Mbed TLS 3.6, links lib_eap.a) -- reproduces the Kontakt.io EAP-TLS handshake path
 TFM        ?= OFF          # ON -> build + boot in-tree TF-M SPE (app_km4 becomes the NS side)
-TLS_BACKEND ?= fallback    # AWS TLS-over-TCP backend (default: fallback — links BOTH picotls/TLS1.3 + mbedTLS/TLS1.2, per-connection choice via NetworkCredentials_t.backendMode: AWS MQTT/OTA force picotls, ota_http falls back picotls->mbedTLS). picotls = TLS 1.3 only, ~112 KB smaller flash but no runtime mode / no 1.2 fallback (backendMode ignored). mbedtls = TLS 1.2/1.3. Switch wiring: component/network_transport/transport_tls.h.
-ifeq ($(filter $(TLS_BACKEND),mbedtls picotls fallback),)
-$(error TLS_BACKEND must be 'mbedtls', 'picotls', or 'fallback')
-endif
-# fallback: try picotls (TLS 1.3) first, fall back to mbedTLS (TLS 1.2/1.3) when the server has no
-# TLS 1.3. Links both backends (transport_fallback.c dispatches). e.g. make AWS=ON TLS_BACKEND=fallback
+# TLS_BACKEND (common_flags.mk, default picotls): AWS IoT + S3 are TLS 1.3, picotls = ~112 KB smaller
+# flash + ~24 KB less runtime heap than fallback on this platform. `fallback` (co-link picotls/TLS1.3
+# + mbedTLS/TLS1.2, per-connection NetworkCredentials_t.backendMode: force picotls for AWS MQTT/OTA,
+# picotls->mbedTLS for ota_http to a non-1.3 server) and `mbedtls` (TLS 1.2/1.3) stay selectable.
+# Switch wiring: component/network_transport/transport_tls.h. e.g. make AWS=ON TLS_BACKEND=fallback
 TLS_HEAP_TRACE ?= OFF      # ON = compile the gated picotls handshake heap trace (transport_picotls.c TLS_HEAP_MARK); logs free heap at connect/handshake/disconnect. Debug/measurement only.
 HWGCM      ?= $(TFM)       # default = TFM: route AES-GCM + ChaCha20-Poly1305 to the RTL8721D IPSEC HW engine (needs TFM=ON's SAU, so on iff TFM is on). Both TLS backends use it: mbedTLS via the classic one-shot mbedtls_gcm; picotls via the encrypt-coalesce shim in transport_picotls.c that reduces its PSA multi-part AEAD to the engine's one-shot path.
 STORAGE    ?= OFF          # ON -> TF-M PSA secure storage (ITS + PS) + NS storage self-test; implies TFM=ON
-AWS        ?= OFF          # ON -> AWS IoT Core MQTT/TLS demo (coreMQTT + mbedTLS); cert/endpoint->LFS, private key->TF-M PS
-# CRT_BUNDLE: verify the TLS server cert against the embedded compressed Mozilla CA root bundle
-# (esp_crt_bundle, ~121 roots), falling back to the `ca/` folder (project/resource/ca -> LittleFS)
-# for roots the bundle lacks (self-signed / niche CAs). ALWAYS ON for AWS images (not
-# user-overridable); forced OFF for non-AWS images (no TLS path). Set below from $(AWS).
-FW_VERSION ?= ota-A        # firmware version string stamped into the AWS image (printed + in telemetry); bump for an OTA target build, e.g. make AWS=ON FW_VERSION=ota-B
-APP_BUILD  ?= 1            # appFirmwareVersion build number (0.9.N) for the OTA self-test; an OTA target must be > the running image, e.g. make AWS=ON FW_VERSION=ota-E APP_BUILD=2
-# coreSNTP UTC time-sync is now default-on (every non-QUIC image) - no SNTP flag.
+# AWS/AWSOTA split (both in common_flags.mk, incl. the AWSOTA->AWS imply): AWS=ON alone = the lean
+# telemetry-only client (aws_telemetry.c; publishes by default) + `aws` provisioning + `ota_http`;
+# cert/endpoint->LFS, private key->TF-M PS. AWSOTA=ON = the full coreMQTT-Agent + FreeRTOS OTA
+# v3.3.0 agent image (aws_iot_demo.c).
+# iperf: manual `iperf server|tx|udp|udptx` console command (no auto-start), linked by default
+# except in AWS images (heap) and MINIMAL images (WiFi-connect only) -- same polarity + UX as bl602.
 ifeq ($(AWS),ON)
-# AWS=ON: the MQTT client private key lives in TF-M secure storage by default (implies STORAGE/TFM).
-# `make AWS=ON TFM=OFF` builds AWS WITHOUT the secure world; the key then falls back to a plain
-# LittleFS file (aws_provision.c / aws_cli.c, gated on AMEBAD_TFM_STORAGE). So only force STORAGE=ON
-# when TFM wasn't explicitly turned off on the command line.
-# NOTE: no trailing comment on the STORAGE := ON assignment — a trailing-space value breaks the ifeq.
-ifeq ($(origin TFM),command line)
-ifeq ($(TFM),ON)
-STORAGE    := ON
-endif
+override IPERF := OFF
+else ifeq ($(MINIMAL),ON)
+override IPERF := OFF
 else
-STORAGE    := ON
+IPERF      ?= ON
 endif
-endif
+# CRT_BUNDLE (common_flags.mk, follows AWS): verify the TLS server cert against the embedded
+# compressed Mozilla CA root bundle (esp_crt_bundle, ~121 roots), falling back to the `ca/` folder
+# (project/resource/ca -> LittleFS) for roots the bundle lacks (self-signed / niche CAs).
+# FW_VERSION / APP_BUILD also come from common_flags.mk.
+# coreSNTP UTC time-sync is now default-on (every non-QUIC image) - no SNTP flag.
+# AWS images no longer imply STORAGE/TFM (aligned with bl602): the MQTT client private key
+# defaults to a plain LittleFS DER file (aws_secret_store_file.c) on BOTH platforms. Opt in to the
+# TF-M ITS key backend with `make AWS=ON STORAGE=ON` (STORAGE implies TFM below); TFM=ON alone
+# builds the secure world without moving the key.
 # HW-GCM (HWGCM follows TFM above, so ON for these TF-M images) is verified end-to-end for BOTH QUIC
 # (picotls/PSA AEAD: ~7.1 Mbps DL / 2.9 UL, vs 1.7 / 1.2 with software GCM) and AWS IoT (mbedTLS
 # TLS1.3 handshake + MQTT telemetry). gcm_alt.c brings the IPSEC engine up itself, once, via the NS
@@ -102,13 +106,8 @@ ifneq ($(TFM),ON)
 $(error HWGCM=ON requires TFM=ON (NS-direct HW crypto needs TF-M's SAU; a non-TF-M image hangs))
 endif
 endif
-# CRT_BUNDLE only matters for the TLS path, which exists only in the AWS image. Always ON there
-# (the embedded bundle is the primary trust source + the ca/ folder fallback); OFF everywhere else.
-ifeq ($(AWS),ON)
-CRT_BUNDLE := ON
-else
-CRT_BUNDLE := OFF
-endif
+# CRYPTO_SELFTESTS umbrella (common_flags.mk): bench + crt_bundle + pkcs11 as CONSOLE
+# COMMANDS (no boot auto-run). PKCS11=ON / BENCH=ON keep the boot-auto-run diagnostic form.
 VFSTEST    ?= OFF          # ON -> POSIX-fd VFS self-test (fopen/open/socket over LFS+sockets)
 CPPTEST    ?= OFF          # ON -> C++ std::filesystem/iostream self-test (cout/cin over LPUART, stderr LOGUART)
 SBOOT      ?= ON           # DEFAULT-ON: Ed25519-sign image2 (boot-ROM secure-boot format) every build,
@@ -120,10 +119,12 @@ SBOOT      ?= ON           # DEFAULT-ON: Ed25519-sign image2 (boot-ROM secure-bo
 EFUSE_DEBUG ?= OFF         # ON -> DEBUG eFuse provisioning aids (NEVER ship): `efuse_burn` console cmd,
                            #       boot-dump of all eFuse keys + MACs, and Boot_Log_En (verbose bootloader
                            #       log). Default OFF; the signing (SBOOT) is independent and stays on.
-RSIP       ?= ON           # DEFAULT-ON for the RSIP-FUSED bench board: EncTool-encrypt km0/km4 boot +
-                           #       image2 + IMG3 with AMEBAD_RSIP_KEY/IV every build, so the image is
-                           #       bootable (an unencrypted image on a fused board reads as garbage).
-                           #       RSIP=OFF for a plain image (only boots on a board WITHOUT RSIP fused).
+RSIP       ?= OFF          # DEFAULT-OFF: plain image for a board WITHOUT RSIP fused. This bench board's
+                           #       eFuse is blank (verified 2026-07-08: the plain image boots + connects to
+                           #       AWS; an RSIP-encrypted image reads as garbage and hangs silently at boot).
+                           #       RSIP=ON EncTool-encrypts km0/km4 boot + image2 + IMG3 with AMEBAD_RSIP_KEY/
+                           #       IV every build so the image is bootable on an RSIP-FUSED board (an
+                           #       unencrypted image on a fused board reads as garbage).
 RSIP_KEY   ?= f7954f24be5a0e1756e852edb1ff2d24   # THIS board's key: the build key string is the REVERSE
                            #       byte order of eFuse 0x190 (=242dffb1…95f7, AN0405). It IS the flash
                            #       encryption key (in-repo like doc/test_device_keys.csv); override per board.
@@ -140,15 +141,15 @@ TC0 := $(REPO)/cmake/amebad-km0.cmake
 TC4 := $(REPO)/cmake/amebad-km4.cmake
 _COMMON := -G $(GEN) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) -DAMEBAD_EFUSE_DEBUG=$(EFUSE_DEBUG) \
            -DAMEBAD_RSIP_ENABLE=$(RSIP) -DAMEBAD_RSIP_KEY=$(RSIP_KEY) -DAMEBAD_RSIP_IV=$(RSIP_IV)
-_KM4 := -DAMEBAD_ENABLE_NIMBLE=$(NIMBLE) -DAMEBAD_ENABLE_MCUMGR=$(MCUMGR) -DAMEBAD_ENABLE_HCI=$(HCI) -DAMEBAD_ENABLE_QUIC=$(QUIC) \
+_KM4 := -DAMEBAD_ENABLE_NIMBLE=$(NIMBLE) -DAT_ENABLE_MCUMGR=$(MCUMGR) -DAMEBAD_ENABLE_HCI=$(HCI) -DAT_ENABLE_QUIC=$(QUIC) \
         -DAMEBAD_ENABLE_PKCS11=$(PKCS11) -DAMEBAD_ENABLE_CRYPTOBENCH=$(BENCH) -DAMEBAD_ENABLE_MINIMAL=$(MINIMAL) \
-        -DAMEBAD_ENABLE_ROM_KAT=$(ROMKAT) -DAMEBAD_ENABLE_IPERF=$(IPERF) -DAMEBAD_ENABLE_AWS_IOT=$(AWS) -DAMEBAD_ENABLE_CARES=$(CARES) \
-        -DAMEBAD_ENABLE_CRT_BUNDLE=$(CRT_BUNDLE) \
-        -DAMEBAD_FW_VERSION=$(FW_VERSION) -DAMEBAD_APP_BUILD=$(APP_BUILD) -DAMEBAD_TLS_BACKEND=$(TLS_BACKEND) \
-        -DAMEBAD_TLS_HEAP_TRACE=$(TLS_HEAP_TRACE) \
+        -DAMEBAD_ENABLE_ROM_KAT=$(ROMKAT) -DAMEBAD_ENABLE_IPERF=$(IPERF) -DAMEBAD_ENABLE_AWS_IOT=$(AWS) -DAMEBAD_ENABLE_AWS_OTA=$(AWSOTA) -DAMEBAD_ENABLE_CARES=$(CARES) \
+        -DAT_ENABLE_CRT_BUNDLE=$(CRT_BUNDLE) -DAT_CRYPTO_SELFTESTS=$(CRYPTO_SELFTESTS) \
+        -DAT_FW_VERSION=$(FW_VERSION) -DAT_APP_BUILD=$(APP_BUILD) -DTLS_BACKEND=$(TLS_BACKEND) \
+        -DAT_TLS_HEAP_TRACE=$(TLS_HEAP_TRACE) \
         -DAMEBAD_MBEDTLS_HW_GCM=$(HWGCM) -DAMEBAD_TFM_BOOT=$(TFM) -DAMEBAD_TFM_STORAGE=$(STORAGE) \
-        -DAMEBAD_VFS_SELFTEST=$(VFSTEST) -DAMEBAD_CPP_SELFTEST=$(CPPTEST) -DAMEBAD_SBOOT=$(SBOOT) \
-        -DAMEBAD_ENABLE_WPS=$(WPS)
+        -DAT_VFS_SELFTEST=$(VFSTEST) -DAMEBAD_CPP_SELFTEST=$(CPPTEST) -DAMEBAD_SBOOT=$(SBOOT) \
+        -DAMEBAD_ENABLE_WPS=$(WPS) -DAMEBAD_ENABLE_EAP=$(EAP)
 
 bootloader_km0:
 	cd $(REPO) && cmake -S project/amebad/bootloader_km0 -B build/bootloader_km0 $(_COMMON) \

@@ -66,15 +66,15 @@
 
 #include <sys/stat.h>   /* stat / S_ISDIR -- folder vs single-file root CA path */
 
-#ifdef AMEBAD_ENABLE_CRT_BUNDLE
+#ifdef AT_PROJECT_CRT_BUNDLE
     #include "esp_crt_bundle.h"
 #endif
 
-/* Optional heap tracing of the TLS handshake (compile with -DAMEBAD_TLS_HEAP_TRACE). Logs free heap
+/* Optional heap tracing of the TLS handshake (compile with -DAT_PROJECT_TLS_HEAP_TRACE). Logs free heap
  * (and min-ever-free, meaningful only when CONFIG_MM_ENABLE_MIN_FREE_TRACKING=1) at the connect /
  * handshake / disconnect milestones, so the transient handshake PEAK (the Certificate flight) reads
  * off as the low point of the `free` column. No-op by default. */
-#if defined( AMEBAD_TLS_HEAP_TRACE )
+#if defined( AT_PROJECT_TLS_HEAP_TRACE )
     #define TLS_HEAP_MARK( tag )                                                  \
     LogInfo( ( "[HEAPTRACE] %-24s free=%u minever=%u", ( tag ),                    \
                ( unsigned ) xPortGetFreeHeapSize(),                               \
@@ -106,6 +106,16 @@ size_t TLS_FreeRTOS_params_size( void )
 /* Ciphertext read chunk for the handshake / record loops. picotls reassembles records
  * larger than this internally, so an MTU-ish chunk is plenty (and keeps the stack small). */
 #define PICOTLS_RX_CIPHER_CHUNK         ( 2048U )
+
+/* Max size of one TLS 1.3 record on the wire = 5-byte header + 2^14 plaintext + 256 AEAD/content-type
+ * overhead. TLS_FreeRTOS_recv frames whole records into a buffer of this size so ptls_receive gets a
+ * complete record and takes picotls' zero-alloc fast path (no per-record recvbuf.rec churn). */
+#define PICOTLS_MAX_RECORD              ( 5U + ( 1U << 14 ) + 256U )
+
+/* rxReserveSize at/above which a connection opts into record-framing (a resident PICOTLS_MAX_RECORD
+ * buffer). Only bulk-download callers (ota_http passes 16640) clear this; small-record connections
+ * (MQTT/telemetry) stay on the chunked path so heap-tight parts aren't forced to spare 16 KB. */
+#define PICOTLS_FRAME_MIN_RESERVE       ( 8192U )
 
 /*-----------------------------------------------------------*/
 /* One-time picotls context (crypto backend wiring; credentials are set per-connection). */
@@ -407,7 +417,19 @@ static int picotls_verify_cert( ptls_verify_certificate_t * _self,
     mbedtls_x509_crt_init( &s_serverChain );
     s_serverChainInUse = 1;
 
-    for( i = 0; i < num_certs; i++ )
+    /* AWS IoT over-sends its COMPLETE chain (leaf, Amazon RSA 2048 MXX, Amazon Root CA 1, Starfield
+     * Services Root G2). On bl602's ~50 KB heap the TLS 1.3 handshake peak already leaves only ~2 KB
+     * by the time the server cert is verified, so parsing all four certs (~2.7 KB parsed each) OOMs
+     * the RSA-2048 verify modexp -> MPI_ALLOC_FAILED, surfaced as esp_crt_bundle "PK verify 0x4290".
+     * We only need the leaf + its issuing intermediate: the trust anchor (Amazon Root CA 1) is
+     * supplied by the embedded bundle / the pinned CA, and the server-sent roots are never trusted on
+     * their own word anyway. Cap the parsed chain so the verify's heap peak stays within budget.
+     * (leaf + one intermediate covers AWS IoT; raise PICOTLS_VERIFY_MAX_CHAIN for deeper chains.) */
+    #ifndef PICOTLS_VERIFY_MAX_CHAIN
+    #define PICOTLS_VERIFY_MAX_CHAIN    2U
+    #endif
+    size_t nparse = ( num_certs > PICOTLS_VERIFY_MAX_CHAIN ) ? ( size_t ) PICOTLS_VERIFY_MAX_CHAIN : num_certs;
+    for( i = 0; i < nparse; i++ )
     {
         if( mbedtls_x509_crt_parse_der( &s_serverChain, certs[ i ].base, certs[ i ].len ) != 0 )
         {
@@ -417,7 +439,7 @@ static int picotls_verify_cert( ptls_verify_certificate_t * _self,
     }
 
     const char * cn = ( ( server_name != NULL ) && ( server_name[ 0 ] != '\0' ) ) ? server_name : NULL;
-#ifdef AMEBAD_ENABLE_CRT_BUNDLE
+#ifdef AT_PROJECT_CRT_BUNDLE
     /* Verify against the embedded Mozilla bundle, with the file/folder roots (self->trustCa, the
      * `ca/` store) as extra trust anchors for self-signed / niche CAs the bundle lacks. */
     ret = esp_crt_bundle_verify_chain( &s_serverChain, &self->trustCa, cn, &flags );
@@ -502,7 +524,7 @@ static int picotls_init_verify( picotls_verify_t * self,
         }
     }
 
-#ifndef AMEBAD_ENABLE_CRT_BUNDLE
+#ifndef AT_PROJECT_CRT_BUNDLE
     if( self->trustCa.raw.p == NULL )
     {
         LogError( ( "no trusted CA roots (path '%s') and no embedded bundle in this build",
@@ -709,10 +731,13 @@ static int picotls_ctx_once( void )
     /* picotls's ptls_mbedtls backend uses PSA; init it once (the mbedTLS transport's
      * initMbedtls() would normally do this, but it isn't linked on the picotls path).
      * Idempotent. mbedTLS threading is initialized by the application at startup. */
-    if( psa_crypto_init() != PSA_SUCCESS )
     {
-        LogError( ( "psa_crypto_init failed" ) );
-        return -1;
+        psa_status_t _ps = psa_crypto_init();
+        if( _ps != PSA_SUCCESS )
+        {
+            LogError( ( "psa_crypto_init failed: %d", (int) _ps ) );
+            return -1;
+        }
     }
 
     s_ptlsCtx.random_bytes = ptls_mbedtls_random_bytes;
@@ -962,7 +987,7 @@ TlsTransportStatus_t TLS_FreeRTOS_Connect( NetworkContext_t * pNetworkContext,
                     ( void * ) pNetworkContext, ( const void * ) pHostName, ( const void * ) pNetworkCredentials ) );
         return TLS_TRANSPORT_INVALID_PARAMETER;
     }
-#ifndef AMEBAD_ENABLE_CRT_BUNDLE
+#ifndef AT_PROJECT_CRT_BUNDLE
     if( pNetworkCredentials->pRootCaPath == NULL )
     {
         /* Without the embedded bundle, the `ca/` folder is the only trust source. */
@@ -1007,6 +1032,10 @@ TlsTransportStatus_t TLS_FreeRTOS_Connect( NetworkContext_t * pNetworkContext,
     p->rxConsumed = 0;
     isTlsCreated = pdTRUE;
 
+    p->rxFrame = NULL;
+    p->rxFrameFilled = 0;
+    p->rxFrameNeed = 0;
+
     /* Pre-reserve the rxPlain decrypt sink up front, while the heap is least fragmented (the decrypt
      * path otherwise reallocs rxPlain mid-stream to fit a record's plaintext, and a large realloc can
      * fail in a fragmented heap during a big transfer). Default 4 KB: enough for typical small app
@@ -1022,6 +1051,22 @@ TlsTransportStatus_t TLS_FreeRTOS_Connect( NetworkContext_t * pNetworkContext,
         LogError( ( "rxPlain pre-reserve failed" ) );
         status = TLS_TRANSPORT_INSUFFICIENT_MEMORY;
         goto Cleanup;
+    }
+
+    /* Record-framing (see TLS_FreeRTOS_recv) is opt-in per connection via a LARGE rxReserveSize: only
+     * a bulk-download caller (ota_http, rxReserveSize=16640) wants the full-record buffer, because it
+     * costs a resident 16 KB and its payoff — no per-record recvbuf.rec malloc/free churn — only
+     * matters over a long transfer. A small-record connection (MQTT/telemetry, tiny reserve) keeps the
+     * old 2 KB-chunk path (rxFrame==NULL): heap-tight parts like bl602 (~35 KB free) CANNOT spare 16 KB
+     * for their MQTT session, and their few control records don't fragment. The alloc is best-effort —
+     * if it fails, fall back to the chunk path rather than failing the connection. */
+    if( rxReserve >= PICOTLS_FRAME_MIN_RESERVE )
+    {
+        p->rxFrame = pvPortMalloc( PICOTLS_MAX_RECORD );
+        if( p->rxFrame == NULL )
+        {
+            LogWarn( ( "rxFrame alloc failed; falling back to the chunked recv path" ) );
+        }
     }
     }
     TLS_HEAP_MARK( "post-client_new+reserve" );
@@ -1050,6 +1095,11 @@ Cleanup:
     if( isTlsCreated == pdTRUE )
     {
         ptls_buffer_dispose( &p->rxPlain );
+        if( p->rxFrame != NULL )
+        {
+            vPortFree( p->rxFrame );
+            p->rxFrame = NULL;
+        }
         ptls_free( p->tls );
         p->tls = NULL;
     }
@@ -1098,6 +1148,13 @@ void TLS_FreeRTOS_Disconnect( NetworkContext_t * pNetworkContext )
     }
     ptls_buffer_dispose( &p->rxPlain );
     p->rxConsumed = 0;
+    if( p->rxFrame != NULL )
+    {
+        vPortFree( p->rxFrame );
+        p->rxFrame = NULL;
+    }
+    p->rxFrameFilled = 0;
+    p->rxFrameNeed = 0;
 
     /* Release per-connection credential state (statics shared across the single connection). */
     if( s_signer.loaded )
@@ -1131,7 +1188,6 @@ int32_t TLS_FreeRTOS_recv( NetworkContext_t * pNetworkContext,
                            size_t bytesToRecv )
 {
     TlsTransportParams_t * p = NULL;
-    uint8_t rxCipher[ PICOTLS_RX_CIPHER_CHUNK ];
     int32_t n;
     size_t avail, take;
 
@@ -1157,26 +1213,87 @@ int32_t TLS_FreeRTOS_recv( NetworkContext_t * pNetworkContext,
         return ( int32_t ) take;
     }
 
-    /* (B) Buffer drained — reset and read one ciphertext chunk (honors the recv timeout). */
+    /* (B) Buffer drained — read the next record's plaintext into rxPlain. */
     p->rxPlain.off = 0;
     p->rxConsumed = 0;
 
-    n = TCP_Sockets_Recv( p->tcpSocket, rxCipher, sizeof( rxCipher ) );
-    if( n == 0 )
+    if( p->rxFrame != NULL )
     {
-        return 0; /* timeout, no data — coreMQTT retries */
+        /* Record-framing path (bulk download, e.g. ota_http): assemble exactly ONE whole TLS record
+         * into rxFrame — read the 5-byte header (length = bytes[3..4], big-endian), then the body,
+         * reading record-aligned amounts so we never straddle into the next record — then feed the
+         * COMPLETE record to picotls so it takes the zero-alloc fast path (no per-record recvbuf.rec
+         * malloc/free churn that would fragment a tight heap over a long download into
+         * PTLS_ERROR_NO_MEMORY). A mid-record recv timeout returns 0 with the partial record kept in
+         * p->rxFrame{Filled,Need} for the next call. */
+        for( ; ; )
+        {
+            size_t want = ( p->rxFrameFilled < 5U )
+                          ? ( 5U - p->rxFrameFilled )                 /* still filling the record header */
+                          : ( p->rxFrameNeed - p->rxFrameFilled );    /* header parsed: fill the body     */
+
+            n = TCP_Sockets_Recv( p->tcpSocket, p->rxFrame + p->rxFrameFilled, want );
+            if( n == 0 )
+            {
+                return 0; /* timeout — partial record kept for the next call; caller retries */
+            }
+            if( n < 0 )
+            {
+                LogError( ( "recv: socket error %d", ( int ) n ) );
+                return -1;
+            }
+            p->rxFrameFilled += ( size_t ) n;
+
+            if( ( p->rxFrameNeed == 0U ) && ( p->rxFrameFilled >= 5U ) )
+            {
+                p->rxFrameNeed = 5U + ( ( (size_t) p->rxFrame[ 3 ] << 8 ) | (size_t) p->rxFrame[ 4 ] );
+                if( p->rxFrameNeed > PICOTLS_MAX_RECORD )
+                {
+                    LogError( ( "recv: TLS record too large (%u)", (unsigned) p->rxFrameNeed ) );
+                    return -1;
+                }
+            }
+            if( ( p->rxFrameNeed != 0U ) && ( p->rxFrameFilled >= p->rxFrameNeed ) )
+            {
+                break; /* a whole record is in rxFrame */
+            }
+        }
+
+        /* (C) Decrypt the complete record — ptls_receive fast-paths it (recvbuf.rec stays NULL). */
+        {
+            size_t recBytes = p->rxFrameNeed;
+            p->rxFrameFilled = 0;
+            p->rxFrameNeed = 0;
+            if( picotls_feed_records( p, p->rxFrame, recBytes ) != 0 )
+            {
+                return -1;
+            }
+        }
     }
-    if( n < 0 )
+    else
     {
-        LogError( ( "recv: socket error %d", ( int ) n ) );
-        return -1;
+        /* Chunked path (small-record connections, e.g. MQTT/telemetry, and any part too heap-tight for
+         * the frame buffer): read one MTU-ish ciphertext chunk and let picotls reassemble records
+         * internally. The per-record recvbuf.rec churn is negligible for a handful of control records,
+         * and this avoids holding a resident 16 KB buffer that bl602 (~35 KB free) can't spare. */
+        uint8_t rxCipher[ PICOTLS_RX_CIPHER_CHUNK ];
+
+        n = TCP_Sockets_Recv( p->tcpSocket, rxCipher, sizeof( rxCipher ) );
+        if( n == 0 )
+        {
+            return 0; /* timeout, no data — caller retries */
+        }
+        if( n < 0 )
+        {
+            LogError( ( "recv: socket error %d", ( int ) n ) );
+            return -1;
+        }
+        if( picotls_feed_records( p, rxCipher, ( size_t ) n ) != 0 )
+        {
+            return -1;
+        }
     }
 
-    /* (C) Decrypt. */
-    if( picotls_feed_records( p, rxCipher, ( size_t ) n ) != 0 )
-    {
-        return -1;
-    }
     if( p->rxPlain.off == 0 )
     {
         return 0; /* only non-application records (e.g. NewSessionTicket) — retry */

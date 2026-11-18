@@ -1,0 +1,42 @@
+// Unsigned template; keys are supplied only in ignored build artifacts.
+{
+  "version": 1,
+  "image1": {
+    "img_id": 0,
+    "img_ver_major": 1,
+    "img_ver_minor": 1,
+    "huk_epoch": 1,
+    "rsip_iv": "0000000000000000"
+  },
+  "cert": {},
+  "image2": {
+    "img_id": 1,
+    "img_ver_major": 1,
+    "img_ver_minor": 1,
+    "huk_epoch": 1,
+    "rsip_iv": "0000000000000000"
+  },
+  "image3": {
+    "rdp_enable": false,
+    "rdp_iv": "0123456789abcdef",
+    "rdp_key": "otp_key_0x200"
+  },
+  "sboot_enable": false,
+  "sboot_algorithm": "ed25519",
+  "sboot_hash_alg": "sha256",
+  "sboot_hmac_key": "otp_key_0x220",
+  "rsip_enable": false,
+  "rsip_mode": 1,
+  "rsip_key_group": "rsip_xts_g0",
+  "rsip_xts_g0": [
+    "otp_key_0x2C0",
+    "otp_key_0x2E0"
+  ],
+  "rsip_ctr_g0": [
+    "otp_key_0x2E0"
+  ],
+  "otp_key_0x2C0": "0000000000000000000000000000000000000000000000000000000000000000",
+  "otp_key_0x2E0": "0000000000000000000000000000000000000000000000000000000000000000",
+  "otp_key_0x200": "0000000000000000000000000000000000000000000000000000000000000000",
+  "otp_key_0x220": "0000000000000000000000000000000000000000000000000000000000000000"
+}

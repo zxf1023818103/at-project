@@ -34,6 +34,14 @@ const at_console_backend_t *at_console_default_backend(void);
 int at_console_read(char *buf, int len);                /* fd 0: canonical line  */
 int at_console_write(int fd, const char *buf, int len); /* fd 0/1->putc, 2->err  */
 
+/* Raw byte I/O straight to the active backend, bypassing the line discipline: no
+ * timestamp prefix (at_console_write_raw) and no echo / CR-LF canonicalisation
+ * (at_console_getc). The interactive console (component/monitor_config) uses these
+ * for its prompt / echo / command output (which must NOT be timestamped) and its
+ * own line editor. at_console_getc returns the byte (0..255) or <0 when idle. */
+void at_console_write_raw(const char *buf, int len);
+int  at_console_getc(void);
+
 /* Per-line log timestamp prefix. at_console_write() calls this at the start of
  * every output line and emits the returned bytes before the line's content, so
  * all printf-routed logs are timestamped with no call-site changes. Writes the

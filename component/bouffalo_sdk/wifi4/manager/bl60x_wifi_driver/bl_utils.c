@@ -8,12 +8,10 @@
  */
 
 #include <string.h>
-#include <lwip/api.h>
-#include <lwip/opt.h>
-#include <lwip/def.h>
-#include <lwip/mem.h>
-#include <lwip/pbuf.h>
-#include <lwip/netif.h>
+#include <FreeRTOS.h>
+#include "FreeRTOS_IP.h"
+#include "NetworkBufferManagement.h"
+#include "bl_compat.h"
 #include <wifi_mgmr_ext.h>
 #include <wifi_pkt_hooks.h>
 
@@ -39,41 +37,12 @@
 
 extern struct bl_hw wifi_hw;
 
-#if 1
-typedef struct bl_custom_pbuf
-{
-    struct pbuf_custom p;
-    void *swdesc;
-} bl_custom_pbuf_t;
-#else
-typedef struct bl_custom_pbuf
-{
-    struct pbuf_custom p;
-    uint32_t payload[1800 >> 2];
-} bl_custom_pbuf_t;
-#undef LWIP_DECLARE_MEMORY_ALIGNED
-#ifdef CONF_USER_ENABLE_PSRAM
-#define LWIP_DECLARE_MEMORY_ALIGNED(variable_name, size) u8_t variable_name[LWIP_MEM_ALIGN_BUFFER(size)] __attribute__((section(".wifi_psram")))
-LWIP_MEMPOOL_DECLARE(RX_POOL, 100, sizeof(bl_custom_pbuf_t), "bl_zero_copy_rx");
-#else
-#define LWIP_DECLARE_MEMORY_ALIGNED(variable_name, size) u8_t variable_name[LWIP_MEM_ALIGN_BUFFER(size)] __attribute__((section(".wifi_ram")))
-LWIP_MEMPOOL_DECLARE(RX_POOL, 24, sizeof(bl_custom_pbuf_t), "bl_zero_copy_rx");
-#endif
-#endif
-
-static void my_pbuf_free_custom(struct pbuf *p)
-{
-    bl_custom_pbuf_t* my_pbuf = (bl_custom_pbuf_t*)p;
-
-void bl60x_firmwre_mpdu_free(void *swdesc);
-    //bflb_os_printf("--- cb free@%p\r\n", my_pbuf->swdesc);
-    bl60x_firmwre_mpdu_free(my_pbuf->swdesc);
-}
-
-static void my_pbuf_free_custom_fake(struct pbuf *p)
-{
-    /*nothing needs to be done for tailed pbuf*/
-}
+extern void bl60x_firmwre_mpdu_free(void *swdesc);
+/* FreeRTOS-Plus-TCP RX bridge (component/bouffalo_sdk/freertos_tcp_port/bl602_netif.c):
+ * alloc a NetworkBufferDescriptor (NULL if the stack is not up / pool empty) and
+ * submit the filled buffer to the IP task. Replaces the lwIP custom-pbuf RX pool. */
+extern NetworkBufferDescriptor_t *bl602_tcp_rx_alloc(uint32_t len);
+extern void bl602_tcp_rx_submit(NetworkBufferDescriptor_t *pxBuf, uint32_t len);
 
 static inline struct bl_vif *bl_rx_get_vif(int sta_idx)
 {
@@ -272,78 +241,6 @@ __attribute__((unused)) static void dump_pkt_infor(struct hw_rxhdr *hw_rxhdr)
     }
 }
 
-static inline struct pbuf *_handle_frame_from_stack_with_mempool(void *swdesc, unsigned int msdu_offset, struct wifi_pkt *pkt)
-{
-    struct pbuf *t, *h;
-    int i = 0;
-
-    h = pbuf_alloc(PBUF_RAW, pkt->len[0] - msdu_offset, PBUF_POOL);
-    if (NULL == h) {
-        printf("error mem1 ========================================== pbuf mem\r\n");
-        return NULL;
-    }
-    pbuf_take(h, (uint8_t*)(pkt->pkt[0]) + msdu_offset, pkt->len[0] - msdu_offset);
-
-    i = 1;//header is already set
-    while (i < sizeof(pkt->pkt)/sizeof(pkt->pkt[0])) {
-        if (0 == pkt->len[i]) {
-            break;
-        }
-        t = pbuf_alloc(PBUF_RAW, pkt->len[i], PBUF_POOL);
-        if (t) {
-            pbuf_take(t, (uintptr_t*)pkt->pkt[i], pkt->len[i]);
-            pbuf_cat(h, t);
-            i++;
-        } else {
-            printf("error mem2 ====================================== pbuf mem\r\n");
-            pbuf_free(h);
-            return NULL;
-        }
-    }
-    return h;
-}
-
-static inline struct pbuf *_handle_frame_from_stack_with_zerocopy(void *swdesc, unsigned int msdu_offset, struct wifi_pkt *pkt)
-{
-    struct pbuf *h, *t;
-    int i;
-    bl_custom_pbuf_t* my_pbuf;
-
-    my_pbuf = (bl_custom_pbuf_t*)pkt->pbuf[0];
-    memset(my_pbuf, 0, sizeof(bl_custom_pbuf_t));
-    my_pbuf->p.custom_free_function = my_pbuf_free_custom;
-    my_pbuf->swdesc = swdesc;
-    h = pbuf_alloced_custom(
-            PBUF_RAW,
-            pkt->len[0] - msdu_offset,
-            PBUF_REF,
-            &my_pbuf->p,
-            (uint8_t*)(pkt->pkt[0]) + msdu_offset,
-            pkt->len[0] - msdu_offset
-    );
-
-    i = 1;//header is already set
-    while (i < sizeof(pkt->pkt)/sizeof(pkt->pkt[0])) {
-        if (0 == pkt->len[i]) {
-            break;
-        }
-        my_pbuf = (bl_custom_pbuf_t*)pkt->pbuf[i];
-        memset(my_pbuf, 0, sizeof(bl_custom_pbuf_t));
-        my_pbuf->p.custom_free_function = my_pbuf_free_custom_fake;
-        t = pbuf_alloced_custom(
-                PBUF_RAW,
-                pkt->len[i],
-                PBUF_REF,
-                &my_pbuf->p,
-                (uint8_t*)(pkt->pkt[i]),
-                pkt->len[i]
-        );
-        pbuf_cat(h, t);
-        i++;
-    }
-    return h;
-}
-
 #ifdef CFG_NETBUS_WIFI_ENABLE
 void pbuf_cfm_cb(int idx, void *arg)
 {
@@ -372,6 +269,57 @@ static int tcpip_src_addr_cmp(struct ethhdr *hdr, uint8_t addr[])
 #endif
 
 int tcpip_stack_input(void *swdesc, uint8_t status, void *hwhdr, unsigned int msdu_offset, struct wifi_pkt *pkt, uint8_t extra_status)
+{
+    struct hw_rxhdr *hw_rxhdr = (struct hw_rxhdr*)hwhdr;
+    struct bl_vif *bl_vif;
+    NetworkBufferDescriptor_t *pxBuf;
+    uint32_t total, off;
+    int i;
+
+    (void)extra_status;
+
+    /* Only forward frames destined for the host stack. */
+    if (!(status & RX_STAT_FORWARD)) {
+        return -1;   /* caller frees the fw buffer */
+    }
+
+    /* 802.11 monitor/mgmt (sniffer) frames are not bridged in this STA slice. */
+    if (hw_rxhdr->flags_is_80211_mpdu) {
+        return -1;
+    }
+
+    bl_vif = bl_rx_get_vif(hw_rxhdr->flags_sta_idx);
+    if (!bl_vif || !bl_vif->up) {
+        return -1;
+    }
+
+    /* Total length across fragments (frag 0 skips msdu_offset). */
+    total = pkt->len[0] - msdu_offset;
+    for (i = 1; i < (int)(sizeof(pkt->pkt) / sizeof(pkt->pkt[0])); i++) {
+        if (0 == pkt->len[i]) break;
+        total += pkt->len[i];
+    }
+
+    pxBuf = bl602_tcp_rx_alloc(total);
+    if (!pxBuf) {
+        return -1;   /* stack not up or pool empty -> caller frees */
+    }
+
+    memcpy(pxBuf->pucEthernetBuffer, (uint8_t*)pkt->pkt[0] + msdu_offset, pkt->len[0] - msdu_offset);
+    off = pkt->len[0] - msdu_offset;
+    for (i = 1; i < (int)(sizeof(pkt->pkt) / sizeof(pkt->pkt[0])); i++) {
+        if (0 == pkt->len[i]) break;
+        memcpy(pxBuf->pucEthernetBuffer + off, (uint8_t*)pkt->pkt[i], pkt->len[i]);
+        off += pkt->len[i];
+    }
+
+    bl60x_firmwre_mpdu_free(swdesc);   /* frame copied out -> release fw RX buffer */
+    bl602_tcp_rx_submit(pxBuf, total);
+    return 0;                          /* we freed the fw buffer ourselves */
+}
+
+#if 0  /* old lwIP RX body (pbuf + netif->input + AP intra-BSS + netbus) — replaced above */
+int tcpip_stack_input_lwip_old(void *swdesc, uint8_t status, void *hwhdr, unsigned int msdu_offset, struct wifi_pkt *pkt, uint8_t extra_status)
 {
     struct hw_rxhdr *hw_rxhdr = (struct hw_rxhdr*)hwhdr;
 
@@ -537,6 +485,7 @@ end:
         return 0;
     }
 }
+#endif  /* old lwIP RX body */
 
 u8 bl_radarind(void *pthis, void *hostid)
 {
@@ -618,7 +567,7 @@ int bl_ipc_init(struct bl_hw *bl_hw, struct ipc_shared_env_tag *ipc_shared_mem)
 void bl_utils_dump(void)
 {
     int i, cnt;
-    struct pbuf *p;
+    uint8_t *p;
     struct bl_txhdr *txhdr;
 
     bflb_os_puts("---------- bl_utils_dump -----------\r\n");
@@ -642,8 +591,8 @@ void bl_utils_dump(void)
             /*break on empty*/
             break;
         }
-        p = (struct pbuf*)(ipc_env->tx_host_id0[(ipc_env->txdesc_used_idx + i) & (NX_TXDESC_CNT0 - 1)]);
-        txhdr = (struct bl_txhdr*)(((uint32_t)p->payload) + RWNX_HWTXHDR_ALIGN_PADS((uint32_t)p->payload));
+        p = (uint8_t*)(ipc_env->tx_host_id0[(ipc_env->txdesc_used_idx + i) & (NX_TXDESC_CNT0 - 1)]);
+        txhdr = (struct bl_txhdr*)((uint32_t)p + RWNX_HWTXHDR_ALIGN_PADS((uint32_t)p));
         bflb_os_printf("    [%lu]%p(%p:%08lX)\r\n",
                 (ipc_env->txdesc_used_idx + i) & (NX_TXDESC_CNT0 - 1),
                 p,

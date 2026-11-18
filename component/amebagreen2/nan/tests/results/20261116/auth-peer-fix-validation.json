@@ -1,0 +1,129 @@
+{
+  "date": "2026-11-16",
+  "change": "Create an ordinary unauthenticated vendor peer for eligible early PASN Auth1 before calling original validation, adapted from reference GREEN2_NAN_AUTH_PEER_FIX.",
+  "firmware": {
+    "bytes": 898432,
+    "sha256": "c4317e78f61016ea61b138925faf354d968567b93cded17969f064145e6933bd",
+    "combined_application_bytes": 832896,
+    "target": "COM5 / AmebaGreen2 / DID 0x7005",
+    "programming_readback": "PASS"
+  },
+  "native_tests": {
+    "sanitizers": [
+      "address",
+      "undefined"
+    ],
+    "passed": 5,
+    "failed": 0,
+    "added_test": "pasn_early_peer_context",
+    "coverage": [
+      "missing/existing peer",
+      "native rejection and return value preserved",
+      "duplicate/retry idempotence",
+      "allocation failure",
+      "frame/source/flags/transaction/status validation",
+      "null/truncated/maximum length and IE bounds"
+    ]
+  },
+  "linked_np_entry_checked": true,
+  "cold_module_restarts": {
+    "successes": 5,
+    "requested": 5,
+    "ready_seconds": {
+      "min": 2.938351499964483,
+      "median": 2.9470896249986254,
+      "max": 4.334130000032019
+    }
+  },
+  "continuous_reconnect": {
+    "successes": 20,
+    "requested": 20,
+    "ready_seconds": {
+      "min": 0.46134720830013976,
+      "median": 0.9794162083708216,
+      "max": 3.2341594583704136
+    }
+  },
+  "app_restarts_module_running": {
+    "successes": 10,
+    "requested": 10,
+    "ready_seconds": {
+      "min": 1.8775752083747648,
+      "median": 2.1806551458430476,
+      "max": 2.521080583333969
+    }
+  },
+  "throughput_30_seconds_each_direction": [
+    {
+      "bytes": 45809664,
+      "direction": "upload",
+      "mbps": 12.177348795480977,
+      "peerBytes": 45809664,
+      "receiverSeconds": 30.095,
+      "senderSeconds": 30.0493911250378
+    },
+    {
+      "bytes": 78905344,
+      "direction": "download",
+      "mbps": 21.032997670307118,
+      "peerBytes": 78905344,
+      "receiverSeconds": 30.01202025002567,
+      "senderSeconds": 30.012
+    }
+  ],
+  "uart_observations": {
+    "early_peer_created": 0,
+    "early_peer_allocation_failures": 0,
+    "missing_peer_warnings": 0,
+    "station_add_failures": 0,
+    "protocol_aborts": 0,
+    "PKE_self_tests_during_cold_cases": 5,
+    "transfer_queue_counters": [
+      {
+        "rxdrop": 0,
+        "txdrop": 0
+      },
+      {
+        "rxdrop": 0,
+        "txdrop": 0
+      }
+    ],
+    "sampled_ap_heap_during_transfer": [
+      36300,
+      36300,
+      36300,
+      37420,
+      37420,
+      37420
+    ]
+  },
+  "limitations": [
+    "No real early-Auth1/missing-peer case occurred in these captures (early_peer_created=0). The new branch is covered by native tests and verified in the linked image, but recovery on this hardware is not demonstrated by these runs.",
+    "The phone already had a completed 100/100 reconnect report before this patch. Do not attribute 35/35 here versus the older 18/20 report to a measured reliability improvement.",
+    "Cold ready times remain several seconds; no sub-second cold-start guarantee.",
+    "One CoreDevice launch failed to obtain a process ID and one was denied because the device was locked. Neither started a connection test; after the user requested retry, testing succeeded.",
+    "Only current AP heap samples and software queue-drop counters are measured. These are not a true minimum heap or proof of zero RF loss/TCP retransmissions.",
+    "Original archive, radio settings, bulk buffers, task priorities, 10-second heap logging and app source are unchanged. No new throughput gain is claimed."
+  ],
+  "reports": [
+    "iphone-auth-peer-cold-five-rounds.json",
+    "iphone-auth-peer-twenty-rounds.json",
+    "iphone-auth-peer-app-restart-ten-rounds.json",
+    "throughput-auth-peer-30s.json"
+  ],
+  "final_health": {
+    "running": 1,
+    "events": 352,
+    "dropped": 0,
+    "link": 0,
+    "rx": 72208,
+    "tx": 81741,
+    "pong": 31,
+    "up": 1,
+    "down": 1,
+    "err": 0,
+    "rxdrop": 0,
+    "txdrop": 0,
+    "available_ap_heap_bytes": 132068
+  }
+}

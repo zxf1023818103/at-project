@@ -57,4 +57,8 @@ int amebad_time_is_synced(void);
 }
 #endif
 
+/* Earliest libc bring-up (TLS/thread-pointer on picolibc; no-op on newlib).
+ * Call once from main() before any other libc use. */
+void at_libc_early_init( void );
+
 #endif /* AT_SYSCALLS_H */

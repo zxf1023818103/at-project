@@ -12,6 +12,9 @@
 #ifndef MCUMGR_BUF_SZ
 #define MCUMGR_BUF_SZ 1152     /* holds one SMP packet: 8B hdr + CBOR(img upload chunk + keys) */
 #endif
+#ifndef MCUMGR_SMP_BORROW_REQUEST
+#define MCUMGR_SMP_BORROW_REQUEST 0
+#endif
 
 /* Flat SMP buffer. `off` is the trim watermark (mcumgr trims the header / processed requests off
  * the front); `len` is the total valid length from base. */
@@ -22,9 +25,13 @@ struct mcumgr_buf {
     size_t   cap;
 };
 
-static uint8_t s_req_data[MCUMGR_BUF_SZ];
 static uint8_t s_rsp_data[MCUMGR_BUF_SZ];
+#if MCUMGR_SMP_BORROW_REQUEST
+static struct mcumgr_buf s_req;
+#else
+static uint8_t s_req_data[MCUMGR_BUF_SZ];
 static struct mcumgr_buf s_req = { s_req_data, 0, 0, sizeof s_req_data };
+#endif
 static struct mcumgr_buf s_rsp = { s_rsp_data, 0, 0, sizeof s_rsp_data };
 
 static mcumgr_tx_fn   s_tx;
@@ -138,6 +145,15 @@ cb_reset_buf(void *buf, void *arg)
 {
     struct mcumgr_buf *b = buf;
     (void)arg;
+#if MCUMGR_SMP_BORROW_REQUEST
+    /* SMP can reuse its request as an error response after tx fails and it has
+     * relinquished rsp. Redirect that fallback to our owned response storage;
+     * the borrowed request bytes must remain read-only even on this path. */
+    if (b == &s_req) {
+        b->base = s_rsp_data;
+        b->cap = sizeof s_rsp_data;
+    }
+#endif
     b->off = 0;
     b->len = 0;
 }
@@ -220,15 +236,31 @@ static struct smp_streamer s_streamer = {
 int
 mcumgr_smp_process(const uint8_t *req, size_t req_len, mcumgr_tx_fn tx, void *arg)
 {
-    if (req_len > sizeof s_req_data) {
+    if (req_len > MCUMGR_BUF_SZ) {
         return MGMT_ERR_ENOMEM;
     }
+#if MCUMGR_SMP_BORROW_REQUEST
+    /* Synchronous, single-task processing: only the offset/length metadata is
+     * trimmed. SMP reads request bytes; all writes target the separate response.
+     * The caller keeps req immutable until this function (including tx) returns. */
+    s_req.base = (uint8_t *)req;
+    s_req.cap = req_len;
+#else
     memcpy(s_req_data, req, req_len);
+#endif
     s_req.off = 0;
     s_req.len = req_len;
     s_tx = tx;
     s_tx_arg = arg;
-    return smp_process_request_packet(&s_streamer, &s_req);
+    int rc = smp_process_request_packet(&s_streamer, &s_req);
+#if MCUMGR_SMP_BORROW_REQUEST
+    /* Never leave a borrowed transport buffer reachable after its lifetime. */
+    memset(&s_req, 0, sizeof s_req);
+    memset(&s_reader, 0, sizeof s_reader);
+#endif
+    s_tx = NULL;
+    s_tx_arg = NULL;
+    return rc;
 }
 
 size_t

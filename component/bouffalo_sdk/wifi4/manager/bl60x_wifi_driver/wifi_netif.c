@@ -1,25 +1,18 @@
-#include <lwip/netifapi.h>
 
 #include "wifi_mgmr.h"
 #include "wifi_netif.h"
 
 #define DEBUG_HEADER "[WF][IF] "
 
-int wifi_netif_dhcp_start(struct netif *netif)
+/* lwIP removed: DHCP is driven by the FreeRTOS-Plus-TCP endpoint (bWantDHCP) and
+ * (re)kicked from the driver connect indication (bl602_tcp_kick). These wrappers
+ * are no-ops kept so the wifi_mgmr state machine call sites still link. */
+int wifi_netif_dhcp_start(void)
 {
-    if (0 == wifiMgmr.wlan_sta.dhcp_started) {
-        netifapi_dhcp_start(netif);
-        wifiMgmr.wlan_sta.dhcp_started = 1;
-    } else {
-        bflb_os_printf(DEBUG_HEADER "Skip DHCPCing...\r\n");
-    }
     return 0;
 }
 
-int wifi_netif_dhcp_stop(struct netif *netif)
+int wifi_netif_dhcp_stop(void)
 {
-    netifapi_dhcp_stop(netif);
-    wifiMgmr.wlan_sta.dhcp_started = 0;
     return 0;
 }
-

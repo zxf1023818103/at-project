@@ -24,11 +24,11 @@
 #include "board_flash_psram.h"
 
 #include "mm.h"
+#include "ram_heap.h"   /* shared ram_heap_init() (freertos-kernel_config): OCRAM + WRAM */
 
-extern void log_start(void);
 
-extern uint32_t __HeapBase;
-extern uint32_t __HeapLimit;
+/* PSRAM heap symbols stay board-local: PSRAM needs board_psram_x8_init() HW bring-up,
+ * which can't live in the cross-platform ram_heap.c (see board_psram_heap_init below). */
 extern uint32_t __psram_heap_base;
 extern uint32_t __psram_limit;
 
@@ -36,9 +36,6 @@ extern uint32_t __psram_data_start__;
 extern uint32_t __psram_data_end__;
 extern uint32_t __psram_noinit_data_start__;
 extern uint32_t __psram_noinit_data_end__;
-
-extern uint32_t _heap_wifi_start;
-extern uint32_t _heap_wifi_size;
 
 #ifdef CONFIG_CONSOLE_WO
 static struct bflb_device_s *wo;
@@ -55,6 +52,12 @@ static void ATTR_CLOCK_SECTION __attribute__((noinline)) system_clock_init(void)
 #if 1
     /* wifipll/audiopll */
     GLB_Power_On_XTAL_And_PLL_CLK(GLB_XTAL_40M, GLB_PLL_WIFIPLL | GLB_PLL_AUPLL);
+    /* 320M is the SDK default and the production clock. One early bring-up board showed
+     * intermittent instruction-fetch corruption at 320M under sustained WiFi MAC DMA (a
+     * silent hang mid-OTA), but that reproduced on nothing else and healthy boards run
+     * 320M fine end to end (telemetry + HTTPS OTA), so it was an individual hardware fault
+     * on that unit, not a part-wide limit. If a specific board proves unstable at 320M,
+     * drop to GLB_MCU_SYS_CLK_TOP_WIFIPLL_240M here (+ fw_header.c mcu_clk = 0x04). */
     GLB_Set_MCU_System_CLK(GLB_MCU_SYS_CLK_TOP_WIFIPLL_320M);
     HBN_Set_MCU_XCLK_Sel(HBN_MCU_XCLK_XTAL);
 #else
@@ -316,7 +319,10 @@ static void console_init()
     struct bflb_device_s *gpio;
 
     gpio = bflb_device_get_by_name("gpio");
-    bflb_gpio_uart_init(gpio, GPIO_PIN_30, GPIO_UART_FUNC_UART0_TX);
+    /* This bench's bl616dk wires the console-capture UART (COM22) to GPIO21, not the SDK
+     * default GPIO30 — verified by reading the third-party image's live GPIO func_sel and by
+     * stock helloworld printing on GPIO21. TX -> GPIO21 so the console lands on COM22. */
+    bflb_gpio_uart_init(gpio, GPIO_PIN_21, GPIO_UART_FUNC_UART0_TX);
     bflb_gpio_uart_init(gpio, GPIO_PIN_22, GPIO_UART_FUNC_UART0_RX);
 
     struct bflb_uart_config_s cfg = { 0 };
@@ -360,18 +366,11 @@ void bflb_wfa_init(void)
 }
 #endif
 
-void ram_heap_init(void)
+/* OCRAM + WiFi-DMA WRAM heaps are registered by the shared ram_heap_init()
+ * (component/freertos-kernel_config/ram_heap.c). PSRAM stays board-local because it needs
+ * board_psram_x8_init() hardware bring-up; board_init() calls this right after ram_heap_init(). */
+static void board_psram_heap_init(void)
 {
-    size_t heap_len;
-
-    /* ram heap init */
-    mem_manager_init();
-
-    /* ocram heap init */
-    heap_len = ((size_t)&__HeapLimit - (size_t)&__HeapBase);
-    mm_register_heap(MM_HEAP_OCRAM_0, "OCRAM", MM_ALLOCATOR_TLSF, &__HeapBase, heap_len);
-    mm_register_heap(MM_HEAP_WRAM_0, "WRAM", MM_ALLOCATOR_TLSF, &_heap_wifi_start, (uintptr_t)&_heap_wifi_size);
-
 #ifdef CONFIG_PSRAM
     /* psram init */
     if (board_psram_x8_init() != SUCCESS) {
@@ -380,29 +379,16 @@ void ram_heap_init(void)
     }
 
     /* psram heap init */
-    heap_len = ((size_t)&__psram_limit - (size_t)&__psram_heap_base);
 #ifndef CONFIG_PSRAM_SKIP_REGISTER_HEAP
-    mm_register_heap(MM_HEAP_PSRAM_0, "PSRAM", MM_ALLOCATOR_TLSF, &__psram_heap_base, heap_len);
+    mm_register_heap(MM_HEAP_PSRAM_0, "PSRAM", MM_ALLOCATOR_TLSF, &__psram_heap_base,
+                     (size_t)&__psram_limit - (size_t)&__psram_heap_base);
 #endif
-
-    /* ram info dump */
-    printf("dynamic memory init success\r\n"
-           "  ocram heap size: %d Kbyte, \r\n"
-           "  psram heap size: %d Kbyte\r\n",
-           ((size_t)&__HeapLimit - (size_t)&__HeapBase) / 1024,
-           ((size_t)&__psram_limit - (size_t)&__psram_heap_base) / 1024);
-
 #else
     /* check psram data */
     if (&__psram_data_end__ - &__psram_data_start__ > 0 || &__psram_noinit_data_end__ - &__psram_noinit_data_start__ > 0) {
         puts("psram data already exists, please enable CONFIG_PSRAM\r\n");
         while (1) {}
     }
-
-    /* ram info dump */
-    printf("dynamic memory init success\r\n"
-           "  ocram heap size: %d Kbyte \r\n",
-           ((size_t)&__HeapLimit - (size_t)&__HeapBase) / 1024);
 #endif
 }
 
@@ -448,8 +434,9 @@ void board_init(void)
     /* console init (uart or wo) */
     console_init();
 
-    /* ram and heap init (including psram) */
+    /* ram and heap init: shared OCRAM + WRAM, then board-local PSRAM */
     ram_heap_init();
+    board_psram_heap_init();
 
     /* boot info dump */
     bl_show_log();
@@ -473,7 +460,6 @@ void board_init(void)
     HBN_Get_Xtal_Value(&xtal_value);
     printf("xtal:%dHz(%s)\r\n", xtal_value, ((getreg32(AON_BASE + AON_XTAL_CFG_OFFSET) >> 3) & 0x01) ? "oscillator" : "crystal");
 
-    log_start();
 
 #if (defined(CONFIG_LUA) || defined(CONFIG_BFLB_LOG) || defined(CONFIG_FATFS))
     rtc = bflb_device_get_by_name("rtc");

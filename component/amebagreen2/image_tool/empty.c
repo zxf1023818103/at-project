@@ -1,0 +1,1 @@
+/* The bootloader entry table is supplied by the hardware component. */

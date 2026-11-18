@@ -42,11 +42,9 @@
 
 # Ameba Dplus / Green2
 
-`project/ameba/CMakeLists.txt` `include(src/CMakeLists.txt)` 后，调 `ameba_add_internal_library(at_user p_SOURCES ${AT_USER_SOURCES} …)` 注册到当前 image。
+Dplus 使用 `project/amebadplus/{bootloader_km4,app_km0,app_km4}` 三个独立 CMake/Ninja 工程，对应芯片实际镜像。与 `project/amebad` 一样，项目目录负责入口、配置和链接脚本，`component/amebadplus` 负责硬件适配，`component/*_config` 负责共享中间件。KM4 编译共享 `src/main.cpp`。构建入口为 `make -C project amebadplus`，产物在 `build/amebadplus`。详见 [Dplus README](../project/amebadplus/README.md)。
 
-第三方 CMake 工程的标准接法（`ameba_add_subdirectory` + `ameba_port_standalone_internal_library`）在这里不适用：那条路径不把 SDK 的全局 include / define 注入到目标，会导致 `FreeRTOSConfig.h` 等系统头找不到。
-
-参考 `platform/ameba-rtos/cmake/CMakeLists-template.cmake`。
+Green2 原有 `ameba.py` 构建配置已移至 `project/amebagreen2`；此次未验证 Green2。旧 `project/ameba` 已删除。
 
 # BL602 / BL616 / BL616CL
 

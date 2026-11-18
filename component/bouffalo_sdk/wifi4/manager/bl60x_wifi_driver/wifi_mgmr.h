@@ -200,6 +200,7 @@ typedef struct wifi_mgmr_scan_item {
     uint8_t is_used;
     uint8_t wps;
     uint8_t group_cipher;
+    uint8_t country[2];   /* at-project: beacon 802.11d Country IE (0 = absent) */
 } wifi_mgmr_scan_item_t;
 
 struct wlan_netif {
@@ -214,7 +215,8 @@ struct wlan_netif {
         uint32_t dns1;
         uint32_t dns2;
     } ipv4;
-    struct netif netif;
+    /* lwIP `struct netif` removed — the FreeRTOS-Plus-TCP interface/endpoint live in
+     * component/bouffalo_sdk/freertos_tcp_port/bl602_netif.c (static, one STA vif). */
     union {
         struct {
             int8_t rssi;

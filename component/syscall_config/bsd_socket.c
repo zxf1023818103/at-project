@@ -111,7 +111,7 @@ static void from_freertos(const struct freertos_sockaddr *fa, struct sockaddr *s
 
 /* ---- connected-UDP shim (for c-ares): FreeRTOS+TCP has no connect() on a UDP socket, so we
  * remember the peer set via connect() on a SOCK_DGRAM fd and route send()/recv() on it through
- * FreeRTOS_sendto()/FreeRTOS_recvfrom(). socket() (re)registers a fd, so closed-fd reuse is fine. */
+ * FreeRTOS_sendto()/FreeRTOS_recvfrom(). */
 static struct udp_ent {
     int                      fd;        /* 0 = free (socket fds are >= 3) */
     int                      has_peer;
@@ -130,6 +130,20 @@ static void udp_track(int fd, int is_udp)
     struct udp_ent *e = udp_find(fd);
     if (is_udp) {
         if (e == NULL) { int i; for (i = 0; i < 8; i++) { if (s_udp[i].fd == 0) { e = &s_udp[i]; break; } } }
+        if (e == NULL) {
+            /* Table full: every slot holds a CLOSED socket's entry. VFS fds are MONOTONIC (never
+             * reused), so the original "socket() re-registers a reused fd" reclamation never fires:
+             * after 8 UDP sockets (c-ares makes one per DNS query) the table stayed full forever and
+             * every later query's connect() fell through to FreeRTOS_connect() on a UDP socket ->
+             * ECONNREFUSED -> c-ares reports ARES_ECONNREFUSED for every resolve until reboot (the
+             * long-standing "DNS wedge"; first host resolved after the wedge with no last-good cache
+             * entry - e.g. the OTA S3 endpoint - hard-fails). Reclaim entries whose fd no longer maps
+             * to a live socket. */
+            int i;
+            for (i = 0; i < 8; i++) {
+                if (sock(s_udp[i].fd) == NULL) { e = &s_udp[i]; break; }
+            }
+        }
         if (e != NULL) { e->fd = fd; e->has_peer = 0; }
     } else if (e != NULL) {
         e->fd = 0; e->has_peer = 0;

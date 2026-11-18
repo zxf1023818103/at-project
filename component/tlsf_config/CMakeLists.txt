@@ -27,14 +27,14 @@ target_include_directories(tlsf_config PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/tlsf"
 )
 
-# mm.h includes bflb_l1c.h; mm.c/mm_debug.c/tlsf_allocator.c also log. On Bouffalo the logging
-# comes from bflb_lhal/bflb_log's <log.h> (MM_USE_BFLB_LOG); elsewhere the port_generic shims supply
-# portable equivalents (bflb_l1c/bflb_irq/IS_ENABLED). The logging shim is NOT a "log.h" — that name
-# shadows other components' log.h (e.g. rxi_log_config's) on the shared include path — it's the
-# uniquely-named mm_log_stub.h, selected by the consumers when MM_USE_BFLB_LOG is unset.
+# mm.h includes bflb_l1c.h; mm.c/mm_debug.c/tlsf_allocator.c also log. On Bouffalo bflb_l1c.h is the
+# real HAL (bflb_lhal); logging uses the portable no-op mm_log_stub.h (same as every other platform).
+# bflb_log was deleted, and tlsf_config can't link the rxi logger (it would cycle: rxi_log ->
+# freertos_config -> tlsf_config), so mm's LOG_* stay no-ops here — mm errors are fatal/rare. Elsewhere
+# the port_generic shims supply bflb_l1c/bflb_irq/IS_ENABLED. mm_log_stub.h is uniquely named (not a
+# "log.h") so it never shadows rxi_log_config's log.h on the shared include path.
 if(BOUFFALO_CHIP)
-    target_link_libraries(tlsf_config PUBLIC bflb_lhal bflb_log)
-    target_compile_definitions(tlsf_config PRIVATE MM_USE_BFLB_LOG)
+    target_link_libraries(tlsf_config PUBLIC bflb_lhal)
 else()
     # PUBLIC: mm.h (a public header) #includes <bflb_l1c.h>, so consumers of tlsf_config
     # need the shims on their path too — not just tlsf_config's own sources.

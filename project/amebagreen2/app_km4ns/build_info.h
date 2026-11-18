@@ -1,0 +1,7 @@
+#define UTS_VERSION "2026-06-10 19:52:41"
+#define RTL_FW_COMPILE_TIME "2026-06-10 19:52:41"
+#define RTL_FW_COMPILE_DATE "2026-06-10"
+#define RTL_FW_COMPILE_BY "zxf10"
+#define RTL_FW_COMPILE_HOST "home"
+#define RTL_FW_COMPILE_DOMAIN "home"
+#define RTL_FW_COMPILER "arm-none-eabi-gcc"

@@ -10,8 +10,8 @@
 | BL616 | `project/bouffalo/build_bl616/build_out/at_bl616.elf` | 8,061,184 B |
 | BL616CL | `project/bouffalo/build_bl616cl/build_out/at_bl616cl.elf` | 7,828,320 B |
 | AmebaD | `project/amebad/out/Image_All.bin` | ✅ |
-| AmebaDplus | `project/ameba/build_RTL8711Dx/Image_All.bin` | ✅ |
-| AmebaGreen2 | `project/ameba/build_RTL8711F/Image_All.bin` | ✅ |
+| AmebaDplus | `build/amebadplus/Image_All.bin` | ✅ |
+| AmebaGreen2 | `project/amebagreen2/build_RTL8711F/Image_All.bin` | ✅ |
 
 本文档只覆盖 Bouffalo 三颗芯片；Realtek 阵营见 [realtek_network_stack_eval.md](realtek_network_stack_eval.md)。
 

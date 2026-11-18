@@ -217,7 +217,8 @@ struct bl_bcn {
  */
 struct bl_vif {
     struct list_head list;
-    struct netif *dev;
+    void *dev;                  /* was lwIP `struct netif *`; unused after the
+                                   FreeRTOS-Plus-TCP switch (RX uses `up` only) */
     bool up;                    /* Indicate if associated netdev is up
                                    (i.e. Interface is created at fw level) */
     u8 vif_idx;

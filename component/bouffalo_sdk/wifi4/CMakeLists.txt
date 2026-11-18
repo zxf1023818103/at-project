@@ -65,23 +65,24 @@ target_include_directories(wifi4_internal_headers INTERFACE
 # SDK's old global include space (utils_list.h, utils_hex.h, utils_log.h,
 # …). PUBLIC-link propagation gives every wifi4 sublib that PRIVATEly
 # uses wifi4_internal_headers transparent access to these headers.
-# lwip is here too — wifi_mgmr_ext.h and a half-dozen .c files #include
-# <lwip/…> directly. Linking lwipcore brings its PUBLIC include surface
-# (lwip/* + lwipopts.h via bflb_lwip_port) onto the line.
+# The BL602 driver's packet path was rewritten from lwIP pbuf/netif onto
+# FreeRTOS-Plus-TCP NetworkBufferDescriptor_t (bl_utils.c RX + bl_tx.c TX call into
+# component/bouffalo_sdk/freertos_tcp_port/bl602_netif.c), so the driver TUs now need
+# the FreeRTOS+TCP + FreeRTOS include surface (FreeRTOS_IP.h / NetworkBufferManagement.h).
 target_link_libraries(wifi4_internal_headers INTERFACE
     bflb_list
     bflb_math
-    bflb_log
+    rxi_log
     bflb_ring_buffer
-    lwipcore
-    lwip_dhcpd
+    freertos_plus_tcp
+    freertos_config
 )
 # wpa_supplicant's crypto layer #includes <mbedtls/aes.h> unconditionally
-# (USE_MBEDTLS_CRYPTO is hardwired in supplicant_opt.h). The hw_acc
+# (USE_MBEDTLS_CRYPTO is hardwired in supplicant_opt.h). The mbedtls_port
 # target carries the public include path for component/mbedtls_config/mbedtls/include
-# (and the matching MBEDTLS_*_ALT macros via bflb_mbedtls_config).
-if(TARGET bflb_mbedtls_hw_acc)
-    target_link_libraries(wifi4_internal_headers INTERFACE bflb_mbedtls_hw_acc)
+# (and the matching MBEDTLS_*_ALT macros via mbedtls_port's mbedtls_cfg).
+if(TARGET mbedtls_port)
+    target_link_libraries(wifi4_internal_headers INTERFACE mbedtls_port)
 endif()
 
 add_subdirectory(firmware)

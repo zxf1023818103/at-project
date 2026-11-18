@@ -1,0 +1,211 @@
+{
+  "date": "2026-11-17",
+  "feature": "BLE-assisted NAN PIN bootstrap",
+  "native_tests": {
+    "passed": 9,
+    "sanitizers": [
+      "ASan",
+      "UBSan"
+    ],
+    "cases": [
+      "crypto_and_sae",
+      "pasn_handshake",
+      "secure_ndp_parser",
+      "tcp_throughput_protocol",
+      "pasn_early_peer_context",
+      "ble_oob_pin_lifecycle",
+      "ble_pin_pasn_and_saved_pairing",
+      "ble_pin_expired_auth3",
+      "ble_pin_replaced_auth3"
+    ]
+  },
+  "app_build": "Xcode iOS device signed build and install passed",
+  "swift_credential_parser": "PASS",
+  "firmware": {
+    "sha256": "8cc752d35816e92b009efb21f5dfd4ddd0d195292513b47a42bef0681a880f1f",
+    "bytes": 1010112,
+    "flash_readback": "PASS"
+  },
+  "ble": {
+    "advertisement": "PASS",
+    "connection": "PASS",
+    "secure_connections_encryption": "PASS",
+    "encrypted_pin_read": "PASS",
+    "bond_survives_module_reflash": "PASS"
+  },
+  "limitations": [
+    "iOS system NAN picker still requires manual PIN input",
+    "LE Secure Connections Just Works has no MITM authentication"
+  ],
+  "nan_cache_fix": {
+    "cause": "Duplicate service instance IDs after re-pairing rejected NIK cache updates",
+    "changes": [
+      "bind new NPK using instance, responder role and the authenticated SAE password hash",
+      "update the NP peer password to the BLE PIN",
+      "allow ordinary cache refreshes with duplicate instance IDs",
+      "retain pending NPK until the atomic persistent write succeeds"
+    ],
+    "native_regression": "PASS",
+    "hardware_new_pairing_persistence": "PASS: authenticated pairing persisted slot=1; cache rc=0"
+  },
+  "tcp_memory_fix": {
+    "observed_failure": {
+      "firmware_sha256": "1cd62d5eca2e88dd18ac20834c3690df6c2c2f56f766c4ffa4aec0bbb03b9324",
+      "task": "nan_tcp",
+      "free_heap_bytes": 69248,
+      "point": "first TCP response after successful saved-pair verification"
+    },
+    "ble_profile_streams_mss": {
+      "tx": 24,
+      "rx": 16
+    },
+    "ble_profile_windows_mss": {
+      "tx": 24,
+      "rx": 16
+    },
+    "configured_mss": 1460,
+    "actual_iphone_tx_stream_bytes": 36000,
+    "actual_tx_window_bytes": 35040,
+    "scope": "NAN_BLE_OOB only; NAN-only bulk settings retained"
+  },
+  "hardware_checks": [
+    {
+      "case": "ble-oob-memory-reconnect5",
+      "reset": false,
+      "startedAt": "2026-11-17T01:54:08Z",
+      "early_peer_created": 0,
+      "early_peer_alloc_failed": 0,
+      "missing_peer_warnings": 0,
+      "station_add_failures": 0,
+      "PKE_self_test_passes": 0,
+      "tcp_pong_count": 5,
+      "ap_heap_samples": [
+        114192,
+        104824
+      ],
+      "protocol_aborts": 0,
+      "queue_counters": [],
+      "successes": 5,
+      "rounds": 5,
+      "ready_seconds": [
+        3.487716666655615,
+        2.103616166685242,
+        2.0413947500055656,
+        1.0253245000494644,
+        0.5690626666764729
+      ],
+      "pass": true,
+      "malloc_failures": 0,
+      "stack_overflows": 0,
+      "saved_pair_verifications": 3,
+      "cache_errors": 0
+    },
+    {
+      "case": "ble-oob-memory-cold",
+      "reset": true,
+      "startedAt": "2026-11-17T01:54:59Z",
+      "early_peer_created": 0,
+      "early_peer_alloc_failed": 0,
+      "missing_peer_warnings": 0,
+      "station_add_failures": 0,
+      "PKE_self_test_passes": 1,
+      "tcp_pong_count": 1,
+      "ap_heap_samples": [
+        104824
+      ],
+      "protocol_aborts": 0,
+      "queue_counters": [],
+      "successes": 1,
+      "rounds": 1,
+      "ready_seconds": [
+        3.9863866249797866
+      ],
+      "pass": true,
+      "malloc_failures": 0,
+      "stack_overflows": 0,
+      "saved_pair_verifications": 1,
+      "cache_errors": 0
+    },
+    {
+      "case": "ble-oob-memory-throughput10",
+      "reset": false,
+      "startedAt": "2026-11-17T01:55:14Z",
+      "early_peer_created": 0,
+      "early_peer_alloc_failed": 0,
+      "missing_peer_warnings": 0,
+      "station_add_failures": 0,
+      "PKE_self_test_passes": 0,
+      "tcp_pong_count": 0,
+      "ap_heap_samples": [
+        44896,
+        44896,
+        104824
+      ],
+      "protocol_aborts": 0,
+      "queue_counters": [
+        {
+          "rxdrop": 0,
+          "txdrop": 0
+        },
+        {
+          "rxdrop": 0,
+          "txdrop": 0
+        }
+      ],
+      "results": [
+        {
+          "bytes": 14614528,
+          "direction": "upload",
+          "mbps": 11.581597226349677,
+          "peerBytes": 14614528,
+          "receiverSeconds": 10.095,
+          "senderSeconds": 10.016229291679338
+        },
+        {
+          "bytes": 24707072,
+          "direction": "download",
+          "mbps": 19.732706775178062,
+          "peerBytes": 24707072,
+          "receiverSeconds": 10.016698583320249,
+          "senderSeconds": 10.015
+        }
+      ],
+      "readySeconds": 2.1712880000122823,
+      "pass": true,
+      "malloc_failures": 0,
+      "stack_overflows": 0,
+      "saved_pair_verifications": 1,
+      "cache_errors": 0
+    },
+    {
+      "case": "ble-oob-final-app-cold",
+      "reset": true,
+      "startedAt": "2026-11-17T01:57:15Z",
+      "early_peer_created": 0,
+      "early_peer_alloc_failed": 0,
+      "missing_peer_warnings": 0,
+      "station_add_failures": 0,
+      "PKE_self_test_passes": 1,
+      "tcp_pong_count": 1,
+      "ap_heap_samples": [],
+      "protocol_aborts": 0,
+      "queue_counters": [],
+      "successes": 1,
+      "rounds": 1,
+      "ready_seconds": [
+        2.9379845000221394
+      ],
+      "pass": true,
+      "malloc_failures": 0,
+      "stack_overflows": 0,
+      "saved_pair_verifications": 1,
+      "cache_errors": 0
+    }
+  ],
+  "app_final_ble_read": {
+    "report": "iphone-ble-final-app.json",
+    "elapsed_seconds_rounded": 2,
+    "result": "PASS; existing BLE bond reused"
+  },
+  "scope": "One iPhone 13 Pro / one COM5 Green2; short tests, not long-duration or multi-device qualification"
+}

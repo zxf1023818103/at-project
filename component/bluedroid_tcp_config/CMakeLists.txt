@@ -1,0 +1,11 @@
+# FreeRTOS+TCP core; the application supplies freertos_config and its IP config.
+set(FREERTOS_PLUS_TCP_BUFFER_ALLOCATION "2")
+set(FREERTOS_PLUS_TCP_NETWORK_IF "A_CUSTOM_NETWORK_IF")
+set(FREERTOS_PLUS_TCP_COMPILER "GCC")
+if(NOT TARGET freertos_plus_tcp_network_if)
+    add_library(freertos_plus_tcp_network_if INTERFACE)
+    add_library(freertos_plus_tcp_utilities INTERFACE)
+endif()
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../freertos-plus-tcp_config/freertos-plus-tcp/source upstream EXCLUDE_FROM_ALL)
+add_library(freertos-plus-tcp_config INTERFACE)
+target_link_libraries(freertos-plus-tcp_config INTERFACE freertos_plus_tcp)

@@ -29,7 +29,14 @@ add_subdirectory(tinycbor EXCLUDE_FROM_ALL)         # built only when linked
 
 # Silence the vendor sources: upstream attaches -Wall -Wextra -Werror=... PRIVATE to tinycbor;
 # a trailing -w (same pattern as ngtcp2_static) wins on the command line and defuses -Werror=.
-target_compile_options(tinycbor PRIVATE -w)
+# -w silences warnings, but GCC 14 (bl618dg's Zephyr toolchain) promotes some to hard
+# errors. open_memstream.c also hits a genuine picolibc-vs-newlib difference: picolibc's
+# funopen() takes a different write-callback signature. Vendored source, so demote rather
+# than patch. Harmless on GCC 10, where these are warnings anyway.
+target_compile_options(tinycbor PRIVATE -w
+    -Wno-error=incompatible-pointer-types
+    -Wno-error=int-conversion
+    -Wno-error=implicit-function-declaration)
 
 # Umbrella INTERFACE (伞形): consumers link `tinycbor_config` to get TinyCBOR (cbor.h is on
 # tinycbor's PUBLIC include path: its src/ + the build dir with the generated headers).

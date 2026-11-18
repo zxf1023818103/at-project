@@ -1821,9 +1821,12 @@ _WEAK void wifi_set_mib(void)
 	wext_set_powersave_mode(1);
 #endif
 #ifdef CONFIG_SAE_SUPPORT
-	// DISABLED: this driver-only image doesn't link the SAE supplicant; if the
-	// target AP is WPA3/SAE, association with WPA2-PSK blocks. Force WPA2 path.
-	wext_set_support_wpa3(DISABLE);
+	// Enable WPA3/SAE. The SAE implementation (rtw_sae_*) IS inside lib_wlan.a
+	// (byte-identical to the Realtek factory image, which does SAE fine) -- an
+	// earlier "no SAE supplicant linked" assumption was wrong. Without this the
+	// driver never advertises the SAE AKM (AuthKeyMgmt=0x400) and falls back to
+	// Open 802.11 auth (algthm=0), so a WPA3-only/PMF-required AP deauths us.
+	wext_set_support_wpa3(ENABLE);
 #endif
 	wext_set_ant_div_gpio(0);
     wext_set_bw40_enable(0);    //default disable 40m

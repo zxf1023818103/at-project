@@ -15,6 +15,10 @@
 #ifndef FREERTOS_CONFIG_H
 #define FREERTOS_CONFIG_H
 
+#if defined(CONFIG_AMEBADPLUS) || defined(CONFIG_AMEBAGREEN2)
+#include "FreeRTOSConfig_port.h"
+#else
+
 /* ---- AmebaD preamble (SystemCoreClock + Kconfig autoconf used in its branch) ---- */
 #if defined(CONFIG_PLATFORM_8721D)
 #if defined(__ICCARM__) || defined(__CC_ARM) || defined(__GNUC__)
@@ -131,15 +135,16 @@ extern uint32_t SystemCoreClock;
 
 #else
 /* ----------------- KM0 (Cortex-M23, LP) ----------------- */
-/* (Software timers are ON, via the common section. They used to crash KM0's scheduler start, but
- * the real cause was heap exhaustion — the 20 KB ucHeap couldn't fit the timer task+queue, so
- * xTimerCreateTimerTask's malloc returned NULL, vTaskStartScheduler returned, and KM0 unwound
- * all the way out to the boot ROM (0x49a2 dead-loop). See doc/amebad_km0_scheduler_and_runtime_flash.md.
- * Now configSUPPORT_STATIC_ALLOCATION is on (common): the idle + timer TASKS are static (.bss, via
- * freertos_port/freertos_static_mem.c), off-heap — so the heap no longer needs the ~1.7 KB those
- * tasks took, and it's trimmed to 24 KB to make BD_RAM room for the new static .bss.) */
+/* KM0's heap is now registered by the shared ram_heap_init() (ram_heap.c) from the app_km0
+ * linker symbols: the main region __HeapBase..__HeapLimit spans all SRAM left above the image
+ * (BD_RAM ceiling 0x8F000, ~25 KB), plus the reclaimed ROM-BSS scratch (0x80A00, 0x1600) as a
+ * secondary heap — so configTOTAL_HEAP_SIZE below no longer sizes a static ucHeap; it is kept
+ * only as documentation of the ~24-25 KB budget. History: KM0's scheduler start is heap-exhaustion
+ * sensitive (a 20 KB ucHeap once couldn't fit the timer task+queue -> vTaskStartScheduler returned
+ * -> boot-ROM 0x49a2 dead-loop; see doc/amebad_km0_scheduler_and_runtime_flash.md). The idle + timer
+ * TASKS are static (.bss, via freertos_config/freertos_static_mem.c), off-heap. */
 #define configENABLE_FPU                                0
-#define configTOTAL_HEAP_SIZE                           ( ( size_t ) ( 24 * 1024 ) ) /* idle/timer tasks now static (.bss), off-heap; BD_RAM ceiling ~31K from ucHeap@~0x87460. */
+#define configTOTAL_HEAP_SIZE                           ( ( size_t ) ( 24 * 1024 ) ) /* informational only; actual heap = __HeapBase..__HeapLimit + ROM-BSS (see ram_heap.c / app_km0 .ld) */
 #define configUSE_APPLICATION_TASK_TAG                  0
 #define configUSE_IDLE_HOOK                             1
 #define configUSE_MALLOC_FAILED_HOOK                    0
@@ -184,9 +189,17 @@ extern uint32_t SystemCoreClock;
 #define configPRE_SLEEP_PROCESSING( x )                 ( freertos_pre_sleep_processing((unsigned int *)&x) )
 #define configPOST_SLEEP_PROCESSING( x )                ( freertos_post_sleep_processing((unsigned int *)&x) )
 #define portSUPPRESS_TICKS_AND_SLEEP( xExpectedIdleTime ) vPortSuppressTicksAndSleep( xExpectedIdleTime )
+/* C-linkage: these are defined in C (SDK PMU glue). The shared main is now compiled as C++ on
+ * AmebaD, so the declarations must not get C++ linkage (would conflict with the C definitions). */
+#ifdef __cplusplus
+extern "C" {
+#endif
 extern void freertos_pre_sleep_processing(unsigned int *expected_idle_time);
 extern void freertos_post_sleep_processing(unsigned int *expected_idle_time);
 extern int  freertos_ready_to_sleep(void);
+#ifdef __cplusplus
+}
+#endif
 #define traceLOW_POWER_IDLE_BEGIN()
 #define traceLOW_POWER_IDLE_END()
 #define configUSE_WAKELOCK_PMU                          1
@@ -205,12 +218,20 @@ extern int  freertos_ready_to_sleep(void);
 
 #include <stdio.h>
 
-/* The build also passes -DconfigMTIME(CMP)_BASE_ADDRESS via bflb_freertos_port;
+/* The build also passes -DconfigMTIME(CMP)_BASE_ADDRESS via freertos_port;
  * guard with #ifndef so this header doesn't redefine. */
 #ifndef configMTIME_BASE_ADDRESS
 #if defined(BL602) || defined(BL702) || defined(BL702L)
 #define configMTIME_BASE_ADDRESS    (0x02000000UL + 0xBFF8UL)
 #define configMTIMECMP_BASE_ADDRESS (0x02000000UL + 0x4000UL)
+#elif defined(BL618DG)
+/* B0 silicon is a Nuclei-900 core: its SysTimer lives at 0x18030000, NOT the
+ * T-Head CLINT at 0xE0000000 the other Bouffalo RISC-V chips use. Reading the
+ * wrong base faults in vPortSetupTimerInterrupt (Load access fault, mtval
+ * 0xe000bff8-ish) before the scheduler ever starts. Values mirror the SDK's
+ * components/os/freertos/CMakeLists.txt bl618dg (non-a0) branch. */
+#define configMTIME_BASE_ADDRESS    (0x18030000UL)
+#define configMTIMECMP_BASE_ADDRESS (0x18030008UL)
 #else
 #define configMTIME_BASE_ADDRESS    (0xE0000000UL + 0xBFF8UL)
 #define configMTIMECMP_BASE_ADDRESS (0xE0000000UL + 0x4000UL)
@@ -228,12 +249,23 @@ extern int  freertos_ready_to_sleep(void);
 #define configUSE_MALLOC_FAILED_HOOK             1
 #define configUSE_APPLICATION_TASK_TAG           1
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION  1
+/* Tickless idle PDS15 is opt-in via LP_FW=ON (AT_LP_TICKLESS_IDLE from freertos_config_common when
+ * CONFIG_LPAPP). The stock GCC/RISC-V port has no tickless of its own, so the idle task routes
+ * portSUPPRESS_TICKS_AND_SLEEP -> vApplicationSleep (bflb_power_mgmt/tickless.c) via the scaffold
+ * below; that impl is self-contained (compensates the kernel tick with vTaskStepTick) and the mtimer
+ * clock is restored inside bl_lp_fw_enter on wake. Runtime entry is still gated by tickless_enter(). */
+#ifdef AT_LP_TICKLESS_IDLE
+#define configUSE_TICKLESS_IDLE                  1
+#define configEXPECTED_IDLE_TIME_BEFORE_SLEEP    5   /* don't attempt PDS15 for trivially short idles */
+#else
 #define configUSE_TICKLESS_IDLE                  0
+#endif
 #define configUSE_POSIX_ERRNO                    1
 #define configUSE_CO_ROUTINES                    0
 #define configTIMER_TASK_PRIORITY                (configMAX_PRIORITIES - 1)
 #define configTIMER_QUEUE_LENGTH                 4
 #define configTIMER_TASK_STACK_DEPTH             (1024)
+#define configCOMMAND_INT_MAX_OUTPUT_SIZE        2048   /* FreeRTOS-Plus-CLI output buffer (component/monitor_config console) */
 #ifndef uartPRIMARY_PRIORITY
 #define uartPRIMARY_PRIORITY                     (configMAX_PRIORITIES - 3)
 #endif
@@ -261,4 +293,5 @@ void vApplicationSleep(uint32_t xExpectedIdleTime);
 #error "FreeRTOSConfig.h: unknown platform (expected CONFIG_PLATFORM_8721D or a BLxxx macro)"
 #endif
 
+#endif /* CONFIG_AMEBADPLUS */
 #endif /* FREERTOS_CONFIG_H */

@@ -13,7 +13,11 @@
 #define FREERTOS_IP_CONFIG_H
 
 /* Use the legacy (single-interface) FreeRTOS_IPInit() API. */
+#ifdef AT_GREEN2_NAN
+#define ipconfigIPv4_BACKWARD_COMPATIBLE        0
+#else
 #define ipconfigIPv4_BACKWARD_COMPATIBLE        1
+#endif
 
 #define ipconfigUSE_IPv6                        1
 #define ipconfigUSE_RA                          1       /* Router Advertisement -> SLAAC (stateless IPv6) */
@@ -22,14 +26,53 @@
 
 /* TCP buffers. Two profiles:
  *  - Default (iperf/QUIC throughput images): big window to keep the pipe full at ~1-2 ms RTT.
- *  - AMEBAD_NET_LOW_MEM (AWS/MINIMAL connect-only images, set per-target in app_km4/CMakeLists):
+ *  - AT_NET_LOW_MEM (AWS/MINIMAL connect-only images, set per-target in app_km4/CMakeLists):
  *    the MQTT client is low-rate, so shrink the per-socket RX/TX buffers + window hard to give the
  *    tight NS heap back ~50 KB. 6*1460 still comfortably streams the AWS server cert handshake. */
 #define ipconfigUSE_TCP_WIN                      1
-#if defined( AMEBAD_NET_LOW_MEM )
+#ifdef AT_GREEN2_NAN
+/* NAN availability gaps exceed the default 100 ms first retransmit timeout.
+ * Premature retries can permanently reduce this stack's TX window to two MSS.
+ * Keep at least 500 ms before the first retransmission on the NAN profile. */
+#define ipconfigTCP_SRTT_MINIMUM_VALUE_MS         250
+#endif
+/* Two TCP-buffer tiers: a shared low-mem tier for the heap-tight MQTT/telemetry images, and the big
+ * throughput tier for iperf/QUIC/BL616.
+ *  - low-mem (AT_NET_LOW_MEM = AmebaD AWS/MINIMAL, and BL602/BL702 which are tighter still):
+ *    RX 4*1460 / TX 2*1460. Sized by BL602's hard limit — 6*1460 was tried on bl602 and *breaks* the
+ *    AWS path: the TLS handshake still succeeds, but the 17.5 KB per-socket buffers leave too little
+ *    TLSF heap for FreeRTOS+TCP (BufferAllocation_2, heap-on-demand) to allocate the network buffer
+ *    that receives the MQTT CONNACK, so it is silently dropped and MQTT_Connect times out
+ *    (MQTTNoDataAvailable). 4*1460 RX still streams the AWS server cert flight (mbedTLS reassembles
+ *    records in its own IN buffer as TCP windows). HW-verified on bl602: 4/2 connects + publishes;
+ *    6/6 never CONNACKs. AmebaD AWS/MINIMAL share it — a low-rate MQTT client; its ota_http HTTPS OTA
+ *    download from S3 still works, just with a smaller window (slower).
+ *  - default (iperf/QUIC/BL616 throughput): the big 24*1460 window. */
+#if defined( AT_GREEN2_NAN )
+    /* A bulk NAN socket can queue more than sixteen 1024-byte peer MSSes.
+     * Segment records are shared by TX and out-of-order RX; keep headroom for
+     * both without changing the small default buffers of other sockets. */
+    #define ipconfigTCP_WIN_SEG_COUNT           96
+    #define ipconfigTCP_RX_BUFFER_LENGTH        ( 4 * 1460 )
+    #define ipconfigTCP_TX_BUFFER_LENGTH        ( 2 * 1460 )
+#elif defined( BL602 ) || defined( BL702 )
+    /* BL602/BL702 must do the RSA-2048 server-cert verify in SOFTWARE (the HW PKA mis-computes a
+     * 2048-bit modexp), whose ~7 KB of transient heap has to coexist with the cert flight. RX stays
+     * 4*1460 -- 3*1460 was tried and STALLS the multi-segment AWS cert flight (handshake times out
+     * "No data"/WANT_READ before reaching cert verify): mbedTLS reassembles the ~5.6 KB flight in its
+     * own 6 KB IN buffer, but the socket RX window must still hold enough in flight to make progress.
+     * TX 1*1460 IS safe (the client sends only small handshake records + MQTT control) and frees ~1.5
+     * KB. The rest of the modexp's heap comes from deferring the MQTT buffer + trimming .bss. */
     #define ipconfigTCP_WIN_SEG_COUNT           16
-    #define ipconfigTCP_RX_BUFFER_LENGTH        ( 6 * 1460 )    /* ~8.5 KB */
-    #define ipconfigTCP_TX_BUFFER_LENGTH        ( 6 * 1460 )    /* ~8.5 KB */
+    #define ipconfigTCP_RX_BUFFER_LENGTH        ( 4 * 1460 )    /* ~5.7 KB (holds AWS's ~5.6 KB flight) */
+    #define ipconfigTCP_TX_BUFFER_LENGTH        ( 1 * 1460 )    /* ~1.5 KB */
+#elif defined( AT_NET_LOW_MEM )
+    #define ipconfigTCP_WIN_SEG_COUNT           16
+    #define ipconfigTCP_RX_BUFFER_LENGTH        ( 4 * 1460 )    /* ~5.7 KB (holds AWS's ~5.6 KB
+                                                                 * server-cert flight; a bigger buffer
+                                                                 * can't get a contiguous heap block on
+                                                                 * bl602 -> socket connect fails). */
+    #define ipconfigTCP_TX_BUFFER_LENGTH        ( 2 * 1460 )    /* ~2.9 KB */
 #else
     #define ipconfigTCP_WIN_SEG_COUNT           64
     #define ipconfigTCP_RX_BUFFER_LENGTH        ( 24 * 1460 )   /* ~35 KB */
@@ -61,7 +104,9 @@
 
 /* Network buffer descriptors (BufferAllocation_2 = heap, each ~MTU+pad ~1.6 KB). 40 for TCP
  * throughput; 14 is plenty for the low-rate MQTT client and saves ~42 KB of NS heap. */
-#if defined( AMEBAD_NET_LOW_MEM )
+#if defined( AT_GREEN2_NAN )
+    #define ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS  32
+#elif defined( AT_NET_LOW_MEM ) || defined( BL602 ) || defined( BL702 )
     #define ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS  24   /* was 14: too tight for the TLS handshake's
                                                           * bursty bidirectional flight (server ~6KB in +
                                                           * client flight out + ACKs + concurrent WiFi RX)

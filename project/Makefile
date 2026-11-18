@@ -7,6 +7,9 @@
 #   make -C project bl602        # bouffalo BL602    (auto-builds lfs.bin first)
 #   make -C project bl616        # bouffalo BL616
 #   make -C project bl616cl      # bouffalo BL616CL
+#   make -C project bl618dg      # bouffalo BL618DG (dual-core AP+NP)
+#   make -C project tl3238       # TL3238 FreeRTOS + NimBLE + mcumgr
+#   make -C project tl3238_bootloader # vendor BLE + Telink OTA size comparison (build only)
 #   make -C project amebad       # Ameba D (RTL8721D / RTL8710C)
 #   make -C project amebadplus   # Ameba Dplus (RTL8711Dx)
 #   make -C project amebagreen2  # Ameba Green2 (RTL8711F)
@@ -27,7 +30,7 @@ LFS_BUILD_DIR := .lfs_build
 
 RESOURCE_FILES := $(shell find resource -type f 2>/dev/null)
 
-.PHONY: all lfs_image bl602 bl616 bl616cl amebad amebadplus amebagreen2 clean
+.PHONY: all lfs_image bl602 bl616 bl616cl bl618dg tl3238 tl3238_bootloader amebad amebadplus amebagreen2 clean
 
 all: bl602 bl616 bl616cl amebad amebadplus amebagreen2
 
@@ -41,14 +44,39 @@ lfs.bin: $(RESOURCE_FILES)
 
 lfs_image: lfs.bin
 
+# Bouffalo: the CMake/bflb_image_tool build leaves the PSM partition (LFS @ 0x300000)
+# blank (0xFF), which makes the runtime LittleFS mount fault while formatting before the
+# scheduler is up. Mirror the amebad flow: overlay the SAME project/lfs.bin at 0x300000
+# (seek 768 * 4 KB) into the 4 MB whole_flash_data.bin so LFS mounts clean (no format).
+define bflb_embed_lfs
+	@echo "[$(1)] embed lfs.bin -> PSM @ 0x300000 in at_$(1)_whole_flash_data.bin"
+	@dd if=lfs.bin of=bouffalo/build_$(1)/at_$(1)_whole_flash_data.bin bs=4096 seek=768 conv=notrunc status=none
+	@md5sum bouffalo/build_$(1)/at_$(1)_whole_flash_data.bin
+endef
+
 bl602: lfs.bin
 	$(MAKE) -C bouffalo CHIP=bl602 BOARD=bl602dk
+	$(call bflb_embed_lfs,bl602)
 
 bl616: lfs.bin
 	$(MAKE) -C bouffalo CHIP=bl616 BOARD=bl616dk
+	$(call bflb_embed_lfs,bl616)
 
 bl616cl: lfs.bin
 	$(MAKE) -C bouffalo CHIP=bl616cl BOARD=bl616cldk
+	$(call bflb_embed_lfs,bl616cl)
+
+# BL618DG is dual-core: its own makefile builds the NP image, appends it into the
+# AP image, and packs the flashable whole image (build/bl618dg_ap/). It does not
+# go through project/bouffalo (that tree is single-core by construction).
+bl618dg:
+	$(MAKE) -C bl618dg
+
+tl3238:
+	$(MAKE) -C tl3238
+
+tl3238_bootloader:
+	$(MAKE) -C tl3238_bootloader
 
 amebad: lfs.bin
 	$(MAKE) -C amebad
@@ -60,13 +88,14 @@ amebad: lfs.bin
 	@md5sum ../build/amebad/Image_All.bin
 
 amebadplus: lfs.bin
-	$(MAKE) -C ameba amebadplus
+	$(MAKE) -C amebadplus
 
 amebagreen2: lfs.bin
-	$(MAKE) -C ameba amebagreen2
+	$(MAKE) -C amebagreen2
 
 clean:
 	-rm -f lfs.bin
 	-rm -rf $(LFS_BUILD_DIR)
 	-$(MAKE) -C amebad clean
-	-$(MAKE) -C ameba clean
+	-$(MAKE) -C amebadplus clean
+	-$(MAKE) -C amebagreen2 clean

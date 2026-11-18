@@ -27,11 +27,14 @@ if(NOT TARGET FreeRTOS)
     add_subdirectory(tlsf_config)
     add_subdirectory(freertos-kernel_config)
     add_subdirectory(freertos-posix_config)
+    add_subdirectory(rtc_time_config)   # header-only seam (rtc_time.h) both platforms' RTC ports implement
+    add_subdirectory(ota_flash_config)  # header-only OTA slot-writer interface (ota_flash.h) both platforms implement
+    add_subdirectory(aws_ota_config)    # shared AWS IoT OTA agent sources (ota_app/ota_pal + agent support), compiled per-app
 endif()
 
 # QUIC self-test option (ngtcp2 + picotls/mbedTLS TLS 1.3 — wolfSSL was retired). AmebaD app_km4
 # reads it; ngtcp2_config builds its crypto only when ON. Declared before the block that consumes it.
-option(AMEBAD_ENABLE_QUIC "Build the ngtcp2 + picotls/mbedTLS QUIC client self-test" OFF)
+option(AT_ENABLE_QUIC "Build the ngtcp2 + picotls/mbedTLS QUIC client self-test" OFF)
 
 # =====================================================================
 # AmebaD-coupled cross-platform config components. Gated to NON-Bouffalo: Bouffalo brings its own
@@ -41,7 +44,7 @@ option(AMEBAD_ENABLE_QUIC "Build the ngtcp2 + picotls/mbedTLS QUIC client self-t
 # =====================================================================
 if(NOT BOUFFALO_CHIP)
 add_subdirectory(freertos-plus-tcp_config)  # FreeRTOS-Plus-TCP V4.0.0 core stack + FreeRTOSIPConfig.h
-add_subdirectory(ngtcp2_config)             # ngtcp2 QUIC + the picotls crypto binding (built only when AMEBAD_ENABLE_QUIC)
+add_subdirectory(ngtcp2_config)             # ngtcp2 QUIC + the picotls crypto binding (built only when AT_ENABLE_QUIC)
 add_subdirectory(coremqtt_config)           # coreMQTT v5.0.2 static lib + core_mqtt_config.h
 add_subdirectory(coremqtt-agent_config)     # coreMQTT-Agent v2.0.0 (thread-safe wrapper) — links coremqtt_config
 add_subdirectory(backoffalgorithm_config)   # backoffAlgorithm v1.4.2 (reconnect backoff-with-jitter)
@@ -50,17 +53,30 @@ add_subdirectory(corejson_config)           # coreJSON parser (OTA job-document 
 add_subdirectory(tinycbor_config)           # TinyCBOR (OTA MQTT data-plane block decode) — ota_config dep
 add_subdirectory(ota_config)                # AWS IoT OTA Agent v3.3.0 — links corejson_config + tinycbor_config + freertos_config
 add_subdirectory(coresntp_config)           # coreSNTP SNTPv4 client static lib + core_sntp_config.h
-add_subdirectory(freertos-cli_config)       # FreeRTOS-Plus-CLI V202212.00 static lib
+add_subdirectory(sntp_time_config)          # coreSNTP UTC time-sync app glue (sntp_time; strong sntp_sync_once)
+add_subdirectory(iperf_config)              # iperf2 throughput probes over FreeRTOS+TCP (iperf + `iperf` console cmd)
+add_subdirectory(80211d_config)         # 802.11d country auto-detect (config layer; ports in <platform>/80211d_port)
+add_subdirectory(wifi_service_config)       # shared WiFi provisioning + reconnect policy (wifi_service) over the wifi_port HAL
+add_subdirectory(net_cli_config)            # shared network-diagnostic console cmds: resolve / ip6 (net_cli)
+add_subdirectory(freertos-cli_config)       # FreeRTOS-Plus-CLI V202212.00 static lib (freertos_cli)
+add_subdirectory(monitor_config)            # cross-platform interactive console: engine (monitor) + fs/env/time cmds (monitor_cmds)
 add_subdirectory(nimble_config)             # INTERFACE: NimBLE syscfg + upstream include surface
 add_subdirectory(mcumgr_config)             # apache/mynewt-mcumgr 0.7.0 SMP core (img+os groups) over tinycbor v7 shim — BLE DFU (MCUMGR=ON)
 add_subdirectory(syscall_config)            # newlib retarget OBJECT lib (VFS + malloc + byte-order); PRIVATE-links freertos-plus-tcp_config + at_console
 add_subdirectory(c-ares_config)             # c-ares async DNS resolver (compiled only when linked / targeted; wired in under CARES=ON)
 add_subdirectory(rxi_log_config)            # rxi log.c (leveled logger) + FreeRTOS-mutex lock via log_set_lock
+add_subdirectory(flash_cli_config)          # cross-platform flash write-protect: `flash` cmd + board_flash_* helpers (after freertos_cli + rxi_log)
+add_subdirectory(dsleep_config)             # cross-platform `dsleep [uart] [rtc <s>]`: deep/low-power sleep + wake, over board_dsleep_enter (board_dsleep_port)
 add_subdirectory(mbedtls_config)            # upstream Mbed TLS v3.6.4 -> mbedcrypto / mbedx509 / mbedtls
-add_subdirectory(esp_crt_bundle_config)     # compressed Mozilla CA root bundle (CRT_BUNDLE=ON) over mbedtls_config
 add_subdirectory(corepkcs11_config)         # PKCS#11 software token over mbedcrypto/mbedx509 (PAL consumer-supplied)
+add_subdirectory(pkcs11_selftest_config)    # corePKCS11 token self-test (pkcs11_selftest + `pkcs11` cmd) + the LittleFS POSIX PAL
+add_subdirectory(mbedtls_bench_config)      # upstream Mbed TLS microbenchmark (mbedtls_bench) + `bench` cmd (BENCH=ON / bl602 always)
 add_subdirectory(picotls_config)            # TLS 1.3 core + mbedTLS/PSA backend (picotls_mbedtls) for ngtcp2 QUIC
 add_subdirectory(network_transport)         # TransportInterface_t impls over mbedtls_config + freertos-plus-tcp_config — coreMQTT TLS transport
+add_subdirectory(ota_http_config)           # shared `ota_http <url>` command sources (compiled per-app) + its include/link deps
+add_subdirectory(aws_iot_config)            # shared AWS provisioning + `aws` CLI (aws_provision_core); AmebaD links it, bl602 also gets aws_iot telemetry
+add_subdirectory(esp_crt_bundle_config)     # compressed Mozilla CA root bundle (CRT_BUNDLE=ON) + `crt_bundle` cmd; AFTER network_transport
+                                            # so crt_bundle_cli's if(TARGET network_transport) sees it (enables the `connect` subcommand)
 endif()  # NOT BOUFFALO_CHIP
 
 # lfs_image — host-side LittleFS image builder (cross-platform). Dual-mode CMakeLists: add_subdirectory
@@ -69,19 +85,19 @@ endif()  # NOT BOUFFALO_CHIP
 add_subdirectory(lfs_image)
 
 # =====================================================================
-# Platform: Bouffalo Lab BL602 / BL616 / BL616CL
+# Platform: Bouffalo Lab BL602 / BL616 / BL616CL / BL618DG
 # =====================================================================
 #
 #   bouffalo_sdk         the Bouffalo Lab SDK extraction (HAL + chip-std
 #                        + sysinit + port adapters + wifi/BT/RF stacks).
 #                        Umbrella INTERFACE target `bouffalo_sdk` is what
-#                        consumers link. Also pulls in upstream lwip
-#                        (via bflb_lwip_port) and upstream mbedtls (after
-#                        the three bflb_mbedtls_* port adapters).
-#   lwip_dhcpd           Bouffalo's raw DHCP-server-on-lwip app, lifted
-#                        out of the lwip submodule so it can depend on
-#                        the upstream-clean lwip + freertos_kernel.
-#   lfs_easyflash        EasyFlash KV API on top of upstream littlefs.
+#                        consumers link. Pulls in upstream mbedtls (config +
+#                        HW-crypto ALTs come from the mbedtls_port adapter).
+#                        (The lwIP stack has been removed — the network stack
+#                        is being switched to FreeRTOS-Plus-TCP. libc is now
+#                        newlib + the shared component/syscall_config, same as
+#                        AmebaD; the Bouffalo-specific bflb_libc + lfs_easyflash
+#                        KV were deleted — NV is POSIX env over /KV.)
 # (lfs_image — the cross-platform host-side LittleFS image builder — is added unconditionally above.)
 if(BOUFFALO_CHIP)
     # Target chip selection. Typical usage is to set this through a chip
@@ -93,13 +109,13 @@ if(BOUFFALO_CHIP)
     # not overwrite an existing value, so this is a no-op when the
     # toolchain file has already set it.
     set(BOUFFALO_CHIP "${BOUFFALO_CHIP}" CACHE STRING
-        "Bouffalo target chip — required (bl602 | bl616 | bl616cl)")
+        "Bouffalo target chip — required (bl602 | bl616 | bl616cl | bl618dg)")
     set_property(CACHE BOUFFALO_CHIP PROPERTY STRINGS
-        bl602 bl616 bl616cl)
-    if(NOT BOUFFALO_CHIP MATCHES "^(bl602|bl616|bl616cl)$")
+        bl602 bl616 bl616cl bl618dg)
+    if(NOT BOUFFALO_CHIP MATCHES "^(bl602|bl616|bl616cl|bl618dg)$")
         message(FATAL_ERROR
             "BOUFFALO_CHIP='${BOUFFALO_CHIP}' is not a supported chip. "
-            "Expected one of: bl602, bl616, bl616cl.")
+            "Expected one of: bl602, bl616, bl616cl, bl618dg.")
     endif()
 
     # ASM is an SDK concern (startup code, FreeRTOS port asm, vendor archive
@@ -112,19 +128,108 @@ if(BOUFFALO_CHIP)
     # transitively by add_subdirectory(bouffalo_sdk).
     enable_language(ASM)
 
+    # FreeRTOS-Plus-TCP V4.0.0 core stack + FreeRTOSIPConfig.h — the network stack
+    # replacing lwIP on Bouffalo. Its custom NetworkInterface (A_CUSTOM_NETWORK_IF)
+    # is component/bouffalo_sdk/freertos_tcp_port, resolved inside bouffalo_sdk's
+    # --start-group at the final image link (same pattern as amebad_freertos_tcp).
+    # Added here (not in the NOT-BOUFFALO block, which also double-adds mbedtls_config)
+    # so bouffalo_sdk below can link freertos_plus_tcp / freertos_plus_tcp_port.
+    add_subdirectory(freertos-plus-tcp_config)
+
+    # Cross-platform newlib retarget OBJECT lib (the POSIX fd VFS + <dirent.h> +
+    # malloc + env + time + BSD sockets/select over FreeRTOS-Plus-TCP). Bouffalo now
+    # uses the SAME libc as AmebaD (newlib + syscall_config) — the old Bouffalo-specific
+    # bflb_libc was deleted. Added here (like freertos-plus-tcp_config, in both branches)
+    # so bouffalo_sdk below can force-include $<TARGET_OBJECTS:syscall_config>. Its deps
+    # (FreeRTOS heap + littlefs + freertos-plus-tcp_config + at_console) all exist by now.
+    add_subdirectory(syscall_config)
+
+    # FreeRTOS-Plus-CLI core + the cross-platform interactive console. Added here too (like
+    # freertos-plus-tcp_config / syscall_config, in both branches) so bl602 gets the same
+    # console (ls/cat/setenv/date) as AmebaD; the bl602 monitor_port glue lives in bouffalo_sdk.
+    # monitor_config depends on freertos_cli + at_console, so it comes after freertos-cli_config.
+    add_subdirectory(freertos-cli_config)
+    add_subdirectory(monitor_config)
+
+    # rxi log (component/rxi_log_config) is now the SINGLE project logger — the Bouffalo-specific
+    # bflb_log was deleted; the SDK's LOG_*/BFLB_LOG_* route to rxi via bflb_log_compat.h. main()
+    # calls log_lock_init(). Output -> at_console (uart0), line-timestamped.
+    add_subdirectory(rxi_log_config)
+
+    # Cross-platform flash write-protect (component/flash_cli_config): the `flash` lock/unlock/status
+    # command + board_flash_* helpers; the bl602 board_flash_protect primitive is in bouffalo_sdk's
+    # board_flash_port. main() calls board_flash_lock_fw() + board_flash_log_status() at boot.
+    add_subdirectory(flash_cli_config)
+
+    # Cross-platform `dsleep [uart] [rtc <s>]` deep/low-power sleep + wake (component/dsleep_config);
+    # the bl602/bl616 board_dsleep_enter primitive is in bouffalo_sdk's board_dsleep_port.
+    add_subdirectory(dsleep_config)
+
+    # coreSNTP UTC time sync for bl602 (same as AmebaD: date/sntp_update/log timestamps become
+    # real UTC). coreSNTP + backoffAlgorithm were NOT-BOUFFALO-only until now. freertos-plus-tcp_config
+    # (added above) supplies the UDP sockets + DHCP opt-42 server; sntp_time logs through rxi_log
+    # (at_log.h), the single project logger on Bouffalo too (bflb_log deleted).
+    add_subdirectory(coresntp_config)
+    add_subdirectory(backoffalgorithm_config)
+    add_subdirectory(sntp_time_config)
+    # AWS IoT telemetry: coreMQTT + the mbedTLS TLS transport (network_transport). Default = direct MQTT
+    # publish over TLS (no agent/OTA). AWSOTA=ON adds the coreMQTT-Agent + FreeRTOS OTA v3.3.0 agent
+    # (MQTT data plane), sharing AmebaD's ota_app/ota_pal + agent support (component/aws_ota_config).
+    add_subdirectory(coremqtt_config)      # coreMQTT v5.0.2
+    if(AT_ENABLE_AWS_OTA)
+        add_subdirectory(coremqtt-agent_config) # coreMQTT-Agent v2.0.0 (agent+telemetry+OTA share one connection)
+        add_subdirectory(corejson_config)       # coreJSON (OTA job-document parsing) -- ota_config dep
+        add_subdirectory(tinycbor_config)        # TinyCBOR (OTA MQTT data-plane block decode) -- ota_config dep
+        add_subdirectory(ota_config)             # AWS IoT OTA Agent v3.3.0 (MQTT data plane)
+    endif()
+    add_subdirectory(picotls_config)       # TLS 1.3 core + mbedTLS/PSA backend (for TLS_BACKEND=picotls)
+    add_subdirectory(network_transport)    # TransportInterface_t (network_transport_mbedtls / _picotls) over FreeRTOS+TCP
+    if(AT_ENABLE_AWS_OTA)
+        # bl602 AWS mutual-TLS to AWS IoT: pin mbedTLS to TLS 1.2 (its TLS 1.3 client handshake to AWS
+        # fails negotiation; AWS accepts 1.2 ECDHE-RSA-AES128-GCM-SHA256 with the EC/RSA client cert) +
+        # don't offer MFLN (AWS ignores it and sends >2 KB cert records, which a negotiated MFLN rejects).
+        target_compile_definitions(network_transport_mbedtls PRIVATE
+            TRANSPORT_MBEDTLS_MAX_TLS_1_2 TRANSPORT_MBEDTLS_NO_MFLN)
+    endif()
+    add_subdirectory(corehttp_config)      # coreHTTP v3.1.3 + bundled llhttp, for the shared `ota_http` command
+    add_subdirectory(ota_http_config)      # shared `ota_http <url>` sources (compiled into the app) + its deps
+    add_subdirectory(c-ares_config)        # c-ares async DNS resolver (cares_port); compiled only when linked (CARES=ON)
+    add_subdirectory(ngtcp2_config)        # ngtcp2 QUIC + the picotls crypto binding (compiled only when linked, QUIC=ON)
+    add_subdirectory(quic_selftest_config) # ngtcp2 + picotls/mbedTLS QUIC client self-test (quic_selftest; QUIC=ON)
+    add_subdirectory(aws_iot_config)       # minimal AWS IoT telemetry (aws_iot; the `aws` console command)
+    add_subdirectory(iperf_config)   # iperf throughput probes + the `iperf` console command
+    add_subdirectory(80211d_config)     # 802.11d country auto-detect (config layer)
+    add_subdirectory(wifi_service_config)   # shared WiFi provisioning + reconnect policy (wifi_service) over the wifi_port HAL
+    add_subdirectory(net_cli_config)        # shared network-diagnostic console cmds: resolve / ip6 (net_cli)
+    add_subdirectory(mbedtls_bench_config)   # Mbed TLS crypto microbenchmark + the `bench` console command
+                                             # (RISC-V mcycle timer override lives in bouffalo_sdk/mbedtls_bench_port)
+    # Compressed Mozilla CA root bundle + the `crt_bundle` console command (info/verify/addca).
+    # esp_crt_bundle links mbedtls_config (mbedcrypto/mbedx509), pulled into the image by bouffalo_sdk
+    # below. No network_transport on bl602 -> crt_bundle_cli compiles without the `connect` subcommand.
+    add_subdirectory(esp_crt_bundle_config)
+
+    # corePKCS11 software token + its self-test (pkcs11_selftest + the `pkcs11` console command) + the
+    # upstream fopen-based PAL over LittleFS. corepkcs11/pkcs11_selftest link mbedcrypto/mbedx509 (PSA)
+    # via mbedtls_config, pulled into the image by bouffalo_sdk below. Same reused POSIX PAL as AmebaD.
+    add_subdirectory(corepkcs11_config)
+    add_subdirectory(pkcs11_selftest_config)
+
+    # mcumgr SMP-over-BLE DFU (MCUMGR=ON, implies NIMBLE). The shared apache/mynewt-mcumgr core
+    # (mgmt/smp + img/os/fs groups over the tinycbor v7 shim) + tinycbor. These live in the
+    # NOT-BOUFFALO block above (AmebaD default), so add them here for bl602 when the feature is on.
+    # tinycbor_config may already be present (AWSOTA block above); guard it. The bl602 SMP transport
+    # (smp_bt.c) + img/os/fs platform impls are compiled by bouffalo_sdk/mcumgr_port (below).
+    if(AT_ENABLE_MCUMGR)
+        if(NOT TARGET tinycbor_config)
+            add_subdirectory(tinycbor_config)   # TinyCBOR (SMP payload encode/decode)
+        endif()
+        add_subdirectory(mcumgr_config)          # mcumgr core (mgmt/smp + img/os/fs) — mcumgr_port block self-gates to amebad
+    endif()
+
     # Third-party submodules are added by the root CMakeLists.txt before we
     # get here, so zlibstatic / cjson / littlefs are already real targets that
     # bouffalo_sdk's umbrella can pull into its INTERFACE link list.
     add_subdirectory(bouffalo_sdk)
-
-    # lwip_dhcpd / lfs_easyflash live at this level (not inside bouffalo_sdk) because they
-    # depend on targets the bouffalo_sdk subtree defines (lwipcore / bflb_littlefs_port).
-    # Each self-registers into the bouffalo_sdk umbrella aggregate from its OWN CMakeLists
-    # (target_link_libraries(bouffalo_sdk INTERFACE <self>) there), and the --start/--end
-    # link-group is owned by bouffalo_sdk/CMakeLists.txt — so this subtree umbrella stays
-    # add_subdirectory-only.
-    add_subdirectory(lwip_dhcpd)
-    add_subdirectory(lfs_easyflash)
 endif()
 
 # =====================================================================
@@ -137,4 +242,11 @@ endif()
 # the cross-platform config targets added unconditionally above.
 if(AMEBAD_CHIP MATCHES "^amebad-km[04]$")
     add_subdirectory(amebad)
+endif()
+
+if(AMEBADPLUS_CORE)
+    add_subdirectory(amebadplus)
+endif()
+if(AMEBAGREEN2_CORE)
+    add_subdirectory(amebagreen2)
 endif()

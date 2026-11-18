@@ -1,7 +1,6 @@
 #ifndef __RWNX_TX_H__
 #define __RWNX_TX_H__
-#include <lwip/opt.h>
-#include <lwip/mem.h>
+#include "bl_compat.h"
 #include <utils_list.h>
 
 #include "lmac_types.h"
@@ -76,18 +75,16 @@ struct ke_tx_fc {
     } sta;
 };
 
-#ifdef CFG_NETBUS_WIFI_ENABLE
-err_t bl_output(struct bl_hw *bl_hw, int is_sta, struct pbuf *p, struct bl_tx_cfm *custom_cfm, uint8_t from_local);
-#else
-err_t bl_output(struct bl_hw *bl_hw, int is_sta, struct pbuf *p, struct bl_tx_cfm *custom_cfm);
-#endif
+/* FreeRTOS-Plus-TCP TX entry: send one linear ethernet frame (ethhdr + payload)
+ * of `len` bytes. is_sta = 1 for the STA vif. Returns 0 on success. Replaces the
+ * old pbuf-based bl_output() (the NetworkInterface prvOutput in bl602_netif.c calls
+ * this). Internally copies into a [bl_txhdr headroom | frame] firmware TX block. */
+int   bl602_ll_output(int is_sta, void *frame, uint16_t len, void *cfm);
 int   bl_tx_cfm(void *pthis, void *host_id);
 void  bl_tx_try_flush(int param, struct ke_tx_fc *tx_fc_field);
 void  bl_tx_cntrl_link_up(struct bl_sta *sta);
 void  bl_tx_cntrl_link_down(struct bl_sta *sta);
 
 int bl_tx_find_sta_by_mac(uint8_t vif_idx, struct mac_addr *mac);
-err_t bl_tx_intra_bss_forward(struct pbuf *p, int dst_sta_idx);
-err_t bl_tx_intra_bss_broadcast(struct pbuf *p, int src_sta_idx);
 
 #endif

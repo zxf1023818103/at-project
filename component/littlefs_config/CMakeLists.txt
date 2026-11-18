@@ -31,7 +31,7 @@ target_compile_definitions(littlefs PUBLIC LFS_THREADSAFE)
 # ---- lfs_config: cross-platform LittleFS service layer ----
 # lfs_selftest.c: portable LittleFS self-test (mount via the platform's vfs_lfs_mount
 # hook, list/read/write round-trip). It also carries the optional POSIX-fd VFS self-test
-# (vfs_selftest, #ifdef AMEBAD_VFS_SELFTEST — the consumer attaches FreeRTOS+TCP +
+# (vfs_selftest, #ifdef AT_VFS_SELFTEST — the consumer attaches FreeRTOS+TCP +
 # syscall_config when the flag is set). The C++ std::filesystem/iostream self-test
 # (cpp_selftest.cpp) is added conditionally by the consumer (CXX-only, gated).
 add_library(lfs_config STATIC EXCLUDE_FROM_ALL lfs_config.c lfs_selftest.c)

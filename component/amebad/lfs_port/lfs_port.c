@@ -73,7 +73,12 @@ static const struct lfs_diskio amebad_lfs_diskio = {
     amebad_lfs_read, amebad_lfs_prog, amebad_lfs_erase, amebad_lfs_sync,
 };
 
-lfs_t *amebad_lfs_mount(void)
+/* vfs_lfs_mount — the cross-platform mount entry + fd-VFS hook, SAME NAME as bouffalo's
+ * lfs_port (component/bouffalo_sdk/lfs_port/vfs_lfs_mount.c): the newlib retarget's file
+ * backend routes _open'd paths to this LittleFS instance. The prototype is local
+ * (syscalls.h is not on this port's include path). Was amebad_lfs_mount + a wrapper. */
+lfs_t *vfs_lfs_mount(void);
+lfs_t *vfs_lfs_mount(void)
 {
     return lfs_config_mount(&amebad_lfs_diskio);
 }
@@ -82,14 +87,4 @@ void amebad_lfs_unmount(lfs_t *lfs)
 {
     (void)lfs;                 /* singleton is owned by lfs_config */
     lfs_config_unmount();
-}
-
-/* Cross-platform fd VFS hook (component/syscalls/syscalls.h): the newlib retarget's
- * file backend routes _open'd paths to this LittleFS instance. Strong override of the
- * shared core's contract; rides into the image with amebad_lfs_mount (same TU). The
- * prototype is local (syscalls.h is not on this port's include path). */
-lfs_t *vfs_lfs_mount(void);
-lfs_t *vfs_lfs_mount(void)
-{
-    return amebad_lfs_mount();
 }

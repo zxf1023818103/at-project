@@ -12,12 +12,8 @@
 #include "board.h"
 #include "bl602_glb.h"
 
-#include "mm.h"
+#include "ram_heap.h"   /* shared ram_heap_init() (freertos-kernel_config) */
 
-extern void log_start(void);
-
-extern uint32_t __HeapBase;
-extern uint32_t __HeapLimit;
 
 static struct bflb_device_s *uart0;
 
@@ -141,22 +137,9 @@ static void console_init()
     bflb_uart_set_console(uart0);
 }
 
-void ram_heap_init(void)
-{
-    size_t heap_len;
-
-    /* ram heap init */
-    mem_manager_init();
-
-    /* ocram heap init */
-    heap_len = ((size_t)&__HeapLimit - (size_t)&__HeapBase);
-    mm_register_heap(MM_HEAP_OCRAM_0, "OCRAM", MM_ALLOCATOR_TLSF, &__HeapBase, heap_len);
-
-    /* ram info dump */
-    printf("dynamic memory init success\r\n"
-           "  ocram heap size: %d Kbyte \r\n",
-           ((size_t)&__HeapLimit - (size_t)&__HeapBase) / 1024);
-}
+/* ram_heap_init() is the shared cross-platform registrar in
+ * component/freertos-kernel_config/ram_heap.c (driven by the __HeapBase/__HeapLimit +
+ * _heap_wram_* linker symbols this board's .ld provides). board_init() below calls it. */
 
 extern int main(void);
 
@@ -193,7 +176,6 @@ void board_init(void)
 
     printf("cgen1:%08x\r\n", getreg32(BFLB_GLB_CGEN1_BASE));
 
-    log_start();
 #if defined(CONFIG_BFLB_LOG)
     rtc = bflb_device_get_by_name("rtc");
 #endif

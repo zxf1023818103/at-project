@@ -1,0 +1,81 @@
+diff --git a/porting/npl/freertos/include/nimble/nimble_npl_os.h b/porting/npl/freertos/include/nimble/nimble_npl_os.h
+index 44d216c8..0f229a9a 100644
+--- a/porting/npl/freertos/include/nimble/nimble_npl_os.h
++++ b/porting/npl/freertos/include/nimble/nimble_npl_os.h
+@@ -283,7 +283,9 @@ ble_npl_hw_set_isr(int irqn, void (*addr)(void))
+ static inline uint32_t
+ ble_npl_hw_enter_critical(void)
+ {
+-    vPortEnterCritical();
++    /* Portable FreeRTOS critical section: taskENTER_CRITICAL() maps to the right
++     * port impl (ARM vPortEnterCritical / RISC-V vTaskEnterCritical). */
++    taskENTER_CRITICAL();
+     s_critical_nesting++;
+     return 0;
+ }
+@@ -294,7 +296,7 @@ ble_npl_hw_exit_critical(uint32_t ctx)
+     if (s_critical_nesting > 0) {
+         s_critical_nesting--;
+     }
+-    vPortExitCritical();
++    taskEXIT_CRITICAL();
+ }
+ 
+ static inline bool
+diff --git a/porting/npl/freertos/include/nimble/nimble_npl_os_log.h b/porting/npl/freertos/include/nimble/nimble_npl_os_log.h
+index 24315a21..df065828 100644
+--- a/porting/npl/freertos/include/nimble/nimble_npl_os_log.h
++++ b/porting/npl/freertos/include/nimble/nimble_npl_os_log.h
+@@ -23,15 +23,14 @@
+ #include <stdarg.h>
+ #include <stdio.h>
+ 
+-/* Example on how to use macro to generate module logging functions */
++/* at-project: the upstream impl vprintf()s EVERY level (incl DEBUG) unconditionally, which floods
++ * the LOGUART with per-ACL/HCI/GATT traces and cripples high-throughput BLE (e.g. mcumgr DFU). We
++ * never consume NimBLE's internal logs (the app logs via rxi/at_log), so make them no-ops. */
+ #define BLE_NPL_LOG_IMPL(lvl) \
+         static inline void _BLE_NPL_LOG_CAT(BLE_NPL_LOG_MODULE, \
+                 _BLE_NPL_LOG_CAT(_, lvl))(const char *fmt, ...)\
+         {                               \
+-            va_list args;               \
+-            va_start(args, fmt);        \
+-            vprintf(fmt, args);          \
+-            va_end(args);               \
++            (void)fmt;                  \
+         }
+ 
+ #endif  /* _NIMBLE_NPL_OS_LOG_H_ */
+diff --git a/porting/npl/freertos/src/nimble_port_freertos.c b/porting/npl/freertos/src/nimble_port_freertos.c
+index 8ee3475a..ed77719b 100644
+--- a/porting/npl/freertos/src/nimble_port_freertos.c
++++ b/porting/npl/freertos/src/nimble_port_freertos.c
+@@ -46,6 +46,10 @@ nimble_port_freertos_init(TaskFunction_t host_task_fn)
+      * have separate task for NimBLE host, but since something needs to handle
+      * default queue it is just easier to make separate task which does this.
+      */
+-    xTaskCreate(host_task_fn, "ble", configMINIMAL_STACK_SIZE + 400,
++    /* at-project: +1280 (not +400). The mcumgr SMP handlers run in this task's GATT-access
++     * context; img_mgmt's upload-request struct (~600 B img_data) plus the
++     * gatt->smp->mgmt->cbor->ota_flash->flash-HAL call chain overflows the ~2 KB default,
++     * faulting the device mid-DFU (BLE drop + dead console). ~5 KB gives headroom. */
++    xTaskCreate(host_task_fn, "ble", configMINIMAL_STACK_SIZE + 1280,
+                 NULL, tskIDLE_PRIORITY + 1, &host_task_h);
+ }
+diff --git a/porting/npl/freertos/src/npl_os_freertos.c b/porting/npl/freertos/src/npl_os_freertos.c
+index 584333c3..f1f49930 100644
+--- a/porting/npl/freertos/src/npl_os_freertos.c
++++ b/porting/npl/freertos/src/npl_os_freertos.c
+@@ -32,8 +32,10 @@ volatile uint32_t s_critical_nesting = 0;
+ static inline bool
+ in_isr(void)
+ {
+-    /* XXX hw specific! */
+-    return (SCB->ICSR & SCB_ICSR_VECTACTIVE_Msk) != 0;
++    /* Portable across FreeRTOS ports: the ARM Cortex-M port reads IPSR, the RISC-V
++     * port reads its interrupt-nesting counter — both without an SoC-specific SCB
++     * probe, so no NIMBLE_NPL_OS_EXTRA_INCLUDE / #ifdef is needed. */
++    return xPortIsInsideInterrupt() != 0;
+ }
+ 
+ struct ble_npl_event *

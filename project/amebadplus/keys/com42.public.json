@@ -1,0 +1,9 @@
+{
+  "device": "COM42 / RTL8711Dx",
+  "private_key_file": "com42.json (local file; backed up in the private repository)",
+  "private_key_backup": "https://github.com/zxf1023818103/at-project-com42-keys",
+  "root_public_key": "44f568c78bde6bc7361add23cfe3ec3d887a53830eb26622d2a3605879f7d444",
+  "root_public_key_sha256": "50591c9571de24ec3c675a0fbf9b218b812c63edbb30140cf7210d2bfc6d3062",
+  "app_public_key": "c33d88de0c911cc70041b0d88f397f4349604af9f1a3f03d6a96e608158047f2",
+  "app_public_key_sha256": "208ddd1827950826412a74900ceeb183d1fd265355cd993091b5c20ba8207a22"
+}

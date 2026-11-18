@@ -84,6 +84,29 @@ int at_console_write(int fd, const char *buf, int len)
     return len;
 }
 
+void at_console_write_raw(const char *buf, int len)
+{
+    const at_console_backend_t *be = cur();
+    int i;
+
+    if (be == 0 || be->putc == 0) {
+        return;                     /* no console wired: sink the bytes */
+    }
+    for (i = 0; i < len; i++) {
+        be->putc(buf[i]);
+    }
+}
+
+int at_console_getc(void)
+{
+    const at_console_backend_t *be = cur();
+
+    if (be == 0 || be->getc == 0) {
+        return -1;                  /* no input device */
+    }
+    return be->getc();
+}
+
 int at_console_read(char *buf, int len)
 {
     const at_console_backend_t *be = cur();

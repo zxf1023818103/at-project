@@ -1,7 +1,8 @@
 # mcumgr_config - apache/mynewt-mcumgr 0.7.0 (submodule component/mcumgr_config/mcumgr) as the
 # SMP management protocol for AmebaD BLE DFU (make MCUMGR=ON). We compile only the protocol core
 # (mgmt + smp) and the img + os command groups; the BLE smp_bt transport + the img/os platform
-# impls live in component/amebad/mcumgr_port + app_km4 (mcumgr's transport/ is docs-only and the
+# impls live in app_km4, and the BLE smp_bt transport is built here too (smp_bt.c, the mcumgr_port
+# target below - merged in from the former component/amebad/mcumgr_port; mcumgr's transport/ is docs-only and the
 # *_impl_* hooks are platform-specific).
 #
 # mcumgr 0.7.0 targets the old apache-mynewt-core tinycbor (reader/writer CBOR API). This project
@@ -12,6 +13,25 @@
 # mcumgr_cbor_* wrappers. See include/mcumgr_compat.h.
 
 set(_m "${CMAKE_CURRENT_SOURCE_DIR}/mcumgr")
+
+# Keep cborattr's decode errors when advancing to the next item. TinyCBOR v7
+# also accepts a text buffer filled exactly to capacity without a trailing NUL;
+# mcumgr's string consumers require that terminator. Patch a build-local copy
+# so the vendored submodule stays untouched.
+file(READ "${_m}/cborattr/src/cborattr.c" _cborattr)
+set(_advance "        err = cbor_value_advance(&cur_value);")
+set(_text_copy "err |= cbor_value_copy_text_string(&cur_value, lptr,\n                                                   &len, NULL);")
+foreach(_expected IN ITEMS "${_advance}" "${_text_copy}")
+    string(FIND "${_cborattr}" "${_expected}" _found)
+    if(_found EQUAL -1)
+        message(FATAL_ERROR "mcumgr cborattr changed; review the TinyCBOR compatibility fixes")
+    endif()
+endforeach()
+string(REPLACE "${_advance}" "        err |= cbor_value_advance(&cur_value);" _cborattr "${_cborattr}")
+string(REPLACE "${_text_copy}"
+    "${_text_copy}\n                if (len >= cursor->len) {\n                    err |= CborErrorDataTooLarge;\n                }"
+    _cborattr "${_cborattr}")
+file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/cborattr.c" CONTENT "${_cborattr}" @ONLY)
 
 # mcumgr's sources include "tinycbor/cbor.h", but this project's tinycbor exposes headers as
 # "cbor.h" (its src/ is on the include path). Bridge the prefix with a symlink inc/tinycbor ->
@@ -31,7 +51,9 @@ add_library(mcumgr STATIC EXCLUDE_FROM_ALL
     "${_m}/cmd/img_mgmt/src/img_mgmt_util.c"
     "${_m}/cmd/os_mgmt/src/os_mgmt.c"
     "${_m}/cmd/os_mgmt/src/stubs.c"
-    "${_m}/cborattr/src/cborattr.c"
+    "${_m}/cmd/fs_mgmt/src/fs_mgmt.c"
+    "${_m}/cmd/fs_mgmt/src/stubs.c"
+    "${CMAKE_CURRENT_BINARY_DIR}/cborattr.c"
     "${_m}/util/src/mcumgr_util.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/mcumgr_compat.c"
 )
@@ -41,6 +63,7 @@ target_include_directories(mcumgr PUBLIC
     "${_m}/smp/include"
     "${_m}/cmd/img_mgmt/include"
     "${_m}/cmd/os_mgmt/include"
+    "${_m}/cmd/fs_mgmt/include"
     "${_m}/cborattr/include"
     "${_m}/util/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/include"          # mcumgr_compat.h, syscfg shim, cbor_buf_reader.h
@@ -61,3 +84,17 @@ target_include_directories(mcumgr PUBLIC
 
 add_library(mcumgr_config INTERFACE)
 target_link_libraries(mcumgr_config INTERFACE mcumgr)
+
+# SMP-over-BLE transport (smp_bt.c) - merged in from the former component/amebad/mcumgr_port (no
+# platform-HAL code: pure NimBLE host + mcumgr core). KM4 + MCUMGR-gated. Include-only deps (NOT link):
+# mcumgr_port rides the image's cross_refs LINK_GROUP alongside mcumgr / nimble / rxi_log archives, so
+# linking the umbrellas here would cycle; the group resolves the symbols at the final link.
+if(("${AMEBAD_CHIP}" STREQUAL "amebad-km4" OR AMEBADPLUS_CORE STREQUAL "km4" OR AMEBAGREEN2_CORE STREQUAL "km4tz") AND AT_ENABLE_MCUMGR)
+    add_library(mcumgr_port STATIC EXCLUDE_FROM_ALL "${CMAKE_CURRENT_SOURCE_DIR}/smp_bt.c")
+    target_compile_options(mcumgr_port PRIVATE "-fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=")
+    target_include_directories(mcumgr_port PRIVATE
+        $<TARGET_PROPERTY:mcumgr,INTERFACE_INCLUDE_DIRECTORIES>          # mcumgr_smp_process + mgmt/smp + tinycbor prefix
+        $<TARGET_PROPERTY:nimble_config,INTERFACE_INCLUDE_DIRECTORIES>  # host/ble_hs.h, ble_gatt, ble_att, os_mbuf
+        $<TARGET_PROPERTY:rxi_log_config,INTERFACE_INCLUDE_DIRECTORIES> # at_log.h
+        $<TARGET_PROPERTY:FreeRTOS,INTERFACE_INCLUDE_DIRECTORIES>)
+endif()

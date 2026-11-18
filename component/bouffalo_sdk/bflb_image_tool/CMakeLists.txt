@@ -76,9 +76,9 @@ function(bflb_add_executable TARGET)
     # at ~4 KB (the LDS wildcards otherwise snowball to ~24 KB via
     # bl602_*.o(.rodata) function-pointer tables that keep their .text
     # alive through gc-sections). Reproducing it under CMake 3.28 needs
-    # link-line de-dup (CMP0156 is 3.29+), reconciling
-    # bflb_mbedtls_port/bignum.c vs upstream library/bignum.c (full
-    # mbedtls_mpi_* overlap), and feature-unification across cascading
+    # link-line de-dup (CMP0156 is 3.29+), reconciling the mbedtls bignum
+    # variants (the SDK's full mbedtls_mpi_* replacement vs upstream
+    # library/bignum.c), and feature-unification across cascading
     # INTERFACE umbrellas. We hit each of those in turn; the project's
     # bl<chip>_flash.ld bumps ITCM 16K → 24K as the simpler workaround
     # for now. See cmake/at_dedup_link_libs.cmake (which stays in-tree
@@ -95,6 +95,13 @@ function(bflb_add_executable TARGET)
         "${CMAKE_CURRENT_BINARY_DIR}/${_base}.xz.ota"
     )
 
+    # Low-power firmware concat (the SDK's CONFIG_POST_BUILDS_CONCAT_WITH_LP_FW): append the lp_fw
+    # blob onto the FW bin before the whole-flash pack. Off by default; enabled by the CMake var.
+    set(_lpfw_arg "")
+    if(CONFIG_POST_BUILDS_CONCAT_WITH_LP_FW)
+        set(_lpfw_arg --with-lp-fw)
+    endif()
+
     add_custom_command(
         OUTPUT ${_outputs}
         COMMAND "${BFLB_PYTHON}" "${BFLB_ELF_TO_BIN_SCRIPT}"
@@ -104,6 +111,7 @@ function(bflb_add_executable TARGET)
                 --build-dir "${CMAKE_CURRENT_BINARY_DIR}"
                 --elf       "$<TARGET_FILE:${TARGET}>"
                 --objcopy   "${CMAKE_OBJCOPY}"
+                ${_lpfw_arg}
         DEPENDS ${TARGET} "${BFLB_ELF_TO_BIN_SCRIPT}"
         COMMENT "[bflb] ${TARGET}: ELF -> ${_base}_whole_flash_data.bin (chip=${BOUFFALO_CHIP}, board=${_board})"
         VERBATIM

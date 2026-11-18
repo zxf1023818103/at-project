@@ -42,6 +42,11 @@
 
 #include "logging_stack.h"
 
+/* Read the private mbedtls_ssl_context.state (the handshake state machine) in the failure log to
+ * pinpoint WHERE an intermittent handshake error lands (2=ServerHello, 3=Certificate, 4=SKE, 7-9=
+ * client cert/keyexch/certverify). Must precede the mbedTLS headers so MBEDTLS_PRIVATE(state)=state. */
+#define MBEDTLS_ALLOW_PRIVATE_ACCESS
+
 /* Standard includes. */
 #include <string.h>
 
@@ -87,7 +92,7 @@
 
 #include <sys/stat.h>   /* stat / S_ISDIR -- folder vs single-file root CA path */
 
-#ifdef AMEBAD_ENABLE_CRT_BUNDLE
+#ifdef AT_PROJECT_CRT_BUNDLE
     #include "esp_crt_bundle.h"
 #endif
 
@@ -478,7 +483,7 @@ static int32_t setCredentials( SSLContext_t * pSslContext,
 
     /* Load the file/folder trust anchors (the `ca/` store) into pSslContext->rootCa. */
     setRootCaPath( pSslContext, pNetworkCredentials->pRootCaPath );
-#ifdef AMEBAD_ENABLE_CRT_BUNDLE
+#ifdef AT_PROJECT_CRT_BUNDLE
     /* Verify against the embedded Mozilla CA bundle, with the file roots as extra trust anchors
      * (so a server chaining to a self-signed / niche CA dropped in the folder is also accepted). */
     mbedtlsError = esp_crt_bundle_attach( &( pSslContext->config ), &( pSslContext->rootCa ) );
@@ -577,11 +582,14 @@ static void setOptionalConfigurations( SSLContext_t * pSslContext,
                     mbedtlsLowLevelCodeOrDefault( mbedtlsError ) ) );
     }
 
-    /* Set Maximum Fragment Length if enabled. */
-    #ifdef MBEDTLS_SSL_MAX_FRAGMENT_LENGTH
+    /* Set Maximum Fragment Length if enabled. TRANSPORT_MBEDTLS_NO_MFLN (bl602 AWS) skips OFFERING it:
+     * AWS IoT does not honour MFLN and sends its ~5.6 KB server-cert flight in records bigger than the
+     * 2 KB we'd advertise, so with MFLN negotiated mbedTLS caps the record below what AWS sends and the
+     * handshake stalls. The full 6144 IN buffer holds AWS's records, so not offering MFLN is lossless. */
+    #if defined( MBEDTLS_SSL_MAX_FRAGMENT_LENGTH ) && !defined( TRANSPORT_MBEDTLS_NO_MFLN )
 
         /* Enable the max fragment extension. AmebaD KM4: 2048 (not 4096) — it must match
-         * MBEDTLS_SSL_OUT_CONTENT_LEN (mbedtls_amebad_user_config.h, trimmed to 2 KB to fit the NS
+         * MBEDTLS_SSL_OUT_CONTENT_LEN (mbedtls_user_config.h, trimmed to 2 KB to fit the NS
          * heap), and 2 KB holds the largest record we send (the ~1.3 KB client Certificate). With
          * MBEDTLS_SSL_VARIABLE_BUFFER_LENGTH this also lets IN/OUT realloc down to 2 KB after the
          * handshake. See RFC 8449; smaller values are in "mbedtls/include/ssl.h".
@@ -629,6 +637,17 @@ static TlsTransportStatus_t tlsSetup( NetworkContext_t * pNetworkContext,
         /* Per mbed TLS docs, mbedtls_ssl_config_defaults only fails on memory allocation. */
         returnStatus = TLS_TRANSPORT_INSUFFICIENT_MEMORY;
     }
+
+#ifdef TRANSPORT_MBEDTLS_MAX_TLS_1_2
+    /* Pin the maximum protocol to TLS 1.2 (bl602 AWS build). bl602's mbedTLS TLS 1.3 client handshake
+     * to AWS IoT fails negotiation, whereas AWS accepts TLS 1.2 ECDHE-RSA-AES128-GCM-SHA256 with the
+     * RSA-2048 client cert - the well-trodden mbedTLS mutual-auth path (AmebaD uses picotls for 1.3). */
+    if( returnStatus == TLS_TRANSPORT_SUCCESS )
+    {
+        mbedtls_ssl_conf_max_tls_version( &( pTlsTransportParams->sslContext.config ),
+                                          MBEDTLS_SSL_VERSION_TLS1_2 );
+    }
+#endif
 
     if( returnStatus == TLS_TRANSPORT_SUCCESS )
     {
@@ -698,8 +717,10 @@ static TlsTransportStatus_t tlsHandshake( NetworkContext_t * pNetworkContext,
 
     if( returnStatus == TLS_TRANSPORT_SUCCESS )
     {
-        /* Perform the TLS handshake. */
-        TickType_t handshakeTimeoutTicks = pdMS_TO_TICKS( 10000 );
+        /* Perform the TLS handshake. 30 s (was 10 s): tolerates TCP retransmits of the multi-record
+         * server-cert flight over a congested 2.4 GHz link (bl602 is 2.4 GHz-only) so a lost packet's
+         * retransmit doesn't blow the whole-handshake budget mid-flight. */
+        TickType_t handshakeTimeoutTicks = pdMS_TO_TICKS( 30000 );
         TimeOut_t handshakeStart;
         vTaskSetTimeOutState( &handshakeStart );
 
@@ -712,9 +733,20 @@ static TlsTransportStatus_t tlsHandshake( NetworkContext_t * pNetworkContext,
 
         if( mbedtlsError != 0 )
         {
-            LogError( ( "Failed to perform TLS handshake: mbedTLSError= %s : %s.",
+            extern size_t xPortGetFreeHeapSize( void );
+            LogError( ( "Failed to perform TLS handshake: mbedTLSError= %s : %s (raw=-0x%04X state=%d free_heap=%u).",
                         mbedtlsHighLevelCodeOrDefault( mbedtlsError ),
-                        mbedtlsLowLevelCodeOrDefault( mbedtlsError ) ) );
+                        mbedtlsLowLevelCodeOrDefault( mbedtlsError ),
+                        ( unsigned ) -mbedtlsError,
+                        pTlsTransportParams->sslContext.context.MBEDTLS_PRIVATE( state ),
+                        ( unsigned ) xPortGetFreeHeapSize() ) );
+
+            if( mbedtlsError == MBEDTLS_ERR_X509_CERT_VERIFY_FAILED )
+            {
+                uint32_t vflags = mbedtls_ssl_get_verify_result( &( pTlsTransportParams->sslContext.context ) );
+                LogError( ( "  X509 verify flags = 0x%08x (NOTTRUST=0x8 EXPIRED=0x1 FUTURE=0x200 BADMD=0x20 SKIP=0x8000000)",
+                            ( unsigned ) vflags ) );
+            }
 
             returnStatus = TLS_TRANSPORT_HANDSHAKE_FAILED;
         }
@@ -736,6 +768,12 @@ static TlsTransportStatus_t initMbedtls( mbedtls_entropy_context * pEntropyConte
     int32_t mbedtlsError = 0;
 
     #if defined( MBEDTLS_THREADING_ALT )
+        /* Supplied by the application TU that owns the mbedTLS threading shim
+         * (aws_iot_config/aws_telemetry.c or aws_iot_demo.c). Declared here
+         * because no shared header exposes it and GCC 14 (the bl618dg
+         * toolchain) rejects the implicit declaration older GCCs allowed. */
+        extern void mbedtls_platform_threading_init( void );
+
         /* Set the mutex functions for mbed TLS thread safety. */
         mbedtls_platform_threading_init();
     #endif
@@ -819,7 +857,7 @@ TlsTransportStatus_t TLS_FreeRTOS_Connect( NetworkContext_t * pNetworkContext,
                     pNetworkCredentials ) );
         returnStatus = TLS_TRANSPORT_INVALID_PARAMETER;
     }
-#ifndef AMEBAD_ENABLE_CRT_BUNDLE
+#ifndef AT_PROJECT_CRT_BUNDLE
     else if( pNetworkCredentials->pRootCaPath == NULL )
     {
         /* Without the embedded bundle, the `ca/` folder is the only trust source. */

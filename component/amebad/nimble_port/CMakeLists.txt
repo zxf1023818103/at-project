@@ -43,7 +43,6 @@ file(GLOB _nb_src
     "${_nb}/nimble/host/services/ias/src/*.c"
     "${_nb}/nimble/host/services/lls/src/*.c"
     "${_nb}/nimble/host/services/tps/src/*.c"
-    "${_nb}/nimble/host/store/ram/src/*.c"
     "${_nb}/nimble/transport/src/*.c"
     "${_nb}/nimble/transport/common/hci_h4/src/*.c"   # H4 framing state machine (custom transport uses it)
     "${_nb}/nimble/host/mesh/src/*.c"        # BLE Mesh
@@ -84,8 +83,9 @@ list(REMOVE_ITEM _nb_src
 
 add_library(nimble STATIC EXCLUDE_FROM_ALL
     ${_nb_src}
-    "${CMAKE_CURRENT_SOURCE_DIR}/transport_amebad.c"   # custom HCI transport (LL side) -> amebad_hci
-    "${CMAKE_CURRENT_SOURCE_DIR}/coex_amebad.c"        # WiFi/BT coex glue -> lib_wlan (P5)
+    "${CMAKE_CURRENT_SOURCE_DIR}/transport_amebad.c"       # custom HCI transport (LL side) -> amebad_hci
+    "${CMAKE_CURRENT_SOURCE_DIR}/coex_amebad.c"            # WiFi/BT coex glue -> lib_wlan (P5)
+    "${CMAKE_CURRENT_SOURCE_DIR}/nimble_platform_amebad.c" # strong overrides for nimble_app.c's __weak hooks
 )
 
 # Config + header surface (our syscfg.h FIRST, then the upstream NimBLE includes)
@@ -99,11 +99,18 @@ target_link_libraries(nimble PUBLIC
     amebad_wlan          # rltk_coex_* (coex, P5)
 )
 
-# porting/npl/freertos/src/npl_os_freertos.c does `#include NIMBLE_NPL_OS_EXTRA_INCLUDE`
-# to get CMSIS SCB (for its in_isr() check). Point it at the AmebaD SoC umbrella
-# (pulls core_cm33.h via the device header).
-target_compile_definitions(nimble PRIVATE "NIMBLE_NPL_OS_EXTRA_INCLUDE=\"ameba_soc.h\"")
+# npl_os_freertos.c's in_isr() now uses the portable xPortIsInsideInterrupt() (both the
+# ARM CM33 and RISC-V ports define it), so NIMBLE_NPL_OS_EXTRA_INCLUDE (was ameba_soc.h
+# for CMSIS SCB) is no longer needed.
 
 # Vendored upstream — silence its warnings (the AmebaD flag stack is -Wall -Wextra
 # -Werror). -w (last on the command line) overrides the global -Werror.
 target_compile_options(nimble PRIVATE -w)
+
+# NDEBUG (Mynewt's release mode) for the vendored upstream: hci_h4_sm_rx treats an
+# ACL/EVT pool OOM as assert-fatal (`assert(rc >= 0)`) even though its own tail comment +
+# consumed-bytes return implement a graceful path. Under a sustained notification flood
+# (bletp RX side) the pool WILL momentarily exhaust (host task at idle+1 vs HCI RX at
+# idle+4), so the assert aborted the image. With NDEBUG the OOM propagates as a short
+# read that transport_amebad.c's RX loop retries with backpressure.
+target_compile_definitions(nimble PRIVATE NDEBUG)

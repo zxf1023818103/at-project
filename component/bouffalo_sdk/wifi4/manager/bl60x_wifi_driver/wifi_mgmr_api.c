@@ -188,7 +188,7 @@ int wifi_mgmr_api_sniffer_enable(void)
     return wifi_mgmr_api_common_msg(WIFI_MGMR_EVENT_APP_SNIFFER, (void*)0x1, (void*)0x2);
 }
 
-int wifi_mgmr_api_scan_item_beacon(uint8_t channel, int8_t rssi, uint8_t auth, uint8_t mac[], uint8_t ssid[], int len, int8_t ppm_abs, int8_t ppm_rel, uint8_t cipher, uint8_t wps, uint32_t mode, uint8_t group_cipher)
+int wifi_mgmr_api_scan_item_beacon(uint8_t channel, int8_t rssi, uint8_t auth, uint8_t mac[], uint8_t ssid[], int len, int8_t ppm_abs, int8_t ppm_rel, uint8_t cipher, uint8_t wps, uint32_t mode, uint8_t group_cipher, uint8_t country[2])
 {
     wifi_mgmr_scan_item_t scan;
 
@@ -206,6 +206,8 @@ int wifi_mgmr_api_scan_item_beacon(uint8_t channel, int8_t rssi, uint8_t auth, u
     scan.wps = wps;
     scan.mode = mode;
     scan.group_cipher = group_cipher;
+    scan.country[0] = country ? country[0] : 0;   /* at-project: 802.11d Country IE */
+    scan.country[1] = country ? country[1] : 0;
 
     return wifi_mgmr_scan_beacon_save(&scan);
 }

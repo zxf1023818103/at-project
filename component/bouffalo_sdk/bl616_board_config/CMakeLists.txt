@@ -28,6 +28,14 @@ if(BL616_BOARD_CONFIG_RF)
         wireless_regdb.c
         wireless_spur.c
     )
+elseif(CONFIG_LPAPP)
+    # LP_FW=ON needs just board_rf_ctl() (board_rf.c, self-contained — no regdb/spur): the
+    # post-PDS15-wake restore callback (bflb_power_mgmt/lp_recovery.c) resets the RF via
+    # BRD_CTL_RF_RESET_DEFAULT + wl_init(), same as every SDK lp demo's lp_exit.
+    target_sources(bl616_board_config PRIVATE board_rf.c)
+    target_link_libraries(bl616_board_config PRIVATE
+        bl616_phyrf     # wl_api.h / wl_init
+        rfparam)        # rfparam_adapter.h (capcode/param-load callbacks)
 endif()
 
 target_include_directories(bl616_board_config PUBLIC
@@ -43,6 +51,12 @@ endif()
 target_compile_definitions(bl616_board_config PUBLIC
     "CONFIG_CONSOLE_UART_BAUDRATE=${CONFIG_CONSOLE_UART_BAUDRATE}"
 )
+
+# LP_FW=ON (CONFIG_LPAPP): board.c's board_recovery() (system/peripheral clock + console re-init after
+# a PDS wake) and its board.h declaration are #ifdef LP_APP. PUBLIC so lp_cli.c (which calls it) sees it.
+if(CONFIG_LPAPP)
+    target_compile_definitions(bl616_board_config PUBLIC LP_APP=1)
+endif()
 
 # board.c / board_gpio.c / board_flash_psram.c #include lhal headers
 # (bflb_uart.h, bflb_gpio.h, bflb_clock.h, …). PUBLIC so consumers that
@@ -84,6 +98,10 @@ target_link_options(bl616_board_config INTERFACE
     # that include resolves.
     "-L${CMAKE_CURRENT_LIST_DIR}"
     "-ufw_header"
+    # The prebuilt fhost SDK .a's (libwpa_supplicant/libmacsw_os_adapter) bundle their own copies of
+    # common symbols that clash with ours (crc32 vs zlib; vApplicationStackOverflowHook vs
+    # freertos_config). Let the linker take the first definition rather than erroring.
+    "-Wl,--allow-multiple-definition"
 )
 
 set_target_properties(bl616_board_config PROPERTIES

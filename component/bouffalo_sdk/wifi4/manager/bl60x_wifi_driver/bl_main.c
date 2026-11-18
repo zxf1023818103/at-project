@@ -1,11 +1,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <lwip/opt.h>
-#include <lwip/def.h>
-#include <lwip/mem.h>
-#include <lwip/pbuf.h>
-#include <netif/etharp.h>
 
 #include "bl_main.h"
 #include "bl_defs.h"
@@ -307,7 +302,7 @@ int bl_main_get_channel_nums()
     return bl_msg_get_channel_nums();
 }
 
-int bl_main_if_add(int is_sta, struct netif *netif, uint8_t *vif_index)
+int bl_main_if_add(int is_sta, uint8_t *mac, uint8_t *vif_index)
 {
     struct mm_add_if_cfm add_if_cfm;
     int error, vif_id;
@@ -315,7 +310,7 @@ int bl_main_if_add(int is_sta, struct netif *netif, uint8_t *vif_index)
     bflb_os_printf("[WF] MM_ADD_IF_REQ Sending: %s\r\n", is_sta ? "STA" : "AP");
     error = bl_send_add_if(
             &wifi_hw,
-            netif->hwaddr,
+            mac,
             is_sta ? NL80211_IFTYPE_STATION : NL80211_IFTYPE_AP,
             false,
             &add_if_cfm
@@ -334,7 +329,7 @@ int bl_main_if_add(int is_sta, struct netif *netif, uint8_t *vif_index)
     /* TODO: Dont care wifi_hw.vifs */
     vif_id = (is_sta) ? (BL_VIF_STA) : (BL_VIF_AP);
     wifi_hw.vif_table[vif_id].vif_idx   = add_if_cfm.inst_nbr;
-    wifi_hw.vif_table[vif_id].dev       = netif;
+    wifi_hw.vif_table[vif_id].dev       = NULL;   /* was the lwIP netif; unused now */
     wifi_hw.vif_table[vif_id].up        = 1;
     wifi_hw.vif_table[vif_id].links_num = 0;
 
@@ -487,7 +482,7 @@ int bl_main_cfg_task_req(uint32_t ops, uint32_t task, uint32_t element, uint32_t
     return bl_send_cfg_task_req(&wifi_hw, ops, task, element, type, arg1, arg2);
 }
 
-int bl_main_scan(struct netif *netif, uint16_t *fixed_channels, uint16_t channel_num, struct mac_addr *bssid, struct mac_ssid *ssid, uint8_t scan_mode, uint32_t duration_scan)
+int bl_main_scan(uint8_t *mac, uint16_t *fixed_channels, uint16_t channel_num, struct mac_addr *bssid, struct mac_ssid *ssid, uint8_t scan_mode, uint32_t duration_scan)
 {
     struct bl_send_scanu_para scanu_para;
 
@@ -495,7 +490,7 @@ int bl_main_scan(struct netif *netif, uint16_t *fixed_channels, uint16_t channel
     scanu_para.channel_num = channel_num;
     scanu_para.bssid = bssid;
     scanu_para.ssid = ssid;
-    scanu_para.mac = netif->hwaddr;
+    scanu_para.mac = mac;
     scanu_para.scan_mode = scan_mode;
     scanu_para.duration_scan = duration_scan;
 

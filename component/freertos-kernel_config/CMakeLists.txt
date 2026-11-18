@@ -19,6 +19,10 @@
 #       freertos_heap_tlsf.c    FreeRTOS heap surface over the shared tlsf_config
 #       freertos_heap_none.c       empty FREERTOS_HEAP stub
 #       freertos_hooks.c           idle / stack-overflow / malloc-failed hooks (printf)
+#       freertos_static_mem.c      idle + timer task static buffers (configSUPPORT_STATIC_ALLOCATION)
+#       ram_heap.c                 the single cross-platform ram_heap_init() — registers the
+#                                  __HeapBase/__HeapLimit (+ _heap_wram_* / __psram_*) linker
+#                                  regions as tlsf_config heaps; every platform's boot calls it
 #     This is ALSO the kernel's mandated `freertos_config` target (the upstream
 #     FreeRTOS-Kernel links any target of that name for FreeRTOSConfig.h), so it
 #     PUBLIC-exposes this dir (FreeRTOSConfig.h + freertos_backtrace_ext.h).
@@ -34,12 +38,23 @@ add_library(freertos_config_common INTERFACE)
 # __FUNCTION__ (non-ISO). Keep it a system include so that does not error.
 target_include_directories(freertos_config_common SYSTEM INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
 
+# Bouffalo LP_FW=ON (CONFIG_LPAPP, set in proj.conf before add_subdirectory(component)): enable the
+# FreeRTOS tickless-idle PDS15 path. freertos_config does NOT link bflb_autoconf, so CONFIG_LPAPP is
+# invisible to FreeRTOSConfig.h from -include autoconf.h; carry it here as AT_LP_TICKLESS_IDLE on the
+# INTERFACE config lib so BOTH the kernel TU and bflb_power_mgmt/tickless.c see the same value (keeps
+# configUSE_TICKLESS_IDLE uniform across TUs). FreeRTOSConfig.h gates configUSE_TICKLESS_IDLE on it.
+if(CONFIG_LPAPP)
+    target_compile_definitions(freertos_config_common INTERFACE AT_LP_TICKLESS_IDLE=1)
+endif()
+
 # ---- (2) portable FreeRTOS extensions = the kernel's `freertos_config` target ----
 add_library(freertos_config STATIC
     freertos_backtrace_ext.c
     freertos_heap_tlsf.c   # FreeRTOS heap surface over the shared tlsf_config (TLSF)
     freertos_heap_none.c      # empty FREERTOS_HEAP stub (kernel compiles no heap_N.c)
     freertos_hooks.c
+    freertos_static_mem.c     # idle + timer task static buffers (was duplicated per-platform)
+    ram_heap.c                # the single cross-platform ram_heap_init() (linker-symbol driven)
 )
 
 # PUBLIC: this dir (FreeRTOSConfig.h for the kernel + freertos_backtrace_ext.h) and the
@@ -67,7 +82,15 @@ target_compile_options(freertos_config PRIVATE
 #              start on KM0's image2 — see component/amebad/freertos_port for the why)
 #   KM4 (HP) image2 = Cortex-M33, non-secure -> GCC_ARM_CM33_NTZ_NONSECURE
 #   Bouffalo (RISC-V)                        -> GCC_RISC_V
-if("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
+if(AMEBAGREEN2_CORE)
+    add_subdirectory(${AT_ROOT}/component/amebagreen2/freertos_port
+                     ${CMAKE_BINARY_DIR}/component/amebagreen2/freertos_port)
+    set(_frt_port A_CUSTOM_PORT)
+elseif(AMEBADPLUS_CORE)
+    add_subdirectory(${AT_ROOT}/component/amebadplus/freertos_port
+                     ${CMAKE_BINARY_DIR}/component/amebadplus/freertos_port)
+    set(_frt_port A_CUSTOM_PORT)
+elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km0")
     set(_frt_port GCC_ARM_CM0)
 elseif("${AMEBAD_CHIP}" STREQUAL "amebad-km4")
     # KM4 image2 is non-secure (the secure world is TF-M). No-TrustZone port.

@@ -83,12 +83,14 @@ add_library(amebad_wlan_glue STATIC EXCLUDE_FROM_ALL
     "${CMAKE_CURRENT_SOURCE_DIR}/src/rtw_opt_wlan_ram_map.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/rtw_opt_power_by_rate.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/rtw_opt_power_limit.c"
-    # rtw_opt_crypto_ssl.c — the WiFi driver's TLS/crypto option (WPA-Enterprise /
-    # EAP-TLS connect path). Written against the SDK's mbedtls 2.4.0 (uses the now-
-    # private mbedtls_ecp_point.X/Y/Z, removed in the shared mbedtls 3.6.4). Not on
-    # the scan path, so it stays vendored-but-uncompiled here; wire it (with a 3.x
-    # port) when WPA-Enterprise/connect lands. Its symbols are weak-stubbed if the
-    # driver references them at link.
+    # NOTE: rtw_opt_crypto_ssl.c (the WPA3/SAE crypto backend rtw_crypto_ecc_*/crypto_ec_point_*) is
+    # NOT compiled here -- lib_wlan.a ALREADY contains rtw_opt_crypto_ssl.o (the SDK compiled it into
+    # the prebuilt driver). Compiling our own copy just creates a duplicate symbol. The force-pull
+    # (-Wl,-u,rtw_sae_prepare_commit in app_km4) drags lib_wlan.a's rtw_sae.o -> rtw_opt_crypto_ssl.o
+    # into the image. That copy is 2.4.0-ABI (mbedtls_mpi = {s,n,p}), so its mbedtls_ecp_*/mbedtls_mpi_*
+    # MUST resolve to the ROM 2.4.0 (mbedtls_rom.ld) -- which requires a ROM-only image (ROMKAT/no
+    # upstream mbedcrypto) AND providing mbedtls_platform_set_calloc_free ourselves (component/amebad/
+    # mbedtls_rom/rom_mbedtls.c) so that one missing-from-ROM symbol doesn't pull in upstream 3.6.x.
 )
 # GLOBAL visibility for app_km4's link group.
 set_target_properties(amebad_wlan_glue PROPERTIES EXCLUDE_FROM_ALL TRUE)

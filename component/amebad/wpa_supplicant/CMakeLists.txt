@@ -61,3 +61,10 @@ set_target_properties(amebad_wps PROPERTIES
 add_library(amebad_eap STATIC IMPORTED GLOBAL)
 set_target_properties(amebad_eap PROPERTIES
     IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/lib_eap.a")
+# The EAP peer core is lib_eap.a (amebad_eap) — the imported archive above. Its
+# SOURCE glue/adapter (wpa_supplicant/wifi_eap_config.c + src/crypto/tls_polarssl.c)
+# is compiled straight INTO the KM4 image by project/amebad/app_km4/CMakeLists.txt's
+# AMEBAD_ENABLE_EAP block (mirrors how AMEBAD_ENABLE_WPS builds wifi_wps_config.c), so
+# it inherits the image's platform_opts.h / include context. tls_polarssl.c binds to
+# whichever mbedTLS is in scope over the version-independent wpa `tls.h` API; the app
+# block gives it the project's CURRENT upstream Mbed TLS 3.6 (its >=0x03010000 branch).

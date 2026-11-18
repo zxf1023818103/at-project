@@ -1,0 +1,84 @@
+#include "lfs_port.h"
+#include "lfs_config.h"
+
+#include "flash_api.h"      /* flash_t, flash_stream_read/write, flash_erase_sector */
+
+/* Absolute SPI-NOR offset of the LFS region (raw, 0-based — the flash HAL takes
+ * raw offsets, not the 0x08000000 XIP alias). */
+#define LFS_BASE   LFS_CFG_REGION_OFFSET
+
+/* ===== diskio over the SDK flash HAL ====================================== *
+ * The SDK HAL serializes writes/erases with FLASH_Write_Lock/Unlock (IPC
+ * semaphore plus peer-core parking). lfs_config serializes filesystem calls. */
+
+int amebagreen2_lfs_read(const struct lfs_config *c, lfs_block_t block, lfs_off_t off,
+                    void *buffer, lfs_size_t size)
+{
+    flash_t flash;
+
+    if (size == 0) {
+        return LFS_ERR_OK;
+    }
+    if (block >= c->block_count || off > c->block_size || size > c->block_size - off)
+        return LFS_ERR_IO;
+    flash_stream_read(&flash, LFS_BASE + c->block_size * block + off, size,
+                      (uint8_t *)buffer);
+    return LFS_ERR_OK;
+}
+
+int amebagreen2_lfs_prog(const struct lfs_config *c, lfs_block_t block, lfs_off_t off,
+                    const void *buffer, lfs_size_t size)
+{
+    flash_t flash;
+
+    if (size == 0) {
+        return LFS_ERR_OK;
+    }
+    if (block >= c->block_count || off > c->block_size || size > c->block_size - off) {
+        return LFS_ERR_IO;
+    }
+    return flash_stream_write(&flash, LFS_BASE + c->block_size * block + off, size,
+                       (uint8_t *)buffer) == 1 ? LFS_ERR_OK : LFS_ERR_IO;
+}
+
+int amebagreen2_lfs_erase(const struct lfs_config *c, lfs_block_t block)
+{
+    flash_t flash;
+
+    /* block_size must be the NOR sector size — flash_erase_sector erases 4 KB. */
+    if (block >= c->block_count || c->block_size != 0x1000) {
+        return LFS_ERR_IO;
+    }
+    flash_erase_sector(&flash, LFS_BASE + c->block_size * block);
+    return LFS_ERR_OK;
+}
+
+int amebagreen2_lfs_sync(const struct lfs_config *c)
+{
+    (void)c;
+    return LFS_ERR_OK;   /* writes are synchronous through the flash HAL */
+}
+
+/* ===== mount: delegate to the cross-platform lfs_config service =========== *
+ * The mount lifecycle (singleton + format-on-blank) and the LFS_THREADSAFE
+ * lock/unlock live in component/littlefs_config; this port supplies only the four flash
+ * diskio callbacks above. */
+static const struct lfs_diskio amebagreen2_lfs_diskio = {
+    amebagreen2_lfs_read, amebagreen2_lfs_prog, amebagreen2_lfs_erase, amebagreen2_lfs_sync,
+};
+
+/* vfs_lfs_mount — the cross-platform mount entry + fd-VFS hook, SAME NAME as bouffalo's
+ * lfs_port (component/bouffalo_sdk/lfs_port/vfs_lfs_mount.c): the newlib retarget's file
+ * backend routes _open'd paths to this LittleFS instance. The prototype is local
+ * (syscalls.h is not on this port's include path). Was amebagreen2_lfs_mount + a wrapper. */
+lfs_t *vfs_lfs_mount(void);
+lfs_t *vfs_lfs_mount(void)
+{
+    return lfs_config_mount(&amebagreen2_lfs_diskio);
+}
+
+void amebagreen2_lfs_unmount(lfs_t *lfs)
+{
+    (void)lfs;                 /* singleton is owned by lfs_config */
+    lfs_config_unmount();
+}

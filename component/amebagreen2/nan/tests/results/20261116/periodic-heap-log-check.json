@@ -1,0 +1,77 @@
+{
+  "interval_ms": 10000,
+  "core": "AP/KM4TZ",
+  "heap_api": "xPortGetFreeHeapSize",
+  "image_bytes": 898176,
+  "image_sha256": "734c034701b0afd80009320a0a620ab65a50b59e31b3e1c993937a2503880217",
+  "readback": "PASS",
+  "checks": {
+    "idle": {
+      "samples": [
+        {
+          "timestamp": "13:36:14.311",
+          "elapsed_clock_ms": 48974311,
+          "available_heap_bytes": 141436
+        },
+        {
+          "timestamp": "13:36:24.311",
+          "elapsed_clock_ms": 48984311,
+          "available_heap_bytes": 141436
+        },
+        {
+          "timestamp": "13:36:34.311",
+          "elapsed_clock_ms": 48994311,
+          "available_heap_bytes": 141436
+        },
+        {
+          "timestamp": "13:36:44.311",
+          "elapsed_clock_ms": 49004311,
+          "available_heap_bytes": 141436
+        }
+      ],
+      "intervals_ms": [
+        10000,
+        10000,
+        10000
+      ]
+    },
+    "active": {
+      "samples": [
+        {
+          "timestamp": "13:37:14.311",
+          "elapsed_clock_ms": 49034311,
+          "available_heap_bytes": 141436
+        },
+        {
+          "timestamp": "13:37:24.332",
+          "elapsed_clock_ms": 49044332,
+          "available_heap_bytes": 36300
+        },
+        {
+          "timestamp": "13:37:34.358",
+          "elapsed_clock_ms": 49054358,
+          "available_heap_bytes": 37420
+        },
+        {
+          "timestamp": "13:37:44.397",
+          "elapsed_clock_ms": 49064397,
+          "available_heap_bytes": 132068
+        },
+        {
+          "timestamp": "13:37:54.397",
+          "elapsed_clock_ms": 49074397,
+          "available_heap_bytes": 132068
+        }
+      ],
+      "intervals_ms": [
+        10021,
+        10026,
+        10039,
+        10000
+      ]
+    }
+  },
+  "throughput_report": "throughput-periodic-heap-log-10s.json",
+  "rxdrop": 0,
+  "txdrop": 0
+}
