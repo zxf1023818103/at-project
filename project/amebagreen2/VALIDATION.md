@@ -220,3 +220,33 @@ AON 实际时长偏离设置值。用活动状态时钟测频换算计数的试�
 本轮采集等待 App 上传/下载 20 分钟后超时退出，串口记录中只有配对认证和 TCP PONG，没有 throughput 结果，未启动传输阶段的电流采样。记录结束时 NAN 仍在运行；这不构成完整 DSLP 传输循环通过，也不能用旧 PG 模式的结果代替。后续仍需 App 双向各 10 秒测速，确认自动进入 DSLP、再次 AON 唤醒，并补充实际耗时和电流。`nan sleep 0` 的最终实机停留检查也尚未执行。
 
 证据目录：`build/power/green2-com43-blu-20261117/nan-deep-sleep/`，含 `preflight/`、`preflight-calibrated/`、`app-cycle-final/`、最终构建/烧录日志、`build-manifest.json` 和 `source.patch`。本轮未写 eFuse；zlib 的原有改动未处理。
+
+### 2026-11-18：COM5 深睡编译及手动唤醒复测
+
+在 `test/bl618dg-native-whc-usb` 的 `0232348f` 上重新构建，使用独立目录，避免沿用其他配置的产物：
+
+```sh
+make -C project/amebagreen2 BUILD="$PWD/build/green2-nan-deep-20261118" \
+  NAN=ON NAN_DEEP_SLEEP=ON NAN_DEEP_SLEEP_MS=30000 \
+  NIMBLE=OFF BLE_NAN_WAKE=OFF BLE_POWER_TEST=OFF NAN_USB=OFF \
+  MINIMAL=ON IPERF=OFF TFM=OFF image
+```
+
+双核固件编译打包通过，NAN 本地 ASan/UBSan 测试 **6/6 通过**。确认 COM5 是已连接的 CH340/Green2，串口可读且 NAN 正在运行后，使用同端口 DTR/RTS 烧录。`firmware.bin` 为 897,824 字节，SHA-256 为 `ff1b90cf5d70f3c95bc16ba7922471f029a99a5d0ea4602aa737a1d8cc327801`，逐字节读回通过；只写固件，保留 LittleFS 和配对存储。
+
+| 实机检查 | 结果 |
+|---|---|
+| `nan sleep 3` | AON 唤醒，启动原因 `0x2`、AON `0x8`；进入日志至启动原因日志 4.531 s，至 NAN 活动日志 4.760 s；NAN 初始化 228 ms |
+| `nan sleep 10` | AON 唤醒，启动原因 `0x2`、AON `0x8`；进入日志至启动原因日志 14.756 s，至 NAN 活动日志 14.987 s；NAN 初始化 226 ms |
+| 有限定时测试后执行 `nan sleep 0` | 观察 60 s，无自主启动、`entry pending` 或故障日志 |
+| 无定时唤醒状态下 RTS 复位 | 启动原因 `0x0`、AON `0x0`，NAN 初始化 229 ms，`running=1` |
+
+上述时间使用主机串口接收时间，包含进入前 100 ms 的串口排空及启动开销，不等同于电流波形测出的深睡时长。AON 定时偏差仍存在，未修改计数算法或 trim。本机没有 COM17 电流仪，没有测量这一块 COM5 板的深睡电流，也未以另一台架的电流结果替代。
+
+MacBook 可通过 SSH 访问，但 CoreDevice 显示 iPhone 13 Pro 不在线；本轮尚未验证 App 双向测速后的自动 DSLP、AON 唤醒后的保存配对重连。手动测试未出现 HardFault、断言、内存分配失败或栈溢出。结束时模组保持 NAN 活动，COM5 已释放；构建生成的 zlib `zconf.h` 改动已还原。
+
+脱敏结果：[deep-sleep-com5-validation.json](../../component/amebagreen2/nan/tests/results/20261118/deep-sleep-com5-validation.json)。原始构建、烧录及串口证据保存在 `build/green2-nan-deep-20261118/test/`，原始 UART 可能包含密钥，不应公开。
+
+同日继续自动深睡测试：iPhone 上线，App 为回退到 BLE 配对功能之前的 `1.0 (8.1)`。三次自动测速均未完成服务发现，无传输结果，也没有触发自动深睡。复位后板端收到订阅报文，未出现崩溃或队列丢失。最后一次人工重新配对完成 SAE/PASN setup，但板端连续五次 `cache rc=-1`，随后重连认证失败。
+
+检查发现本分支尚未包含 `amebad-aws-ota` 的缓存修复：服务实例号可以被不同设备或重新配对复用，不能单独作为 NPK 绑定依据；普通 PMKID/cache 刷新也不应因此拒绝。补入成功 SAE 凭据匹配和持久化成功后再提交内存、清除待存密钥的处理。新增回归先复现原实现失败，修复后本地 ASan/UBSan **6/6 通过**，保留已有 pause/resume 验证。此时用户要求将所有 NAN 分支合并至 `master`；修复尚未烧录，自动深睡及唤醒重连仍未通过实机验证。续测结果见 [automatic-deep-sleep-attempts.json](../../component/amebagreen2/nan/tests/results/20261118/automatic-deep-sleep-attempts.json)。
