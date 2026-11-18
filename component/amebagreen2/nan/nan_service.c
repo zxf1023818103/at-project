@@ -393,7 +393,7 @@ static void nan_task(void *arg)
         }
         else if (running) {
             received++; printf("[NAN] event=%u len=%u\n", m->id, m->len);
-            if (m->id == 29 || m->id == 30) {
+            if (m->id == 29 || m->id == 30 || m->id == 31) {
                 printf("[NAN] PASN rc=%d\n", green2_pasn_event(m->id, m->data, m->len));
                 extern void green2_nan_heap_check(const char *where);
                 green2_nan_heap_check("PASN done");

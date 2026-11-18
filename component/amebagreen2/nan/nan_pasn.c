@@ -44,6 +44,12 @@ struct pasn_rx_event {
 	u8 attrs_len, attrs[ATTR_MAX];
 } __attribute__((packed));
 
+/* The shipped radio ABI includes prev_pmkid. The public vendor header's
+ * 25-byte version omits it and puts auth_method at the wrong offset. */
+struct pasn_pmkid_event {
+	u8 role, status, peer[6], pmkid[16], prev_pmkid[16], auth_method;
+} __attribute__((packed));
+
 struct nik_cache_entry {
 	u32 lifetime, start_ms;
 	u8 role, auth, peer_inst, nik[16], pmkid[16], pass_len, pass[16];
@@ -58,6 +64,8 @@ _Static_assert(sizeof(struct pasn_start_event) == PASN_START_LEN,
 	       "PASN start event ABI changed");
 _Static_assert(sizeof(struct pasn_rx_event) == PASN_RX_LEN,
 	       "PASN rx event ABI changed");
+_Static_assert(sizeof(struct pasn_pmkid_event) == 41,
+	       "PASN PMKID event ABI changed");
 _Static_assert(sizeof(struct nik_cache_file) == 500,
 	       "Green2 NIK cache ABI changed");
 
@@ -76,6 +84,8 @@ struct bridge {
 	struct os_reltime auth1_started;
 	bool keys_installed;
 	u8 setup_password_hash[32];
+	u8 setup_peer_pmkid[16];
+	bool setup_peer_pmkid_valid;
 #ifdef AT_NAN_BLE_OOB
 	uint32_t oob_generation;
 #endif
@@ -301,6 +311,8 @@ static void reset_session(struct bridge *b)
 	b->auth1_len = b->auth2_len = 0;
 	b->keys_installed = false;
 	forced_memzero(b->setup_password_hash, sizeof(b->setup_password_hash));
+	forced_memzero(b->setup_peer_pmkid, sizeof(b->setup_peer_pmkid));
+	b->setup_peer_pmkid_valid = false;
 	memset(b->auth1_frame, 0, sizeof(b->auth1_frame));
 	memset(b->auth2_frame, 0, sizeof(b->auth2_frame));
 	b->pairing_type = 0;
@@ -652,10 +664,31 @@ int green2_pasn_init(void)
     }
     return green2_nan_vendor(0x190a, &persistent.nik, sizeof(persistent.nik));
 }
+static int on_pmkid_update(struct bridge *b, const void *data, size_t len)
+{
+    struct pasn_pmkid_event e;
+    if (!data || len != sizeof(e)) return -1;
+    if (!pending_npk_valid || !b->keys_installed || b->pairing_type != PAIRING_SETUP)
+        return 0;
+    memcpy(&e, data, sizeof(e));
+    /* status=1 is the radio's success value. Only a completed SAE setup may
+     * nominate an identity for its pending NPK; unrelated peers cannot change
+     * that nomination. The cache handler also verifies the NIRA with its NIK. */
+    int rc = -1;
+    if (e.role == 2 && e.status == 1 && e.auth_method == 1 &&
+        !memcmp(e.peer, b->peer, sizeof(b->peer))) {
+        memcpy(b->setup_peer_pmkid, e.pmkid, sizeof(b->setup_peer_pmkid));
+        b->setup_peer_pmkid_valid = true;
+        rc = 0;
+    }
+    forced_memzero(&e, sizeof(e));
+    return rc;
+}
 int green2_pasn_event(unsigned short id, const void *data, size_t len)
 {
     if (id == 29) return on_start(&state, data, len);
     if (id == 30) return on_rx(&state, data, len);
+    if (id == 31) return on_pmkid_update(&state, data, len);
     return -1;
 }
 int green2_pasn_peer_authorized(const unsigned char peer[6])
@@ -673,6 +706,11 @@ int green2_pasn_cache_update(const void *data, size_t len, unsigned char peer_in
         forced_memzero(&next, sizeof(next));
         return -1;
     }
+    if (pending_npk_valid && !state.setup_peer_pmkid_valid) {
+        printf("[NAN] cache deferred: waiting for authenticated peer PMKID\n");
+        forced_memzero(&next, sizeof(next));
+        return -1;
+    }
     int index = -1;
     for (unsigned i = 0; i < 8; ++i) {
         if (next.entries[i].pass_len > PASS_MAX) {
@@ -684,10 +722,21 @@ int green2_pasn_cache_update(const void *data, size_t len, unsigned char peer_in
         if (pending_npk_valid && state.keys_installed &&
             next.entries[i].auth == 1 && next.entries[i].role == 2 &&
             next.entries[i].peer_inst == peer_instance) {
-            /* Service instance IDs are peer-local and reused on re-pairing.
-             * Bind only to a driver-authenticated identity carrying the
-             * credential from this successful SAE setup, never the first ID. */
+            /* Instances and passwords can both be reused. The PMKID update
+             * names the authenticated peer's NIRA (nonce || HMAC tag), which
+             * must match this cache entry and validate with this peer's NIK. */
+            if (os_memcmp_const(next.entries[i].pmkid, state.setup_peer_pmkid, 16))
+                continue;
+            u8 message[3 + 6 + 8];
             u8 digest[32];
+            memcpy(message, "NIR", 3);
+            memcpy(message + 3, state.peer, 6);
+            memcpy(message + 9, state.setup_peer_pmkid, 8);
+            int identity_matches = !hmac_sha256(next.entries[i].nik, 16,
+                message, sizeof(message), digest) &&
+                !os_memcmp_const(digest, state.setup_peer_pmkid + 8, 8);
+            forced_memzero(digest, sizeof(digest));
+            if (!identity_matches) continue;
             const u8 *parts[] = { &next.entries[i].pass_len, next.entries[i].pass };
             size_t lengths[] = { 1, next.entries[i].pass_len };
             int match = !sha256_vector(2, parts, lengths, digest) &&
@@ -695,12 +744,17 @@ int green2_pasn_cache_update(const void *data, size_t len, unsigned char peer_in
             forced_memzero(digest, sizeof(digest));
             if (!match) continue;
             if (index >= 0) {
-                printf("[NAN] cache rejected: ambiguous authenticated credential instance=%u\n", peer_instance);
+                printf("[NAN] cache rejected: ambiguous authenticated identity instance=%u\n", peer_instance);
                 forced_memzero(&next, sizeof(next));
                 return -1;
             }
             index = i;
         }
+    }
+    if (pending_npk_valid && index < 0) {
+        printf("[NAN] cache rejected: no matching authenticated identity instance=%u\n", peer_instance);
+        forced_memzero(&next, sizeof(next));
+        return -1;
     }
     struct pairing_storage candidate = persistent;
     if (index >= 0) {
@@ -716,6 +770,8 @@ int green2_pasn_cache_update(const void *data, size_t len, unsigned char peer_in
         forced_memzero(pending_npk, sizeof(pending_npk));
         pending_npk_valid = false;
         forced_memzero(state.setup_password_hash, sizeof(state.setup_password_hash));
+        forced_memzero(state.setup_peer_pmkid, sizeof(state.setup_peer_pmkid));
+        state.setup_peer_pmkid_valid = false;
         printf("[NAN] authenticated pairing persisted slot=%d\n", index);
     }
     return rc;

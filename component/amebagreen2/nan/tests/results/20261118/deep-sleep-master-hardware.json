@@ -1,0 +1,320 @@
+{
+  "date": "2026-11-18",
+  "platform": "Ameba Green2 / COM5",
+  "phone": "iPhone 13 Pro",
+  "status": "passed",
+  "firmware": {
+    "firmware": "build/green2-nan-deep-identity-20261118/firmware.bin",
+    "bytes": 899584,
+    "sha256": "3fef5e8099dc299d8adf2c15fef34b237fc3ebdff03a3a9f7b90ef525dffa4cb",
+    "base_commit": "0b7d8d1",
+    "changes": "Authenticated peer PMKID/NIRA binding",
+    "port": "COM5",
+    "source_patch_sha256": "ada0d6c342e20de60e41a4f55c1e926b3a5834096513ae45f83d542ae38dd7f7",
+    "source_sha256": {
+      "component/amebagreen2/nan/nan_pasn.c": "c77388b500bc952481898935fb9d8508e0c4dd50a7bb6b0f6e01bb3f77d39617",
+      "component/amebagreen2/nan/nan_service.c": "f466201a7a2aa121cc0547fdc5a16ba603e6d5c2db21ce8de2163c3fc31d58c1",
+      "component/amebagreen2/nan/tests/pasn_test.c": "eb850f5ff2a78542ccb94a12d5779a20ca9874ed11e2a4ab0b08826db3e74535"
+    },
+    "build_flags": {
+      "NAN": "ON",
+      "NAN_DEEP_SLEEP": "ON",
+      "NAN_DEEP_SLEEP_MS": 30000,
+      "NIMBLE": "OFF",
+      "NAN_BLE_OOB": "OFF",
+      "BLE_NAN_WAKE": "OFF",
+      "BLE_POWER_TEST": "OFF",
+      "NAN_USB": "OFF",
+      "MINIMAL": "ON",
+      "IPERF": "OFF",
+      "TFM": "OFF"
+    }
+  },
+  "app": {
+    "app_base_commit": "9ed3b1ed17ea5a22fa275fbfeafb3e9b5406c628",
+    "app_version": "1.0",
+    "app_build": "8.2",
+    "change": "Keep NAN stress PING write side open until PONG is received",
+    "signed_build": "passed",
+    "signature_verification": "passed",
+    "install": "passed",
+    "nan_ble_pairing_feature": false,
+    "full_cycle_retest": "passed_two_consecutive_cycles",
+    "source_sha256": {
+      "NANBench.swift": "d18437cbdc15ff006557dadbd5ee1be0b27cd357f80b3d0c63d11290b539b64e"
+    }
+  },
+  "flash": {
+    "exit_code": 0,
+    "byte_for_byte_readback": true,
+    "littlefs_mount_ok": true,
+    "application_ready": true,
+    "nan_startup_ok": true,
+    "fault": false,
+    "firmware_only": true,
+    "pairing_littlefs_calibration_preserved": true,
+    "efuse_written": false
+  },
+  "new_pairing": {
+    "setup_authenticated": 1,
+    "persisted_slots": [
+      2
+    ],
+    "cache_ok": 3,
+    "cache_errors": 0,
+    "cache_rejections": [],
+    "fault": false
+  },
+  "native_tests": {
+    "passed": 14,
+    "failed": 0,
+    "sanitizers": [
+      "ASan",
+      "UBSan"
+    ],
+    "includes_same_instance_same_PIN_different_identity_regression": true
+  },
+  "cycles": [
+    {
+      "private_attempt": "identity-fixed-app-cycle-2",
+      "initial_RTS_reset": true,
+      "checks": [
+        {
+          "case": "throughput_10s",
+          "pass": true,
+          "startedAt": "2026-11-18T02:07:28Z",
+          "readySeconds": 2.4827730000251904,
+          "results": [
+            {
+              "bytes": 15466496,
+              "direction": "upload",
+              "mbps": 12.290848117611999,
+              "peerBytes": 15466496,
+              "receiverSeconds": 10.067,
+              "senderSeconds": 10.003172750002705
+            },
+            {
+              "bytes": 26017792,
+              "direction": "download",
+              "mbps": 20.800126087825575,
+              "peerBytes": 26017792,
+              "receiverSeconds": 10.006782416661736,
+              "senderSeconds": 10.018
+            }
+          ],
+          "error": null
+        },
+        {
+          "case": "automatic_DSLP_AON_wake",
+          "pass": true,
+          "setting_seconds": 30
+        },
+        {
+          "case": "saved_pair_reconnect_after_AON",
+          "pass": true,
+          "readySeconds": 3.4559506249497645
+        },
+        {
+          "case": "post_wake_PING_idle_7s",
+          "pass": true
+        }
+      ],
+      "throughput_discovery_seconds": 0.7090461250045337,
+      "post_wake_ping": {
+        "startedAt": "2026-11-18T02:08:46Z",
+        "success": true,
+        "discoverySeconds": 1.8147806249908172,
+        "readySeconds": 3.4559506249497645,
+        "elapsedSeconds": 3.4605379999848083
+      },
+      "automatic_standby_idle_ms": 5032,
+      "wake": {
+        "configured_ms": 30000,
+        "boot_reason_hex": "00000002",
+        "aon_reason_hex": "00000008",
+        "uart_entry_to_boot_reason_ms": 44061,
+        "uart_entry_to_nan_active_ms": 44293,
+        "firmware_nan_startup_ms": 228
+      },
+      "saved_pair_verification_count": 2,
+      "new_pair_setup_count": 0,
+      "post_wake_final_status": {
+        "running": 1,
+        "events": 23,
+        "dropped": 0,
+        "link": 0,
+        "rx": 6,
+        "tx": 6,
+        "pong": 1,
+        "up": 0,
+        "down": 0,
+        "err": 0,
+        "rxdrop": 0,
+        "txdrop": 0
+      },
+      "log_diagnostic_counts": {
+        "hard_or_secure_fault": 0,
+        "assert_or_fatal": 0,
+        "allocation_failure": 0,
+        "stack_overflow": 0,
+        "macid_exhaustion": 0,
+        "station_add_failure": 0,
+        "cache_failure": 0,
+        "cache_rejection": 0,
+        "pasn_failure": 0,
+        "tcp_protocol_abort": 0,
+        "generic_warning_error_failure": 0
+      },
+      "heap_samples": {
+        "AP": {
+          "sample_count": 4,
+          "min_sample_bytes": 29216,
+          "max_sample_bytes": 131136
+        },
+        "NP": {
+          "sample_count": 8,
+          "min_sample_bytes": 50712,
+          "max_sample_bytes": 61916
+        }
+      },
+      "peer_macid_peak_sample": 3,
+      "peer_macid_capacity": [
+        12
+      ]
+    },
+    {
+      "private_attempt": "identity-fixed-app-cycle-3",
+      "initial_RTS_reset": false,
+      "checks": [
+        {
+          "case": "throughput_10s",
+          "pass": true,
+          "startedAt": "2026-11-18T02:09:55Z",
+          "readySeconds": 2.0083018750301562,
+          "results": [
+            {
+              "bytes": 16056320,
+              "direction": "upload",
+              "mbps": 12.719136548173086,
+              "peerBytes": 16056320,
+              "receiverSeconds": 10.099,
+              "senderSeconds": 10.028981249954086
+            },
+            {
+              "bytes": 26083328,
+              "direction": "download",
+              "mbps": 20.797166933635296,
+              "peerBytes": 26083328,
+              "receiverSeconds": 10.033415833313484,
+              "senderSeconds": 10.021
+            }
+          ],
+          "error": null
+        },
+        {
+          "case": "automatic_DSLP_AON_wake",
+          "pass": true,
+          "setting_seconds": 30
+        },
+        {
+          "case": "saved_pair_reconnect_after_AON",
+          "pass": true,
+          "readySeconds": 3.448859791678842
+        },
+        {
+          "case": "post_wake_PING_idle_7s",
+          "pass": true
+        }
+      ],
+      "throughput_discovery_seconds": 0.37135687499539927,
+      "post_wake_ping": {
+        "startedAt": "2026-11-18T02:11:13Z",
+        "success": true,
+        "discoverySeconds": 1.6879727499908768,
+        "readySeconds": 3.448859791678842,
+        "elapsedSeconds": 3.4537052499945275
+      },
+      "automatic_standby_idle_ms": 5036,
+      "wake": {
+        "configured_ms": 30000,
+        "boot_reason_hex": "00000002",
+        "aon_reason_hex": "00000008",
+        "uart_entry_to_boot_reason_ms": 44007,
+        "uart_entry_to_nan_active_ms": 44234,
+        "firmware_nan_startup_ms": 228
+      },
+      "saved_pair_verification_count": 2,
+      "new_pair_setup_count": 0,
+      "post_wake_final_status": {
+        "running": 1,
+        "events": 22,
+        "dropped": 0,
+        "link": 0,
+        "rx": 6,
+        "tx": 6,
+        "pong": 1,
+        "up": 0,
+        "down": 0,
+        "err": 0,
+        "rxdrop": 0,
+        "txdrop": 0
+      },
+      "log_diagnostic_counts": {
+        "hard_or_secure_fault": 0,
+        "assert_or_fatal": 0,
+        "allocation_failure": 0,
+        "stack_overflow": 0,
+        "macid_exhaustion": 0,
+        "station_add_failure": 0,
+        "cache_failure": 0,
+        "cache_rejection": 0,
+        "pasn_failure": 0,
+        "tcp_protocol_abort": 0,
+        "generic_warning_error_failure": 0
+      },
+      "heap_samples": {
+        "AP": {
+          "sample_count": 5,
+          "min_sample_bytes": 30336,
+          "max_sample_bytes": 124984
+        },
+        "NP": {
+          "sample_count": 7,
+          "min_sample_bytes": 53232,
+          "max_sample_bytes": 61916
+        }
+      },
+      "peer_macid_peak_sample": 2,
+      "peer_macid_capacity": [
+        12
+      ]
+    }
+  ],
+  "prior_attempts": [
+    {
+      "firmware_sha256": "26f21f6ddbef5836408371c078a018f7d38328703d4adb39a8e28ff76b318fe5",
+      "result": "SAE setup completed; cache rejected because multiple identities reused instance and PIN. Superseded by authenticated PMKID/NIRA binding."
+    },
+    {
+      "private_attempt": "identity-cycle-1",
+      "app_build": "8.1",
+      "result": "Transfer, automatic DSLP, AON wake and saved-pair authentication passed; PONG failed because App sent FIN with PING. Not a complete passing cycle."
+    },
+    {
+      "private_attempt": "identity-fixed-app-cycle-1",
+      "app_build": "8.2",
+      "result": "Phone locked after App installation; OS rejected launch. Excluded from protocol qualification."
+    }
+  ],
+  "limitations": [
+    "UART entry-to-boot intervals include serial drain and boot; electrical sleep duration was not measured.",
+    "30-second AON setting produced approximately 44-second UART entry-to-boot intervals. No timer compensation or oscillator trim applied.",
+    "Heap values are periodic samples, not minimum-ever guarantees.",
+    "Post-wake status counters restart at boot and do not cover the preceding transfer interval.",
+    "Two complete cycles do not qualify long-duration MACID or NP heap stability.",
+    "No current measurement on this COM5 bench; no new BLE/OOB hardware test.",
+    "Firmware and App source fixes were local and uncommitted at the time of this validation."
+  ],
+  "private_evidence_root": "build/nan-merge-master-20261118/hardware",
+  "raw_logs_published": false
+}

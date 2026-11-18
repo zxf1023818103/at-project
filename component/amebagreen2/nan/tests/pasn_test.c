@@ -67,6 +67,16 @@ static int capture(void *ctx, const u8 *p, size_t n, int noack, unsigned freq, u
 static int validate_responder(void *ctx, const u8 *addr, const u8 *pmkid)
 { return memcmp(addr, own, 6) || memcmp(ctx, pmkid, 16) ? -1 : 0; }
 
+static void make_pmkid(u8 pmkid[16], const u8 nik[16], const u8 nmi[6])
+{
+    u8 message[17], tag[32];
+    assert(!os_get_random(pmkid, 8));
+    memcpy(message, "NIR", 3); memcpy(message + 3, nmi, 6);
+    memcpy(message + 9, pmkid, 8);
+    assert(!hmac_sha256(nik, 16, message, sizeof(message), tag));
+    memcpy(pmkid + 8, tag, 8);
+}
+
 static void verify_cached_pairing(void)
 {
     u8 identity[16], tag[32], message[17], local_pmkid[16];
@@ -137,6 +147,10 @@ int main(int argc, char **argv)
     start[1] = 2; start[2] = 1; memcpy(start + 3, peer, 6); memcpy(start + 9, own, 6);
     start[15] = start[16] = 1; start[17] = 6; memcpy(start + 18, "123456", 6);
     WPA_PUT_LE16(start + 34, tx_len); memcpy(start + 36, tx, tx_len);
+    u8 pmkid_update[41] = {2, 1};
+    memcpy(pmkid_update + 2, peer, 6); pmkid_update[40] = 1;
+    /* A PMKID event before authenticated Auth3 cannot nominate a key. */
+    assert(!green2_pasn_event(31, pmkid_update, sizeof(pmkid_update)));
 #ifdef AT_NAN_BLE_OOB
     assert(green2_pasn_event(29, start, sizeof(start)) < 0);
     assert(!installations && !authenticated);
@@ -182,14 +196,52 @@ int main(int argc, char **argv)
     nik_cache[4] ^= 1;
     assert(green2_pasn_cache_update(nik_cache, 500, 7) < 0);
     nik_cache[4] ^= 1;
-    /* Instance IDs are reused by other peers and by re-pairing. Only bind
-     * the NPK when the successful setup credential identifies one entry. */
+    /* Historical peers can reuse BOTH the service instance and the static
+     * PIN. Bind only the NIRA nominated for this authenticated peer. */
     u8 old_stored[sizeof(stored)]; memcpy(old_stored, stored, sizeof(stored));
+    make_pmkid(nik_cache + 47, nik_cache + 31, peer);
     memcpy(nik_cache + 80, nik_cache + 20, 60);
     memset(nik_cache + 91, 0x88, 16);
+    make_pmkid(nik_cache + 107, nik_cache + 91, peer);
     assert(green2_pasn_cache_update(nik_cache, sizeof(nik_cache), 7) < 0);
     assert(!memcmp(old_stored, stored, sizeof(stored)));
-    memcpy(nik_cache + 124, "654321", 6);
+    memcpy(pmkid_update + 8, nik_cache + 47, 16);
+    assert(green2_pasn_event(31, pmkid_update, 25) < 0); /* stale public ABI */
+    assert(green2_pasn_event(31, pmkid_update, 40) < 0);
+    pmkid_update[2] ^= 1;
+    assert(green2_pasn_event(31, pmkid_update, sizeof(pmkid_update)) < 0);
+    pmkid_update[2] ^= 1;
+    pmkid_update[0] = 1;
+    assert(green2_pasn_event(31, pmkid_update, sizeof(pmkid_update)) < 0);
+    pmkid_update[0] = 2; pmkid_update[1] = 0;
+    assert(green2_pasn_event(31, pmkid_update, sizeof(pmkid_update)) < 0);
+    pmkid_update[1] = 1; pmkid_update[40] = 0;
+    assert(green2_pasn_event(31, pmkid_update, sizeof(pmkid_update)) < 0);
+    pmkid_update[40] = 1;
+    assert(green2_pasn_cache_update(nik_cache, sizeof(nik_cache), 7) < 0);
+    /* Matching PMKID bytes alone are insufficient: reject a NIRA calculated
+     * for another NMI, then a corrupt tag, without changing saved keys. */
+    make_pmkid(nik_cache + 47, nik_cache + 31, own);
+    memcpy(pmkid_update + 8, nik_cache + 47, 16);
+    assert(!green2_pasn_event(31, pmkid_update, sizeof(pmkid_update)));
+    assert(green2_pasn_cache_update(nik_cache, sizeof(nik_cache), 7) < 0);
+    make_pmkid(nik_cache + 47, nik_cache + 31, peer);
+    nik_cache[62] ^= 1;
+    memcpy(pmkid_update + 8, nik_cache + 47, 16);
+    assert(!green2_pasn_event(31, pmkid_update, sizeof(pmkid_update)));
+    assert(green2_pasn_cache_update(nik_cache, sizeof(nik_cache), 7) < 0);
+    nik_cache[62] ^= 1;
+    memcpy(pmkid_update + 8, nik_cache + 47, 16);
+    assert(!green2_pasn_event(31, pmkid_update, sizeof(pmkid_update)));
+    /* Duplicate identity records remain ambiguous even after NIRA validation. */
+    u8 historical[60]; memcpy(historical, nik_cache + 80, sizeof(historical));
+    memcpy(nik_cache + 80, nik_cache + 20, 60);
+    assert(green2_pasn_cache_update(nik_cache, sizeof(nik_cache), 7) < 0);
+    memcpy(nik_cache + 80, historical, sizeof(historical));
+    memcpy(nik_cache + 64, "654321", 6);
+    assert(green2_pasn_cache_update(nik_cache, sizeof(nik_cache), 7) < 0);
+    memcpy(nik_cache + 64, "123456", 6);
+    assert(!memcmp(old_stored, stored, sizeof(stored)));
     store_fail = 1;
     assert(green2_pasn_cache_update(nik_cache, sizeof(nik_cache), 7) < 0);
     assert(!memcmp(old_stored, stored, sizeof(stored)));
