@@ -81,6 +81,14 @@ void app_console_register_platform(void)
     wifi_provision_cli_register();
 #endif
 #ifdef AT_PROJECT_NIMBLE
+#ifdef AT_ENABLE_BLE_POWER_TEST
+    extern void green2_ble_power_register(void);
+    green2_ble_power_register();
+#endif
+#ifdef AT_ENABLE_BLE_NAN_WAKE
+    extern void green2_ble_nan_register(void);
+    green2_ble_nan_register();
+#endif
     extern void ble_tp_cli_register(void);
     ble_tp_cli_register();
 #endif
@@ -114,6 +122,12 @@ static void ble_task(void *arg)
 {
     (void)arg;
     extern void nimble_start(void);
+#ifdef AT_GREEN2_BLE_SLEEP
+    extern int wifi_port_enable(void);
+    /* Initialize RF/IPC for BLE without a network interface or STA reconnect.
+     * The BLE wake profile defers NAN and the IP task until a connection. */
+    configASSERT(wifi_port_enable() == 0);
+#endif
     /* The controller RF calibration uses the WLAN/coexistence IPC service. */
     extern int amebagreen2_wifi_ready(void);
     while (!amebagreen2_wifi_ready()) vTaskDelay(pdMS_TO_TICKS(50));
@@ -164,7 +178,7 @@ static void ready_task(void *arg)
 }
 void app_platform_wifi_bringup(void)
 {
-#ifndef AT_ENABLE_NAN
+#if !defined(AT_ENABLE_NAN) && !defined(AT_ENABLE_BLE_POWER_TEST)
     wifi_service_start();
 #endif
     /* The standalone NAN task enables the radio itself. STA auto-connect

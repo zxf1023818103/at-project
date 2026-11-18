@@ -18,12 +18,14 @@ static unsigned installations, authenticated;
 static unsigned expected_type = 1;
 static u8 nik_cache[500], stored[888];
 static int stored_valid;
+static unsigned store_reads;
 static const u8 peer[6] = {2,1,2,3,4,5}, own[6] = {2,1,2,3,4,6};
 
 int green2_nan_store(void *p, size_t n, int write)
 {
     assert(n == sizeof(stored));
     if (write) { memcpy(stored, p, n); stored_valid = 1; return 0; }
+    ++store_reads;
     if (!stored_valid) return -1;
     memcpy(p, stored, n); return 0;
 }
@@ -143,8 +145,19 @@ int main(void)
     assert(!green2_pasn_cache_update(nik_cache, sizeof(nik_cache), 7));
     assert(!memcmp(stored + 504, nik_cache + 31, 16));
     assert(p->pmk_len == 32 && !memcmp(stored + 520, p->pmk, 32));
+    /* Parking must revoke the old link's authorization. Resume restores the
+     * retained identity, without reading flash or authorizing a new link. */
+    unsigned reads = store_reads;
+    u8 retained_nik[500]; memcpy(retained_nik, nik_cache, sizeof(retained_nik));
+    green2_pasn_pause();
+    assert(!green2_pasn_peer_authorized(peer));
+    memset(nik_cache, 0, sizeof(nik_cache));
+    assert(!green2_pasn_resume() && store_reads == reads);
+    assert(!green2_pasn_peer_authorized(peer));
+    assert(!memcmp(nik_cache, retained_nik, sizeof(nik_cache)));
     green2_pasn_stop();
     assert(!green2_pasn_peer_authorized(peer));
+    assert(green2_pasn_resume() < 0); /* A full stop cannot use the resume path. */
     /* Reinitialization loads the same persistent identity without leaking a
      * second responder cache or authorizing a peer before verification. */
     assert(!green2_pasn_init() && !green2_pasn_peer_authorized(peer));

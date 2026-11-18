@@ -70,6 +70,9 @@ __attribute__((weak)) void nimble_platform_coex_init(void) { }
 __attribute__((weak)) void nimble_platform_coex_set_conn(int connected) { (void)connected; }
 __attribute__((weak)) void nimble_platform_transport_start_rx(void) { }
 __attribute__((weak)) void nimble_platform_transport_stop_rx(void) { }
+/* Return nonzero when a platform test profile owns advertising. */
+__attribute__((weak)) int nimble_platform_advertise(uint8_t addr_type)
+{ (void)addr_type; return 0; }
 
 __attribute__((weak)) const char *nimble_platform_device_name(void)
 {
@@ -187,6 +190,7 @@ nimble_gap_event(struct ble_gap_event *event, void *arg)
 static void
 nimble_advertise(void)
 {
+    if (nimble_platform_advertise(own_addr_type)) return;
     struct ble_gap_adv_params adv_params;
     struct ble_hs_adv_fields fields;
     const char *name;

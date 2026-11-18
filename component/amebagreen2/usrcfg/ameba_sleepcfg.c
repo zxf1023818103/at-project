@@ -14,7 +14,11 @@ struct WakeEvent_TypeDef sleep_wevent_config[] = {
 #else
 	{WAKE_SRC_SDIO_WIFI,					WAKEUP_NULL},
 #endif
+#ifdef AT_GREEN2_BLE_SLEEP
+	{WAKE_SRC_BT_WAKE_HOST,					WAKEUP_AP},
+#else
 	{WAKE_SRC_BT_WAKE_HOST,					WAKEUP_NULL},
+#endif
 	{WAKE_SRC_BT_SCB,						WAKEUP_NULL},
 	{WAKE_SRC_CAN1,							WAKEUP_NULL},
 	{WAKE_SRC_CAN0,							WAKEUP_NULL},

@@ -643,3 +643,15 @@ void green2_pasn_stop(void)
     if (state.pmksa) pasn_responder_pmksa_cache_deinit(state.pmksa);
     state.pmksa = NULL;
 }
+void green2_pasn_pause(void)
+{
+    reset_session(&state);
+}
+int green2_pasn_resume(void)
+{
+    if (!state.pmksa || memcmp(persistent.magic, "GNP1", 4) ||
+        persistent.nik.version != 1) return -1;
+    /* Radio stop removes peer state. Restore only its identity cache from RAM;
+     * a new PASN exchange must authorize the next NDP. No flash reload or init. */
+    return green2_nan_vendor(0x190a, &persistent.nik, sizeof(persistent.nik));
+}

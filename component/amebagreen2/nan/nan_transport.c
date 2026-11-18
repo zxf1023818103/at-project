@@ -14,7 +14,18 @@
 #endif
 
 int green2_nan_radio_enable(void)
-{ extern int wifi_port_enable(void); return wifi_port_enable(); }
+{
+#ifdef AT_ENABLE_BLE_NAN_WAKE
+    extern void amebagreen2_nan_network_start(void);
+    /* The BLE boot task already initialized WLAN for controller calibration. */
+    if (!green2_nan_radio_ready()) return -1;
+    amebagreen2_nan_network_start();
+    return 0;
+#else
+    extern int wifi_port_enable(void);
+    return wifi_port_enable();
+#endif
+}
 int green2_nan_radio_ready(void)
 { extern int amebagreen2_wifi_ready(void); return amebagreen2_wifi_ready(); }
 int green2_nan_radio_start(void)

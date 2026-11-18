@@ -1054,7 +1054,11 @@ void pmu_post_sleep_processing(uint32_t *tick_before_sleep)
 /* not use systick like FreeRTOS default implementation */
 void vPortSuppressTicksAndSleep(TickType_t xExpectedIdleTime)
 {
+#ifdef AT_GREEN2_BLE_SLEEP
+	if (xExpectedIdleTime > pdMS_TO_TICKS(500)) xExpectedIdleTime = pdMS_TO_TICKS(500);
+#else
 	if (xExpectedIdleTime > pdMS_TO_TICKS(50)) xExpectedIdleTime = pdMS_TO_TICKS(50);
+#endif
 	sleep_budget = xExpectedIdleTime;
 	uint32_t tick_before_sleep;
 	eSleepModeStatus eSleepStatus;

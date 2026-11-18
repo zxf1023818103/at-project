@@ -48,7 +48,11 @@ int monitor_rx_get(uint8_t *c)
     if (sleep_poll) {
         if (xStreamBufferReceive(rx,c,1,0) == 1) return 1;
         if (LOGUART_Readable()) { *c=DiagGetChar(0); return 1; }
+#ifdef AT_ENABLE_BLE_NAN_WAKE
+        vTaskDelay(pdMS_TO_TICKS(500));
+#else
         vTaskDelay(pdMS_TO_TICKS(100));
+#endif
         return 0;
     }
     return xStreamBufferReceive(rx,c,1,pdMS_TO_TICKS(100)) == 1;
