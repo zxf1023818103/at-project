@@ -7,6 +7,7 @@
 - `memory/` — 项目记忆条目（用户偏好、踩过的坑、外部资源引用）
 - `skills/ameba-openocd-flash/` — Ameba 系列用 OpenOCD + CMSIS-DAP 烧录的完整 SOP（含 Green2 UARTBURN 解锁等）
 - `skills/amebad-imagetool-flash/` — AmebaD 用 UART + MP_ImageTool 烧录
+- `skills/blu-power-monitor/` — BLU 低功耗测试仪供电、电流采集、SDK 离线分析及 USBPcap 抓包指南；包含控制与分析脚本，厂商 SDK 需另行准备，路径见 [SKILL.md](skills/blu-power-monitor/SKILL.md)
 
 ## 在新机器上装上
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "BLU 低功耗测试仪"
+  short_description: "控制 BLU 测试仪供电、电压、电流采集，并分析 USBPcap 通信记录"
+  default_prompt: "使用 $blu-power-monitor 连接测试仪，按已验证协议控制供电或读取电流。"
