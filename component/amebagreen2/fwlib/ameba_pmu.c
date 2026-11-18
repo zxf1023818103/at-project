@@ -215,7 +215,7 @@ void pmu_pre_sleep_processing(uint32_t *tick_before_sleep)
 #if defined(CONFIG_STANDARD_TICKLESS)
 #if (defined(CONFIG_KM4TZ_AS_AP) && defined(CONFIG_ARM_CORE_CM4_KM4TZ)) \
 	|| (defined(CONFIG_KM4NS_AS_AP) && defined(CONFIG_ARM_CORE_CM4_KM4NS)) \
-	|| defined(AT_GREEN2_BLE_SLEEP)
+	|| defined(AT_GREEN2_BLE_SLEEP) || defined(AT_GREEN2_NAN_TICKLESS)
 		sleep_param.sleep_time = *tick_before_sleep;
 #else
 		sleep_param.sleep_time = pmu_get_sleep_time();//*expected_idle_time;
@@ -343,6 +343,11 @@ void pmu_set_wakeup_timer(uint32_t timeout_ms)
 	timeout_cnt = (timeout_ms << 5) + (((timeout_ms << 7) + (timeout_ms << 6) + (timeout_ms << 2) + timeout_ms) >> 8);
 
 	PMCTimerCnt_Set(PMC_TIMER, PMC_WAKEUP_TIMER, timeout_cnt);
+#if defined(AT_GREEN2_NAN_TICKLESS) && defined(CONFIG_ARM_CORE_CM4_KM4NS)
+	/* CPU-only idle stops an early-woken alarm. Re-enable it for either the
+	 * next WFI wait or the vendor's full CG/PG path using this same API. */
+	PMCTimer_Cmd(PMC_TIMER, PMC_WAKEUP_TIMER, ENABLE);
+#endif
 }
 
 void pmu_reset_wakeup_timer(void)

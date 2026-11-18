@@ -11,6 +11,13 @@ The profile starts automatically, publishes `_flashstudio._tcp` as **Green2
 FreeRTOS**, and accepts a paired iPhone's IPv6 TCP connection on port **8000**.
 Send exactly `NAN-PING\n` and read `NAN-PONG\n` before closing the connection.
 The initial pairing PIN is the development value **123456** (`nan_service.c`).
+
+The current power experiment forces a **0 dBm** target before each NAN start
+with `wifi_set_tx_power()`. The enable flag is explicitly set, so a target of
+zero is distinct from the default rate/limit tables. It is reapplied after
+deep sleep and does not rewrite calibration or eFuse. This is a software target,
+not an RF-meter calibration of the antenna output.
+
 The Flash Studio iOS stress client must keep its write side open while waiting
 for the reply; this FreeRTOS+TCP version rejects sends after a received FIN.
 
@@ -18,10 +25,14 @@ for the reply; this FreeRTOS+TCP version rejects sends after a received FIN.
 
 ```sh
 make -C project/amebagreen2 NAN=ON
+# Disable the standalone NAN CPU tickless profile for comparison:
+make -C project/amebagreen2 NAN=ON NAN_TICKLESS=OFF
 # Optional TLSF consistency checks around authentication and shared-memory IPC:
 make -C project/amebagreen2 NAN=ON NAN_HEAP_CHECKS=ON
 # Optional bounded TCP metadata/timing trace, printed after each test phase:
 make -C project/amebagreen2 NAN=ON NAN_NET_DIAG=ON
+# Optional read-only NP channel/power snapshots, printed every 10 seconds:
+make -C project/amebagreen2 NAN=ON NAN_RADIO_DIAG=ON
 # Optional NP allocation ownership snapshots when the peer MACID pool is empty:
 make -C project/amebagreen2 NAN_BLE_OOB=ON NAN_NP_HEAP_TRACE=ON
 # Experimental BLE-assisted NAN PIN bootstrap (implies NAN=ON NIMBLE=ON):
@@ -34,6 +45,87 @@ Artifacts are `build/amebagreen2/firmware.bin` (boot + OTA1), `Image_All.bin`
 (4 MiB factory image), and the per-core AXF/map files. Use `firmware.bin` for
 updates that retain pairing and calibration. `NAN=OFF` remains the default.
 The ASDK 12.3.1 compiler and normal project dependencies are required.
+
+### Default CPU frequency and core voltage
+
+AP and NP use the SDK's default **240 MHz** clock (960 MHz USB PLL / 4)
+and **CORE_VOL_0P9** profile. The experimental frequency selector and volatile
+CLDO override have been removed. Boot preserves the factory-loaded regulator
+calibration. Each core refreshes `SystemCoreClock` and ROM delay calibration
+before starting FreeRTOS; `CPU CLK ... check=0` verifies the clock configuration.
+
+With `NAN_RADIO_DIAG=ON`, `[NAN-CLK]` reads the CPU clock, CLDO normal/live/sleep
+codes and regulator state. COM15's factory normal/live code is 7 (nominal
+0.900 V); no physical core-voltage measurement has been made. Cold power-cycle
+boards that ran the earlier trim experiment before booting the restored image,
+so ROM reloads the factory regulator calibration. No eFuse or calibration Flash
+was modified.
+
+The earlier 120 MHz/code 6 trial passed traffic and sleep/wake checks, but lost
+throughput faster than it reduced current: estimated upload/download energy
+per Mbit rose 60%/15% versus 240 MHz/code 7. See the historical
+[measurement record](tests/results/20261118/cpu120-cldo6-com15.json). The restored
+240 MHz/code 7 cold boot and two DSLP wake cycles are recorded
+[here](tests/results/20261118/cpu-default-restore-com15.json).
+
+### CPU idle and tickless operation
+
+`NAN_TICKLESS=ON` is the default for standalone NAN without NimBLE, TF-M,
+or USB. Both cores already compile with `configUSE_TICKLESS_IDLE=1`; the
+profile enables the runtime sleep path instead of only setting that macro.
+AP releases its boot wakelock after radio/IPC startup and enters retention CG.
+The idle ceiling is 1000 ms on AP and 500 ms on NP; earlier task deadlines,
+packet interrupts and IPC still wake the cores. NP keeps its watchdog deadline.
+
+The NAN task waits for the next PASN timer or the existing 10-second heap
+report, instead of polling every 100 ms. The console waits for its RX interrupt.
+LOGUART wakes AP, while NP keeps the peripheral clocks available to the console.
+This reduces idle work without changing the CPU frequency or the NAN discovery
+schedule. `NAN_TICKLESS=OFF` retains the previous PM policy, but keeps the
+deadline-driven NAN task improvement.
+
+While NAN is active, the pinned Wi-Fi firmware holds raw NP wakelock bit 3.
+Disassembly shows acquisition/release in its MAC LPS path; the local header's
+name for that bit is not sufficient to identify the private firmware ABI.
+The profile does **not** force-clear this lock, and retains the original NP
+`PMU_OS` veto even while AP is gated. Allowing full NP CG after `nan stop`
+lost console RX in hardware testing, including with XTAL retention enabled.
+NP instead stops its periodic
+SysTick during CPU-only WFI, uses the PMC alarm for the scheduler deadline,
+and accounts for elapsed time with the 32 kHz counter on every wake. RF and
+clock domains remain active in this path. An early packet/IPC wake cancels
+the outstanding alarm; `pmu_set_wakeup_timer()` re-enables it for subsequent
+WFI or callers of the existing full CG/PG path. This profile uses NP CPU-only
+tickless WFI, not full NP CG; explicit automatic DSLP after NAN teardown still
+uses the separate AON/deep-sleep path.
+
+`[NAN-PM] AP` reports CG entries/time and NAN queue timeouts; `[NAN-PM] NP`
+separately reports full sleep and CPU-only `idle_wfi`/`idle_ms`. These lines use
+the existing heap-report cadence. COM15 validation at 0 dBm found about
+9.84 s of NP WFI per 10 s idle interval, while full NP sleep remained zero.
+Discovery current was 51.83 mA before and 51.22 mA after; a single short window
+does not establish a significant saving. Upload/download, automatic DSLP,
+and saved-pair reconnect passed. See [validation](../../../project/amebagreen2/VALIDATION.md)
+and [the measurement record](tests/results/20261118/tickless-com15.json).
+
+`NAN_RADIO_DIAG=ON` records up to eight RF channels per reporting interval,
+after HAL channel switching and on the existing NP periodic status task.
+`[NAN-RF]` reports the loaded power-table switches, regulatory-domain index,
+forced-power/TPC flags and selected rates' target powers in **0.25 dBm** units
+(`OFDM6=60` on the `target_qdbm` line means 15 dBm). These are driver targets, not measured RF power
+or the current peer PHY rate. The normal traffic-statistics API returns empty
+statistics for NAN interface 2. The diagnostic uses the hash-pinned NP library's
+private RF layout; it does not change power, country, rates or channel scheduling,
+and it performs no allocation or logging in the channel-switch hook. It is
+disabled by default and adds no hooks or storage to that build.
+
+The diagnostic also reads the MAC's seven power-table words at
+`0x4000d2c0..0x4000d2d8`, the table-write guard, and mode/limit registers.
+`mac_power_halfdbm` contains 28 packed per-rate half-dBm entries; all words are
+zero when the 0 dBm override reaches this hardware table. These registers are
+the destinations of the pinned driver's power setter. They strengthen the
+configuration check but do not measure radiated power or identify the current
+peer PHY rate. The batch buffer is static to avoid increasing the NP task stack.
 
 ### BLE-assisted pairing experiment
 

@@ -357,8 +357,18 @@ static void nan_task(void *arg)
     }
     printf("[NAN] standalone startup result=%d\n", rc);
     green2_nan_start_result(rc);
+#ifdef AT_GREEN2_NAN_TICKLESS
+    extern void green2_nan_tickless_enable(void);
+    if (!rc) green2_nan_tickless_enable();
+#endif
     TickType_t last_heap_log = xTaskGetTickCount();
+#ifdef AT_GREEN2_NAN_TICKLESS
+    extern volatile uint32_t green2_sleep_count, green2_sleep_ms;
+    extern uint32_t pmu_get_wakelock_status(void);
+    unsigned queue_timeouts = 0;
+#endif
     for (;;) {
+        green2_pasn_timers();
         /* Use elapsed time, rather than queue inactivity, so busy discovery
          * still reports memory. Keep logging out of the RX/IP tasks. */
         TickType_t now = xTaskGetTickCount();
@@ -366,10 +376,27 @@ static void nan_task(void *arg)
             last_heap_log = now;
             printf("[NAN] AP Available Heap Size: %lu bytes\n",
                 (unsigned long)xPortGetFreeHeapSize());
+#ifdef AT_GREEN2_NAN_TICKLESS
+            printf("[NAN-PM] AP sleep=%lu sleep_ms=%lu locks=%08lx queue_timeouts=%u\n",
+                   (unsigned long)green2_sleep_count, (unsigned long)green2_sleep_ms,
+                   (unsigned long)pmu_get_wakelock_status(), queue_timeouts);
+#endif
         }
+        /* Events wake this queue immediately. Only hostap deadlines and the
+         * requested heap report need a timed wake; all timers share this task. */
+        TickType_t elapsed = xTaskGetTickCount() - last_heap_log;
+        unsigned wait_ms = elapsed >= pdMS_TO_TICKS(NAN_HEAP_LOG_INTERVAL_MS) ? 0 :
+            NAN_HEAP_LOG_INTERVAL_MS - elapsed * portTICK_PERIOD_MS;
+        wait_ms = green2_pasn_next_timeout_ms(wait_ms);
+        TickType_t wait = pdMS_TO_TICKS(wait_ms);
+        if (wait_ms && !wait) wait = 1;
         struct nan_message *m;
-        green2_pasn_timers();
-        if (xQueueReceive(events, &m, pdMS_TO_TICKS(100)) != pdPASS) continue;
+        if (xQueueReceive(events, &m, wait) != pdPASS) {
+#ifdef AT_GREEN2_NAN_TICKLESS
+            ++queue_timeouts;
+#endif
+            continue;
+        }
         if (m->id == NAN_EVENT_START) {
             int result = start();
             printf("[NAN] start result=%d\n", result);

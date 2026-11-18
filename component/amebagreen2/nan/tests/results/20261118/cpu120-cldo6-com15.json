@@ -1,0 +1,428 @@
+{
+  "test": "COM15 NAN: shared AP/NP 120 MHz and one-step lower active CLDO trim",
+  "recorded_at_utc": "2026-11-18T09:20:21.872295+00:00",
+  "firmware": {
+    "sha256": "c01d4007c39b49461fac4a5c65ad46f36bc0fc65f939d09dae12db798fd07e38",
+    "bytes": 902816,
+    "cpu_mhz": 120,
+    "core_ldo_code": 6,
+    "core_ldo_nominal_mv": 877,
+    "core_voltage_independently_measured": false,
+    "target_dbm": 0,
+    "nan_tickless": true
+  },
+  "build_checks": {
+    "full_build": "passed",
+    "strict_compiles": {
+      "bootloader_km4tz-bootloader_clk.c": 0,
+      "bootloader_km4tz-ameba_bootcfg.c": 0,
+      "app_km4tz-ameba_app_start.c": {
+        "returncode": 0,
+        "exception": "One pre-existing int-conversion in rtc_irq_init: RCC_PeriphClockCmd(NULL,...); new clock/trim code compiles without diagnostics."
+      },
+      "app_km4ns-ameba_app_start.c": 0,
+      "app_km4ns-nan_radio_diag.c": 0
+    }
+  },
+  "baseline_record": "tickless-com15.json",
+  "fixture": {
+    "board_port": "COM15",
+    "blu_port": "COM10",
+    "voltage_setting_mv": 3300,
+    "voltage_independently_measured": false,
+    "calibrated_flag": 0
+  },
+  "frequency": {
+    "before_hz": 240000000,
+    "after_hz": 120000000,
+    "shared_ap_np": true,
+    "cpu_sram_rom_clock_changed": true,
+    "independent_peripheral_clocks_unchanged": true
+  },
+  "core_voltage": {
+    "factory_normal_code": 7,
+    "target_normal_and_live_code": 6,
+    "sleep_code_unchanged": 3,
+    "regulator_state_unchanged": 6,
+    "register_nominal_mv_before": 900,
+    "register_nominal_mv_after": 877,
+    "physical_core_voltage_measured": false,
+    "normal_api_supported_voltages_mv": [
+      900,
+      1000
+    ],
+    "experiment_only": true,
+    "volatile_registers_only": true,
+    "efuse_or_calibration_flash_modified": false,
+    "no_cumulative_trim_after_deep_sleep": true,
+    "scope": "CLDO below standard SDK operating voltage; CPU clock reduction does not establish RF voltage margin. SDK warns that 0.8 V affects RF."
+  },
+  "clock_and_regulator_readback": {
+    "boot.log": [
+      "[CLK-I] CLDO active trim 7 -> 6; normal mode, volatile only",
+      "[APP-I] NP CPU CLK: 120000000 Hz check=0",
+      "[APP-I] AP CPU CLK: 120000000 Hz check=0",
+      "[APP-I] CLDO trim: active=6 normal=6 sleep=3 state=6",
+      "[NAN-CLK] cpu_hz=120000000 check=0 cldo_active=6 cldo_normal=6 cldo_sleep=3 regu_state=6",
+      "[NAN-CLK] cpu_hz=120000000 check=0 cldo_active=6 cldo_normal=6 cldo_sleep=3 regu_state=6",
+      "[NAN-CLK] cpu_hz=120000000 check=0 cldo_active=6 cldo_normal=6 cldo_sleep=3 regu_state=6"
+    ],
+    "traffic/uart.log": [
+      "[NAN-CLK] cpu_hz=120000000 check=0 cldo_active=6 cldo_normal=6 cldo_sleep=3 regu_state=6",
+      "[NAN-CLK] cpu_hz=120000000 check=0 cldo_active=6 cldo_normal=6 cldo_sleep=3 regu_state=6",
+      "[NAN-CLK] cpu_hz=120000000 check=0 cldo_active=6 cldo_normal=6 cldo_sleep=3 regu_state=6",
+      "[CLK-I] CLDO active trim 6 -> 6; normal mode, volatile only",
+      "[APP-I] NP CPU CLK: 120000000 Hz check=0",
+      "[APP-I] AP CPU CLK: 120000000 Hz check=0",
+      "[APP-I] CLDO trim: active=6 normal=6 sleep=3 state=6",
+      "[NAN-CLK] cpu_hz=120000000 check=0 cldo_active=6 cldo_normal=6 cldo_sleep=3 regu_state=6",
+      "[NAN-CLK] cpu_hz=120000000 check=0 cldo_active=6 cldo_normal=6 cldo_sleep=3 regu_state=6",
+      "[NAN-CLK] cpu_hz=120000000 check=0 cldo_active=6 cldo_normal=6 cldo_sleep=3 regu_state=6"
+    ],
+    "wake-repeat/uart.log": [
+      "[CLK-I] CLDO active trim 6 -> 6; normal mode, volatile only",
+      "[APP-I] NP CPU CLK: 120000000 Hz check=0",
+      "[APP-I] AP CPU CLK: 120000000 Hz check=0",
+      "[APP-I] CLDO trim: active=6 normal=6 sleep=3 state=6",
+      "[NAN-CLK] cpu_hz=120000000 check=0 cldo_active=6 cldo_normal=6 cldo_sleep=3 regu_state=6",
+      "[CLK-I] CLDO active trim 6 -> 6; normal mode, volatile only",
+      "[APP-I] NP CPU CLK: 120000000 Hz check=0",
+      "[APP-I] AP CPU CLK: 120000000 Hz check=0",
+      "[APP-I] CLDO trim: active=6 normal=6 sleep=3 state=6",
+      "[NAN-CLK] cpu_hz=120000000 check=0 cldo_active=6 cldo_normal=6 cldo_sleep=3 regu_state=6"
+    ]
+  },
+  "discovery_current": {
+    "baseline_240mhz": {
+      "sample_count": 999936,
+      "sample_rate_hz": 100000,
+      "sample_duration_s": 9.99936,
+      "ignored_tail_bytes": 0,
+      "discarded_warmup_s": 1.0,
+      "statistics_duration_s": 8.99936,
+      "mean_uA": 51220.92546840737,
+      "min_uA": 35552.75718575271,
+      "max_uA": 249478.20490056815,
+      "calibrated_flag": "0",
+      "conversion": "vendor SDK get_samples; includes SDK range-switch filtering"
+    },
+    "cpu120_factory_trim": {
+      "sample_count": 998912,
+      "sample_rate_hz": 100000,
+      "sample_duration_s": 9.98912,
+      "ignored_tail_bytes": 0,
+      "discarded_warmup_s": 1.0,
+      "statistics_duration_s": 8.98912,
+      "mean_uA": 50591.35796829011,
+      "min_uA": 35772.78575917439,
+      "max_uA": 250365.98899147726,
+      "calibrated_flag": "0",
+      "conversion": "vendor SDK get_samples; includes SDK range-switch filtering"
+    },
+    "cpu120_cldo6": {
+      "sample_count": 999424,
+      "sample_rate_hz": 100000,
+      "sample_duration_s": 9.99424,
+      "ignored_tail_bytes": 0,
+      "discarded_warmup_s": 1.0,
+      "statistics_duration_s": 8.99424,
+      "mean_uA": 49967.63662622163,
+      "min_uA": 34997.4869294206,
+      "max_uA": 248146.52876420453,
+      "calibrated_flag": "0",
+      "conversion": "vendor SDK get_samples; includes SDK range-switch filtering"
+    },
+    "change_vs_240_percent": -2.446829749217927,
+    "change_vs_120_factory_percent": -1.2328614354637724
+  },
+  "phone": {
+    "throughput": {
+      "startedAt": "2026-11-18T09:13:57Z",
+      "finished": true,
+      "cancelled": false,
+      "error": null,
+      "readySeconds": 3.504426291678101,
+      "discoverySeconds": 1.8295837083715014,
+      "results": [
+        {
+          "bytes": 11599872,
+          "direction": "upload",
+          "mbps": 9.223633436040156,
+          "peerBytes": 11599872,
+          "receiverSeconds": 10.061,
+          "senderSeconds": 10.010547375015449
+        },
+        {
+          "bytes": 19398656,
+          "direction": "download",
+          "mbps": 15.49264217802014,
+          "peerBytes": 19398656,
+          "receiverSeconds": 10.016964583366644,
+          "senderSeconds": 10.017
+        }
+      ]
+    },
+    "auto_sleep_wake": true,
+    "reconnect": {
+      "startedAt": "2026-11-18T09:15:16Z",
+      "finished": true,
+      "cancelled": false,
+      "error": null,
+      "rounds": [
+        {
+          "discoverySeconds": 1.824989708373323,
+          "elapsedSeconds": 3.504159875039477,
+          "number": 1,
+          "readySeconds": 3.4984767917194404,
+          "startedAt": "2026-11-18T09:15:16Z",
+          "success": true
+        }
+      ]
+    },
+    "passed": true,
+    "diagnostic_counts": {
+      "fault": 0,
+      "allocation_failure": 0,
+      "stack_overflow": 0,
+      "macid_full": 0,
+      "cache_error": 0,
+      "tcp_abort": 0
+    }
+  },
+  "power": {
+    "passed": true,
+    "voltage_setting_mv": 3300,
+    "voltage_independently_measured": false,
+    "calibrated_flag": "0",
+    "sample_segments": [
+      {
+        "start_s": 0.0,
+        "end_s": 59.991039991378784,
+        "sample_count": 5999104
+      },
+      {
+        "start_s": 60.86979103088379,
+        "end_s": 100.86211109161377,
+        "sample_count": 3999232
+      }
+    ],
+    "gaps": [
+      {
+        "start_s": 59.991039991378784,
+        "end_s": 60.86979103088379,
+        "duration_s": 0.8787510395050049
+      }
+    ],
+    "transfer_phases": [
+      {
+        "start_s": 8.789084196090698,
+        "end_s": 17.85008430480957,
+        "observed_samples": 906100,
+        "observed_seconds": 9.061,
+        "window_seconds": 9.061000108718872,
+        "mean_uA": 59243.762189695626,
+        "min_uA": 37087.42734636492,
+        "max_uA": 250809.8810369318,
+        "calculated_mean_power_mW": 195.50441522599556,
+        "direction": "upload",
+        "bytes": 11599872,
+        "firmware_elapsed_ms": 10061,
+        "firmware_mbps": 9.223,
+        "app_mbps": 9.223633436040156,
+        "full_transfer_start_s": 8.289084196090698,
+        "full_transfer_end_s": 18.35008430480957,
+        "window_method": "UART completion receipt time minus firmware elapsed duration; trim 0.5 s at each edge"
+      },
+      {
+        "start_s": 18.886921644210815,
+        "end_s": 27.903921604156494,
+        "observed_samples": 901700,
+        "observed_seconds": 9.017,
+        "window_seconds": 9.016999959945679,
+        "mean_uA": 107042.29371607574,
+        "min_uA": 39517.267400568184,
+        "max_uA": 253917.12535511362,
+        "calculated_mean_power_mW": 353.23956926305,
+        "direction": "download",
+        "bytes": 19398656,
+        "firmware_elapsed_ms": 10017,
+        "firmware_mbps": 15.492,
+        "app_mbps": 15.49264217802014,
+        "full_transfer_start_s": 18.386921644210815,
+        "full_transfer_end_s": 28.403921604156494,
+        "window_method": "UART completion receipt time minus firmware elapsed duration; trim 0.5 s at each edge"
+      }
+    ],
+    "automatic_sleep": {
+      "start_s": 34.42374086380005,
+      "end_s": 76.68979120254517,
+      "observed_samples": 4138730,
+      "observed_seconds": 41.3873,
+      "window_seconds": 42.26605033874512,
+      "mean_uA": 9.061294269329618,
+      "min_uA": 6.176259217157989,
+      "max_uA": 13.689771891114253,
+      "calculated_mean_power_mW": 0.02990227108878774,
+      "low_current_drop_to_rise_span_s": 43.67979121208191,
+      "current_rise_to_nan_ready_ms": 467.01717376708984,
+      "configured_wake_seconds": 30.0,
+      "late_10s": {
+        "start_s": 66.68979120254517,
+        "end_s": 76.68979120254517,
+        "observed_samples": 1000000,
+        "observed_seconds": 10.0,
+        "window_seconds": 10.0,
+        "mean_uA": 8.025465561125435,
+        "min_uA": 6.176259217157989,
+        "max_uA": 10.675630178887612,
+        "calculated_mean_power_mW": 0.026484036351713935
+      }
+    },
+    "post_wake_saved_pair_reconnect": {
+      "startedAt": "2026-11-18T09:15:16Z",
+      "finished": true,
+      "cancelled": false,
+      "error": null,
+      "rounds": [
+        {
+          "discoverySeconds": 1.824989708373323,
+          "elapsedSeconds": 3.504159875039477,
+          "number": 1,
+          "readySeconds": 3.4984767917194404,
+          "startedAt": "2026-11-18T09:15:16Z",
+          "success": true
+        }
+      ]
+    },
+    "diagnostic_counts": {
+      "fault": 0,
+      "allocation_failure": 0,
+      "stack_overflow": 0,
+      "macid_full": 0,
+      "cache_error": 0,
+      "tcp_abort": 0
+    },
+    "limits": [
+      "Current conversion uses vendor SDK range-switch filtering; negative samples retained.",
+      "Power is calculated using the configured 3.3 V; no independent voltage measurement.",
+      "BLU Calibrated=0; calibration state unconfirmed.",
+      "Two standard skill captures have an explicit gap; no samples are synthesized across it.",
+      "Transfer statistics exclude 0.5 s at each edge because UART/power alignment uses host timestamps.",
+      "Single board/round per CPU/CLDO configuration; RF target remains 0 dBm, PHY rate/retries were not fixed."
+    ]
+  },
+  "traffic_comparison": [
+    {
+      "direction": "upload",
+      "baseline_240mhz": {
+        "mean_mA": 65.15178103937143,
+        "mbps": 16.266692124105013,
+        "energy_mJ_per_Mbit": 13.217246370042487
+      },
+      "cpu120_cldo6": {
+        "mean_mA": 59.24376218969562,
+        "mbps": 9.223633436040156,
+        "energy_mJ_per_Mbit": 21.196030456076812
+      },
+      "current_change_percent": -9.068084947832144,
+      "throughput_change_percent": -43.297424174076596,
+      "energy_per_Mbit_change_percent": 60.366462594800495
+    },
+    {
+      "direction": "download",
+      "baseline_240mhz": {
+        "mean_mA": 126.93231741266787,
+        "mbps": 21.151777010553904,
+        "energy_mJ_per_Mbit": 19.803378564968845
+      },
+      "cpu120_cldo6": {
+        "mean_mA": 107.04229371607575,
+        "mbps": 15.49264217802014,
+        "energy_mJ_per_Mbit": 22.80047297317698
+      },
+      "current_change_percent": -15.66978694001776,
+      "throughput_change_percent": -26.754890757925807,
+      "energy_per_Mbit_change_percent": 15.134258017517466
+    }
+  ],
+  "additional_deep_sleep_cycles": {
+    "sleep_commands": 2,
+    "sleep_entries": 2,
+    "deep_boots": 2,
+    "nan_ready_after_wake": 2,
+    "final_status": "nan: running=1 events=1 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+    "passed": true
+  },
+  "fault_counts": {
+    "boot.log": {
+      "fault": 0,
+      "allocation_failure": 0,
+      "stack_overflow": 0,
+      "macid_full": 0
+    },
+    "traffic/uart.log": {
+      "fault": 0,
+      "allocation_failure": 0,
+      "stack_overflow": 0,
+      "macid_full": 0
+    },
+    "wake-repeat/uart.log": {
+      "fault": 0,
+      "allocation_failure": 0,
+      "stack_overflow": 0,
+      "macid_full": 0
+    }
+  },
+  "vendor_warnings": [
+    "[NAN-W] dw early: nanctrl_propagation",
+    "[NAN-W] dw early: nanctrl_propagation"
+  ],
+  "final_state": {
+    "com15": {
+      "nan_responds_after_blu_port_closed": true,
+      "status": "nan: running=1 events=1 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+      "com15_closed": true,
+      "blu_output_commanded_off": false
+    },
+    "com5": {
+      "before": "nan: running=0 events=10 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+      "after": "nan: running=1 events=11 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+      "restored_by_test": true
+    },
+    "blu_output_left_on": true,
+    "blu_serial_closed_without_off": true,
+    "test_pid_31021_absent": true,
+    "router_unchanged": true,
+    "commit_or_push": false
+  },
+  "limits": [
+    "Single measurement per operating point; no fixed PHY rate or RF environment.",
+    "BLU Calibrated=0; supply 3.3 V is a setting, not an independent voltage measurement.",
+    "CLDO register table voltages are nominal; no core test-point measurement.",
+    "Only the combined frequency/trim setting has a new traffic test; the 120 MHz factory-trim intermediate has discovery current only.",
+    "These bench checks do not characterize temperature/process or long-term undervoltage margin."
+  ],
+  "evidence_root": "build/green2-nan-cpu120-uv-20261118",
+  "evidence_sha256": {
+    "firmware/firmware.bin": "c01d4007c39b49461fac4a5c65ad46f36bc0fc65f939d09dae12db798fd07e38",
+    "flash.log": "470149e7bd8260a7ea9d83af38c7104bdc2859c0710a953ddef489a56fb493ea",
+    "boot.log": "fc0ca59e676e54952f8797b771d67f8efaa6b314800f6b599d90a816bd25861e",
+    "strict-checks.json": "6d0e9089cb931e761e9a9f9645ad3e8a2015173506095336f333b755cd99b098",
+    "idle/current.bin": "e5490b5adc0687780feab78d18897e69a47c252bdbc0a46eb87ab68747898fc4",
+    "idle/current.json": "82e4db14d002b69dbc72cefd39c025fbe731b310206a6ef9cccae6cce15490c7",
+    "traffic/current-1.bin": "6c6a6e94d197cb000781cf0df4e72358e8e98d74cdf2304fcb7936071894d921",
+    "traffic/current-2.bin": "b85e88df0646a097fbc24ec6a46e1c5267e05b714771388f7d360d2fb4b04089",
+    "traffic/uart.log": "c77dd26dda181cf8e278d314cec37822193a2c0908b377f1c53114b58249af36",
+    "traffic/phone-summary.json": "eb9532ee749aeafcde7611aa3af89d718f56e9eba5ae5aa880f63eb344692844",
+    "traffic/power-report.json": "143d85290b59eab1a15965e3701651c396596ed71fdac9e30fde0d98b47997bf",
+    "traffic/nan-traffic-power.png": "67c0c0e90a481045895cdf57a8207fc9cdbaf13e3b45c5adf96f378b64e0add1",
+    "wake-repeat/uart.log": "72d32226d25c905ac76a524dc52bf74a952dd56bd27516ac16e2fa920b4b111d",
+    "wake-repeat/current.bin": "4a539e3a84ef02eae24347b88cc3bb16ab15afcd6c29a33a047e6218faa7019e",
+    "wake-repeat/summary.json": "96128a1b764454df778d2ae054553a1485c195b3e829d91e0cc22b881550807e",
+    "final-state.json": "dea771b892d8ee1ed42f49bb1e6f888984fbe2164f513085b2b910d2f0e25a46",
+    "com5-restored.json": "48ca4793e6dabc566e02881aaf4e04e15790d2bdaa611c4c54948cee8af9d63b",
+    "blu-stop.json": "5b891e247b6d8393b94d6b5cf790a8d42698587be270ee3188dc2ac754f2de76",
+    "phone-stop.log": "17df111bb6d7f1c23e5a173ee2538ddca6ced5842d052f75109cc90edc96c51c",
+    "phone-processes-final.log": "e8a21dd635180cc9c33fe38ea7264eb4802284cbd90b18bbb8b3dbce26961628"
+  }
+}

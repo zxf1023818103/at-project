@@ -48,7 +48,9 @@ void ap_clock_gate(void)
 #else
 	/* This port supports AP retention SleepCG. Keep the NP OS awake for the
 	 * wireless/controller IPC and watchdog instead of cascading into whole-
-	 * chip sleep, whose SPIC/power sequence does not preserve TF-M ownership. */
+	 * chip sleep, whose SPIC/power sequence does not preserve TF-M ownership.
+	 * NAN uses CPU-only tickless WFI under this lock: full NP CG after NAN
+	 * teardown loses the interrupt console, so retain the existing veto. */
 #endif
 }
 void ap_clock_on(void)

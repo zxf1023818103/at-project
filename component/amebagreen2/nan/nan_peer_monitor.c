@@ -4,6 +4,9 @@
  */
 #include "rtw_inic_common.h"
 #include <stdint.h>
+#ifdef AT_GREEN2_NAN_TICKLESS
+#include "FreeRTOS.h"
+#endif
 
 extern uint8_t *g_nanpriv;
 extern void __real_rtw_nan_linked_status_chk(void);
@@ -16,6 +19,10 @@ void __wrap_rtw_nan_linked_status_chk(void)
     static unsigned ticks;
     static unsigned previous_used = 0xff;
     __real_rtw_nan_linked_status_chk();
+#ifdef AT_NAN_RADIO_DIAG
+    extern void green2_nan_radio_diag_poll(void);
+    green2_nan_radio_diag_poll();
+#endif
     if (!g_nanpriv || !(g_nanpriv[2350] & 2)) {
         ticks = 0;
         previous_used = 0xff;
@@ -36,6 +43,15 @@ void __wrap_rtw_nan_linked_status_chk(void)
              "[NAN] NP Available Heap Size: %u bytes, peer MACID %u/%u\n",
              (unsigned)rtos_mem_get_free_heap_size(), used,
              (unsigned)wifi_user_config.nan_max_peer_num);
+#ifdef AT_GREEN2_NAN_TICKLESS
+    extern volatile uint32_t green2_sleep_count, green2_sleep_ms;
+    extern volatile uint32_t green2_idle_wfi_count, green2_idle_wfi_ms;
+    RTK_LOGS(NOTAG, RTK_LOG_INFO,
+             "[NAN-PM] NP tickless=%u sleep=%u sleep_ms=%u idle_wfi=%u idle_ms=%u locks=%08x\n",
+             (unsigned)configUSE_TICKLESS_IDLE, (unsigned)green2_sleep_count,
+             (unsigned)green2_sleep_ms, (unsigned)green2_idle_wfi_count,
+             (unsigned)green2_idle_wfi_ms, (unsigned)pmu_get_wakelock_status());
+#endif
 #ifdef AT_NAN_NP_HEAP_TRACE
     green2_nan_heap_snapshot(used);
 #endif

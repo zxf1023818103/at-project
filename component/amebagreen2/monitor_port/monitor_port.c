@@ -55,7 +55,13 @@ int monitor_rx_get(uint8_t *c)
 #endif
         return 0;
     }
+    /* NAN uses RX IRQ wake; explicit BLE sleep profiles keep their polling
+     * fallback because another task may mask console interrupts. */
+#ifdef AT_GREEN2_NAN_TICKLESS
+    return xStreamBufferReceive(rx,c,1,portMAX_DELAY) == 1;
+#else
     return xStreamBufferReceive(rx,c,1,pdMS_TO_TICKS(100)) == 1;
+#endif
 }
 /* During explicit SleepCG, retain RX in the FIFO and sample on the bounded
  * PMC timer. Clear latched errors before restoring the interrupt console. */

@@ -1,0 +1,126 @@
+{
+  "test": "Green2 standalone NAN RF target-power snapshots",
+  "recorded_at_utc": "2026-11-18T06:02:29.191281+00:00",
+  "base_commit": "e3e267645b968238b74ea449f1e50788c8bb6638",
+  "source_state": "Uncommitted NAN_RADIO_DIAG implementation on the base commit",
+  "device": {
+    "port": "COM5",
+    "transport": "CH340 UART 1500000 baud, same-port DTR/RTS",
+    "phone": "Not connected; board-only test as requested"
+  },
+  "build": {
+    "NAN": "ON",
+    "NAN_RADIO_DIAG": "ON",
+    "NAN_DEEP_SLEEP": "ON",
+    "NAN_DEEP_SLEEP_MS": 30000,
+    "MINIMAL": "ON",
+    "NIMBLE": "OFF",
+    "IPERF": "OFF",
+    "TFM": "OFF",
+    "firmware_bytes": 900768,
+    "firmware_sha256": "3b1227bc554c81470211dce84ab1d833d9ac114f4dde21986f40d2f8b6d56388",
+    "np_text_growth_bytes": 896,
+    "np_bss_growth_bytes": 256
+  },
+  "checks": {
+    "diag_image_build": true,
+    "default_off_np_build": true,
+    "strict_diag_compile": true,
+    "symbols": {
+      "diag": {
+        "__wrap_wifi_hal_set_channel_bw": true,
+        "green2_nan_radio_diag_poll": true
+      },
+      "off": {
+        "__wrap_wifi_hal_set_channel_bw": false,
+        "green2_nan_radio_diag_poll": false
+      }
+    },
+    "flash_readback": true,
+    "application_boot": true,
+    "nan_active": true,
+    "stop_restart": true,
+    "final_running": true,
+    "runtime_fault_count": 0
+  },
+  "country": "CN",
+  "bandwidth_mhz": 20,
+  "channels": [
+    {
+      "channel": 6,
+      "state": {
+        "ch": 6,
+        "center": 6,
+        "bw_code": 0,
+        "band": 0,
+        "reg": 11,
+        "table": 2,
+        "efuse_sel": 1,
+        "byrate": 1,
+        "limit": 1,
+        "force": 0,
+        "force_qdbm": 0,
+        "tpc": 0,
+        "tpc_active": 0
+      },
+      "target_power_dbm_by_rate": {
+        "OFDM6": 15.0,
+        "OFDM54": 15.0,
+        "HT0": 15.0,
+        "HT7": 15.0,
+        "HE0": 15.0,
+        "HE7": 15.0,
+        "HE8": 15.0,
+        "HE9": 15.0
+      }
+    },
+    {
+      "channel": 149,
+      "state": {
+        "ch": 149,
+        "center": 149,
+        "bw_code": 0,
+        "band": 1,
+        "reg": 11,
+        "table": 2,
+        "efuse_sel": 1,
+        "byrate": 1,
+        "limit": 1,
+        "force": 0,
+        "force_qdbm": 0,
+        "tpc": 0,
+        "tpc_active": 0
+      },
+      "target_power_dbm_by_rate": {
+        "OFDM6": 18.0,
+        "OFDM54": 17.0,
+        "HT0": 18.0,
+        "HT7": 16.0,
+        "HE0": 18.0,
+        "HE7": 16.0,
+        "HE8": 15.0,
+        "HE9": 14.0
+      }
+    }
+  ],
+  "status_lines": [
+    "nan: running=1 events=1 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+    "nan: running=0 events=1 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+    "nan: running=1 events=2 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+    "nan: running=1 events=2 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0"
+  ],
+  "limitations": [
+    "Driver target powers, not conducted/OTA RF measurements.",
+    "Sampled rates are lookup inputs, not measured peer PHY rates.",
+    "Observed ch6/ch149 discovery scheduling with no peer; this does not establish the NDP data-channel band.",
+    "No phone throughput, pairing, deep-sleep or TPC-enabled run in this test.",
+    "Snapshot counts include periodic reads and channel-switch hooks; they are not frame counts or airtime."
+  ],
+  "final_state": "Diagnostic firmware running on COM5, NAN active, serial handle closed; power settings and pairing storage retained.",
+  "private_evidence_directory": "build/green2-rf-20261118",
+  "evidence_sha256": {
+    "diag-boot.log": "b300568318a55dfdb20caeb5cae270a2c76ccb4d97a7d56c0285bc3aac1067e3",
+    "diag-flash.log": "65b5dfa9a7ee0a5c7aba3ac842f087c0bab08365a16c432f8e8eda68f32fbf82",
+    "runtime/capture-uart.log": "afcb1081e74bfa5bc2975f2cf3facd3160206bd92505b9349a5a18f0e74a6dc7"
+  }
+}

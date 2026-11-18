@@ -1,0 +1,111 @@
+{
+  "test": "COM15 restore SDK default AP/NP CPU frequency and factory CLDO calibration",
+  "recorded_at_utc": "2026-11-18T09:30:34.412288+00:00",
+  "firmware": {
+    "sha256": "4da22acdb2e804652476631648e87310fb2bb7a98a7c46dab07f971598406e36",
+    "bytes": 902816,
+    "ap_cpu_hz": 240000000,
+    "np_cpu_hz": 240000000,
+    "clock_profile": "CLKCFG_0P9_RMII_USB: PLL_960M / 4, CORE_VOL_0P9",
+    "core_nominal_mv": 900,
+    "core_voltage_independently_measured": false,
+    "cldo_live_code": 7,
+    "cldo_normal_code": 7,
+    "cldo_sleep_code": 3,
+    "regulator_state": 6,
+    "nan_target_dbm": 0,
+    "nan_tickless": true,
+    "nan_radio_diag": true,
+    "nan_deep_sleep_ms": 30000
+  },
+  "source": {
+    "frequency_override_removed": true,
+    "volatile_cldo_override_removed": true,
+    "boot_clock_and_voltage_sources_match_baseline": "257f321",
+    "tickless_and_pasn_deadline_changes_retained": true
+  },
+  "fixture": {
+    "board_port": "COM15",
+    "blu_port": "COM10",
+    "voltage_setting_mv": 3300,
+    "voltage_independently_measured": false
+  },
+  "checks": {
+    "full_dual_core_build": "passed",
+    "native_tests": {
+      "passed": 16,
+      "total": 16,
+      "asan_ubsan": true
+    },
+    "firmware_byte_for_byte_readback": "passed",
+    "cold_power_cycles": 2,
+    "littlefs_and_calibration_not_programmed": true,
+    "efuse_not_programmed": true,
+    "boot_clock_checks": "passed",
+    "deep_sleep_wake_checks": "passed"
+  },
+  "clock_and_regulator_readback": {
+    "boot.log": [
+      "[APP-I] AP CPU CLK: 240000000 Hz check=0",
+      "[APP-I] NP CPU CLK: 240000000 Hz check=0",
+      "[APP-I] CLDO trim: active=7 normal=7 sleep=3 state=6",
+      "[NAN-CLK] cpu_hz=240000000 check=0 cldo_active=7 cldo_normal=7 cldo_sleep=3 regu_state=6",
+      "[NAN-CLK] cpu_hz=240000000 check=0 cldo_active=7 cldo_normal=7 cldo_sleep=3 regu_state=6",
+      "[NAN-CLK] cpu_hz=240000000 check=0 cldo_active=7 cldo_normal=7 cldo_sleep=3 regu_state=6"
+    ],
+    "wake-repeat/uart.log": [
+      "[NAN-CLK] cpu_hz=240000000 check=0 cldo_active=7 cldo_normal=7 cldo_sleep=3 regu_state=6",
+      "[APP-I] AP CPU CLK: 240000000 Hz check=0",
+      "[APP-I] NP CPU CLK: 240000000 Hz check=0",
+      "[APP-I] CLDO trim: active=7 normal=7 sleep=3 state=6",
+      "[NAN-CLK] cpu_hz=240000000 check=0 cldo_active=7 cldo_normal=7 cldo_sleep=3 regu_state=6",
+      "[APP-I] AP CPU CLK: 240000000 Hz check=0",
+      "[APP-I] NP CPU CLK: 240000000 Hz check=0",
+      "[APP-I] CLDO trim: active=7 normal=7 sleep=3 state=6",
+      "[NAN-CLK] cpu_hz=240000000 check=0 cldo_active=7 cldo_normal=7 cldo_sleep=3 regu_state=6"
+    ]
+  },
+  "deep_sleep": {
+    "passed": true,
+    "sleep_commands": 2,
+    "sleep_entries": 2,
+    "deep_boots": 2,
+    "nan_ready_after_wake": 2
+  },
+  "diagnostics": {
+    "fault_pattern_counts": {
+      "cpu_fault": 0,
+      "stack_overflow": 0,
+      "allocation_failure": 0,
+      "macid_exhaustion": 0,
+      "assertion": 0
+    },
+    "vendor_warning_tag_counts": {
+      "[NAN-W]": 3
+    },
+    "cldo_override_log_present": false
+  },
+  "scope": "Board-only restoration, cold boot and two manual DSLP/AON wake cycles; no new phone throughput or current comparison. Prior phone throughput measurements remain historical.",
+  "previous_experiment_record": "cpu120-cldo6-com15.json",
+  "final_state": {
+    "nan_responds_after_blu_port_closed": true,
+    "status": "nan: running=1 events=2 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+    "com15_closed": true,
+    "blu_output_commanded_off": false,
+    "blu_serial_open": false,
+    "supply_left_on": true,
+    "com5_untouched": true,
+    "router_and_phone_untouched": true
+  },
+  "private_evidence_directory": "build/green2-nan-default-cpu-20261118",
+  "evidence_sha256": {
+    "build.log": "e40c6ae292de17564cbe16571666100db0e890babf526987941a53d9a8a649cc",
+    "native-tests.log": "bd84122db13293f126b019ca7ec927781dfdb0eb234ad1154441a6540fbaa694",
+    "flash.log": "a0f7b301a31dea1ca6b5062a038ebde993cff0b0c264417a8764650364c8709b",
+    "boot.log": "2d1bbe34ee5d665c0498829350a377cb8abb1acc35f62926b74a2550b2ca71a7",
+    "flash-power-actions.json": "ff11b2f3e8d864d1134b493f94c2ca9490b01e2d072129e101810bf9e1306412",
+    "wake-repeat/uart.log": "a37bb3b566f5b9208ddf82e784f7e192181e71c0c9134723792d152b022cdc60",
+    "wake-repeat/summary.json": "1d3490f14297271ffe2c2ec25f54ba28990ce27e75cef9dd4492e21da3d28592",
+    "final-state.json": "d9a0faadad0f71da36590a0854c1cc1ed150b64b09c8ebec6a6ff94f4a517dbf"
+  }
+}

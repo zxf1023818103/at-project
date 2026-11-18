@@ -1,0 +1,182 @@
+{
+  "test": "Green2 NAN fixed 8 dBm target power on COM5",
+  "recorded_at_utc": "2026-11-18T06:12:46.340752+00:00",
+  "base_commit": "e3e267645b968238b74ea449f1e50788c8bb6638",
+  "source_state": "Uncommitted NAN RF diagnostic and fixed-power changes on the base commit",
+  "device": {
+    "port": "COM5",
+    "transport": "CH340 UART 1500000 baud, same-port DTR/RTS",
+    "phone": "Not connected; board-only test as requested"
+  },
+  "setting": {
+    "api": "wifi_set_tx_power",
+    "forced": true,
+    "target_dbm": 8,
+    "tx_pwr_force_qdbm": 32,
+    "scope": "Shared RF override for all rates and bands, applied before every NAN radio start",
+    "calibration_or_efuse_written": false
+  },
+  "build": {
+    "NAN": "ON",
+    "NAN_RADIO_DIAG": "ON",
+    "NAN_DEEP_SLEEP": "ON",
+    "NAN_DEEP_SLEEP_MS": 30000,
+    "MINIMAL": "ON",
+    "NIMBLE": "OFF",
+    "IPERF": "OFF",
+    "TFM": "OFF",
+    "firmware_bytes": 901024,
+    "firmware_sha256": "bdee3d8e0b406d6bc9d3e14861340ee7bd738f44563e06a0ca1abd4be39c6b43"
+  },
+  "checks": {
+    "image_build": true,
+    "strict_compile": {
+      "nan_transport.c": true,
+      "nan_radio_diag.c": true
+    },
+    "flash_readback": true,
+    "application_boot": true,
+    "nan_active": true,
+    "initial_power_set_success": true,
+    "nan_stop_start": true,
+    "manual_deep_sleep_wake": true,
+    "runtime_fault_count": 0,
+    "serial_closed": true
+  },
+  "runtime": {
+    "recorded_at_utc": "2026-11-18T06:11:36.517707+00:00",
+    "stages": [
+      {
+        "stage": "idle_after_flash",
+        "passed": true,
+        "channels": [
+          {
+            "channel": 6,
+            "state_line": "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=32 tpc=0/0 samples=87",
+            "target_qdbm": {
+              "OFDM6": 32,
+              "OFDM54": 32,
+              "HT0": 32,
+              "HT7": 32,
+              "HE0": 32,
+              "HE7": 32,
+              "HE8": 32,
+              "HE9": 32
+            }
+          },
+          {
+            "channel": 149,
+            "state_line": "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=32 tpc=0/0 samples=90",
+            "target_qdbm": {
+              "OFDM6": 32,
+              "OFDM54": 32,
+              "HT0": 32,
+              "HT7": 32,
+              "HE0": 32,
+              "HE7": 32,
+              "HE8": 32,
+              "HE9": 32
+            }
+          }
+        ]
+      },
+      {
+        "stage": "nan_restart",
+        "passed": true,
+        "channels": [
+          {
+            "channel": 6,
+            "state_line": "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=32 tpc=0/0 samples=69",
+            "target_qdbm": {
+              "OFDM6": 32,
+              "OFDM54": 32,
+              "HT0": 32,
+              "HT7": 32,
+              "HE0": 32,
+              "HE7": 32,
+              "HE8": 32,
+              "HE9": 32
+            }
+          },
+          {
+            "channel": 149,
+            "state_line": "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=32 tpc=0/0 samples=72",
+            "target_qdbm": {
+              "OFDM6": 32,
+              "OFDM54": 32,
+              "HT0": 32,
+              "HT7": 32,
+              "HE0": 32,
+              "HE7": 32,
+              "HE8": 32,
+              "HE9": 32
+            }
+          }
+        ]
+      },
+      {
+        "stage": "deep_sleep_wake",
+        "passed": true,
+        "channels": [
+          {
+            "channel": 6,
+            "state_line": "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=32 tpc=0/0 samples=10",
+            "target_qdbm": {
+              "OFDM6": 32,
+              "OFDM54": 32,
+              "HT0": 32,
+              "HT7": 32,
+              "HE0": 32,
+              "HE7": 32,
+              "HE8": 32,
+              "HE9": 32
+            }
+          },
+          {
+            "channel": 149,
+            "state_line": "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=32 tpc=0/0 samples=8",
+            "target_qdbm": {
+              "OFDM6": 32,
+              "OFDM54": 32,
+              "HT0": 32,
+              "HT7": 32,
+              "HE0": 32,
+              "HE7": 32,
+              "HE8": 32,
+              "HE9": 32
+            }
+          }
+        ]
+      }
+    ],
+    "initial_status": "nan: running=1 events=1 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+    "stopped_status": "nan: running=0 events=1 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+    "restarted_status": "nan: running=1 events=2 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+    "deep_wake_line": "[NAN-DEEP] boot reason=00000002 aon=00000008 source=dslp next_sleep_ms=30000",
+    "final_status": "nan: running=1 events=1 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+    "runtime_fault_count": 0,
+    "fixed_power_success_count": 2,
+    "passed": true,
+    "serial_closed": true
+  },
+  "limitations": [
+    "Driver configured targets and getter readback, not instrument-calibrated conducted/OTA RF power.",
+    "Forced power takes precedence over rate/limit tables; the driver reports byrate=1 and limit=0 in this mode.",
+    "The eight rate inputs are lookup probes, not measured peer PHY rates.",
+    "No phone/NDP, pairing or throughput test was run. Observed ch149 discovery does not prove 5 GHz NDP negotiation.",
+    "The deep-sleep cycle was manually requested with nan sleep 2; automatic post-transfer sleep was not tested in this run."
+  ],
+  "final_state": "8 dBm diagnostic firmware running on COM5, NAN active, serial handle closed. Existing pairing storage retained.",
+  "private_evidence_directory": "build/green2-rf-20261118",
+  "evidence_sha256": {
+    "power8-build.log": "3d4c57f877e57ae13ccb492427027b6f08f828338a72ea4ea0f7642a199646a2",
+    "power8-flash.log": "dc15dc9c0daf3bcf6f86c8e46dcdff50f15cd7f193058763d50aaff5ac74a167",
+    "power8-boot.log": "ee33ef19dd1fc95385e4007d0fb9638127d1881c3d09226f6ae5cf65bedf28f1",
+    "power8-runtime/capture-uart.log": "7e596a608c0515fa4de31283b5baab855685685fd776ce895dab4dfc13e4d94a",
+    "power8-runtime/summary.json": "aa9e91be05238e54557ec4f3d2eec8ffb7295caf8e47c46613f9d9012bfe2280"
+  },
+  "source_sha256": {
+    "component/amebagreen2/nan/nan_transport.c": "c768993a6a08057d8ffb6fb4fe0306ec9a4cda7f2d70722b7173436c513e294a",
+    "component/amebagreen2/nan/nan_radio_diag.c": "ca9065c9b80f765c0b0d85d757ac8b7736f77c379cb9e99a5ef882912308b8df"
+  }
+}

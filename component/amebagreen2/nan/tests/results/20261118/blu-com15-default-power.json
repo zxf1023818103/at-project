@@ -1,0 +1,386 @@
+{
+  "test": "COM15 Green2 default RF power tables versus fixed 8 dBm",
+  "recorded_at_utc": "2026-11-18T07:47:32.402665+00:00",
+  "firmware": {
+    "image": "build/green2-rf-20261118/default-restore/firmware.bin",
+    "sha256": "509a16eb8c4ddfecef45a00e898c16cefd9d95ee08a6d1227d7c520e27e3ca54",
+    "bytes": 900768,
+    "feature_flag_differences": {
+      "bootloader_km4tz": {},
+      "app_km4ns": {},
+      "app_km4tz": {}
+    }
+  },
+  "source_restore": {
+    "strict_compile_passed": true,
+    "stripped_objects_equal": true,
+    "built_sha256": "671bc5329420360106f2b91d0c2aa57a8ede0f019e8ba9cff9acf681d9853322",
+    "restored_sha256": "671bc5329420360106f2b91d0c2aa57a8ede0f019e8ba9cff9acf681d9853322"
+  },
+  "flash": {
+    "firmware_readback": true,
+    "nan_running": true,
+    "fixed_power_log_absent": true,
+    "rf_lines": [
+      "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=1 force=0 force_qdbm=0 tpc=0/0 samples=10",
+      "[NAN-RF] ch=6 target_qdbm valid=0xff OFDM6=60 OFDM54=60 HT0=60 HT7=60 HE0=60 HE7=60 HE8=60 HE9=60",
+      "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=1 force=0 force_qdbm=0 tpc=0/0 samples=8",
+      "[NAN-RF] ch=149 target_qdbm valid=0xff OFDM6=72 OFDM54=68 HT0=72 HT7=64 HE0=72 HE7=64 HE8=60 HE9=56",
+      "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=1 force=0 force_qdbm=0 tpc=0/0 samples=89",
+      "[NAN-RF] ch=149 target_qdbm valid=0xff OFDM6=72 OFDM54=68 HT0=72 HT7=64 HE0=72 HE7=64 HE8=60 HE9=56",
+      "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=1 force=0 force_qdbm=0 tpc=0/0 samples=88",
+      "[NAN-RF] ch=6 target_qdbm valid=0xff OFDM6=60 OFDM54=60 HT0=60 HT7=60 HE0=60 HE7=60 HE8=60 HE9=60",
+      "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=1 force=0 force_qdbm=0 tpc=0/0 samples=90",
+      "[NAN-RF] ch=149 target_qdbm valid=0xff OFDM6=72 OFDM54=68 HT0=72 HT7=64 HE0=72 HE7=64 HE8=60 HE9=56",
+      "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=1 force=0 force_qdbm=0 tpc=0/0 samples=87",
+      "[NAN-RF] ch=6 target_qdbm valid=0xff OFDM6=60 OFDM54=60 HT0=60 HT7=60 HE0=60 HE7=60 HE8=60 HE9=60"
+    ],
+    "passed": true
+  },
+  "fixture": {
+    "board_port": "COM15",
+    "meter_port": "COM10",
+    "voltage_setting_mv": 3300,
+    "voltage_independently_measured": false,
+    "calibrated_flag": 0,
+    "saved_pairing_preserved": true
+  },
+  "discovery": {
+    "sample_count": 499712,
+    "sample_rate_hz": 100000,
+    "sample_duration_s": 4.99712,
+    "ignored_tail_bytes": 0,
+    "discarded_warmup_s": 1.0,
+    "statistics_duration_s": 3.99712,
+    "mean_uA": 51910.69017302008,
+    "min_uA": 36369.808421415444,
+    "max_uA": 340476.07421875,
+    "calibrated_flag": "0",
+    "conversion": "vendor SDK get_samples; includes SDK range-switch filtering",
+    "assumed_voltage_mv": 3300,
+    "calculated_mean_power_mW": 171.30527757096624
+  },
+  "phone_throughput": {
+    "status": "passed",
+    "measurement": {
+      "passed": true,
+      "voltage_setting_mv": 3300,
+      "voltage_independently_measured": false,
+      "calibrated_flag": "0",
+      "sample_segments": [
+        {
+          "start_s": 0.0,
+          "end_s": 60.001280069351196,
+          "sample_count": 6000128
+        },
+        {
+          "start_s": 61.211292028427124,
+          "end_s": 101.19337201118469,
+          "sample_count": 3998208
+        }
+      ],
+      "gaps": [
+        {
+          "start_s": 60.001280069351196,
+          "end_s": 61.211292028427124,
+          "duration_s": 1.2100119590759277
+        }
+      ],
+      "transfer_phases": [
+        {
+          "start_s": 6.9688880443573,
+          "end_s": 16.02288794517517,
+          "observed_samples": 905400,
+          "observed_seconds": 9.054,
+          "window_seconds": 9.053999900817871,
+          "mean_uA": 66409.78291894015,
+          "min_uA": 39073.37535511363,
+          "max_uA": 368885.16512784094,
+          "calculated_mean_power_mW": 219.1522836325025,
+          "direction": "upload",
+          "bytes": 22347776,
+          "firmware_elapsed_ms": 10054,
+          "firmware_mbps": 17.782,
+          "app_mbps": 17.782196936542668,
+          "full_transfer_start_s": 6.4688880443573,
+          "full_transfer_end_s": 16.52288794517517,
+          "window_method": "UART completion receipt time minus firmware elapsed duration; trim 0.5 s at each edge"
+        },
+        {
+          "start_s": 17.059033155441284,
+          "end_s": 26.066033124923706,
+          "observed_samples": 900700,
+          "observed_seconds": 9.007,
+          "window_seconds": 9.006999969482422,
+          "mean_uA": 134691.85925447347,
+          "min_uA": 42180.619673295456,
+          "max_uA": 363114.5685369318,
+          "calculated_mean_power_mW": 444.48313553976243,
+          "direction": "download",
+          "bytes": 29818880,
+          "firmware_elapsed_ms": 10007,
+          "firmware_mbps": 23.838,
+          "app_mbps": 23.849607758568983,
+          "full_transfer_start_s": 16.559033155441284,
+          "full_transfer_end_s": 26.566033124923706,
+          "window_method": "UART completion receipt time minus firmware elapsed duration; trim 0.5 s at each edge"
+        }
+      ],
+      "automatic_sleep": {
+        "start_s": 32.60014486312866,
+        "end_s": 74.93129205703735,
+        "observed_samples": 4112114,
+        "observed_seconds": 41.12114,
+        "window_seconds": 42.33114719390869,
+        "mean_uA": 9.776886666273727,
+        "min_uA": 6.744140989026777,
+        "max_uA": 15.524466846382643,
+        "calculated_mean_power_mW": 0.0322637259987033,
+        "low_current_drop_to_rise_span_s": 43.951292276382446,
+        "current_rise_to_nan_ready_ms": 285.9318256378174,
+        "configured_wake_seconds": 30.0,
+        "late_10s": {
+          "start_s": 64.93129205703735,
+          "end_s": 74.93129205703735,
+          "observed_samples": 1000000,
+          "observed_seconds": 10.0,
+          "window_seconds": 10.0,
+          "mean_uA": 8.242359966179487,
+          "min_uA": 6.744140989026777,
+          "max_uA": 10.457214112784232,
+          "calculated_mean_power_mW": 0.027199787888392307
+        }
+      },
+      "post_wake_saved_pair_reconnect": {
+        "startedAt": "2026-11-18T07:45:29Z",
+        "finished": true,
+        "cancelled": false,
+        "error": null,
+        "rounds": [
+          {
+            "discoverySeconds": 1.6728212916641496,
+            "elapsedSeconds": 4.487813749990892,
+            "number": 1,
+            "readySeconds": 4.4821319583570585,
+            "startedAt": "2026-11-18T07:45:29Z",
+            "success": true
+          }
+        ]
+      },
+      "diagnostic_counts": {
+        "fault": 0,
+        "allocation_failure": 0,
+        "stack_overflow": 0,
+        "macid_full": 0,
+        "cache_error": 0,
+        "tcp_abort": 0
+      },
+      "limits": [
+        "Current conversion uses vendor SDK range-switch filtering; negative samples retained.",
+        "Power is calculated using the configured 3.3 V; no independent voltage measurement.",
+        "BLU Calibrated=0; calibration state unconfirmed.",
+        "Two standard skill captures have an explicit gap; no samples are synthesized across it.",
+        "Transfer statistics exclude 0.5 s at each edge because UART/power alignment uses host timestamps.",
+        "Single board/round, not a controlled comparison against the previous RF power setting."
+      ],
+      "sample_rate_hz": 100000,
+      "invalid_range_count": 0,
+      "ignored_tail_bytes": 0
+    },
+    "phone": {
+      "throughput": {
+        "startedAt": "2026-11-18T07:44:12Z",
+        "finished": true,
+        "cancelled": false,
+        "error": null,
+        "readySeconds": 2.1335793333128095,
+        "discoverySeconds": 0.5072582083521411,
+        "results": [
+          {
+            "bytes": 22347776,
+            "direction": "upload",
+            "mbps": 17.782196936542668,
+            "peerBytes": 22347776,
+            "receiverSeconds": 10.054,
+            "senderSeconds": 10.006001708330587
+          },
+          {
+            "bytes": 29818880,
+            "direction": "download",
+            "mbps": 23.849607758568983,
+            "peerBytes": 29818880,
+            "receiverSeconds": 10.002304541645572,
+            "senderSeconds": 10.007
+          }
+        ]
+      },
+      "auto_sleep_wake": true,
+      "reconnect": {
+        "startedAt": "2026-11-18T07:45:29Z",
+        "finished": true,
+        "cancelled": false,
+        "error": null,
+        "rounds": [
+          {
+            "discoverySeconds": 1.6728212916641496,
+            "elapsedSeconds": 4.487813749990892,
+            "number": 1,
+            "readySeconds": 4.4821319583570585,
+            "startedAt": "2026-11-18T07:45:29Z",
+            "success": true
+          }
+        ]
+      },
+      "passed": true,
+      "diagnostic_counts": {
+        "fault": 0,
+        "allocation_failure": 0,
+        "stack_overflow": 0,
+        "macid_full": 0,
+        "cache_error": 0,
+        "tcp_abort": 0
+      }
+    },
+    "final_status": "nan: running=1 events=23 dropped=0 link=0 rx=6 tx=6 pong=1 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+    "rf_diagnostics": [
+      "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=1 force=0 force_qdbm=0 tpc=0/0 samples=57",
+      "[NAN-RF] ch=149 target_qdbm valid=0xff OFDM6=72 OFDM54=68 HT0=72 HT7=64 HE0=72 HE7=64 HE8=60 HE9=56",
+      "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=1 force=0 force_qdbm=0 tpc=0/0 samples=60",
+      "[NAN-RF] ch=6 target_qdbm valid=0xff OFDM6=60 OFDM54=60 HT0=60 HT7=60 HE0=60 HE7=60 HE8=60 HE9=60",
+      "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=1 force=0 force_qdbm=0 tpc=0/0 samples=30",
+      "[NAN-RF] ch=149 target_qdbm valid=0xff OFDM6=72 OFDM54=68 HT0=72 HT7=64 HE0=72 HE7=64 HE8=60 HE9=56",
+      "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=1 force=0 force_qdbm=0 tpc=0/0 samples=29",
+      "[NAN-RF] ch=6 target_qdbm valid=0xff OFDM6=60 OFDM54=60 HT0=60 HT7=60 HE0=60 HE7=60 HE8=60 HE9=60",
+      "[NAN-RF] ch=36 center=36 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=1 force=0 force_qdbm=0 tpc=0/0 samples=22",
+      "[NAN-RF] ch=36 target_qdbm valid=0xff OFDM6=64 OFDM54=64 HT0=64 HT7=64 HE0=64 HE7=64 HE8=60 HE9=56",
+      "[NAN-RF] ch=36 center=36 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=1 force=0 force_qdbm=0 tpc=0/0 samples=38",
+      "[NAN-RF] ch=36 target_qdbm valid=0xff OFDM6=64 OFDM54=64 HT0=64 HT7=64 HE0=64 HE7=64 HE8=60 HE9=56",
+      "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=1 force=0 force_qdbm=0 tpc=0/0 samples=19",
+      "[NAN-RF] ch=6 target_qdbm valid=0xff OFDM6=60 OFDM54=60 HT0=60 HT7=60 HE0=60 HE7=60 HE8=60 HE9=60",
+      "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=1 force=0 force_qdbm=0 tpc=0/0 samples=20",
+      "[NAN-RF] ch=149 target_qdbm valid=0xff OFDM6=72 OFDM54=68 HT0=72 HT7=64 HE0=72 HE7=64 HE8=60 HE9=56",
+      "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=1 force=0 force_qdbm=0 tpc=0/0 samples=10",
+      "[NAN-RF] ch=6 target_qdbm valid=0xff OFDM6=60 OFDM54=60 HT0=60 HT7=60 HE0=60 HE7=60 HE8=60 HE9=60",
+      "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=1 force=0 force_qdbm=0 tpc=0/0 samples=8",
+      "[NAN-RF] ch=149 target_qdbm valid=0xff OFDM6=72 OFDM54=68 HT0=72 HT7=64 HE0=72 HE7=64 HE8=60 HE9=56",
+      "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=1 force=0 force_qdbm=0 tpc=0/0 samples=70",
+      "[NAN-RF] ch=149 target_qdbm valid=0xff OFDM6=72 OFDM54=68 HT0=72 HT7=64 HE0=72 HE7=64 HE8=60 HE9=56",
+      "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=1 force=0 force_qdbm=0 tpc=0/0 samples=68",
+      "[NAN-RF] ch=6 target_qdbm valid=0xff OFDM6=60 OFDM54=60 HT0=60 HT7=60 HE0=60 HE7=60 HE8=60 HE9=60",
+      "[NAN-RF] ch=36 center=36 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=1 force=0 force_qdbm=0 tpc=0/0 samples=1",
+      "[NAN-RF] ch=36 target_qdbm valid=0xff OFDM6=64 OFDM54=64 HT0=64 HT7=64 HE0=64 HE7=64 HE8=60 HE9=56",
+      "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=1 force=0 force_qdbm=0 tpc=0/0 samples=40",
+      "[NAN-RF] ch=6 target_qdbm valid=0xff OFDM6=60 OFDM54=60 HT0=60 HT7=60 HE0=60 HE7=60 HE8=60 HE9=60",
+      "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=1 force=0 force_qdbm=0 tpc=0/0 samples=41",
+      "[NAN-RF] ch=149 target_qdbm valid=0xff OFDM6=72 OFDM54=68 HT0=72 HT7=64 HE0=72 HE7=64 HE8=60 HE9=56"
+    ],
+    "fixed_power_log_count": 0,
+    "diagnostic_review": {
+      "saved_pair_auth_count": 2,
+      "new_pair_auth_count": 0,
+      "warnings": [
+        "[NAN-W] dw early: nanctrl_propagation"
+      ],
+      "warning_tag_count": 1,
+      "error_tag_count": 0
+    }
+  },
+  "private_evidence_directory": "build/green2-blu-com15-default-20261118",
+  "evidence_sha256": {
+    "flash.log": "e1f6d5553a0e46aa7871783457fafd6b72357ad4381cb28b04b26c8703ee9639",
+    "boot.log": "0e043665ce3097a2691ca9b5a8e46052d392535c8e86e34bbaf9a1b077d8da60",
+    "metadata.txt": "9b9b0bc527bf3073afacb684fc3d599443b6cd3db23751b1b78f6bd5ebff6808",
+    "discovery/current.bin": "b9ec671548873adbf82fe2ad6fa5afdaaaadb8494db87675279f5f167e11a840",
+    "discovery/uart.log": "ef60a337a3e705c051b13d229191226623a2bb4ea201e18b21967efe97769062",
+    "traffic/current-1.bin": "6447a2cda3a6c0252c9f18c23ee350e5199c13f4d3b5696b3a56980d3ea815cc",
+    "traffic/current-2.bin": "c0da1a6810559c6d7b0cdb53d6d3192570d17b63cf633beff679bda6790a8b0f",
+    "traffic/uart.log": "059c7ddda5286b9fe713c3f9d16428a7e79c8d917062c4ff05af5b1c304c1edb",
+    "traffic/phone-summary.json": "f17d630ba5c0cffae1c693fff1b674b6be262324c204eb566c3b5e2c8f8746af",
+    "traffic/capture-summary.json": "ad94b85903a062da3c502d07736b4d76f1817b7f404998640c94506b02ecab95",
+    "traffic/power-report.json": "cf73cf3bdaa68fba8f0a58722a7963e7dd58b801af22e0bb6e0ea31386dd6506",
+    "comparison.json": "bc4f671e58a998a547581911274f5e3bb916f0c9bb8e7e63eb048b50d43b47f1",
+    "traffic/diagnostic-review.json": "065b9b061df33c151f27fdeb48187147ab192d7d8426643cdf4105df729493c6",
+    "final-state.json": "64efaa31c4808f71fbc34f18bd93ffd3ffbe31b992081a5a5b441d7dc84ae1f6",
+    "com5-restored.json": "5022feea5685266006ef3daa05dbb43c928599c101428578f16442b81669ce32"
+  },
+  "cleanup": {
+    "throughput_capture_completed": true,
+    "blu_serial_closed": true,
+    "blu_output_kept_on_3300mv": true,
+    "com15": {
+      "nan_responds_after_blu_port_closed": true,
+      "status": "nan: running=1 events=23 dropped=0 link=0 rx=6 tx=6 pong=1 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+      "com15_closed": true,
+      "blu_output_commanded_off": false
+    },
+    "com5": {
+      "before": "nan: running=0 events=4 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+      "after": "nan: running=1 events=5 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+      "restored_by_test": true
+    },
+    "test_app_terminated": true,
+    "com15_keeps_default_power_firmware": true
+  },
+  "comparison_to_8dbm": {
+    "transfer_comparison": [
+      {
+        "direction": "upload",
+        "flow": "iPhone to Green2",
+        "fixed_8dbm": {
+          "mean_mA": 64.74205088353966,
+          "calculated_mean_mW": 213.64876791568088,
+          "mbps": 15.633277010237551,
+          "calculated_mJ_per_Mbit": 13.666281725563465,
+          "window_seconds": 9.061
+        },
+        "default_tables": {
+          "mean_mA": 66.40978291894015,
+          "calculated_mean_mW": 219.1522836325025,
+          "mbps": 17.782196936542668,
+          "calculated_mJ_per_Mbit": 12.324252420247435,
+          "window_seconds": 9.054
+        },
+        "current_change_mA": 1.6677320354004905,
+        "current_change_percent": 2.5759641726526006,
+        "throughput_change_percent": 13.74580598103574
+      },
+      {
+        "direction": "download",
+        "flow": "Green2 to iPhone",
+        "fixed_8dbm": {
+          "mean_mA": 124.68556802742864,
+          "calculated_mean_mW": 411.4623744905145,
+          "mbps": 21.334687324182056,
+          "calculated_mJ_per_Mbit": 19.286074749459186,
+          "window_seconds": 9.011
+        },
+        "default_tables": {
+          "mean_mA": 134.69185925447348,
+          "calculated_mean_mW": 444.48313553976243,
+          "mbps": 23.849607758568983,
+          "calculated_mJ_per_Mbit": 18.636915962698087,
+          "window_seconds": 9.007
+        },
+        "current_change_mA": 10.00629122704484,
+        "current_change_percent": 8.025220067845872,
+        "throughput_change_percent": 11.787941375341182
+      }
+    ],
+    "discovery": {
+      "fixed_8dbm_mean_mA": 51.48259110557621,
+      "default_mean_mA": 51.91069017302008,
+      "change_percent": 0.8315414167207713
+    },
+    "automatic_sleep_late_10s": {
+      "fixed_8dbm_mean_uA": 8.33136040689457,
+      "default_mean_uA": 8.242359966179487
+    },
+    "limits": [
+      "Sequential measurements on the same board and phone; same firmware feature flags and 3.3 V supply setting.",
+      "Traffic rate and scheduling may vary between rounds; this is not a controlled RF chamber or a repeated statistical comparison.",
+      "BLU Calibrated=0, voltage not independently measured, negative current samples retained.",
+      "Per-direction current averages exclude 0.5 s at each boundary; radio target powers are not RF-meter readings."
+    ]
+  },
+  "initial_phone_unlock_wait_timed_out": true
+}

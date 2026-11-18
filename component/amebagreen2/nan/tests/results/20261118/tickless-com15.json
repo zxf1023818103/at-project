@@ -1,0 +1,430 @@
+{
+  "test": "Green2 AP/NP FreeRTOS tickless with NAN, console, throughput and automatic DSLP",
+  "recorded_at_utc": "2026-11-18T09:01:09.226938+00:00",
+  "firmware": {
+    "sha256": "499e89522bf7bb1366d0e57baa4a88fd0554e42b67788f64bb3b3043f3be7b1d",
+    "bytes": 901856,
+    "rf_target_dbm": 0,
+    "flags": {
+      "NAN": "ON",
+      "NAN_TICKLESS": "ON",
+      "NAN_RADIO_DIAG": "ON",
+      "NAN_DEEP_SLEEP": "ON",
+      "NAN_DEEP_SLEEP_MS": 30000,
+      "NIMBLE": "OFF",
+      "TFM": "OFF",
+      "NAN_USB": "OFF"
+    },
+    "firmware_only_readback_passed": true,
+    "pairing_and_calibration_preserved": true
+  },
+  "build_checks": {
+    "dual_core_build": "passed",
+    "freertos_preprocessor": {
+      "app_km4ns": [
+        "#define configTICK_RATE_HZ ( ( TickType_t ) 1000 )",
+        "#define CONFIG_STANDARD_TICKLESS 1",
+        "#define configUSE_TICKLESS_IDLE 1",
+        "#define AT_GREEN2_NAN_TICKLESS 1"
+      ],
+      "app_km4tz": [
+        "#define configTICK_RATE_HZ ( ( TickType_t ) 1000 )",
+        "#define CONFIG_STANDARD_TICKLESS 1",
+        "#define configUSE_TICKLESS_IDLE 1",
+        "#define AT_GREEN2_NAN_TICKLESS 1"
+      ]
+    },
+    "strict_compiles": {
+      "/freertos_port/km4ns/port.c": {
+        "returncode": 0
+      },
+      "/nan/nan_peer_monitor.c": {
+        "returncode": 0
+      },
+      "/nan/pasn_freertos.c": {
+        "returncode": 0
+      },
+      "/nan/nan_service.c": {
+        "returncode": 0
+      },
+      "/monitor_port/monitor_port.c": {
+        "returncode": 0
+      },
+      "/fwlib/ameba_pmu.c": {
+        "returncode": 0
+      },
+      "/fwlib/km4ns/ameba_npcap.c": {
+        "returncode": 0
+      },
+      "/usrcfg/ameba_sleepcfg.c": {
+        "returncode": 0
+      }
+    },
+    "native_tests": "16/16 ASan+UBSan passed, including PASN deadlines/cancellation/rearm/tick wrap"
+  },
+  "fixture": {
+    "board_port": "COM15",
+    "blu_port": "COM10",
+    "voltage_setting_mv": 3300,
+    "voltage_independently_measured": false,
+    "calibrated_flag": 0
+  },
+  "idle_policy": {
+    "ap": "retention CG; 1000 ms maximum idle, earlier task/IRQ wake",
+    "np": "CPU-only WFI with SysTick disabled; PMC deadline, 32 kHz elapsed tick compensation; 500 ms maximum idle",
+    "np_full_cg_enabled": false,
+    "np_pmu_os_veto_retained": true,
+    "wifi_firmware_wakelocks_unchanged": true,
+    "nan_queue": "next PASN deadline or 10-second heap report; no 100 ms polling",
+    "console": "RX interrupt and blocking stream-buffer read",
+    "ap_boot_counters": [
+      {
+        "sleep": 12,
+        "sleep_ms": 10000,
+        "queue_timeouts": 1
+      },
+      {
+        "sleep": 23,
+        "sleep_ms": 20000,
+        "queue_timeouts": 2
+      }
+    ],
+    "np_boot_counters": [
+      {
+        "idle_wfi": 203,
+        "idle_ms": 1976,
+        "locks": "00000009"
+      },
+      {
+        "idle_wfi": 1140,
+        "idle_ms": 11799,
+        "locks": "00000009"
+      },
+      {
+        "idle_wfi": 2084,
+        "idle_ms": 21637,
+        "locks": "00000009"
+      }
+    ],
+    "np_last_10s_idle_ms": 9838
+  },
+  "discovery_current": {
+    "samples": {
+      "baseline": {
+        "sample_count": 1000960,
+        "sample_rate_hz": 100000,
+        "sample_duration_s": 10.0096,
+        "ignored_tail_bytes": 0,
+        "discarded_warmup_s": 1.0,
+        "statistics_duration_s": 9.0096,
+        "mean_uA": 51834.20688089219,
+        "min_uA": 36130.45486749388,
+        "max_uA": 249478.20490056815,
+        "calibrated_flag": "0",
+        "conversion": "vendor SDK get_samples; includes SDK range-switch filtering"
+      },
+      "ap-cg": {
+        "sample_count": 998912,
+        "sample_rate_hz": 100000,
+        "sample_duration_s": 9.98912,
+        "ignored_tail_bytes": 0,
+        "discarded_warmup_s": 1.0,
+        "statistics_duration_s": 8.98912,
+        "mean_uA": 51177.07925049367,
+        "min_uA": 35413.553904103486,
+        "max_uA": 248146.52876420453,
+        "calibrated_flag": "0",
+        "conversion": "vendor SDK get_samples; includes SDK range-switch filtering"
+      },
+      "dual-tickless": {
+        "sample_count": 999936,
+        "sample_rate_hz": 100000,
+        "sample_duration_s": 9.99936,
+        "ignored_tail_bytes": 0,
+        "discarded_warmup_s": 1.0,
+        "statistics_duration_s": 8.99936,
+        "mean_uA": 51220.92546840737,
+        "min_uA": 35552.75718575271,
+        "max_uA": 249478.20490056815,
+        "calibrated_flag": "0",
+        "conversion": "vendor SDK get_samples; includes SDK range-switch filtering"
+      }
+    },
+    "change_mA": -0.6132814124848228,
+    "change_percent": -1.1831596341274397,
+    "scope": "One approximately 10-second window per configuration, first second excluded; not a statistical significance claim."
+  },
+  "phone": {
+    "throughput": {
+      "startedAt": "2026-11-18T08:57:58Z",
+      "finished": true,
+      "cancelled": false,
+      "error": null,
+      "readySeconds": 3.4580605416558683,
+      "discoverySeconds": 1.6903915833681822,
+      "results": [
+        {
+          "bytes": 20447232,
+          "direction": "upload",
+          "mbps": 16.266692124105013,
+          "peerBytes": 20447232,
+          "receiverSeconds": 10.056,
+          "senderSeconds": 10.039506541681476
+        },
+        {
+          "bytes": 26542080,
+          "direction": "download",
+          "mbps": 21.151777010553904,
+          "peerBytes": 26542080,
+          "receiverSeconds": 10.038713999965694,
+          "senderSeconds": 10.016
+        }
+      ]
+    },
+    "auto_sleep_wake": true,
+    "reconnect": {
+      "startedAt": "2026-11-18T08:59:17Z",
+      "finished": true,
+      "cancelled": false,
+      "error": null,
+      "rounds": [
+        {
+          "discoverySeconds": 1.811834916647058,
+          "elapsedSeconds": 3.972802916658111,
+          "number": 1,
+          "readySeconds": 3.967058708309196,
+          "startedAt": "2026-11-18T08:59:17Z",
+          "success": true
+        }
+      ]
+    },
+    "passed": true,
+    "diagnostic_counts": {
+      "fault": 0,
+      "allocation_failure": 0,
+      "stack_overflow": 0,
+      "macid_full": 0,
+      "cache_error": 0,
+      "tcp_abort": 0
+    }
+  },
+  "power": {
+    "passed": true,
+    "voltage_setting_mv": 3300,
+    "voltage_independently_measured": false,
+    "calibrated_flag": "0",
+    "sample_segments": [
+      {
+        "start_s": 0.0,
+        "end_s": 59.98079991340637,
+        "sample_count": 5998080
+      },
+      {
+        "start_s": 61.006006956100464,
+        "end_s": 100.99320697784424,
+        "sample_count": 3998720
+      }
+    ],
+    "gaps": [
+      {
+        "start_s": 59.98079991340637,
+        "end_s": 61.006006956100464,
+        "duration_s": 1.0252070426940918
+      }
+    ],
+    "transfer_phases": [
+      {
+        "start_s": 8.412983179092407,
+        "end_s": 17.46898317337036,
+        "observed_samples": 905600,
+        "observed_seconds": 9.056,
+        "window_seconds": 9.055999994277954,
+        "mean_uA": 65151.781039371424,
+        "min_uA": 36178.325578278185,
+        "max_uA": 256136.58558238632,
+        "calculated_mean_power_mW": 215.0008774299257,
+        "direction": "upload",
+        "bytes": 20447232,
+        "firmware_elapsed_ms": 10056,
+        "firmware_mbps": 16.266,
+        "app_mbps": 16.266692124105013,
+        "full_transfer_start_s": 7.912983179092407,
+        "full_transfer_end_s": 17.96898317337036,
+        "window_method": "UART completion receipt time minus firmware elapsed duration; trim 0.5 s at each edge"
+      },
+      {
+        "start_s": 18.49654984474182,
+        "end_s": 27.512549877166748,
+        "observed_samples": 901600,
+        "observed_seconds": 9.016,
+        "window_seconds": 9.016000032424927,
+        "mean_uA": 126932.31741266786,
+        "min_uA": 44400.079900568184,
+        "max_uA": 260575.5060369318,
+        "calculated_mean_power_mW": 418.876647461804,
+        "direction": "download",
+        "bytes": 26542080,
+        "firmware_elapsed_ms": 10016,
+        "firmware_mbps": 21.199,
+        "app_mbps": 21.151777010553904,
+        "full_transfer_start_s": 17.99654984474182,
+        "full_transfer_end_s": 28.012549877166748,
+        "window_method": "UART completion receipt time minus firmware elapsed duration; trim 0.5 s at each edge"
+      }
+    ],
+    "automatic_sleep": {
+      "start_s": 34.07110261917114,
+      "end_s": 76.38600707054138,
+      "observed_samples": 4128970,
+      "observed_seconds": 41.2897,
+      "window_seconds": 42.31490445137024,
+      "mean_uA": 9.56405858286633,
+      "min_uA": 6.6130913493647485,
+      "max_uA": 14.956585074513855,
+      "calculated_mean_power_mW": 0.03156139332345889,
+      "low_current_drop_to_rise_span_s": 43.72600722312927,
+      "current_rise_to_nan_ready_ms": 281.51702880859375,
+      "configured_wake_seconds": 30.0,
+      "late_10s": {
+        "start_s": 66.38600707054138,
+        "end_s": 76.38600707054138,
+        "observed_samples": 1000000,
+        "observed_seconds": 10.0,
+        "window_seconds": 10.0,
+        "mean_uA": 8.182354869804609,
+        "min_uA": 6.6130913493647485,
+        "max_uA": 9.976698767356796,
+        "calculated_mean_power_mW": 0.027001771070355212
+      }
+    },
+    "post_wake_saved_pair_reconnect": {
+      "startedAt": "2026-11-18T08:59:17Z",
+      "finished": true,
+      "cancelled": false,
+      "error": null,
+      "rounds": [
+        {
+          "discoverySeconds": 1.811834916647058,
+          "elapsedSeconds": 3.972802916658111,
+          "number": 1,
+          "readySeconds": 3.967058708309196,
+          "startedAt": "2026-11-18T08:59:17Z",
+          "success": true
+        }
+      ]
+    },
+    "diagnostic_counts": {
+      "fault": 0,
+      "allocation_failure": 0,
+      "stack_overflow": 0,
+      "macid_full": 0,
+      "cache_error": 0,
+      "tcp_abort": 0
+    },
+    "limits": [
+      "Current conversion uses vendor SDK range-switch filtering; negative samples retained.",
+      "Power is calculated using the configured 3.3 V; no independent voltage measurement.",
+      "BLU Calibrated=0; calibration state unconfirmed.",
+      "Two standard skill captures have an explicit gap; no samples are synthesized across it.",
+      "Transfer statistics exclude 0.5 s at each edge because UART/power alignment uses host timestamps.",
+      "Single board/round per tickless configuration; RF target remains 0 dBm, PHY rate/retries were not fixed."
+    ]
+  },
+  "comparison_with_previous_0dbm_run": [
+    {
+      "direction": "upload",
+      "previous_current_mA": 64.89576562472554,
+      "current_mA": 65.15178103937143,
+      "previous_mbps": 16.212943024758875,
+      "mbps": 16.266692124105013,
+      "current_change_percent": 0.39450249516486124
+    },
+    {
+      "direction": "download",
+      "previous_current_mA": 124.85690984724991,
+      "current_mA": 126.93231741266787,
+      "previous_mbps": 21.534342752430366,
+      "mbps": 21.151777010553904,
+      "current_change_percent": 1.6622288409644526
+    }
+  ],
+  "vendor_warning_lines": [
+    "[NAN-W] dw early: nanctrl_propagation",
+    "[NAN-W] dw early: nanctrl_propagation"
+  ],
+  "console_stop_start": {
+    "before": "nan: running=1 events=1 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+    "stopped": "nan: running=0 events=1 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+    "idle_console": "nan: running=0 events=1 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+    "after": "nan: running=1 events=2 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+    "pm_lines": [
+      "[10:21:20.235] [NAN-PM] AP sleep=86 sleep_ms=49992 locks=00000000 queue_timeouts=5",
+      "[10:21:30.235] [NAN-PM] AP sleep=97 sleep_ms=59991 locks=00000000 queue_timeouts=6",
+      "[10:21:40.235] [NAN-PM] AP sleep=130 sleep_ms=69952 locks=00000000 queue_timeouts=7",
+      "[NAN-PM] NP tickless=1 sleep=0 sleep_ms=0 idle_wfi=5471 idle_ms=69637 locks=00000009"
+    ],
+    "fault": false,
+    "passed": true,
+    "serial_closed": true
+  },
+  "full_cg_experiment": {
+    "retained_in_final": false,
+    "finding": "Releasing NP PMU_OS allowed full NP CG after NAN stop; periodic CG/wake logs continued but console RX stopped responding even with XTAL retention. Final profile retains original NP veto and uses CPU-only tickless WFI.",
+    "evidence_directory": "build/green2-nan-tickless-20261118/full-cg-candidate"
+  },
+  "final_state": {
+    "com15": {
+      "nan_responds_after_blu_port_closed": true,
+      "status": "nan: running=1 events=22 dropped=0 link=0 rx=6 tx=6 pong=1 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+      "com15_closed": true,
+      "blu_output_commanded_off": false
+    },
+    "com5": {
+      "before": "nan: running=0 events=8 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+      "after": "nan: running=1 events=9 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+      "restored_by_test": true
+    },
+    "blu_output_left_on": true,
+    "blu_serial_stopped_without_off": true,
+    "phone_test_process_terminated": true,
+    "router_unchanged": true,
+    "commit_or_push": false,
+    "terminated_test_pid": 30976,
+    "other_app_pid_seen_after_termination": 30988,
+    "other_app_pid_untouched": true
+  },
+  "evidence_root": "build/green2-nan-tickless-20261118",
+  "evidence_sha256": {
+    "firmware/firmware.bin": "499e89522bf7bb1366d0e57baa4a88fd0554e42b67788f64bb3b3043f3be7b1d",
+    "flash.log": "cf873ff65bc46bb9f313dfec241b0de7595f64b2959193bc305ba6b4467bc2ea",
+    "boot.log": "f18ba00813f8d554f4ad84a364f7094a221244961297c3195acf6426ae911388",
+    "preprocessor-checks.json": "421750c7bfee592c88aa8656080f1f9b61eeaed9173fbbab3c0f4291ad2ec541",
+    "strict-checks.json": "1fc8faf7684d4d381f1ace258c91cf272abdbb53fc8a7681ab5517738afa69a9",
+    "native/Testing/Temporary/LastTest.log": "a562bc538b27c6ac7d6cd9c76a85e6102cf4b6cbb969f2ea9e6cba77407b926f",
+    "baseline/current.bin": "b0d4c4d39e45e6f45f46f8a35f0a344a98b08dba967e789aaa146affeae1ff84",
+    "baseline/uart.log": "da2ec4146e4fedee5020e7291fc73ad697b02f42d2a0e5d56126b146666c0e4d",
+    "ap-cg/current.bin": "d9dd90b001b7a588d6dad504127cc2983ea9e857c036b2df605d07b5d4072d3e",
+    "dual-tickless/current.bin": "c46a4a17f00afa31422c700ef52723fee795e6ff745a632cb02341a49405cddc",
+    "dual-tickless/uart.log": "c3501c2f7f4da866a8e202e94543a0dcbea667920a24974cf3b5aa20c51d4a06",
+    "traffic/current-1.bin": "6bedc41c8b8467066d72a0e81562a49f8c69fc6349bc92e49114502eecd95bda",
+    "traffic/current-2.bin": "2c5ac0362966c7e653b0ad01de2e6123c6fc0f052d1627ea7628813f5b184100",
+    "traffic/uart.log": "8fa688573fbb414985777dbf82e542f53414d30fa2f787a4601dbc6c73b2880e",
+    "traffic/phone-summary.json": "8dfdf0d2a1241744f599bcbdc06e05a7b08255a902d00857edb6160aab64901e",
+    "traffic/power-report.json": "90b43ff481ee8d0de86df7a02634e713f3c8ddeab18aff964aec8b40c7a1e342",
+    "traffic/nan-traffic-power.png": "4fcb02777e8859b03addd04062763379460e8c25c9c24383f06be0bc5437e216",
+    "stop-start.json": "abea9bd71913f0f026e0b34e982125b901c034ffdbaf41947e520c48fff686b3",
+    "final-state.json": "84d448168ac7b43db92b9161707dfbc1b68fe81c18962fb5d3fd9751ff045002",
+    "com5-restored.json": "224fa80cd46376692eb70645bcc49369ed48ab0c69739bb471b6c33ba9ec7875",
+    "full-cg-candidate/stop-start-uart.log": "4e14a1b867f38d3607c5672dca842d4ff3c7950e3a72c25f21f55b66feccdc91",
+    "phone-stop.log": "84fd6d84fafab5bd770172ec353726d5d2aa828764262377825d26006f6528b0",
+    "phone-processes-final.log": "1d538ce3847c745d05dcdc28de5fd24da86e96395c58b79803bc4ed747c51741",
+    "blu-stop.json": "1f87e9b0f117936cae2982cb3c25e468cfcd391ff57941274c9ca0e5e14b7aa9"
+  },
+  "limits": [
+    "BLU Calibrated=0; 3.3 V is the configured output, not an independent measurement.",
+    "One phone transfer per configuration, variable radio environment/PHY/retries; the measurements are not a stress guarantee or a fixed performance claim.",
+    "NP CPU tickless is not full NP/RF domain sleep; active NAN RF scheduling remains.",
+    "Existing 30-second AON configuration sleeps approximately 44 wall-clock seconds; its timer bias is outside this tickless change.",
+    "Raw UART is local only because it may contain pairing secrets."
+  ]
+}

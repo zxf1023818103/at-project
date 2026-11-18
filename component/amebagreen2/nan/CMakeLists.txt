@@ -2,6 +2,10 @@
 if(AMEBAGREEN2_CORE STREQUAL "km4ns")
     target_sources(amebagreen2_vendor PRIVATE vendor/ameba_xtal_trackingcfg.c nan_ipc_device.c nan_peer_monitor.c nan_peer_release.c nan_ndc_reference.c
         fixes/whc_dev_nan_restart_fix.c)
+    if(AT_NAN_RADIO_DIAG)
+        target_sources(amebagreen2_vendor PRIVATE nan_radio_diag.c)
+        target_compile_definitions(amebagreen2_vendor PRIVATE AT_NAN_RADIO_DIAG)
+    endif()
     if(AT_NAN_NP_HEAP_TRACE)
         target_sources(amebagreen2_vendor PRIVATE nan_heap_trace.c)
         target_compile_definitions(amebagreen2_vendor PRIVATE AT_NAN_NP_HEAP_TRACE)

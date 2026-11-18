@@ -1,0 +1,935 @@
+{
+  "test": "COM15 Green2 NAN forced 0 dBm: board power and relative air signal",
+  "recorded_at_utc": "2026-11-18T08:12:37.145904+00:00",
+  "firmware": {
+    "sha256": "3ffe201311dc5f3ea86892d16548e05c3e466531e06b30d625e6c336d92d1766",
+    "bytes": 901280,
+    "target_dbm": 0,
+    "rf_register_readback_added": true,
+    "feature_flag_differences": {
+      "bootloader_km4tz": {},
+      "app_km4ns": {},
+      "app_km4tz": {}
+    }
+  },
+  "build_checks": {
+    "transport": "passed",
+    "radio": "passed"
+  },
+  "flash": {
+    "firmware_byte_readback": true,
+    "nan_started": true,
+    "force_0dbm_applied": true,
+    "rf_lines": [
+      "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=0 tpc=0/0 samples=10",
+      "[NAN-RF] ch=6 target_qdbm valid=0xff OFDM6=0 OFDM54=0 HT0=0 HT7=0 HE0=0 HE7=0 HE8=0 HE9=0",
+      "[NAN-RF] ch=6 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff",
+      "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=0 tpc=0/0 samples=8",
+      "[NAN-RF] ch=149 target_qdbm valid=0xff OFDM6=0 OFDM54=0 HT0=0 HT7=0 HE0=0 HE7=0 HE8=0 HE9=0",
+      "[NAN-RF] ch=149 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff",
+      "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=0 tpc=0/0 samples=89",
+      "[NAN-RF] ch=149 target_qdbm valid=0xff OFDM6=0 OFDM54=0 HT0=0 HT7=0 HE0=0 HE7=0 HE8=0 HE9=0",
+      "[NAN-RF] ch=149 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff",
+      "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=0 tpc=0/0 samples=88",
+      "[NAN-RF] ch=6 target_qdbm valid=0xff OFDM6=0 OFDM54=0 HT0=0 HT7=0 HE0=0 HE7=0 HE8=0 HE9=0",
+      "[NAN-RF] ch=6 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff",
+      "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=0 tpc=0/0 samples=90",
+      "[NAN-RF] ch=149 target_qdbm valid=0xff OFDM6=0 OFDM54=0 HT0=0 HT7=0 HE0=0 HE7=0 HE8=0 HE9=0",
+      "[NAN-RF] ch=149 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff",
+      "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=0 tpc=0/0 samples=87",
+      "[NAN-RF] ch=6 target_qdbm valid=0xff OFDM6=0 OFDM54=0 HT0=0 HT7=0 HE0=0 HE7=0 HE8=0 HE9=0",
+      "[NAN-RF] ch=6 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff"
+    ],
+    "fault": false
+  },
+  "fixture": {
+    "board_port": "COM15",
+    "meter_port": "COM10",
+    "voltage_setting_mv": 3300,
+    "voltage_independently_measured": false,
+    "calibrated_flag": 0,
+    "pairing_preserved": true
+  },
+  "phone": {
+    "throughput": {
+      "startedAt": "2026-11-18T08:05:23Z",
+      "finished": true,
+      "cancelled": false,
+      "error": null,
+      "readySeconds": 2.2647020000149496,
+      "discoverySeconds": 0.6424597916775383,
+      "results": [
+        {
+          "bytes": 20381696,
+          "direction": "upload",
+          "mbps": 16.212943024758875,
+          "peerBytes": 20381696,
+          "receiverSeconds": 10.057,
+          "senderSeconds": 10.00649654166773
+        },
+        {
+          "bytes": 26935296,
+          "direction": "download",
+          "mbps": 21.534342752430366,
+          "peerBytes": 26935296,
+          "receiverSeconds": 10.006452041619923,
+          "senderSeconds": 10.01
+        }
+      ]
+    },
+    "auto_sleep_wake": true,
+    "reconnect": {
+      "startedAt": "2026-11-18T08:06:41Z",
+      "finished": true,
+      "cancelled": false,
+      "error": null,
+      "rounds": [
+        {
+          "discoverySeconds": 1.6742964583681896,
+          "elapsedSeconds": 3.4505645416793413,
+          "number": 1,
+          "readySeconds": 3.445565833360888,
+          "startedAt": "2026-11-18T08:06:41Z",
+          "success": true
+        }
+      ]
+    },
+    "passed": true,
+    "diagnostic_counts": {
+      "fault": 0,
+      "allocation_failure": 0,
+      "stack_overflow": 0,
+      "macid_full": 0,
+      "cache_error": 0,
+      "tcp_abort": 0
+    }
+  },
+  "power": {
+    "passed": true,
+    "voltage_setting_mv": 3300,
+    "voltage_independently_measured": false,
+    "calibrated_flag": "0",
+    "sample_segments": [
+      {
+        "start_s": 0.0,
+        "end_s": 59.991039991378784,
+        "sample_count": 5999104
+      },
+      {
+        "start_s": 61.014986991882324,
+        "end_s": 101.0073070526123,
+        "sample_count": 3999232
+      }
+    ],
+    "gaps": [
+      {
+        "start_s": 59.991039991378784,
+        "end_s": 61.014986991882324,
+        "duration_s": 1.02394700050354
+      }
+    ],
+    "transfer_phases": [
+      {
+        "start_s": 7.166109323501587,
+        "end_s": 16.223109245300293,
+        "observed_samples": 905700,
+        "observed_seconds": 9.057,
+        "window_seconds": 9.056999921798706,
+        "mean_uA": 64895.765624725536,
+        "min_uA": 40848.943536931816,
+        "max_uA": 256136.58558238632,
+        "calculated_mean_power_mW": 214.15602656159427,
+        "direction": "upload",
+        "bytes": 20381696,
+        "firmware_elapsed_ms": 10057,
+        "firmware_mbps": 16.212,
+        "app_mbps": 16.212943024758875,
+        "full_transfer_start_s": 6.666109323501587,
+        "full_transfer_end_s": 16.723109245300293,
+        "window_method": "UART completion receipt time minus firmware elapsed duration; trim 0.5 s at each edge"
+      },
+      {
+        "start_s": 17.25631022453308,
+        "end_s": 26.266310214996338,
+        "observed_samples": 901000,
+        "observed_seconds": 9.01,
+        "window_seconds": 9.009999990463257,
+        "mean_uA": 124856.9098472499,
+        "min_uA": 42180.619673295456,
+        "max_uA": 260575.5060369318,
+        "calculated_mean_power_mW": 412.0278024959247,
+        "direction": "download",
+        "bytes": 26935296,
+        "firmware_elapsed_ms": 10010,
+        "firmware_mbps": 21.526,
+        "app_mbps": 21.534342752430366,
+        "full_transfer_start_s": 16.75631022453308,
+        "full_transfer_end_s": 26.766310214996338,
+        "window_method": "UART completion receipt time minus firmware elapsed duration; trim 0.5 s at each edge"
+      }
+    ],
+    "automatic_sleep": {
+      "start_s": 32.79143929481506,
+      "end_s": 75.13498711585999,
+      "observed_samples": 4131960,
+      "observed_seconds": 41.3196,
+      "window_seconds": 42.34354782104492,
+      "mean_uA": 9.792025593129962,
+      "min_uA": 6.875190628688805,
+      "max_uA": 15.349733993499937,
+      "calculated_mean_power_mW": 0.03231368445732887,
+      "low_current_drop_to_rise_span_s": 43.75498723983765,
+      "current_rise_to_nan_ready_ms": 280.4827690124512,
+      "configured_wake_seconds": 30.0,
+      "late_10s": {
+        "start_s": 65.13498711585999,
+        "end_s": 75.13498711585999,
+        "observed_samples": 1000000,
+        "observed_seconds": 10.0,
+        "window_seconds": 10.0,
+        "mean_uA": 8.344822961644196,
+        "min_uA": 6.875190628688805,
+        "max_uA": 10.500897326004907,
+        "calculated_mean_power_mW": 0.027537915773425847
+      }
+    },
+    "post_wake_saved_pair_reconnect": {
+      "startedAt": "2026-11-18T08:06:41Z",
+      "finished": true,
+      "cancelled": false,
+      "error": null,
+      "rounds": [
+        {
+          "discoverySeconds": 1.6742964583681896,
+          "elapsedSeconds": 3.4505645416793413,
+          "number": 1,
+          "readySeconds": 3.445565833360888,
+          "startedAt": "2026-11-18T08:06:41Z",
+          "success": true
+        }
+      ]
+    },
+    "diagnostic_counts": {
+      "fault": 0,
+      "allocation_failure": 0,
+      "stack_overflow": 0,
+      "macid_full": 0,
+      "cache_error": 0,
+      "tcp_abort": 0
+    },
+    "limits": [
+      "Current conversion uses vendor SDK range-switch filtering; negative samples retained.",
+      "Power is calculated using the configured 3.3 V; no independent voltage measurement.",
+      "BLU Calibrated=0; calibration state unconfirmed.",
+      "Two standard skill captures have an explicit gap; no samples are synthesized across it.",
+      "Transfer statistics exclude 0.5 s at each edge because UART/power alignment uses host timestamps.",
+      "Single board/round, not a controlled comparison against the previous RF power setting."
+    ]
+  },
+  "rf_hardware": [
+    {
+      "channel": 6,
+      "words_hex": [
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000"
+      ],
+      "write_guard": 0
+    },
+    {
+      "channel": 149,
+      "words_hex": [
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000"
+      ],
+      "write_guard": 0
+    },
+    {
+      "channel": 36,
+      "words_hex": [
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000"
+      ],
+      "write_guard": 0
+    },
+    {
+      "channel": 6,
+      "words_hex": [
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000"
+      ],
+      "write_guard": 0
+    },
+    {
+      "channel": 149,
+      "words_hex": [
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000"
+      ],
+      "write_guard": 0
+    },
+    {
+      "channel": 36,
+      "words_hex": [
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000"
+      ],
+      "write_guard": 0
+    },
+    {
+      "channel": 6,
+      "words_hex": [
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000"
+      ],
+      "write_guard": 0
+    },
+    {
+      "channel": 36,
+      "words_hex": [
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000"
+      ],
+      "write_guard": 0
+    },
+    {
+      "channel": 149,
+      "words_hex": [
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000"
+      ],
+      "write_guard": 0
+    },
+    {
+      "channel": 6,
+      "words_hex": [
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000"
+      ],
+      "write_guard": 0
+    },
+    {
+      "channel": 149,
+      "words_hex": [
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000"
+      ],
+      "write_guard": 0
+    },
+    {
+      "channel": 149,
+      "words_hex": [
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000"
+      ],
+      "write_guard": 0
+    },
+    {
+      "channel": 6,
+      "words_hex": [
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000"
+      ],
+      "write_guard": 0
+    },
+    {
+      "channel": 36,
+      "words_hex": [
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000"
+      ],
+      "write_guard": 0
+    },
+    {
+      "channel": 6,
+      "words_hex": [
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000"
+      ],
+      "write_guard": 0
+    },
+    {
+      "channel": 149,
+      "words_hex": [
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000"
+      ],
+      "write_guard": 0
+    }
+  ],
+  "rf_lines": [
+    "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=0 tpc=0/0 samples=82",
+    "[NAN-RF] ch=6 target_qdbm valid=0xff OFDM6=0 OFDM54=0 HT0=0 HT7=0 HE0=0 HE7=0 HE8=0 HE9=0",
+    "[NAN-RF] ch=6 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff",
+    "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=0 tpc=0/0 samples=81",
+    "[NAN-RF] ch=149 target_qdbm valid=0xff OFDM6=0 OFDM54=0 HT0=0 HT7=0 HE0=0 HE7=0 HE8=0 HE9=0",
+    "[NAN-RF] ch=149 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff",
+    "[NAN-RF] ch=36 center=36 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=0 tpc=0/0 samples=3",
+    "[NAN-RF] ch=36 target_qdbm valid=0xff OFDM6=0 OFDM54=0 HT0=0 HT7=0 HE0=0 HE7=0 HE8=0 HE9=0",
+    "[NAN-RF] ch=36 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff",
+    "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=0 tpc=0/0 samples=20",
+    "[NAN-RF] ch=6 target_qdbm valid=0xff OFDM6=0 OFDM54=0 HT0=0 HT7=0 HE0=0 HE7=0 HE8=0 HE9=0",
+    "[NAN-RF] ch=6 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff",
+    "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=0 tpc=0/0 samples=20",
+    "[NAN-RF] ch=149 target_qdbm valid=0xff OFDM6=0 OFDM54=0 HT0=0 HT7=0 HE0=0 HE7=0 HE8=0 HE9=0",
+    "[NAN-RF] ch=149 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff",
+    "[NAN-RF] ch=36 center=36 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=0 tpc=0/0 samples=31",
+    "[NAN-RF] ch=36 target_qdbm valid=0xff OFDM6=0 OFDM54=0 HT0=0 HT7=0 HE0=0 HE7=0 HE8=0 HE9=0",
+    "[NAN-RF] ch=36 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff",
+    "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=0 tpc=0/0 samples=24",
+    "[NAN-RF] ch=6 target_qdbm valid=0xff OFDM6=0 OFDM54=0 HT0=0 HT7=0 HE0=0 HE7=0 HE8=0 HE9=0",
+    "[NAN-RF] ch=6 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff",
+    "[NAN-RF] ch=36 center=36 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=0 tpc=0/0 samples=44",
+    "[NAN-RF] ch=36 target_qdbm valid=0xff OFDM6=0 OFDM54=0 HT0=0 HT7=0 HE0=0 HE7=0 HE8=0 HE9=0",
+    "[NAN-RF] ch=36 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff",
+    "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=0 tpc=0/0 samples=27",
+    "[NAN-RF] ch=149 target_qdbm valid=0xff OFDM6=0 OFDM54=0 HT0=0 HT7=0 HE0=0 HE7=0 HE8=0 HE9=0",
+    "[NAN-RF] ch=149 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff",
+    "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=0 tpc=0/0 samples=10",
+    "[NAN-RF] ch=6 target_qdbm valid=0xff OFDM6=0 OFDM54=0 HT0=0 HT7=0 HE0=0 HE7=0 HE8=0 HE9=0",
+    "[NAN-RF] ch=6 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff",
+    "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=0 tpc=0/0 samples=8",
+    "[NAN-RF] ch=149 target_qdbm valid=0xff OFDM6=0 OFDM54=0 HT0=0 HT7=0 HE0=0 HE7=0 HE8=0 HE9=0",
+    "[NAN-RF] ch=149 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff",
+    "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=0 tpc=0/0 samples=77",
+    "[NAN-RF] ch=149 target_qdbm valid=0xff OFDM6=0 OFDM54=0 HT0=0 HT7=0 HE0=0 HE7=0 HE8=0 HE9=0",
+    "[NAN-RF] ch=149 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff",
+    "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=0 tpc=0/0 samples=75",
+    "[NAN-RF] ch=6 target_qdbm valid=0xff OFDM6=0 OFDM54=0 HT0=0 HT7=0 HE0=0 HE7=0 HE8=0 HE9=0",
+    "[NAN-RF] ch=6 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff",
+    "[NAN-RF] ch=36 center=36 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=0 tpc=0/0 samples=1",
+    "[NAN-RF] ch=36 target_qdbm valid=0xff OFDM6=0 OFDM54=0 HT0=0 HT7=0 HE0=0 HE7=0 HE8=0 HE9=0",
+    "[NAN-RF] ch=36 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff",
+    "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=0 tpc=0/0 samples=70",
+    "[NAN-RF] ch=6 target_qdbm valid=0xff OFDM6=0 OFDM54=0 HT0=0 HT7=0 HE0=0 HE7=0 HE8=0 HE9=0",
+    "[NAN-RF] ch=6 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff",
+    "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=0 tpc=0/0 samples=71",
+    "[NAN-RF] ch=149 target_qdbm valid=0xff OFDM6=0 OFDM54=0 HT0=0 HT7=0 HE0=0 HE7=0 HE8=0 HE9=0",
+    "[NAN-RF] ch=149 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff"
+  ],
+  "diagnostic_review": {
+    "saved_pair_auth_count": 2,
+    "new_pair_auth_count": 0,
+    "warning_lines": [
+      "[NAN-W] dw early: nanctrl_propagation"
+    ],
+    "error_tags": 0
+  },
+  "discovery": {
+    "sample_count": 499712,
+    "sample_rate_hz": 100000,
+    "sample_duration_s": 4.99712,
+    "ignored_tail_bytes": 0,
+    "discarded_warmup_s": 1.0,
+    "statistics_duration_s": 3.99712,
+    "mean_uA": 51388.94317900745,
+    "min_uA": 36130.45486749388,
+    "max_uA": 249922.0969460227,
+    "calibrated_flag": "0",
+    "conversion": "vendor SDK get_samples; includes SDK range-switch filtering",
+    "assumed_voltage_mv": 3300,
+    "calculated_mean_power_mW": 169.5835124907246
+  },
+  "comparison": {
+    "rows": [
+      {
+        "setting": "default",
+        "label": "Default tables",
+        "direction": "upload",
+        "mean_mA": 66.40978291894015,
+        "calculated_mean_mW": 219.1522836325025,
+        "mbps": 17.782196936542668,
+        "window_s": 9.054
+      },
+      {
+        "setting": "default",
+        "label": "Default tables",
+        "direction": "download",
+        "mean_mA": 134.69185925447348,
+        "calculated_mean_mW": 444.48313553976243,
+        "mbps": 23.849607758568983,
+        "window_s": 9.007
+      },
+      {
+        "setting": "power8",
+        "label": "8 dBm",
+        "direction": "upload",
+        "mean_mA": 64.74205088353966,
+        "calculated_mean_mW": 213.64876791568088,
+        "mbps": 15.633277010237551,
+        "window_s": 9.061
+      },
+      {
+        "setting": "power8",
+        "label": "8 dBm",
+        "direction": "download",
+        "mean_mA": 124.68556802742864,
+        "calculated_mean_mW": 411.4623744905145,
+        "mbps": 21.334687324182056,
+        "window_s": 9.011
+      },
+      {
+        "setting": "power0",
+        "label": "0 dBm",
+        "direction": "upload",
+        "mean_mA": 64.89576562472554,
+        "calculated_mean_mW": 214.15602656159427,
+        "mbps": 16.212943024758875,
+        "window_s": 9.057
+      },
+      {
+        "setting": "power0",
+        "label": "0 dBm",
+        "direction": "download",
+        "mean_mA": 124.85690984724991,
+        "calculated_mean_mW": 412.0278024959247,
+        "mbps": 21.534342752430366,
+        "window_s": 9.01
+      }
+    ],
+    "power0_changes": {
+      "upload": {
+        "default": {
+          "current_change_mA": -1.5140172942146108,
+          "current_change_percent": -2.2798106358254855,
+          "throughput_change_percent": -8.824859590655832
+        },
+        "power8": {
+          "current_change_mA": 0.1537147411858797,
+          "current_change_percent": 0.23742643164392785,
+          "throughput_change_percent": 3.7078983129495313
+        }
+      },
+      "download": {
+        "default": {
+          "current_change_mA": -9.834949407223576,
+          "current_change_percent": -7.3018142756811955,
+          "throughput_change_percent": -9.707769744375605
+        },
+        "power8": {
+          "current_change_mA": 0.17134181982126506,
+          "current_change_percent": 0.1374191275958836,
+          "throughput_change_percent": 0.9358254246454756
+        }
+      }
+    },
+    "air_rssi": {
+      "default": {
+        "samples": 41,
+        "mean_rssi_dbm": -36.90243902439025,
+        "median_rssi_dbm": -37.0,
+        "min_rssi_dbm": -39.0,
+        "max_rssi_dbm": -36.0,
+        "first_epoch": "1794988893.965760000",
+        "last_epoch": "1794988904.451489000",
+        "values_dbm": [
+          -36.0,
+          -36.0,
+          -38.0,
+          -39.0,
+          -39.0,
+          -39.0,
+          -39.0,
+          -39.0,
+          -36.0,
+          -37.0,
+          -36.0,
+          -37.0,
+          -37.0,
+          -37.0,
+          -37.0,
+          -37.0,
+          -36.0,
+          -36.0,
+          -36.0,
+          -37.0,
+          -37.0,
+          -36.0,
+          -36.0,
+          -36.0,
+          -37.0,
+          -36.0,
+          -36.0,
+          -36.0,
+          -36.0,
+          -37.0,
+          -36.0,
+          -37.0,
+          -36.0,
+          -37.0,
+          -37.0,
+          -37.0,
+          -37.0,
+          -37.0,
+          -37.0,
+          -38.0,
+          -37.0
+        ],
+        "unique_sequence_count": 41
+      },
+      "power8": {
+        "samples": 50,
+        "mean_rssi_dbm": -45.36,
+        "median_rssi_dbm": -45.0,
+        "min_rssi_dbm": -48.0,
+        "max_rssi_dbm": -44.0,
+        "first_epoch": "1794989500.207894000",
+        "last_epoch": "1794989510.448565000",
+        "values_dbm": [
+          -44.0,
+          -44.0,
+          -44.0,
+          -47.0,
+          -46.0,
+          -45.0,
+          -45.0,
+          -45.0,
+          -46.0,
+          -45.0,
+          -45.0,
+          -45.0,
+          -47.0,
+          -45.0,
+          -47.0,
+          -45.0,
+          -48.0,
+          -46.0,
+          -45.0,
+          -46.0,
+          -47.0,
+          -45.0,
+          -45.0,
+          -45.0,
+          -46.0,
+          -45.0,
+          -46.0,
+          -47.0,
+          -45.0,
+          -45.0,
+          -45.0,
+          -44.0,
+          -45.0,
+          -48.0,
+          -45.0,
+          -46.0,
+          -46.0,
+          -45.0,
+          -48.0,
+          -44.0,
+          -44.0,
+          -45.0,
+          -45.0,
+          -44.0,
+          -45.0,
+          -45.0,
+          -44.0,
+          -44.0,
+          -46.0,
+          -44.0
+        ],
+        "unique_sequence_count": 50
+      },
+      "power0": {
+        "samples": 43,
+        "mean_rssi_dbm": -54.02325581395349,
+        "median_rssi_dbm": -54.0,
+        "min_rssi_dbm": -56.0,
+        "max_rssi_dbm": -52.0,
+        "first_epoch": "1794989044.657517000",
+        "last_epoch": "1794989055.297763000",
+        "values_dbm": [
+          -54.0,
+          -53.0,
+          -55.0,
+          -53.0,
+          -53.0,
+          -53.0,
+          -55.0,
+          -55.0,
+          -55.0,
+          -55.0,
+          -55.0,
+          -54.0,
+          -54.0,
+          -54.0,
+          -54.0,
+          -54.0,
+          -55.0,
+          -53.0,
+          -53.0,
+          -54.0,
+          -52.0,
+          -52.0,
+          -52.0,
+          -53.0,
+          -54.0,
+          -54.0,
+          -54.0,
+          -54.0,
+          -54.0,
+          -55.0,
+          -55.0,
+          -55.0,
+          -54.0,
+          -54.0,
+          -56.0,
+          -54.0,
+          -54.0,
+          -55.0,
+          -54.0,
+          -54.0,
+          -54.0,
+          -55.0,
+          -54.0
+        ],
+        "unique_sequence_count": 43
+      },
+      "change_db": -17.120816789563243,
+      "power0_vs_power8_db": -8.66325581395349,
+      "method": {
+        "transmitter": "24:44:e3:71:2a:04",
+        "channel": 6,
+        "frequency_mhz": 2437,
+        "frame": "NAN beacon",
+        "rate_mbps": 6,
+        "receiver": "RouterOS wifi2",
+        "capture_order": [
+          "default",
+          "power0",
+          "power8"
+        ],
+        "absolute_tx_power_measured": false
+      }
+    },
+    "scope": [
+      "Single sequential measured round per setting; throughput/scheduling not fixed.",
+      "Air comparison is channel 6, 6 Mbps NAN beacons from the same transmitter and receiver; no absolute RF output calibration.",
+      "5 GHz transfer has MAC power-register readback but no 5 GHz over-air capture in this test.",
+      "BLU Calibrated=0, 3.3 V setting without independent voltage measurement.",
+      "0 dBm image additionally reads hardware power registers; no per-packet logging or allocation."
+    ]
+  },
+  "download_current_shape": {
+    "threshold_mA": 100,
+    "interpretation": "Supply-current amplitude classification only; this is not a direct measurement of RF TX duty cycle.",
+    "cases": {
+      "default": {
+        "samples": 900700,
+        "mean_mA": 134.69185925447348,
+        "fraction_at_or_above_100mA": 0.3617108915288109,
+        "high_mean_mA": 261.2294283859806,
+        "low_mean_mA": 62.98451483170408,
+        "p95_mA": 287.2090287642045,
+        "p99_mA": 296.9746537642045,
+        "sdk_filtered_max_mA": 363.1145685369318
+      },
+      "power8": {
+        "samples": 901100,
+        "mean_mA": 124.68556802742863,
+        "fraction_at_or_above_100mA": 0.33626678504050606,
+        "high_mean_mA": 246.76122426950303,
+        "low_mean_mA": 62.83844702906556,
+        "p95_mA": 259.6877219460227,
+        "p99_mA": 263.2388583096591,
+        "sdk_filtered_max_mA": 272.5605912642045
+      },
+      "power0": {
+        "samples": 901000,
+        "mean_mA": 124.8569098472499,
+        "fraction_at_or_above_100mA": 0.3592974472807991,
+        "high_mean_mA": 235.44477604711082,
+        "low_mean_mA": 62.840709260556274,
+        "p95_mA": 248.59042080965907,
+        "p99_mA": 251.6976651278409,
+        "sdk_filtered_max_mA": 260.5755060369318
+      }
+    }
+  },
+  "router_restored": [
+    {
+      "capture": "default",
+      "remote_file": "nan-power-default-20261118.pcap",
+      "capture_command_completed": true,
+      "restore_response": "",
+      "frequency_after": "2472",
+      "width_after": "20/40mhz",
+      "pcap_bytes": 436328
+    },
+    {
+      "capture": "power8",
+      "remote_file": "nan-power-power8-20261118.pcap",
+      "capture_command_completed": true,
+      "restore_response": "",
+      "frequency_after": "2472",
+      "width_after": "20/40mhz",
+      "pcap_bytes": 439971
+    },
+    {
+      "capture": "power0",
+      "remote_file": "nan-power-power0-20261118.pcap",
+      "capture_command_completed": true,
+      "restore_response": "",
+      "frequency_after": "2472",
+      "width_after": "20/40mhz",
+      "pcap_bytes": 374138
+    }
+  ],
+  "private_evidence_directory": "build/green2-blu-com15-power0-20261118",
+  "evidence_sha256": {
+    "initial-programming/flash.log": "c8336640c27feb83f3d95af0e6b508bbd46365cb3934752aeedd2bf0492a0b6d",
+    "initial-programming/boot.log": "185255f6e9bc202f4499c68155c31e9e541cd96e1e7e81eec126eb8e927a93e5",
+    "metadata.txt": "9b9b0bc527bf3073afacb684fc3d599443b6cd3db23751b1b78f6bd5ebff6808",
+    "router-default.pcap": "fe295fa26c88529d53bec5f08c1aa5e7b351d25a4ee7ab074a029bf1b3ce6423",
+    "router-power8.pcap": "6407ffabc3af397441bf26976f58fc4404e4081c7484eec6691bbba31983e1d3",
+    "router-power0.pcap": "29713c844e76cb637d169591f602fac293dea0724e8204454e2dff1b3136828a",
+    "air-rssi-comparison.json": "72ba5159532f7f621610b453c63cec8c22212279624648f0505dcbd7804d278c",
+    "traffic/current-1.bin": "eb1301c1a501f92f257670f8c36c4afcb77d6f9837ae0d38882bc0e06a1fa01b",
+    "traffic/current-2.bin": "78823f8d7836b025f2807afec0d02f8711a2901763d501db92cfa7ff4e6b4a55",
+    "traffic/uart.log": "7a078e0d95cabac3f625e0d9670718d53db61b95537b287d9c88d962f4805f35",
+    "traffic/phone-summary.json": "470a45ed47a7fec7f00fe730c80f6348dcea6a4d7da4bb65dfe6f52d5f8b56b4",
+    "traffic/capture-summary.json": "8a9e5c625cdc90e4a3ee02c57b8598e38a118f755ac618cadb2d9837ec8b8c78",
+    "traffic/power-report.json": "e1ee70efc34cab143cd3fb88183b0ab0eda242055469d41b8c9ac5739cb9d032",
+    "comparison.json": "fee41da2fef2e37b42a153f6fd27309ee2a93fb9a28ab8ac7ed1c4e8a6023854",
+    "download-shape.json": "2a7916f6ccd30d44cfc364a6d1647bd13bdc86792b02883f06a64c0f26971937",
+    "reference8-flash.log": "d148b560ce18fa3c928cc48feeb626b564d56057598c48248527f1a0e45a2613",
+    "reference8-boot.log": "c4a2b4eae64f5c97f5550b8ef16fba4eb74f945b505dd6fd200ccc7fd3ceee37",
+    "restored-zero-summary.json": "ee4b77b833e4cc4e8feedf1b1fce80d8d54fd4270600d2960025b0eab8cee61b",
+    "flash.log": "6d3677e1d5347a2d4e9e4edd8b9c0b5428f720b863c98ddc200ac3803334917a",
+    "boot.log": "06b32e3cc93bb3a2660e29eaa5466f77624537dfb9c5ef112ae0cb34d72083b8",
+    "final-state.json": "dea771b892d8ee1ed42f49bb1e6f888984fbe2164f513085b2b910d2f0e25a46",
+    "final-uart.log": "1113924df0685971eb558a69e8b412e7added4ecfe50c325bc7f064571f194dd",
+    "com5-restored.json": "63e93640adb84091b0ded4aeeacd738c87f4a2b093f0a5efc80618c914a843f7",
+    "com5-restored-uart.log": "0c0f550951028c8f5a2d79a48164b5830be9a84e59dd5b5b2a6bc03a3ceec7e9",
+    "router-final.log": "9d222e3caebec65e344e592deb4a8655ff840e25851f7966e1e0ac686d590bf7",
+    "blu-final-status.json": "c1e4fd1015980d72508cb5c2dbc3ffd478870bee61d91aac9c12db4b65f6c120",
+    "nan-power-sweep.png": "a41a591a54b4e092b9f4e1d402a96168e1d93c3ae459febec0212a45f251512a",
+    "nan-power-sweep.svg": "8138849f85ce07d6629956c0d99984ce28ac8c8e801b1151503739e326091790"
+  },
+  "final_restore": {
+    "byte_readback_passed": true,
+    "zero_dbm_reapplied": true,
+    "nan_active": true,
+    "fault": false,
+    "hardware_lines": [
+      "[NAN-RF] ch=6 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff",
+      "[NAN-RF] ch=149 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff",
+      "[NAN-RF] ch=149 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff",
+      "[NAN-RF] ch=6 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff",
+      "[NAN-RF] ch=149 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff",
+      "[NAN-RF] ch=6 mac_power_halfdbm=00000000,00000000,00000000,00000000,00000000,00000000,00000000 write_guard=0 mode=00000000 limit=00000000 ru_limit=002000ff"
+    ],
+    "firmware_sha256": "3ffe201311dc5f3ea86892d16548e05c3e466531e06b30d625e6c336d92d1766",
+    "reason": "Restore the measured 0 dBm firmware after the temporary 8 dBm beacon reference capture."
+  },
+  "final_state": {
+    "nan_responds_after_blu_port_closed": true,
+    "status": "nan: running=1 events=1 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+    "com15_closed": true,
+    "blu_output_commanded_off": false,
+    "blu_voltage_setting_mv": 3300,
+    "blu_serial_open": false,
+    "blu_supply": "Output left on; NAN UART response verified after the BLU serial handle closed. No independent voltage measurement.",
+    "com5": {
+      "before": "nan: running=0 events=6 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+      "after": "nan: running=1 events=7 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+      "restored_by_test": true
+    },
+    "router_wifi2": {
+      "frequency_mhz": 2472,
+      "width": "20/40mhz",
+      "disabled": false
+    },
+    "router_wifi1": {
+      "state": "running",
+      "channel_mhz": 5180,
+      "registered_peers": 2
+    },
+    "test_app_terminated": true,
+    "phone_app_pid": 30821,
+    "remote_test_pcaps_removed": [
+      "nan-power-default-20261118.pcap",
+      "nan-power-power0-20261118.pcap",
+      "nan-power-power8-20261118.pcap"
+    ]
+  },
+  "closure_recorded_at_utc": "2026-11-18T08:17:16.444752+00:00"
+}

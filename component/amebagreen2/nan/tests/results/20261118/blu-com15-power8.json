@@ -1,0 +1,478 @@
+{
+  "test": "COM15 Green2 NAN 8 dBm board supply current with BLU",
+  "recorded_at_utc": "2026-11-18T07:23:03.128069+00:00",
+  "repository_head": "257f32128da77d25feddbf6686ea2355ae8abccf",
+  "source_state": "Local uncommitted NAN fixed 8 dBm and RF diagnostics; fetched commit adds BLU skill only",
+  "firmware": {
+    "bytes": 901024,
+    "sha256": "bdee3d8e0b406d6bc9d3e14861340ee7bd738f44563e06a0ca1abd4be39c6b43",
+    "flags": {
+      "NAN": "ON",
+      "NAN_RADIO_DIAG": "ON",
+      "NAN_DEEP_SLEEP": "ON",
+      "NAN_DEEP_SLEEP_MS": 30000,
+      "MINIMAL": "ON",
+      "NIMBLE": "OFF",
+      "IPERF": "OFF",
+      "TFM": "OFF"
+    }
+  },
+  "fixture": {
+    "board_port": "COM15",
+    "boot_control": "COM15 DTR drives LOG_TX low during BLU power-on; same UART used for programming and logs",
+    "meter_port": "COM10",
+    "meter_vid_pid": "15A2:300A",
+    "voltage_setting_mv": 3300,
+    "voltage_setting_readback_mv": 3300,
+    "board_only_powered_by_meter": "Confirmed by user",
+    "voltage_independently_measured": false,
+    "calibrated_flag": "0"
+  },
+  "setup": {
+    "flash_byte_readback": true,
+    "littlefs_format": "Initially nonblank/corrupt and preserved; user explicitly approved mkfs -y on COM15, completed successfully",
+    "nan_boot_after_format": true,
+    "rf_targets_qdbm": 32,
+    "rf_channels_verified": [
+      6,
+      149
+    ],
+    "calibration_efuse_written": false,
+    "unc_session_failure": "State-file rename failed on WSL UNC; unresolved On request was not replayed. Recovered using a Windows-local session and explicit Off/Voltage/On sequence."
+  },
+  "manual_two_10s_cycles": {
+    "sample_count": 5999616,
+    "sample_rate_hz": 100000,
+    "sample_duration_s": 59.99616,
+    "invalid_range_count": 0,
+    "ignored_tail_bytes": 0,
+    "calibrated_flag": "0",
+    "voltage_setting_mv": 3300,
+    "voltage_independently_measured": false,
+    "conversion": "vendor SDK get_samples with range-switch filter; negative samples retained; no baseline subtraction",
+    "sdk_sha256": "f94da4e9be6447d1a5132dfcefda912b5b015310117e3aa2691eae6e018c35d6",
+    "active_windows": [
+      {
+        "start_s": 1.0,
+        "end_s": 7.20035,
+        "sample_count": 620035,
+        "duration_s": 6.20035,
+        "mean_uA": 52893.0945739059,
+        "min_uA": 39961.15944602273,
+        "max_uA": 69701.92649147726,
+        "calculated_mean_power_mW": 174.54721209388947
+      },
+      {
+        "start_s": 23.40082,
+        "end_s": 30.23219,
+        "sample_count": 683137,
+        "duration_s": 6.83137,
+        "mean_uA": 51500.452007272914,
+        "min_uA": 39961.15944602273,
+        "max_uA": 265014.4264914773,
+        "calculated_mean_power_mW": 169.9514916240006
+      },
+      {
+        "start_s": 46.40476,
+        "end_s": 59.49616,
+        "sample_count": 1309140,
+        "duration_s": 13.0914,
+        "mean_uA": 51284.65774944267,
+        "min_uA": 39517.267400568184,
+        "max_uA": 265014.4264914773,
+        "calculated_mean_power_mW": 169.23937057316078
+      }
+    ],
+    "active_weighted_mean_uA": 51722.853557741,
+    "active_total_statistics_seconds": 26.12312,
+    "active_calculated_mean_power_mW": 170.6854167405453,
+    "deep_sleep_cycles": [
+      {
+        "start_s": 8.45035,
+        "end_s": 21.62,
+        "sample_count": 1316965,
+        "duration_s": 13.16965,
+        "mean_uA": 10.19752045930356,
+        "min_uA": 8.229370238529759,
+        "max_uA": 12.772424413480056,
+        "calculated_mean_power_mW": 0.033651817515701746,
+        "cycle": 1,
+        "configured_wake_seconds": 10,
+        "waveform_low_start_s": 7.53,
+        "waveform_low_end_s": 22.12,
+        "waveform_low_duration_s": 14.59,
+        "uart_entry_s": 7.450350999832153,
+        "uart_boot_reason_s": 22.18408441543579,
+        "uart_nan_ready_s": 22.400824069976807,
+        "current_rise_to_nan_ready_ms": 280.8240699768056,
+        "sleep_boundary_method": "10 ms bin mean below 1000 uA, longest interval near matching UART DSLP event"
+      },
+      {
+        "start_s": 31.48219,
+        "end_s": 44.62,
+        "sample_count": 1313781,
+        "duration_s": 13.13781,
+        "mean_uA": 9.28457296504244,
+        "min_uA": 7.57412204021962,
+        "max_uA": 11.76771050940451,
+        "calculated_mean_power_mW": 0.03063909078464005,
+        "cycle": 2,
+        "configured_wake_seconds": 10,
+        "waveform_low_start_s": 30.560000000000002,
+        "waveform_low_end_s": 45.12,
+        "waveform_low_duration_s": 14.559999999999995,
+        "uart_entry_s": 30.482197284698486,
+        "uart_boot_reason_s": 45.19557785987854,
+        "uart_nan_ready_s": 45.40476632118225,
+        "current_rise_to_nan_ready_ms": 284.76632118225353,
+        "sleep_boundary_method": "10 ms bin mean below 1000 uA, longest interval near matching UART DSLP event"
+      }
+    ],
+    "global_filtered_peak_uA": 265014.4264914773,
+    "limits": [
+      "Board supply current, including the current fixture and peripherals.",
+      "BLU Calibrated=0; instrument calibration state is unconfirmed.",
+      "3.3 V is a configured/readback setting, not an independent voltage measurement.",
+      "Protocol has no frame sequence counter; valid sample framing does not prove zero dropped samples.",
+      "Two manually requested sleep cycles with no phone/NDP/traffic; automatic post-transfer sleep and throughput were not tested.",
+      "Boundary resolution is 10 ms; UART/current alignment uses host receipt times, not chip-internal timing."
+    ]
+  },
+  "manual_30s_cycle": {
+    "sample_count": 5999616,
+    "sample_rate_hz": 100000,
+    "sample_duration_s": 59.99616,
+    "invalid_range_count": 0,
+    "ignored_tail_bytes": 0,
+    "calibrated_flag": "0",
+    "voltage_setting_mv": 3300,
+    "voltage_independently_measured": false,
+    "conversion": "vendor SDK get_samples with range-switch filter; negative samples retained; no baseline subtraction",
+    "sdk_sha256": "f94da4e9be6447d1a5132dfcefda912b5b015310117e3aa2691eae6e018c35d6",
+    "active_windows": [
+      {
+        "start_s": 1.0,
+        "end_s": 6.84495,
+        "sample_count": 584495,
+        "duration_s": 5.84495,
+        "mean_uA": 51798.45764973359,
+        "min_uA": 35574.58954561617,
+        "max_uA": 264126.6424005682,
+        "calculated_mean_power_mW": 170.93491024412083
+      },
+      {
+        "start_s": 52.07972,
+        "end_s": 59.49616,
+        "sample_count": 741644,
+        "duration_s": 7.41644,
+        "mean_uA": 51090.69905090048,
+        "min_uA": 35508.135627297794,
+        "max_uA": 265458.3185369318,
+        "calculated_mean_power_mW": 168.5993068679716
+      }
+    ],
+    "active_weighted_mean_uA": 51402.64324545698,
+    "active_total_statistics_seconds": 13.261389999999999,
+    "active_calculated_mean_power_mW": 169.62872271000802,
+    "deep_sleep_cycles": [
+      {
+        "start_s": 8.09495,
+        "end_s": 50.28,
+        "sample_count": 4218505,
+        "duration_s": 42.18505,
+        "mean_uA": 8.685627641485265,
+        "min_uA": 6.176259217157989,
+        "max_uA": 12.597691560597353,
+        "calculated_mean_power_mW": 0.028662571216901377,
+        "cycle": 1,
+        "configured_wake_seconds": 30,
+        "waveform_low_start_s": 7.16,
+        "waveform_low_end_s": 50.78,
+        "waveform_low_duration_s": 43.620000000000005,
+        "uart_entry_s": 7.094958782196045,
+        "uart_boot_reason_s": 50.86218285560608,
+        "uart_nan_ready_s": 51.07972598075867,
+        "current_rise_to_nan_ready_ms": 299.72598075866586,
+        "sleep_boundary_method": "10 ms bin mean below 1000 uA, longest interval near matching UART DSLP event"
+      }
+    ],
+    "late_sleep_last_10s": {
+      "start_s": 40.28,
+      "end_s": 50.28,
+      "sample_count": 1000000,
+      "duration_s": 10.0,
+      "mean_uA": 7.678242333110711,
+      "min_uA": 6.176259217157989,
+      "max_uA": 9.670916274812065,
+      "calculated_mean_power_mW": 0.025338199699265342
+    },
+    "global_filtered_peak_uA": 266346.10262784094,
+    "limits": [
+      "Board supply current, including the current fixture and peripherals.",
+      "BLU Calibrated=0; instrument calibration state is unconfirmed.",
+      "3.3 V is a configured/readback setting, not an independent voltage measurement.",
+      "Protocol has no frame sequence counter; valid sample framing does not prove zero dropped samples.",
+      "One manually requested sleep cycle with no phone/NDP/traffic; automatic post-transfer sleep and throughput were not tested.",
+      "Boundary resolution is 10 ms; UART/current alignment uses host receipt times, not chip-internal timing."
+    ]
+  },
+  "phone_throughput": {
+    "status": "passed",
+    "measurement": {
+      "passed": true,
+      "voltage_setting_mv": 3300,
+      "voltage_independently_measured": false,
+      "calibrated_flag": "0",
+      "sample_segments": [
+        {
+          "start_s": 0.0,
+          "end_s": 59.99616003036499,
+          "sample_count": 5999616
+        },
+        {
+          "start_s": 60.99898815155029,
+          "end_s": 100.98106813430786,
+          "sample_count": 3998208
+        }
+      ],
+      "gaps": [
+        {
+          "start_s": 59.99616003036499,
+          "end_s": 60.99898815155029,
+          "duration_s": 1.0028281211853027
+        }
+      ],
+      "transfer_phases": [
+        {
+          "start_s": 7.455647230148315,
+          "end_s": 16.516647338867188,
+          "observed_samples": 906100,
+          "observed_seconds": 9.061,
+          "window_seconds": 9.061000108718872,
+          "mean_uA": 64742.05088353966,
+          "min_uA": 39961.15944602273,
+          "max_uA": 267677.77876420453,
+          "calculated_mean_power_mW": 213.64876791568088,
+          "direction": "upload",
+          "bytes": 19660800,
+          "firmware_elapsed_ms": 10061,
+          "firmware_mbps": 15.633,
+          "app_mbps": 15.633277010237551,
+          "full_transfer_start_s": 6.955647230148315,
+          "full_transfer_end_s": 17.016647338867188,
+          "window_method": "UART completion receipt time minus firmware elapsed duration; trim 0.5 s at each edge"
+        },
+        {
+          "start_s": 17.54479217529297,
+          "end_s": 26.555792093276978,
+          "observed_samples": 901100,
+          "observed_seconds": 9.011,
+          "window_seconds": 9.010999917984009,
+          "mean_uA": 124685.56802742864,
+          "min_uA": 36896.38624004289,
+          "max_uA": 272560.59126420453,
+          "calculated_mean_power_mW": 411.4623744905145,
+          "direction": "download",
+          "bytes": 26804224,
+          "firmware_elapsed_ms": 10011,
+          "firmware_mbps": 21.419,
+          "app_mbps": 21.334687324182056,
+          "full_transfer_start_s": 17.04479217529297,
+          "full_transfer_end_s": 27.055792093276978,
+          "window_method": "UART completion receipt time minus firmware elapsed duration; trim 0.5 s at each edge"
+        }
+      ],
+      "automatic_sleep": {
+        "start_s": 33.12413954734802,
+        "end_s": 75.43898820877075,
+        "observed_samples": 4131202,
+        "observed_seconds": 41.31202,
+        "window_seconds": 42.31484866142273,
+        "mean_uA": 9.808370199070998,
+        "min_uA": 6.831507415468129,
+        "max_uA": 15.437100419941288,
+        "calculated_mean_power_mW": 0.03236762165693429,
+        "low_current_drop_to_rise_span_s": 43.72898840904236,
+        "current_rise_to_nan_ready_ms": 287.5232696533203,
+        "configured_wake_seconds": 30.0,
+        "late_10s": {
+          "start_s": 65.43898820877075,
+          "end_s": 75.43898820877075,
+          "observed_samples": 1000000,
+          "observed_seconds": 10.0,
+          "window_seconds": 10.0,
+          "mean_uA": 8.33136040689457,
+          "min_uA": 6.831507415468129,
+          "max_uA": 10.282481259901529,
+          "calculated_mean_power_mW": 0.02749348934275208
+        }
+      },
+      "post_wake_saved_pair_reconnect": {
+        "startedAt": "2026-11-18T07:18:51Z",
+        "finished": true,
+        "cancelled": false,
+        "error": null,
+        "rounds": [
+          {
+            "discoverySeconds": 0.5154203333077021,
+            "elapsedSeconds": 2.1600027916720137,
+            "number": 1,
+            "readySeconds": 2.1520027083461173,
+            "startedAt": "2026-11-18T07:18:51Z",
+            "success": true
+          }
+        ]
+      },
+      "diagnostic_counts": {
+        "fault": 0,
+        "allocation_failure": 0,
+        "stack_overflow": 0,
+        "macid_full": 0,
+        "cache_error": 0,
+        "tcp_abort": 0
+      },
+      "limits": [
+        "Current conversion uses vendor SDK range-switch filtering; negative samples retained.",
+        "Power is calculated using the configured 3.3 V; no independent voltage measurement.",
+        "BLU Calibrated=0; calibration state unconfirmed.",
+        "Two standard skill captures have an explicit gap; no samples are synthesized across it.",
+        "Transfer statistics exclude 0.5 s at each edge because UART/power alignment uses host timestamps.",
+        "Single board/round, not a controlled comparison against the previous RF power setting."
+      ]
+    },
+    "phone": {
+      "throughput": {
+        "startedAt": "2026-11-18T07:17:33Z",
+        "finished": true,
+        "cancelled": false,
+        "error": null,
+        "readySeconds": 2.219724291644525,
+        "discoverySeconds": 0.5898637083009817,
+        "results": [
+          {
+            "bytes": 19660800,
+            "direction": "upload",
+            "mbps": 15.633277010237551,
+            "peerBytes": 19660800,
+            "receiverSeconds": 10.061,
+            "senderSeconds": 10.001981208333746
+          },
+          {
+            "bytes": 26804224,
+            "direction": "download",
+            "mbps": 21.334687324182056,
+            "peerBytes": 26804224,
+            "receiverSeconds": 10.05094608332729,
+            "senderSeconds": 10.011
+          }
+        ]
+      },
+      "auto_sleep_wake": true,
+      "reconnect": {
+        "startedAt": "2026-11-18T07:18:51Z",
+        "finished": true,
+        "cancelled": false,
+        "error": null,
+        "rounds": [
+          {
+            "discoverySeconds": 0.5154203333077021,
+            "elapsedSeconds": 2.1600027916720137,
+            "number": 1,
+            "readySeconds": 2.1520027083461173,
+            "startedAt": "2026-11-18T07:18:51Z",
+            "success": true
+          }
+        ]
+      },
+      "passed": true,
+      "diagnostic_counts": {
+        "fault": 0,
+        "allocation_failure": 0,
+        "stack_overflow": 0,
+        "macid_full": 0,
+        "cache_error": 0,
+        "tcp_abort": 0
+      }
+    },
+    "final_status": "nan: running=1 events=24 dropped=0 link=0 rx=6 tx=6 pong=1 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+    "power_reapplied_after_wake": 1,
+    "rf_diagnostics": [
+      "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=32 tpc=0/0 samples=89",
+      "[NAN-RF] ch=6 target_qdbm valid=0xff OFDM6=32 OFDM54=32 HT0=32 HT7=32 HE0=32 HE7=32 HE8=32 HE9=32",
+      "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=32 tpc=0/0 samples=89",
+      "[NAN-RF] ch=149 target_qdbm valid=0xff OFDM6=32 OFDM54=32 HT0=32 HT7=32 HE0=32 HE7=32 HE8=32 HE9=32",
+      "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=32 tpc=0/0 samples=44",
+      "[NAN-RF] ch=149 target_qdbm valid=0xff OFDM6=32 OFDM54=32 HT0=32 HT7=32 HE0=32 HE7=32 HE8=32 HE9=32",
+      "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=32 tpc=0/0 samples=42",
+      "[NAN-RF] ch=6 target_qdbm valid=0xff OFDM6=32 OFDM54=32 HT0=32 HT7=32 HE0=32 HE7=32 HE8=32 HE9=32",
+      "[NAN-RF] ch=36 center=36 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=32 tpc=0/0 samples=17",
+      "[NAN-RF] ch=36 target_qdbm valid=0xff OFDM6=32 OFDM54=32 HT0=32 HT7=32 HE0=32 HE7=32 HE8=32 HE9=32",
+      "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=32 tpc=0/0 samples=19",
+      "[NAN-RF] ch=6 target_qdbm valid=0xff OFDM6=32 OFDM54=32 HT0=32 HT7=32 HE0=32 HE7=32 HE8=32 HE9=32",
+      "[NAN-RF] ch=36 center=36 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=32 tpc=0/0 samples=38",
+      "[NAN-RF] ch=36 target_qdbm valid=0xff OFDM6=32 OFDM54=32 HT0=32 HT7=32 HE0=32 HE7=32 HE8=32 HE9=32",
+      "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=32 tpc=0/0 samples=20",
+      "[NAN-RF] ch=149 target_qdbm valid=0xff OFDM6=32 OFDM54=32 HT0=32 HT7=32 HE0=32 HE7=32 HE8=32 HE9=32",
+      "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=32 tpc=0/0 samples=10",
+      "[NAN-RF] ch=6 target_qdbm valid=0xff OFDM6=32 OFDM54=32 HT0=32 HT7=32 HE0=32 HE7=32 HE8=32 HE9=32",
+      "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=32 tpc=0/0 samples=8",
+      "[NAN-RF] ch=149 target_qdbm valid=0xff OFDM6=32 OFDM54=32 HT0=32 HT7=32 HE0=32 HE7=32 HE8=32 HE9=32",
+      "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=32 tpc=0/0 samples=74",
+      "[NAN-RF] ch=149 target_qdbm valid=0xff OFDM6=32 OFDM54=32 HT0=32 HT7=32 HE0=32 HE7=32 HE8=32 HE9=32",
+      "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=32 tpc=0/0 samples=74",
+      "[NAN-RF] ch=6 target_qdbm valid=0xff OFDM6=32 OFDM54=32 HT0=32 HT7=32 HE0=32 HE7=32 HE8=32 HE9=32",
+      "[NAN-RF] ch=36 center=36 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=32 tpc=0/0 samples=1",
+      "[NAN-RF] ch=36 target_qdbm valid=0xff OFDM6=32 OFDM54=32 HT0=32 HT7=32 HE0=32 HE7=32 HE8=32 HE9=32",
+      "[NAN-RF] ch=149 center=149 bw_code=0 band=1 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=32 tpc=0/0 samples=70",
+      "[NAN-RF] ch=149 target_qdbm valid=0xff OFDM6=32 OFDM54=32 HT0=32 HT7=32 HE0=32 HE7=32 HE8=32 HE9=32",
+      "[NAN-RF] ch=6 center=6 bw_code=0 band=0 reg=11 table=2 efuse_sel=1 byrate=1 limit=0 force=1 force_qdbm=32 tpc=0/0 samples=71",
+      "[NAN-RF] ch=6 target_qdbm valid=0xff OFDM6=32 OFDM54=32 HT0=32 HT7=32 HE0=32 HE7=32 HE8=32 HE9=32"
+    ],
+    "saved_pair_PASN_type2_count": 2,
+    "fresh_pair_PASN_type1_count": 0,
+    "capture_retry": "First throughput completed but BLU session was open=false; recorder exited before payload capture. That attempt has no usable power measurement. Closed the disconnected server with Stop and restarted Serve, verified 2 s/3 s captures, then repeated without changing power output/voltage or firmware.",
+    "diagnostic_review": {
+      "saved_pair_auth_count": 2,
+      "new_pair_auth_count": 0,
+      "warnings": [
+        "[NAN-W] dw early: nanctrl_propagation"
+      ],
+      "warning_tag_count": 1,
+      "error_tag_count": 0
+    }
+  },
+  "private_evidence_directory": "build/green2-blu-com15-20261118",
+  "evidence_sha256": {
+    "flash.log": "cc831ddc32e744a74ba01dd55125a9212552c50a349ea4db45a699d8ee4e21a5",
+    "storage-init-uart.log": "c2bb0e85836b0394be57b643df8bbaa96fb2cda7c20b0d66ab8c8cf65fd0676e",
+    "recovery-boot-uart.log": "09a224bc0bc67605f1347570ad16d8d501ef9c1c80caa574ae164f93d0f52a46",
+    "metadata.txt": "9b9b0bc527bf3073afacb684fc3d599443b6cd3db23751b1b78f6bd5ebff6808",
+    "cycles/current.bin": "38fed9b8218540849746abd26fb29f2caeb80c3d2544978c58d4d61bb62ae5d5",
+    "cycles/uart.log": "a70770137b4c6c1fde1d9733fee3d5ca7f5b6a9c061e3e9d5193e968aa69b965",
+    "long/current.bin": "cc655dfd06f4f8abc6b7a8f3a6ad73da344c93b5af4ede7d8b8785c2cfe06f8e",
+    "long/uart.log": "c59b7e7235b6f9c01500faf3fbb9a314e319a80b4ad5dc1a0fcdabcc48823a6c",
+    "traffic/current-1.bin": "31c916ca90d2fcb8f16331f5650a6adaf123a99a87ac4dd5d1110499313124ac",
+    "traffic/current-2.bin": "bb59cafc384889db88d1166b5bac1205be8c7ccc9dd52beefdf2a5bf70bd8f32",
+    "traffic/uart.log": "79013d3517c9f9cf83a3a43499c4a51f2a51cef892e408d23b122e144959babb",
+    "traffic/phone-summary.json": "37124cae0757ba27d1ca7e5f9a57820283c025c856f5a418eba47dbccd8e4ccf",
+    "traffic/capture-summary.json": "714f826032f8cb7dda602fe4a8184ab796b85abc8d042dcf8929189b97c6f6bf",
+    "traffic/power-report.json": "913cea8f8a4564fda335ce076a9fa787e34b99f881ed1893206008ecda9c7572",
+    "traffic/diagnostic-review.json": "065b9b061df33c151f27fdeb48187147ab192d7d8426643cdf4105df729493c6"
+  },
+  "completed_8dbm_test_cleanup": {
+    "blu_serial_closed": true,
+    "board_power_remained_on": true,
+    "com15": {
+      "nan_responds_after_blu_port_closed": true,
+      "status": "nan: running=1 events=24 dropped=0 link=0 rx=6 tx=6 pong=1 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+      "com15_closed": true,
+      "blu_output_commanded_off": false
+    },
+    "com5": {
+      "before": "nan: running=1 events=2 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+      "after": "nan: running=1 events=2 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+      "restored_by_test": true
+    },
+    "test_app_terminated": true
+  }
+}

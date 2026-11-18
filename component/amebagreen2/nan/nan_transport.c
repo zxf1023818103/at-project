@@ -1,6 +1,7 @@
 #include "ameba_soc.h"
 #include "FreeRTOS.h"
 #include "wifi_api.h"
+#include "wifi_api_ext.h"
 #include "wifi_intf_drv_to_app_internal.h"
 #include "whc_ipc_host_nan.h"
 #include "lfs_port.h"
@@ -8,6 +9,7 @@
 #include "nan_platform.h"
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #ifdef AT_NAN_HEAP_CHECKS
 #include "mm.h"
 #include "tlsf/tlsf.h"
@@ -29,7 +31,30 @@ int green2_nan_radio_enable(void)
 int green2_nan_radio_ready(void)
 { extern int amebagreen2_wifi_ready(void); return amebagreen2_wifi_ready(); }
 int green2_nan_radio_start(void)
-{ return whc_host_nan_start(112, RTW_SUPPORT_BAND_2_4G_5G_BOTH); }
+{
+    enum { NAN_TX_POWER_DBM = 0 };
+    struct rtw_tx_power_ctl_info power = {
+        .tx_pwr_force = NAN_TX_POWER_DBM * 4,
+        .b_tx_pwr_force_enbale = 1,
+    };
+    /* Force zero dBm explicitly; the separate enable flag keeps zero from
+     * meaning "use the default table". Reapply after every NAN/deep-sleep boot. */
+    int rc = wifi_set_tx_power(&power);
+    printf("[NAN] fixed TX power=%d dBm rc=%d\n", NAN_TX_POWER_DBM, rc);
+    if (rc != RTK_SUCCESS) return rc;
+    return whc_host_nan_start(112, RTW_SUPPORT_BAND_2_4G_5G_BOTH);
+}
+#ifdef AT_GREEN2_NAN_TICKLESS
+void green2_nan_tickless_enable(void)
+{
+    /* Radio/IPC are initialized. Release only the boot veto; other clients'
+     * locks remain authoritative, and automatic DSLP still requires teardown. */
+    pmu_set_sleep_type(SLEEP_CG);
+    pmu_set_sysactive_time(0);
+    pmu_release_wakelock(PMU_OS);
+    printf("[NAN-PM] AP tickless=%u CG enabled\n", configUSE_TICKLESS_IDLE);
+}
+#endif
 int green2_nan_send(const void *data, size_t len)
 {
     struct eth_drv_sg;

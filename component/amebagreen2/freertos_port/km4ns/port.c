@@ -1020,14 +1020,17 @@ void vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuffer,
 
 static TickType_t sleep_budget;
 volatile uint32_t green2_sleep_count, green2_sleep_ms;
-void pmu_post_sleep_processing(uint32_t *tick_before_sleep)
+#ifdef AT_GREEN2_NAN_TICKLESS
+volatile uint32_t green2_idle_wfi_count, green2_idle_wfi_ms;
+#endif
+static uint32_t step_sleep_ticks(uint32_t tick_before_sleep)
 {
 	uint32_t tick_passed;
 	volatile uint32_t ms_passed = 0;
 	static uint32_t missing_tick = 0;
 	/*  update kernel tick by calculating passed tick from gtimer */
 	/*  get current gtimer timestamp */
-	tick_passed = SYSTIMER_GetPassTick(*tick_before_sleep);
+	tick_passed = SYSTIMER_GetPassTick(tick_before_sleep);
 
 	uint64_t scaled = (uint64_t)tick_passed * configTICK_RATE_HZ + missing_tick;
 	ms_passed = scaled >> 15;
@@ -1037,6 +1040,12 @@ void pmu_post_sleep_processing(uint32_t *tick_before_sleep)
 	TickType_t step = ms_passed < sleep_budget ? ms_passed : sleep_budget - 1;
 	vTaskStepTick(step);
 	for (uint32_t i = step; i < ms_passed; ++i) (void)xTaskIncrementTick();
+	return ms_passed;
+}
+
+void pmu_post_sleep_processing(uint32_t *tick_before_sleep)
+{
+	uint32_t ms_passed = step_sleep_ticks(*tick_before_sleep);
 	if (cur_device_id == PMU_MAX) {
 		++green2_sleep_count;
 		green2_sleep_ms += ms_passed;
@@ -1054,7 +1063,7 @@ void pmu_post_sleep_processing(uint32_t *tick_before_sleep)
 /* not use systick like FreeRTOS default implementation */
 void vPortSuppressTicksAndSleep(TickType_t xExpectedIdleTime)
 {
-#ifdef AT_GREEN2_BLE_SLEEP
+#if defined(AT_GREEN2_NAN_TICKLESS) || defined(AT_GREEN2_BLE_SLEEP)
 	if (xExpectedIdleTime > pdMS_TO_TICKS(500)) xExpectedIdleTime = pdMS_TO_TICKS(500);
 #else
 	if (xExpectedIdleTime > pdMS_TO_TICKS(50)) xExpectedIdleTime = pdMS_TO_TICKS(50);
@@ -1088,10 +1097,30 @@ void vPortSuppressTicksAndSleep(TickType_t xExpectedIdleTime)
 	} else {
 
 		SOCPS_HWSleepFilter(DISABLE);
+#ifdef AT_GREEN2_NAN_TICKLESS
+		/* The pinned Wi-Fi firmware holds a PMU lock while NAN is active.
+		 * Keep RF, clocks and all driver locks intact: suppress only this
+		 * CPU's periodic SysTick and wait for a device IRQ or its PMC timer.
+		 * No system-sleep callbacks run because no power domain is changed. */
+		tick_before_sleep = SYSTIMER_TickGet();
+		Systick_Cmd(DISABLE);
+		PMCTimer_Cmd(PMC_TIMER_DEV, PMC_WAKEUP_TIMER, DISABLE);
+		PMCTimer_INTClear(PMC_TIMER_DEV, PMC_WAKEUP_TIMER);
+		pmu_set_wakeup_timer(xExpectedIdleTime * portTICK_PERIOD_MS);
+#endif
 		__DSB();
 		__WFI();
 		__NOP();	 //fix cpu fused instruction issue
 		__ISB();
+#ifdef AT_GREEN2_NAN_TICKLESS
+		/* Stop an unexpired alarm after early packet/IPC wake. Avoid the
+		 * asynchronous reset, which requires three 32 kHz clocks before reuse. */
+		PMCTimer_Cmd(PMC_TIMER_DEV, PMC_WAKEUP_TIMER, DISABLE);
+		PMCTimer_INTClear(PMC_TIMER_DEV, PMC_WAKEUP_TIMER);
+		green2_idle_wfi_ms += step_sleep_ticks(tick_before_sleep);
+		++green2_idle_wfi_count;
+		Systick_Cmd(ENABLE);
+#endif
 	}
 
 	system_can_yield = 1;

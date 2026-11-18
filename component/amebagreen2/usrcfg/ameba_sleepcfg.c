@@ -36,7 +36,11 @@ struct WakeEvent_TypeDef sleep_wevent_config[] = {
 	{WAKE_SRC_GPIOC,						WAKEUP_NULL},
 	{WAKE_SRC_GPIOB,						WAKEUP_NULL},
 	{WAKE_SRC_GPIOA,						WAKEUP_AP},
+#ifdef AT_GREEN2_NAN_TICKLESS
+	{WAKE_SRC_UART_LOG,						WAKEUP_AP},
+#else
 	{WAKE_SRC_UART_LOG,						WAKEUP_NULL},
+#endif
 	{WAKE_SRC_UART3,						WAKEUP_NULL},
 	{WAKE_SRC_UART2,						WAKEUP_NULL},
 	{WAKE_SRC_UART1,						WAKEUP_NULL},

@@ -196,7 +196,13 @@ void app_start(void)
 	data_flash_highspeed_setup();
 
 	SystemCoreClockUpdate();
-	RTK_LOGI(TAG, "AP CPU CLK: %lu Hz \n", SystemCoreClock);
+	DelayClkUpdate(SystemCoreClock);
+	RTK_LOGI(TAG, "AP CPU CLK: %lu Hz check=%d\n", SystemCoreClock, CPU_Clk_Check());
+	RTK_LOGI(TAG, "CLDO trim: active=%lu normal=%lu sleep=%lu state=%lu\n",
+		LDO_GET_VOADJ_L_1209(LDO_BASE->LDO_RFAFE_1209),
+		LDO_GET_VOLT_CODE2_CLDO(LDO_BASE->LDO_CLDO_VOLT_CTRL),
+		LDO_GET_VOLT_CODE1_CLDO(LDO_BASE->LDO_CLDO_VOLT_CTRL),
+		LDO_GET_CUR_STS_VAL(LDO_BASE->LDO_APMC_STA));
 
 	/* Init heap region and configure FreeRTOS */
 	os_init();

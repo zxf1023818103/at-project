@@ -404,3 +404,387 @@ AON 唤醒的启动原因为 `0x2`、唤醒源为 `0x8`，NAN 应用初始化均
 脱敏结果见 [master-com43-rx-throughput.json](../../component/amebagreen2/nan/tests/results/20261118/master-com43-rx-throughput.json)。
 构建、烧录、原生测试与原始串口记录位于 `build/power/green2-master-throughput-20261118/`。
 zlib 的 HEAD、索引差异和工作区状态摘要与拉取前一致。
+
+## 2026-11-18：COM5 NAN 功率状态读取
+
+在 `master@e3e2676` 上新增默认关闭的 `NAN_RADIO_DIAG=ON`。NP 在切信道后
+保存只读快照，由现有周期任务每 10 秒打印，避免在切信道或逐包路径打印。
+私有 RF 字段对应已锁定 SHA-256 的 NAN 驱动库；没有修改功率表、国家码、
+TPC 开关或调度参数。固件为 900,768 字节，SHA-256 为
+`3b1227bc554c81470211dce84ab1d833d9ac114f4dde21986f40d2f8b6d56388`。
+
+COM5 固件烧录、逐字节读回、应用启动及一次 `nan stop` / `nan start` 均通过，
+运行告警检查未见 fault、分配失败或栈溢出。诊断完整构建、单文件
+`-Wall -Wextra -Werror` 编译、关闭诊断的 NP 构建通过；关闭后无采样钩子及
+诊断符号。开启诊断的 NP text 增加 896 字节，BSS 增加 256 字节。
+
+启动应用国家码 CN。读取到 `table=2 efuse_sel=1 byrate=1 limit=1`，
+没有强制功率覆盖，TPC 配置及活动状态均为 0。空闲发现期间采样到 ch6 和
+ch149，两者均为 20 MHz。下表为驱动返回值除以 4 后的目标功率：
+
+| 查询速率 | ch6 / 2.4 GHz | ch149 / 5 GHz |
+| --- | ---: | ---: |
+| OFDM 6M | 15 dBm | 18 dBm |
+| OFDM 54M | 15 dBm | 17 dBm |
+| HT / HE MCS0 | 15 dBm | 18 dBm |
+| HT / HE MCS7 | 15 dBm | 16 dBm |
+| HE MCS8 | 15 dBm | 15 dBm |
+| HE MCS9 | 15 dBm | 14 dBm |
+
+按用户要求仅测试板端。以上是指定速率的驱动目标，未使用仪表测量实际射频
+功率，也不代表正在使用这些 PHY 速率。无手机 peer，不能据此认定 NDP 已
+协商到 5 GHz；本轮没有重测传输、配对、深睡或启用 TPC 的行为。
+结束时 COM5 保留诊断固件、NAN 活动，串口已关闭，已有配对存储保留。
+
+脱敏结果见 [radio-power-com5.json](../../component/amebagreen2/nan/tests/results/20261118/radio-power-com5.json)，
+原始日志位于 `build/green2-rf-20261118/`。构建生成的 zlib `zconf.h` 改动已还原。
+
+## 2026-11-18：COM5 NAN 固定 8 dBm 目标功率
+
+按用户要求，在每次 `green2_nan_radio_start()` 进入发现前调用
+`wifi_set_tx_power()`，设置 `tx_pwr_force=32`（0.25 dBm 单位）并开启强制覆盖。
+设置失败时返回错误，不继续启动 NAN。该设置作用于共享 RF 的所有速率与频段，
+不修改校准数据或 eFuse；驱动在此模式下覆盖速率/限制表，报告 `limit=0`。
+
+双核完整构建、修改的 transport 和诊断文件 `-Wall -Wextra -Werror` 编译、
+COM5 固件烧录及逐字节读回均通过。固件为 901,024 字节，SHA-256 为
+`bdee3d8e0b406d6bc9d3e14861340ee7bd738f44563e06a0ca1abd4be39c6b43`。
+配置沿用 NAN、深睡 30000 ms、MINIMAL，并开启只读 RF 诊断；BLE、IPERF、
+TF-M 关闭，保留 LittleFS 配对与校准分区。
+
+启动后、一次 `nan stop` / `nan start` 后、一次 `nan sleep 2` 真实 DSLP/AON
+唤醒后，ch6 和 ch149 均读到 `force=1 force_qdbm=32`。OFDM6/54、HT0/7、
+HE0/7/8/9 的目标值全部为 32，即 **8 dBm**，读取成功掩码均为 `0xff`。
+唤醒原因为 BOOT=0x2、AON=0x8；重新启动成功，默认下次深睡时间恢复为
+30000 ms。未见 fault、分配失败、栈溢出或 MACID 耗尽；结束时 NAN 活动、
+零 peer，串口已释放。
+
+这验证的是软件设置及驱动目标读回，没有仪表校准实际射频输出。本次仅测板端，
+没有手机建链、吞吐或自动传输后深睡测试。
+脱敏结果见 [radio-power8-com5.json](../../component/amebagreen2/nan/tests/results/20261118/radio-power8-com5.json)，
+私有构建和日志位于 `build/green2-rf-20261118/power8*`。
+
+## 2026-11-18：COM15 / BLU 3.3 V、8 dBm 板端功耗
+
+拉取 `257f321` 后使用新增的 `blu-power-monitor` skill。本机 BLU 为 COM10
+（VID/PID `15A2:300A`），COM15 的 DTR 接 Green2 LOG_TX；用户确认板卡仅由
+BLU 供电。先关闭输出并缓存本机校准参数，设置/读回 3300 mV，再用 LOG_TX
+下载电平和 BLU 上电进入烧录。复用上一节同 SHA-256 的 8 dBm 诊断固件，
+逐字节回读通过。该板原有 LittleFS 无法挂载，用户明确批准后执行 `mkfs -y`
+成功；重新上电后 NAN 初始化正常。没有写校准分区或 eFuse。
+
+首次会话目录放在 WSL UNC 路径，发生状态文件重命名失败；未重放未确认的
+On 请求。迁到 Windows 本地目录后，通过明确 Off/Voltage/On 恢复，后续
+采集正常。使用用户提供的厂商 SDK（SHA-256
+`f94da4e9be6447d1a5132dfcefda912b5b015310117e3aa2691eae6e018c35d6`）
+`get_samples()` 换算并保留量程切换滤波、负噪声样本，不扣静态基线。
+
+| 状态 / 统计窗口 | 平均电流 | 按 3.3 V 计算的功耗 |
+| --- | ---: | ---: |
+| NAN 发现，三个活动窗口合计 26.123 s | 51.723 mA | 170.685 mW |
+| 10 s 定时，深睡第 1 轮，剔除过渡区后 13.170 s | 10.198 µA | 33.652 µW |
+| 10 s 定时，深睡第 2 轮，剔除过渡区后 13.138 s | 9.285 µA | 30.639 µW |
+| 30 s 定时，深睡区间 42.185 s | 8.686 µA | 28.663 µW |
+| 30 s 定时，休眠末段 10 s | 7.678 µA | 25.338 µW |
+
+两次 60 秒采样分别包含 5,999,616 点，100 kHz，均无非法量程或残缺尾部。
+两轮短休眠电流仍缓慢下降，因此另外测默认 30 s 设置，并单列末段窗口，
+不将短窗口均值当作完全稳定值。电流波形低于 1 mA 的连续区间（10 ms 分箱）
+分别为 14.59、14.56、43.62 s，AON 定时偏差仍存在。三次 BOOT=0x2 / AON=0x8，
+NAN 应用初始化 226、227、227 ms，唤醒后仍为 8 dBm。
+
+以上为当前板卡与接线的供电电流；BLU `Calibrated=0`，校准状态未确认，
+3.3 V 是设定/读回值，未独立测量板端电压。采样协议没有帧序号，不能由格式
+检查宣称零丢样。这里是手动深睡测试，不含手机跑流或自动传输后休眠。
+用户随后完成 COM15 首次配对。保持同一固件、3.3 V 设置，iPhone 13 Pro
+分别上传/下载约 10 s，接收字节与发送字节一致，保存配对 PASN type=2 成功。
+
+| 8 dBm 目标功率跑流 | 吞吐量（接收端） | 平均电流 | 按 3.3 V 计算的功耗 |
+| --- | ---: | ---: | ---: |
+| 手机 → Green2（上传） | 15.633 Mbps | 64.742 mA | 213.649 mW |
+| Green2 → 手机（下载） | 21.335 Mbps | 124.686 mA | 411.462 mW |
+| 自动深睡末段 10 s | — | 8.331 µA | 27.493 µW |
+
+跑流电流使用 UART 完成时刻减固件耗时定位，每端剔除 0.5 s，统计窗分别
+9.061/9.011 s。两段标准采集共 9,997,824 点，中间 1.003 s 间隙明确保留，
+不插值；两段跑流和休眠末 10 s 均未跨越采样间隙。首轮 App 已完成跑流，
+但 BLU 端口会话失效使采集提前退出，因而没有有效功耗数据；关闭失效会话、
+重新 Serve 并通过短采集后才重跑，未在此重试中改电压、供电或固件。
+
+传输后 5063 ms 自动进入 DSLP，设置 30 s 的低电流跨度约 43.729 s
+（中间含上述采样间隙）；BOOT=0x2/AON=0x8，NAN 初始化 228 ms。
+唤醒后保存配对重连/PONG 通过，App ready 2.152 s，无需重新配对。
+前后两次 PASN type=2、没有 type=1；未见 fault、分配失败、栈溢出、
+MACID 耗尽、cache 拒绝或 TCP abort。休眠电流仍缓慢下降，末段 10 s
+不是完全稳定值。该轮完成后释放串口、保持 BLU 输出，并恢复了 COM5 发布。
+随后用户要求恢复默认功率表，以同板对照功耗。
+
+脱敏记录见 [blu-com15-power8.json](../../component/amebagreen2/nan/tests/results/20261118/blu-com15-power8.json)，
+原始采样、UART、分析脚本和波形图在 `build/green2-blu-com15-20261118/`。
+
+
+## 2026-11-18：COM15 恢复默认功率表的功耗对照
+
+按用户要求移除固定 8 dBm 覆盖，`nan_transport.c` 恢复原始实现，保留 RF
+只读诊断。完整构建的两核功能选项、深睡设置与上一轮一致；固件 900,768 字节，
+SHA-256 `509a16eb8c4ddfecef45a00e898c16cefd9d95ee08a6d1227d7c520e27e3ca54`。
+COM15 固件区烧录、逐字节读回及 NAN 启动通过，保留现有配对/校准分区。
+后续仅清理不再使用的 include 和函数格式，严格编译通过；剔除 debug 信息后
+目标文件与已烧固件中的对应目标文件完全一致。
+
+BLU 仍为 3.3 V，启动读回 `force=0 force_qdbm=0 byrate=1 limit=1`，
+TPC 配置/活动均为 0。ch6 查询速率均为 15 dBm；ch149 的 OFDM6/HT0/HE0
+为 18 dBm、OFDM54 为 17 dBm、HT7/HE7 为 16 dBm、HE8 为 15 dBm、
+HE9 为 14 dBm。这是驱动目标表读回，没有射频仪表校准实际发射功率。
+
+默认表的约 5 s 发现态采集（100 kHz、499,712 点，剔除前 1 s）平均
+51.911 mA / 171.305 mW；同方法 8 dBm 基线 51.483 mA，相差
++0.428 mA（+0.832%）。短窗口与 `Calibrated=0` 条件下未据此认定显著差异。
+
+首轮准备时 iPhone 锁屏，未启动跑流采集。用户继续后确认已解锁，沿用
+现有配对完成双向约 10 s 跑流、自动深睡、AON 唤醒和保存配对重连。
+
+| 状态 | 8 dBm 平均电流 | 默认表平均电流 | 电流变化 | 接收端速率：8 dBm → 默认表 |
+| --- | ---: | ---: | ---: | ---: |
+| 手机 → Green2（上传） | 64.742 mA | 66.410 mA | +2.576% | 15.633 → 17.782 Mbps |
+| Green2 → 手机（下载） | 124.686 mA | 134.692 mA | +8.025% | 21.335 → 23.850 Mbps |
+| 自动深睡末段 10 s | 8.331 µA | 8.242 µA | — | — |
+
+按 3.3 V 计算，默认表上传/下载平均功耗为 219.152/444.483 mW，
+对应 8 dBm 的 213.649/411.462 mW。每端剔除 0.5 s 过渡区，默认表
+统计窗为 9.054/9.007 s；两端字节数一致，分别为 22,347,776/29,818,880。
+两段采集共 9,998,336 点，中间 1.210 s 间隙明确保留；跑流和休眠末 10 s
+统计窗均未跨越间隙，未发现非法量程或残缺尾部。
+
+默认表实测下载平均电流更高，但吞吐量也提高。本次仅每种配置各一轮，
+没有固定 PHY 速率或进行重复轮次统计，不能将全部吞吐/电流差异归因于
+发射功率。BLU `Calibrated=0`、电压未独立测量等限制与上节相同。
+
+传输后 5029 ms 自动休眠，30 s 设置的低电流跨度约 43.951 s（含上述
+采样间隙），已知 AON 定时偏差仍存在。BOOT=0x2/AON=0x8，NAN 初始化
+230 ms；两次 PASN type=2，无新配对 type=1，唤醒后 PONG 成功，App
+ready 4.482 s。两种功率配置各出现一次 `[NAN-W] dw early: nanctrl_propagation`，
+对应轮次仍完成传输/深睡/重连；未见 fault、分配失败、栈溢出、MACID 耗尽、
+cache 拒绝或 TCP abort。跑流及唤醒后保持 `force=0 limit=1`。
+
+结束时 COM15 保留默认功率固件，NAN 活动/零 peer；BLU 3.3 V 输出保持，
+采集串口已关闭，测试 App 已结束，COM5 发布已恢复。对照图在私有证据目录
+`nan-power-comparison.png`，完整默认表波形在 `traffic/nan-traffic-power.png`。
+脱敏记录见 [blu-com15-default-power.json](../../component/amebagreen2/nan/tests/results/20261118/blu-com15-default-power.json)，
+私有证据和对照脚本位于 `build/green2-blu-com15-default-20261118/`。
+
+
+## 2026-11-18：COM15 降至 0 dBm，并以空口确认档位变化
+
+用户要求继续降功率并核查是否生效。将 NAN 启动前的目标改为 0 dBm，
+明确设置 `b_tx_pwr_force_enbale=1`，因此零值不是关闭覆盖。每次 NAN 启动和
+深睡唤醒均重新设置；其余构建功能选项与默认/8 dBm 轮次一致。新增只读
+MAC 功率寄存器采样，完整双核构建与 transport/diagnostic 严格编译通过。
+固件为 901,280 字节，SHA-256
+`3ffe201311dc5f3ea86892d16548e05c3e466531e06b30d625e6c336d92d1766`。
+COM15 固件区烧录及逐字节读回通过，保留配对、校准分区与 eFuse。
+
+查验 hash-pinned NP 库：`wifi_set_tx_power` → `halrf_set_tx_power_by_user`
+会填充逐速率表，并调用 `rtw_hal_mac_write_pwr_by_rate_reg`，写入
+`0x4000d2c0..0x4000d2d8` 的 28 个半 dBm 条目。该路径受
+`hal_data[0x2a9]` 写入保护字节控制；强制模式另关闭 MAC 功率限制位。
+诊断在原有切信道快照中回读这些非破坏性寄存器，以及 mode/limit 状态，
+不逐包打印或分配内存；扩大的批量打印缓存改为静态，避免增加 NP 任务栈。
+启动、跑流和唤醒后的 ch6/ch36/ch149 均为 `force=1 force_qdbm=0`，
+七个硬件功率字全部为零、`write_guard=0`，没有仅改变查询值而跳过写表。
+
+另外使用 RouterOS hAP ax² 的空闲 wifi2 做相对空口测试。先确认该接口
+无关联客户端，临时设为信道 6/20 MHz，限时抓包 12 s；每次完成后立即
+恢复 2472 MHz、20/40 MHz。wifi1 维持原来信道 36 的 AP，未修改。
+用 radiotap 数据只选相同发送地址、信道、6 Mbps NAN beacon，独立序号
+计数与样本数一致。抓包顺序为默认表 → 0 dBm → 补测 8 dBm；补测后恢复
+同 SHA-256 的 0 dBm 固件。没有为此删除配对或调整路由器的全局 sniffer。
+
+| 发射设置 | 有效信标数 | 平均接收 RSSI | RSSI 范围 |
+| --- | ---: | ---: | ---: |
+| 默认表（ch6 查询目标 15 dBm） | 41 | -36.90 dBm | -39～-36 dBm |
+| 8 dBm | 50 | -45.36 dBm | -48～-44 dBm |
+| 0 dBm | 43 | -54.02 dBm | -56～-52 dBm |
+
+8→0 dBm 的接收强度下降 **8.66 dB**，默认→0 下降 **17.12 dB**。
+这支持 2.4 GHz 发现帧的实际发射随档位下降，并非仅日志变化；这是固定接收端
+的相对 RSSI 对照，不是天线端绝对射频功率校准。5 GHz 数据路径本轮有信道
+36 的硬件表回读和完整传输，没有另做 5 GHz 空口抓包。
+
+| 状态 | 默认表 | 8 dBm | 0 dBm |
+| --- | ---: | ---: | ---: |
+| 手机→Green2 平均电流 | 66.410 mA | 64.742 mA | 64.896 mA |
+| Green2→手机平均电流 | 134.692 mA | 124.686 mA | 124.857 mA |
+| 上传吞吐 | 17.782 Mbps | 15.633 Mbps | 16.213 Mbps |
+| 下载吞吐 | 23.850 Mbps | 21.335 Mbps | 21.534 Mbps |
+| 自动深睡末段 10 s | 8.242 µA | 8.331 µA | 8.345 µA |
+
+3.3 V 下，0 dBm 上传/下载平均功耗分别为 214.156/412.028 mW。
+相对 8 dBm，平均电流仅 +0.237%/+0.137%，本轮没有额外整板节电证据。
+按同一下载窗口，以 100 mA 阈值分类 SDK 换算后的样本：高电流样本均值
+246.761→235.445 mA，占比 33.627%→35.930%，低电流均值均约 62.84 mA，
+解释了平均值为何接近。这是供电电流幅度分类，不能当作直接测得的射频 TX
+占空比，也未把变化全部归因于 PA；速率、重试和调度未被固定。
+
+0 dBm 双向各约 10 s，两端字节一致（20,381,696/26,935,296），统计窗
+9.057/9.010 s；100 kHz 两段共 9,998,336 点，中间 1.024 s 间隙明确保留。
+传输后 5019 ms 自动深睡，30 s 设置的低电流跨度约 43.755 s（含间隙），
+AON 定时偏差未修正。BOOT=0x2/AON=0x8，保存配对重连和 PONG 通过，
+App ready 3.446 s；无 fault/分配失败/栈溢出/MACID 耗尽/cache 拒绝/TCP abort。
+仍出现一次两组基线已有的 `[NAN-W] dw early: nanctrl_propagation`。
+
+所有平均电流为 BLU 厂商 SDK 原样换算/滤波结果，保留负值；`Calibrated=0`，
+3.3 V 未独立测量。每档各一轮跑流，未做固定 PHY 速率或多轮统计；新增寄存器
+读取也属于 0 dBm 诊断固件的差异，不据此宣称严密的射频或能效校准结果。
+脱敏记录见 [blu-com15-power0.json](../../component/amebagreen2/nan/tests/results/20261118/blu-com15-power0.json)，
+原始 PCAP、UART、电流、分析脚本和 `nan-power-sweep.png` 在
+`build/green2-blu-com15-power0-20261118/`。
+
+最终恢复上述同 SHA-256 的 0 dBm 固件，逐字节回读、NAN 启动及硬件功率表
+回读均通过。测试 App 已结束；BLU 仅关闭串口，保持 3.3 V 输出，关闭后
+COM15 仍能响应 `nan status`。COM15/COM5 串口均释放，COM5 原有 NAN 发布
+已恢复。RouterOS wifi2 为 2472 MHz、20/40 MHz、启用状态；wifi1 仍在信道
+36，关联客户端数仍为 2。三个本轮远端 PCAP 已删除，本地副本和 SHA-256 保留。
+
+
+## 2026-11-18：COM15 两核 tickless 与 AP 无效唤醒优化
+
+本轮保持 0 dBm 目标，增加 `NAN_TICKLESS=ON`（默认开启，仅用于不带
+NimBLE/TF-M/USB 的 standalone NAN）。最终固件 901,856 字节，SHA-256
+`499e89522bf7bb1366d0e57baa4a88fd0554e42b67788f64bb3b3043f3be7b1d`；COM15 固件分区逐字节回读通过，保留配对、LittleFS、校准。
+两核完整构建、受影响源文件严格编译及 16/16 ASan/UBSan 原生测试通过。
+新增 PASN 定时测试覆盖无序截止时间、取消、到期、回调重装、向上取整和 tick 回绕。
+
+两核原有 `configUSE_TICKLESS_IDLE` 和 `CONFIG_STANDARD_TICKLESS` 都是 1；
+本轮修改运行时策略，让这个配置实际参与 CPU 空闲管理：
+
+- AP 在 NAN/IPC 启动后释放启动锁，进入 retention CG，最长空闲 1000 ms，
+  更早的任务截止时间或中断仍会唤醒。NAN 队列由 100 ms 轮询改为下个 PASN
+  截止时间或 10 s 堆报告；串口改为 RX 中断驱动的阻塞等待，LOGUART 可唤醒 AP。
+- NP 保留原有 `PMU_OS` 锁及无线固件的锁，CPU 空闲时停掉 SysTick，WFI 等待
+  设备/IPC 中断或 PMC 截止时间，以 32 kHz 计数补偿 RTOS tick，最长 500 ms，
+  保留 watchdog 的截止时间。提前唤醒后取消旧闹钟，后续设置闹钟会重新启用计数器。
+- NP 的整域 CG 没有启用。中间候选放开 NP OS 锁后，`nan stop` 会触发整域 CG，
+  虽仍输出 CG/唤醒日志，串口 RX 已不响应；保留 XTAL 也未解决。最终版恢复原有
+  整域休眠限制，`nan stop`、停止后等待 12 s 再查询、`nan start` 均通过。
+  失败证据保存在 `full-cg-candidate/`，不把该候选的电流记作最终结果。
+
+最终启动日志：AP 第 20 s 累计 23 次 CG、20000 ms，NAN 队列仅 2 次超时；
+NP 最近 10 s 累计 WFI 9838 ms，整域 sleep=0，
+锁为 0x9（OS 加无线固件原有 bit 3）。因此“每 10 s 一次”指 NAN 队列超时，
+不代表整个 AP 只有一次唤醒；射频/IPC 中断仍会唤醒 NP。
+
+| 状态 | 修改前 0 dBm | 最终 tickless 0 dBm |
+| --- | ---: | ---: |
+| NAN 发现空闲平均电流 | 51.834 mA | 51.221 mA |
+| 手机→模组上传平均电流 | 64.896 mA | 65.152 mA |
+| 模组→手机下载平均电流 | 124.857 mA | 126.932 mA |
+| 上传吞吐 | 16.213 Mbps | 16.267 Mbps |
+| 下载吞吐 | 21.534 Mbps | 21.152 Mbps |
+| 自动深睡末段 10 s | 8.345 µA | 8.182 µA |
+
+发现电流变化 -0.613 mA（-1.18%）。只启用 AP CG 的
+中间测量为 51.177 mA；因此本轮没有证明 NP 停 tick 带来额外可分辨的整板节电。
+发现对照每组约 10 s、去掉首 1 s；跑流每方向约 10 s、去掉首尾各 0.5 s，
+两端字节数一致（20,447,232/26,542,080）。均为 BLU SDK 原样换算，保留负值；
+Calibrated=0，3.3 V 是输出设置，未独立测量。PHY/重试/射频环境未固定，每配置
+只有一轮，不能由这些小差异推断统计显著性或固定吞吐增益。
+
+最终版自动 DSLP、AON 唤醒、恢复保存配对及 PONG 均通过；App 重连 ready
+3.967 s。30 s AON 设置对应低电流跨度 43.726 s，
+原有 AON 计时偏差未修正。无 fault/分配失败/栈溢出/MACID 耗尽/cache 拒绝/TCP abort；
+基线已有的 `dw early: nanctrl_propagation` 告警本轮 2 次。
+
+脱敏记录见 [tickless-com15.json](../../component/amebagreen2/nan/tests/results/20261118/tickless-com15.json)。
+原始 UART/电流、App 报告、波形、失败候选在 `build/green2-nan-tickless-20261118/`；
+UART 可能含配对材料，不提交。结束时终止本轮 App，BLU 仅 Stop 关闭串口、
+保持 3.3 V 输出，COM15 仍响应 NAN 状态；COM5 原有 NAN 发布已恢复，串口均释放。
+RouterOS 未改动。代码未提交、未推送。
+
+## 2026-11-18：COM15 两核 120 MHz 与运行态 CLDO 降一档
+
+用户要求 CPU 降频并同步降核心电压。新增 `CPU_MHZ=120|160|192|240`，
+默认保持 240；AP/NP 共用 USB PLL 的 CPU 分频，SRAM/ROM 随之降频，独立
+外设分频及 PLL 频率保持原配置。两核启动刷新 `SystemCoreClock` 和 ROM 延时
+校准，并用 `CPU_Clk_Check()` 校验硬件分频。此次实际验证 120 MHz，160/192
+尚未做硬件测试。
+
+标准运行电压 API 只有 0.9/1.0 V。本板读到 CLDO normal/live=7、sleep=3、
+regulator state=6 后，实验使用固定 `CORE_LDO_CODE=6`：寄存器表标称
+0.900→0.877 V，**没有实测核心引脚电压**。默认 `CORE_LDO_CODE=-1` 保留校准值；
+低压选项只允许 120 MHz、standalone NAN tickless、无 BLE/TF-M/USB，并在
+启动时核对时钟、运行态、参考电压及档位，只允许比已加载 normal 值低一档。
+只写 CLDO normal/live 易失寄存器，sleep code、SWR、校准 Flash、eFuse 均保留。
+SDK 在 `ameba_pmc_com.c` 中明确指出 0.8 V 会影响 RF，因此此实验不使用
+0.8 V 休眠档冒充运行降压，也不能由 CPU 降频推断无线部分的电压裕量。
+
+最终 `CPU_MHZ=120 CORE_LDO_CODE=6` 固件 902,816 字节，SHA-256
+`c01d4007c39b49461fac4a5c65ad46f36bc0fc65f939d09dae12db798fd07e38`。
+两核完整构建、COM15 固件逐字节回读、启动检查通过。新增时钟/CLDO/诊断代码
+严格编译通过；AP 启动文件保留一个原有 `rtc_irq_init` 中 NULL→整数的编译告警，
+单独允许该告警后检查，其余新代码无诊断。功率目标仍为 0 dBm，两核 tickless 开启。
+
+| 状态 | 240 MHz / CLDO 7 | 120 MHz / CLDO 6 |
+| --- | ---: | ---: |
+| NAN 发现空闲 | 51.221 mA | 49.968 mA |
+| 上传平均电流 | 65.152 mA | 59.244 mA |
+| 下载平均电流 | 126.932 mA | 107.042 mA |
+| 上传吞吐 | 16.267 Mbps | 9.224 Mbps |
+| 下载吞吐 | 21.152 Mbps | 15.493 Mbps |
+| 上传能量/数据量 | 13.217 mJ/Mbit | 21.196 mJ/Mbit |
+| 下载能量/数据量 | 19.803 mJ/Mbit | 22.800 mJ/Mbit |
+| 深睡末段 10 s | 8.182 µA | 8.025 µA |
+
+单独降至 120 MHz、保留 CLDO 7 的中间固件发现电流为 50.591 mA，未跑新一轮
+手机传输。最终降频降压组合的空闲电流相对 240 MHz 下降 2.45%，但跑流吞吐
+下降更大：按 3.3 V 设置和实测平均电流/吞吐估算，上传/下载每 Mbit 耗能分别
+增加 60.37%/15.13%。本轮结果不支持把该档作为改善传输能耗的配置。
+
+双向各约 10 s，双方字节一致（11,599,872/19,398,656）；自动 DSLP、AON
+唤醒和保存配对 PONG 通过，重连 ready 3.498 s。另加两次 3 s 设置的深睡唤醒，
+均恢复 NAN；每次均打印 `CLDO active trim 6 -> 6`，没有逐次减档。启动、跑流、
+唤醒后的 `[NAN-CLK]` 始终为 120000000 Hz/check=0/live=6/normal=6/sleep=3/state=6。
+未发现 fault、内存分配失败、栈溢出或 MACID 耗尽。原有 AON 时间偏差仍存在。
+
+上述是单板、单轮实验；PHY/射频环境未固定，BLU `Calibrated=0`，供电为 3.3 V
+设置值，核心电压只有档位证据。没有温度/批次/长时间低压稳定性验证。结果见
+[cpu120-cldo6-com15.json](../../component/amebagreen2/nan/tests/results/20261118/cpu120-cldo6-com15.json)，
+原始记录及波形在 `build/green2-nan-cpu120-uv-20261118/`；单独降频记录在
+`build/green2-nan-cpu120-20261118/`。恢复更高主频前应冷启动，让 ROM 重新加载
+出厂调压参数；本次烧录脚本均使用 BLU 断电复位。
+
+最终保留 120 MHz/CLDO 6 实验固件，BLU 3.3 V 输出保持开启、串口关闭，COM15
+状态查询正常，COM5 原有 NAN 发布恢复。本轮 App 进程已终止，RouterOS 未改动。
+代码未提交、未推送。
+
+
+## 2026-11-18：COM15 恢复默认 CPU 频率与出厂电压
+
+按用户要求结束降频降压实验，移除 `CPU_MHZ`、`CORE_LDO_CODE` 构建选项及
+启动时的 CLDO 覆盖函数。时钟/电压启动文件恢复为基线 `257f321`：
+`CLKCFG_0P9_RMII_USB`，USB PLL 960 MHz / 4，AP/NP 均为 **240 MHz**，
+`CORE_VOL_0P9`。保留 tickless、PASN 到期唤醒优化，以及时钟/CLDO 只读诊断。
+NAN 射频目标沿用 0 dBm。
+
+重新核对 COM15 FTDI 板和 COM10 BLU，确认 NAN 活动且没有数据链路后，
+使用 BLU 断电、设置 3.3 V、COM15 DTR→LOG_TX 进入下载模式。
+固件烧录后再次断电启动，让 ROM 重新加载出厂调压；没有格式化 LittleFS、
+改写校准 Flash 或 eFuse。完整双核构建、固件逐字节读回、16/16 ASan+UBSan
+原生测试通过。固件 902,816 字节，SHA-256：
+`4da22acdb2e804652476631648e87310fb2bb7a98a7c46dab07f971598406e36`。
+
+冷启动与随后两次 `nan sleep 3` 的 DSLP/AON 唤醒均确认：
+
+- AP/NP `CPU CLK: 240000000 Hz check=0`。
+- CLDO `active=7 normal=7 sleep=3 state=6`，运行态恢复出厂档位。
+- 每次唤醒后 NAN 启动成功，tickless 保持启用，无降压覆盖日志。
+- 未见 CPU fault、栈溢出、内存分配失败或 MACID 耗尽。
+
+0.9 V 是运行配置及档位标称值，未实测核心引脚电压。本轮仅做板端恢复验证，
+没有重跑手机吞吐或功耗对照；上一节的 120 MHz/CLDO 6 结果属于历史实验。
+3 s 设置仍有先前已记录的 AON 计时偏差。结束时仅 Stop 关闭 BLU 串口，
+保留 3.3 V 输出；COM15 关闭 BLU 会话后仍响应 NAN 状态，NAN 活动/零 peer，
+两侧串口均释放。COM5、手机、RouterOS 未改动。
+
+脱敏记录见 [cpu-default-restore-com15.json](../../component/amebagreen2/nan/tests/results/20261118/cpu-default-restore-com15.json)，
+私有构建、烧录、唤醒证据在 `build/green2-nan-default-cpu-20261118/`。

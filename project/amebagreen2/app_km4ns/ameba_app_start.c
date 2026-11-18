@@ -68,7 +68,8 @@ void os_init(void)
 void app_start(void)
 {
 	SystemCoreClockUpdate();
-	RTK_LOGI(TAG, "NP CPU CLK: %lu Hz \n", SystemCoreClock);
+	DelayClkUpdate(SystemCoreClock);
+	RTK_LOGI(TAG, "NP CPU CLK: %lu Hz check=%d\n", SystemCoreClock, CPU_Clk_Check());
 
 	/* configure FreeRTOS interrupt and heap region for printf(RTK_LOGx)*/
 	os_init();

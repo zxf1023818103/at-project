@@ -54,6 +54,17 @@ int eloop_cancel_timeout(eloop_timeout_handler handler, void *eloop, void *user)
 }
 int eloop_is_timeout_registered(eloop_timeout_handler handler, void *eloop, void *user)
 { for (struct timeout *t = timers; t; t = t->next) if (t->handler == handler && t->eloop == eloop && t->user == user) return 1; return 0; }
+unsigned green2_pasn_next_timeout_ms(unsigned max_wait_ms)
+{
+    uint64_t now = monotonic_us();
+    for (struct timeout *t = timers; t; t = t->next) {
+        if (t->deadline <= now) return 0;
+        /* Round up: a sub-millisecond remainder must not cause a busy loop. */
+        uint64_t remaining = (t->deadline - now + 999) / 1000;
+        if (remaining < max_wait_ms) max_wait_ms = (unsigned)remaining;
+    }
+    return max_wait_ms;
+}
 void green2_pasn_timers(void)
 {
     uint64_t now = monotonic_us(); struct timeout **p = &timers;
