@@ -1,0 +1,100 @@
+{
+  "test": "COM15 hardware verification: quiet PMC transitions and no boot Flash write protection",
+  "recorded_at_utc": "2026-11-18T10:19:50.898598+00:00",
+  "firmware": {
+    "sha256": "b4507205a69df2ed085c4082cb7961e94e2503d7646d63c3e8b56c876a2ad843",
+    "bytes": 902912,
+    "cpu_hz": 240000000,
+    "cldo_live_normal_code": 7,
+    "core_nominal_mv": 900,
+    "core_voltage_independently_measured": false,
+    "nan_target_dbm": 0,
+    "nan_tickless": true
+  },
+  "fixture": {
+    "board_port": "COM15",
+    "blu_port": "COM10",
+    "voltage_setting_mv": 3300,
+    "preflight_cli_responded": false,
+    "power_reset_via_blu": true,
+    "download_strap": "COM15 DTR to LOG_TX"
+  },
+  "checks": {
+    "firmware_byte_for_byte_readback": "passed",
+    "cold_boot": "passed",
+    "flash_status": "unlocked",
+    "sr1": "0x00",
+    "sr2": "0x02",
+    "qe_preserved": true,
+    "APCG_count": 0,
+    "APCW_count": 0,
+    "deep_sleep_cycles": 2,
+    "nan_ready_after_wake": 2,
+    "fault_patterns_found": false
+  },
+  "readbacks": {
+    "boot.log": [
+      "[APP-I] AP CPU CLK: 240000000 Hz check=0",
+      "[APP-I] NP CPU CLK: 240000000 Hz check=0",
+      "[APP-I] CLDO trim: active=7 normal=7 sleep=3 state=6",
+      "[Green2-KM4TZ] > [10:20:30.002] INFO  flash_cli.c:58: [flash] firmware region unlocked (SR1=0x00 SR2=0x02)",
+      "[10:20:35.181] [NAN-PM] AP tickless=1 CG enabled",
+      "[NAN-CLK] cpu_hz=240000000 check=0 cldo_active=7 cldo_normal=7 cldo_sleep=3 regu_state=6",
+      "[NAN-PM] NP tickless=1 sleep=0 sleep_ms=0 idle_wfi=559 idle_ms=5886 locks=00000009",
+      "[10:20:45.182] [NAN-PM] AP sleep=13 sleep_ms=9999 locks=00000000 queue_timeouts=1",
+      "[NAN-CLK] cpu_hz=240000000 check=0 cldo_active=7 cldo_normal=7 cldo_sleep=3 regu_state=6",
+      "[NAN-PM] NP tickless=1 sleep=0 sleep_ms=0 idle_wfi=1460 idle_ms=15707 locks=00000009",
+      "[10:20:55.181] [NAN-PM] AP sleep=24 sleep_ms=19997 locks=00000000 queue_timeouts=2"
+    ],
+    "wake-repeat/uart.log": [
+      "[10:21:25.182] [NAN-PM] AP sleep=68 sleep_ms=49993 locks=00000000 queue_timeouts=5",
+      "[NAN-CLK] cpu_hz=240000000 check=0 cldo_active=7 cldo_normal=7 cldo_sleep=3 regu_state=6",
+      "[NAN-PM] NP tickless=1 sleep=0 sleep_ms=0 idle_wfi=5014 idle_ms=55058 locks=00000009",
+      "[APP-I] AP CPU CLK: 240000000 Hz check=0",
+      "[APP-I] NP CPU CLK: 240000000 Hz check=0",
+      "[APP-I] CLDO trim: active=7 normal=7 sleep=3 state=6",
+      "[Green2-KM4TZ] > [10:21:33.002] INFO  flash_cli.c:58: [flash] firmware region unlocked (SR1=0x00 SR2=0x02)",
+      "[10:21:33.230] [NAN-PM] AP tickless=1 CG enabled",
+      "[NAN-CLK] cpu_hz=240000000 check=0 cldo_active=7 cldo_normal=7 cldo_sleep=3 regu_state=6",
+      "[NAN-PM] NP tickless=1 sleep=0 sleep_ms=0 idle_wfi=199 idle_ms=1961 locks=00000009",
+      "[APP-I] AP CPU CLK: 240000000 Hz check=0",
+      "[APP-I] NP CPU CLK: 240000000 Hz check=0",
+      "[APP-I] CLDO trim: active=7 normal=7 sleep=3 state=6",
+      "[Green2-KM4TZ] > [10:21:45.002] INFO  flash_cli.c:58: [flash] firmware region unlocked (SR1=0x00 SR2=0x02)",
+      "[10:21:45.228] [NAN-PM] AP tickless=1 CG enabled",
+      "[NAN-CLK] cpu_hz=240000000 check=0 cldo_active=7 cldo_normal=7 cldo_sleep=3 regu_state=6",
+      "[NAN-PM] NP tickless=1 sleep=0 sleep_ms=0 idle_wfi=208 idle_ms=1954 locks=00000009",
+      "[10:21:55.229] [NAN-PM] AP sleep=13 sleep_ms=9999 locks=00000000 queue_timeouts=1",
+      "[NAN-CLK] cpu_hz=240000000 check=0 cldo_active=7 cldo_normal=7 cldo_sleep=3 regu_state=6",
+      "[NAN-PM] NP tickless=1 sleep=0 sleep_ms=0 idle_wfi=1098 idle_ms=11789 locks=00000009"
+    ],
+    "final-uart.log": [
+      "flash: firmware region unlocked (SR1=0x00 SR2=0x02)"
+    ]
+  },
+  "warnings": {
+    "nan_warning_tag_count": 3,
+    "known_dw_early_count": 3
+  },
+  "scope": "Firmware-only update and two manual DSLP/AON wake cycles. Startup/wake do not relock Flash. No new phone traffic or power comparison. No filesystem format or calibration/eFuse programming.",
+  "final_state": {
+    "nan_status": "nan: running=1 events=2 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+    "flash_status": "flash: firmware region unlocked (SR1=0x00 SR2=0x02)",
+    "APCG": 0,
+    "APCW": 0,
+    "serial_closed": true,
+    "blu_serial_open": false,
+    "blu_output_left_on": true,
+    "com5_phone_router_untouched": true
+  },
+  "private_evidence_directory": "build/green2-nan-quiet-unlocked-20261118",
+  "evidence_sha256": {
+    "flash.log": "84afa939305db3bafbe57740f14ff1100ede0107b2411c708ee60d8613ab24af",
+    "boot.log": "c79852a97d4da7d38e062ad88430b19f1afbaca25f2f8b7a8feb5e6e84dcfd29",
+    "flash-power-actions.json": "059d043ba3581a647568095ce89784229e968800a1d478bb7308d27037ed3731",
+    "wake-repeat/uart.log": "b8589f41fce52ca42b7efa5d2db7b5ac6e078235d0e69aefc2d75adf196d41d6",
+    "wake-repeat/summary.json": "82183be7f87f14895e3fc5dc3b494a5df967b6781650a4dff49f80cbb1b32667",
+    "final-uart.log": "216cfb09649a8b9d14b972dd80f164c78aef95eb4ee0cf44862e1bdbc6fd3b1d",
+    "final-state.json": "105d3fef8828ce3deaeca1a51b44182dc7ba2bf6d635aee8ff9ead84323f5fae"
+  }
+}

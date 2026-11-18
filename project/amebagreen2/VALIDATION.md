@@ -788,3 +788,35 @@ NAN 射频目标沿用 0 dBm。
 
 脱敏记录见 [cpu-default-restore-com15.json](../../component/amebagreen2/nan/tests/results/20261118/cpu-default-restore-com15.json)，
 私有构建、烧录、唤醒证据在 `build/green2-nan-default-cpu-20261118/`。
+
+## 2026-11-18：关闭 APCG/APCW 打印，取消启动时 Flash 加锁
+
+AP 的 PMC 链接一个位于 SRAM 的日志过滤入口，只忽略 ALWAYS 等级的完整
+`APCG\n` / `APCW\n` 字符串。其他调用保留 r0–r3、LR 和栈上传入的可变参数，
+直接跳转原 ROM 日志函数。NP 源码中的同名 DEBUG 打印也已移除；休眠流程、
+tickless 和定期 `[NAN-PM]` 统计保留。
+
+`ready_task` 改为 `BOARD_FLASH_UNLOCK`，清除旧固件留下的 BP/CMP 保护；
+非 TF-M Flash 适配层仅在寄存器值发生变化时写入，避免每次深睡启动都重复
+写状态寄存器。保留 QE 和其他无关状态位、双核 Flash 操作互斥及读回检查。
+
+沿用上一节功能选项完成双核构建，固件 902,912 字节，SHA-256
+`b4507205a69df2ed085c4082cb7961e94e2503d7646d63c3e8b56c876a2ad843`。
+ARM Thumb 仿真直接执行最终 AXF 中的过滤入口，18 个用例验证两个目标字符串
+被过滤，其他等级/字符串转发且寄存器、栈参数不变；反汇编确认 SleepCG 的
+两处输出均指向过滤入口。Flash 模拟寄存器测试在 ASan/UBSan 下通过，覆盖
+旧保护解除、QE 保留、重复解锁零写入、写后读回失败及手动加锁行为。
+
+随后按用户要求将同一固件烧录到 COM15。烧录前重新核对 COM15/COM10 身份，
+串口没有有效状态响应；通过 BLU 3.3 V 断电上电和 DTR→LOG_TX 进入下载。
+固件逐字节读回通过，冷启动及两次 `nan sleep 3` 的 DSLP/AON 唤醒通过。
+全程 `APCG/APCW` 输出为零，而 AP CG、NP CPU-only WFI 统计仍在增长。
+启动、两次唤醒及最后 `flash status` 均为 `unlocked`、SR1=0x00/SR2=0x02，
+QE 保留。两核 240 MHz/check=0、CLDO normal/live=7 保持，NAN 恢复成功；
+未见 CPU fault、分配失败或栈溢出。没有格式化 LittleFS、改写校准分区或 eFuse。
+
+结束时仅 Stop 关闭 BLU 会话，保留 3.3 V 输出，关闭会话后 COM15 的 NAN 和
+Flash 状态查询仍成功，端口已释放。COM5、手机和 RouterOS 未改动；本轮没有
+重跑手机吞吐或功耗对照。新镜像与验证脚本在
+`build/green2-nan-quiet-unlocked-20261118/`，脱敏记录见
+[quiet-unlocked-com15.json](../../component/amebagreen2/nan/tests/results/20261118/quiet-unlocked-com15.json)。

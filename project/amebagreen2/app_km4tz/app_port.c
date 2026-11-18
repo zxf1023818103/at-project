@@ -143,13 +143,8 @@ static void ble_task(void *arg)
 static void ready_task(void *arg)
 {
     (void)arg;
-    /* HCI owns the UART and has no CLI to unlock before the next download. */
-#ifdef AT_PROJECT_HCI
+    /* Leave firmware writable, including after upgrading a locked image. */
     configASSERT(board_flash_protect(BOARD_FLASH_UNLOCK,NULL,NULL,NULL,NULL));
-#else
-    /* Apply the AmebaD bottom-3-MiB lock; LFS/PSA remain writable. */
-    configASSERT(board_flash_protect(BOARD_FLASH_LOCK_FW,NULL,NULL,NULL,NULL));
-#endif
     board_flash_log_status();
 #ifdef AT_ENABLE_TFM
     extern void green2_tfm_selftest(void);

@@ -37,8 +37,6 @@ void ap_clock_gate(void)
 		}
 	}
 
-	RTK_LOGD(TAG, "APCG\n");
-
 	RCC_PeriphClockCmd(APBPeriph_NULL, APBPeriph_CPU0_CLOCK, DISABLE);
 
 	pmu_release_wakelock(PMU_CPU0_RUN);

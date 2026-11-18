@@ -98,9 +98,11 @@ make -C project/amebagreen2 BUILD="$PWD/build/amebagreen2-complete" \
 | `0x300000..0x3effff` | LittleFS，960 KiB |
 | `0x3f0000..0x3fffff` | TF-M ITS/PS、开发用 HUK 和计数器，64 KiB |
 
-固件默认锁定底部 3 MiB，配置和安全存储仍可写。TF-M 通过受检查网关执行擦写，拒绝启动区、当前槽及由 NS 直接访问的安全存储请求。当前采用 TF-M 隔离级别 1；HUK 由 TRNG 生成并保存在安全 Flash，属于开发用存储后端，没有把普通 Flash 计数器当作硬件防回滚保证。
+固件启动时解除 NOR 写保护，包括旧固件遗留的 BP/CMP 设置，不再自动锁定底部 3 MiB。非 TF-M 模式下，已解锁时不重复写状态寄存器；可用 `flash status` 查询，`flash lock` 仍可手动设置保护。TF-M 通过受检查网关执行擦写，拒绝启动区、当前槽及由 NS 直接访问的安全存储请求。当前采用 TF-M 隔离级别 1；HUK 由 TRNG 生成并保存在安全 Flash，属于开发用存储后端，没有把普通 Flash 计数器当作硬件防回滚保证。
 
 `dsleep rtc <秒>` / `dsleep uart rtc <秒>` 使用 AP 保留式 SleepCG，NP 保持无线、IPC 和看门狗任务运行；不进入整片断电。FreeRTOS 的下一次调度期限驱动 PMC 唤醒定时器，TF-M 启动时设置的安全权限在休眠前后保持不变。
+
+AP 的 PMC 日志入口过滤 `RTK_LOG_ALWAYS` 等级的两个固定字符串 `APCG\n` / `APCW\n`，避免每次浅睡眠切换都打印；tickless、其他诊断日志和 NAN 每 10 秒的 `[NAN-PM]` 统计保留。
 
 ### BLE 广播功耗测试
 

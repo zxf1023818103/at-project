@@ -17,7 +17,9 @@ static int status(int32_t mode,uint8_t result[4])
         uint8_t bits;
         board_flash_sr_for_mode(mode,b,&bits,&b);
         a=(a&0x83)|bits;
-        FLASH_SetStatus(1,1,&a); FLASH_SetStatus(0x31,1,&b);
+        /* Deep-sleep wake boots again; do not rewrite an unchanged NOR SR. */
+        if (a != result[0]) FLASH_SetStatus(1,1,&a);
+        if (b != result[2]) FLASH_SetStatus(0x31,1,&b);
     }
     FLASH_RxCmd(5,1,&result[1]); FLASH_RxCmd(0x35,1,&result[3]);
     FLASH_Write_Unlock();
