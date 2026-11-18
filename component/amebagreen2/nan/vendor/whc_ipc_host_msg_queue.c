@@ -25,6 +25,9 @@
 #include "rtw_skbuff.h"
 
 extern void whc_ipc_host_trx_event_hdl(u8 event_num, u32 msg_addr, u8 wlan_idx);
+#if defined(AT_GREEN2_NAN) && !defined(AT_NAN_USB_BRIDGE)
+extern void green2_nan_rx_flush(void);
+#endif
 
 /* ---------------------------- Global Variables ---------------------------- */
 
@@ -104,6 +107,9 @@ void whc_msg_q_task(void)
 		while (1) {
 			p_node = dequeue_ipc_msg_node(p_queue);
 			if (p_node == NULL) {
+#if defined(AT_GREEN2_NAN) && !defined(AT_NAN_USB_BRIDGE)
+				green2_nan_rx_flush();
+#endif
 				break;
 			}
 

@@ -97,7 +97,11 @@
 #define ipconfigETHERNET_DRIVER_FILTERS_PACKETS       0
 #define ipconfigZERO_COPY_RX_DRIVER             0
 #define ipconfigZERO_COPY_TX_DRIVER             0
+#if defined(CONFIG_AMEBAGREEN2) && defined(AT_GREEN2_NAN) && !defined(AT_NAN_USB_BRIDGE)
+#define ipconfigUSE_LINKED_RX_MESSAGES          1
+#else
 #define ipconfigUSE_LINKED_RX_MESSAGES          0
+#endif
 
 #define ipconfigNETWORK_MTU                     1500
 #define ipconfigBYTE_ORDER                      pdFREERTOS_LITTLE_ENDIAN

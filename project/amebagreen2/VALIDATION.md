@@ -269,3 +269,91 @@ BLE 应用、USB 桥接和休眠配置在 CMake 配置阶段拒绝。
 仍待烧录修复版后实测。结果及镜像摘要见
 [master-merge-validation.json](../../component/amebagreen2/nan/tests/results/20261118/master-merge-validation.json)，
 完整构建日志保留在 `build/nan-merge-master-20261118/`。
+
+### 2026-11-18：合并后 COM5 自动深睡、保存配对和唤醒重连
+
+将上述合并版烧录到 COM5 后，重新配对的 SAE 握手成功，但缓存仍报身份匹配
+歧义：历史记录复用了服务实例号和固定 PIN，凭据哈希不能单独区分新旧 NIK。
+修复为接收已认证 peer NMI 对应的 PMKID 更新，再用候选 NIK 校验该 PMKID 的
+NIRA 标签，并同时检查已完成握手的角色、实例号和凭据。无线库 event 31 的
+实际 ABI 为 **41 字节**，包含旧 PMKID，成功状态为 `1`；公开头文件仍是缺少
+旧 PMKID 的 25 字节布局。无匹配或重复身份仍拒绝绑定，持久化失败保留待存
+NPK 供重试。本地 ASan/UBSan **14/14 通过**，覆盖相同实例和 PIN 的不同身份、
+错误 peer/角色/状态、截断事件、伪造 NIRA、重复身份及写入失败。
+
+最终固件基于 `master@0b7d8d1` 加上述本地修复，899584 字节，SHA-256：
+`3fef5e8099dc299d8adf2c15fef34b237fc3ebdff03a3a9f7b90ef525dffa4cb`。
+配置为 `NAN=ON NAN_DEEP_SLEEP=ON NAN_DEEP_SLEEP_MS=30000 MINIMAL=ON`，
+NimBLE、NAN BLE OOB、BLE 唤醒、USB、IPERF 和 TF-M 均关闭。COM5 同口
+DTR/RTS 自动下载、逐字节回读及启动检查通过；保留 LittleFS、配对和校准分区，
+未写 eFuse。用户重新配对后记录 `authenticated pairing persisted slot=2`，
+三次 cache 更新均为 `rc=0`，无拒绝。
+
+旧 App 1.0 (8.1) 的首轮传输、自动深睡、唤醒和保存密钥认证已成功，但压力测试
+随 PING 一起发送 FIN，FreeRTOS+TCP 进入 `CLOSE_WAIT` 后拒绝发送 PONG。
+在 BLE 配对功能加入前的 App `9ed3b1e` 上恢复“收到 PONG 前保持发送方向打开”
+的处理，签名构建、签名验证和安装通过，测试版本为 **1.0 (8.2)**。没有恢复
+NAN BLE 配对功能。安装后一次启动因手机锁屏被系统拒绝，不计为协议测试；
+用户解锁后完成下面两轮连续循环。
+
+| 检查 | 第 1 轮 | 第 2 轮 |
+|---|---:|---:|
+| 上传 10 秒，双方字节数一致 | 15,466,496 B / **12.291 Mbps** | 16,056,320 B / **12.719 Mbps** |
+| 下载 10 秒，双方字节数一致 | 26,017,792 B / **20.800 Mbps** | 26,083,328 B / **20.797 Mbps** |
+| 测速开始至 App ready | 2.483 s | 2.008 s |
+| 传输完成后自动 standby 空闲计时 | 5032 ms | 5036 ms |
+| 进入 DSLP 日志至唤醒原因日志 | 44.061 s | 44.007 s |
+| 唤醒后固件 NAN 初始化 | 228 ms | 228 ms |
+| 唤醒后 App 发现及重连 ready | **3.456 s** | **3.449 s** |
+| 保存配对认证、TCP PONG | 通过 | 通过 |
+| PING 后空闲 7 秒，不再次触发深睡 | 通过 | 通过 |
+
+第 1 轮开始前执行一次 RTS 复位，第 2 轮直接接续；两轮各一次自动 DSLP，
+均以 `BOOT=0x2 / AON=0x8` 唤醒，过程中无需重新配对。各轮传输前和唤醒后
+均有 PASN type=2 成功记录。未见 HardFault、断言、内存分配失败、MACID 耗尽、
+`staadd fail`、缓存拒绝或 TCP 协议中止。唤醒后的最终状态均为
+`running=1 pong=1 err=0 dropped=0 rxdrop=0 txdrop=0`；这些计数在唤醒重启后
+重新累计，不能用来代表此前整段传输。
+
+两轮 AP 最低堆采样为 29216 / 30336 字节，NP 为 50712 / 53232 字节；均为
+周期采样值，不是实际最低水位。MACID 占用采样峰值为 3/12 和 2/12。
+本次仅验证两轮完整循环，未重新进行长时间 MACID/NP 内存压力测试。
+
+**30 秒 AON 设置对应约 44 秒 UART 间隔的偏差仍存在**，未修改时钟校准或
+补偿。该间隔含串口排空和启动，不等同于电气测量的深睡时长。COM5 此轮
+没有接功耗仪，不能引用其他板卡电流作为本板结果。
+
+脱敏结果和源码摘要见
+[deep-sleep-master-hardware.json](../../component/amebagreen2/nan/tests/results/20261118/deep-sleep-master-hardware.json)。
+原始日志留在忽略目录 `build/nan-merge-master-20261118/hardware/`，可能包含
+配对密钥，不公开。该轮验证完成时，固件和 App 修复尚未提交或推送。
+
+### 2026-11-18：NAN 上传接收路径排查（优化版吞吐待测）
+
+在上述 `3fef5e80` 固件和 App 1.0 (8.2) 上重新测得上传 **12.704 Mbps**、
+下载 **20.635 Mbps**，每方向 10 秒，双方字节数一致，随后自动深睡和 AON
+唤醒通过。未见软件 RX/TX 丢包、内存分配失败、MACID 耗尽或协议中止。
+
+诊断发现较大的应用核接收路径开销：一轮 10.041 秒的上传处理 13,707 个
+接收包，驱动准备累计 1.206 秒、交给网络栈累计 4.847 秒。这里是调用区间
+耗时，包含高优先级 IP 任务抢占，不能作为纯 CPU 利用率；分层计时也不能
+相加。计时本身会降低测速结果。将 ACK 提前到八个 MSS 的试验仅得到
+11.904 Mbps，对照诊断版为 11.534 Mbps，没有明显改善，已撤回。
+
+接收优化版移除 NAN 的中间 pbuf 分配及整包拷贝，直接复制到 FreeRTOS
+网络缓冲；使用 linked RX messages 合并现有队列里的包，每批最多 8 包，
+队列为空立即提交，不增加等待定时器。NDP 代次失效或事件队列满时释放整批
+缓冲。改动只作用于 Green2 本地 NAN，其他接口和 USB 桥接保留原路径。
+
+优化版 `firmware.bin` 为 **899872 字节**，SHA-256：
+`33af6829b5c7999a69009f1a11414711c52aae1997980fef2874fe8fe36ffc17`。
+配置继续使用 NAN 自动深睡 30000 ms，`NAN_NET_DIAG=OFF`；App 未修改。
+COM5 烧录、逐字节读回及 NAN 启动检查通过；保留配对和校准分区，串口已释放。
+原生 ASan/UBSan **15/15 通过**，新增缓冲所有权测试覆盖立即抢占、批次上限、
+队列满、链路失效及错误后的复用；NAN 开启、关闭两种固件构建通过。
+
+**接收优化版尚无手机吞吐数据，也尚未验证其传输后的自动深睡和重连。**
+iPhone 在下一轮测试前变为 CoreDevice `unavailable`，已请求恢复 USB 连接和
+前台状态。不能把旧固件的测量或诊断版结果当作优化后的提升。
+脱敏报告见 [upload-receiver-analysis.json](../../component/amebagreen2/nan/tests/results/20261118/upload-receiver-analysis.json)，
+私有构建及原始日志位于 `build/green2-upload-20261118/`。

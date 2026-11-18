@@ -91,14 +91,21 @@ and vendor-command failures, real PASN/SAE setup using the BLE PIN despite an
 empty NP password, expired/replaced Auth3 rejection, and cached pair verification.
 
 The first hardware pairing exposed an existing cache ambiguity: iOS reused
-service instance `1`, which also appeared in older NIK records. NPK binding now
-requires the local responder role, service instance, and a hash of the password
-used in the completed SAE exchange. Two matching credentials remain an error;
-ordinary cache refreshes do not require a globally unique instance. The AP also
-updates the NP peer's password before the BLE-assisted SAE exchange. The new
-NIK/NPK is committed atomically before clearing the pending NPK; a file-write
-failure retains it for retry. Native tests reproduce duplicate instances,
-ambiguous credentials, failed persistence, and successful later verification.
+service instance `1`, which also appeared in older NIK records. Repeated pairing
+with the fixed PIN can also reuse the password. NPK binding therefore requires
+the completed SAE exchange's responder role, instance and password hash, plus
+the PMKID update for that authenticated peer NMI. The nominated PMKID must match
+the cache entry, and its NIRA tag must validate with that entry's NIK and the
+current peer NMI. Duplicate matching identities remain an error; ordinary cache
+refreshes need no pending NPK. Event 31 uses the radio's 41-byte ABI, including
+the previous PMKID, with success status `1`; the public vendor header still
+describes an older 25-byte ABI.
+
+The AP also updates the NP peer's password before the BLE-assisted SAE exchange.
+The new NIK/NPK is committed atomically before clearing the pending NPK; a
+file-write failure retains it for retry. Native tests cover reused instances
+and PINs, unrelated/malformed PMKID updates, forged NIRA tags, duplicate
+identities, failed persistence, and successful later verification.
 
 On 2026-11-17 the iPhone confirmed pairing with the BLE-delivered PIN, and the
 board logged `authenticated pairing persisted slot=1` with cache result `0`.
@@ -802,3 +809,28 @@ Current `firmware.bin`: **898432 bytes**, SHA-256
 Combined application: 832896 bytes. See the
 [validation summary](tests/results/20261116/auth-peer-fix-validation.json)
 for exact image identity, test scope and remaining limitations.
+
+## Upload receiver follow-up — 2026-11-18 (hardware comparison pending)
+
+The merged deep-sleep image reproduced **12.704 Mbps upload / 20.635 Mbps
+download**, with matching endpoint byte counts and a successful automatic
+sleep/wake cycle. Instrumentation identified substantial AP receive-path
+overhead. An eight-MSS ACK experiment did not materially improve upload and
+was reverted; the upstream ACK policy remains intact.
+
+The receiver candidate copies NAN frames directly from the shared WHC skb into
+a FreeRTOS network buffer, avoiding an intermediate pbuf allocation and copy.
+The WHC receive task submits existing bursts as chains of at most eight frames,
+flushing immediately when its queue empties. There is no batching timer.
+Only the local Green2 NAN profile enables linked RX messages; other interfaces
+and the USB bridge retain their receive paths. Unsent chains are released on
+NDP generation changes or event-queue failure. Native ASan/UBSan ownership and
+protocol tests pass **15/15**, and NAN-on/off builds pass.
+
+Candidate SHA-256 is
+`33af6829b5c7999a69009f1a11414711c52aae1997980fef2874fe8fe36ffc17`
+(899872 bytes, diagnostics off). **No throughput gain is claimed yet:** the
+iPhone became unavailable before this candidate could run. Its transfer,
+automatic-sleep and saved-pair reconnect checks remain pending. See the
+[sanitized analysis](tests/results/20261118/upload-receiver-analysis.json) and
+[hardware validation notes](../../../project/amebagreen2/VALIDATION.md).

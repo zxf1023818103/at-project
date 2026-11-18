@@ -29,6 +29,11 @@
 
 #define CONFIG_ENABLE_CACHE
 
+#if defined(AT_GREEN2_NAN) && !defined(AT_NAN_USB_BRIDGE)
+extern void green2_nan_rx(const void *data, size_t len);
+#endif
+
+
 /* -------------------------------- Defines --------------------------------- */
 
 /* -------------------------------- Macros ---------------------------------- */
@@ -260,6 +265,19 @@ __weak void whc_ipc_host_rx_handler(int idx_wlan, struct sk_buff *skb)
 	DCache_Invalidate(((u32)skb), sizeof(struct sk_buff));
 	DCache_Invalidate((u32)skb->head, skb_buf_max_size);
 #endif /* CONFIG_ENABLE_CACHE */
+
+#if defined(AT_GREEN2_NAN) && !defined(AT_NAN_USB_BRIDGE)
+	if (idx_wlan == 2) {
+		/* NAN uses FreeRTOS+TCP. Copy straight into its network buffer; an
+		 * intermediate lwIP-shaped pbuf adds an allocation and a full copy.
+		 * green2_nan_rx copies before returning, so the normal RSP path can
+		 * safely return this shared skb to the NP. */
+		g_inic_host_priv.rx_bytes += skb->len;
+		g_inic_host_priv.rx_pkts++;
+		green2_nan_rx(skb->data, skb->len);
+		goto RSP;
+	}
+#endif
 
 	/* allocate pbuf to store ethernet data from IPC. */
 #ifdef WHC_RX_SKB_SHARE_TO_PBUF

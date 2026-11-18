@@ -1,0 +1,265 @@
+{
+  "schema": 1,
+  "date": "2026-11-18",
+  "status": "candidate-flashed-hardware-throughput-pending",
+  "target": {
+    "module": "AmebaGreen2 RTL8711F",
+    "port": "COM5",
+    "phone": "iPhone 13 Pro",
+    "app": "Flash Studio 1.0 (8.2), pre-NAN-BLE feature version"
+  },
+  "baseline_firmware_sha256": "3fef5e8099dc299d8adf2c15fef34b237fc3ebdff03a3a9f7b90ef525dffa4cb",
+  "runs": [
+    {
+      "name": "baseline",
+      "startedAt": "2026-11-18T03:32:18Z",
+      "results": [
+        {
+          "bytes": 15990784,
+          "direction": "upload",
+          "mbps": 12.703701290963258,
+          "peerBytes": 15990784,
+          "receiverSeconds": 10.07,
+          "senderSeconds": 10.006179124990012
+        },
+        {
+          "bytes": 25821184,
+          "direction": "download",
+          "mbps": 20.635242192502947,
+          "peerBytes": 25821184,
+          "receiverSeconds": 10.010518416645937,
+          "senderSeconds": 10.021
+        }
+      ],
+      "pass": true,
+      "automatic_sleep_wake": true,
+      "diagnostic_counts": {
+        "fault": 0,
+        "allocation_failure": 0,
+        "stack_overflow": 0,
+        "macid_full": 0,
+        "cache_error": 0,
+        "tcp_abort": 0
+      }
+    },
+    {
+      "name": "diag-baseline-unlocked",
+      "startedAt": "2026-11-18T03:39:29Z",
+      "results": [
+        {
+          "bytes": 14548992,
+          "direction": "upload",
+          "mbps": 11.534232087999207,
+          "peerBytes": 14548992,
+          "receiverSeconds": 10.091,
+          "senderSeconds": 10.018316666653845
+        },
+        {
+          "bytes": 24313856,
+          "direction": "download",
+          "mbps": 19.44208489689613,
+          "peerBytes": 24313856,
+          "receiverSeconds": 10.004629083327018,
+          "senderSeconds": 10.021
+        }
+      ],
+      "pass": true,
+      "automatic_sleep_wake": true,
+      "diagnostic_counts": {
+        "fault": 0,
+        "allocation_failure": 0,
+        "stack_overflow": 0,
+        "macid_full": 0,
+        "cache_error": 0,
+        "tcp_abort": 0
+      }
+    },
+    {
+      "name": "ack8-test",
+      "startedAt": "2026-11-18T03:44:06Z",
+      "results": [
+        {
+          "bytes": 15007744,
+          "direction": "upload",
+          "mbps": 11.903822327979377,
+          "peerBytes": 15007744,
+          "receiverSeconds": 10.086,
+          "senderSeconds": 10.015066624968313
+        },
+        {
+          "bytes": 24444928,
+          "direction": "download",
+          "mbps": 19.478841250566663,
+          "peerBytes": 24444928,
+          "receiverSeconds": 10.039581999997608,
+          "senderSeconds": 10.007
+        }
+      ],
+      "pass": true,
+      "automatic_sleep_wake": true,
+      "diagnostic_counts": {
+        "fault": 0,
+        "allocation_failure": 0,
+        "stack_overflow": 0,
+        "macid_full": 0,
+        "cache_error": 0,
+        "tcp_abort": 0
+      }
+    },
+    {
+      "name": "rxdiag-test",
+      "startedAt": "2026-11-18T03:48:31Z",
+      "results": [
+        {
+          "bytes": 14024704,
+          "direction": "upload",
+          "mbps": 11.173950004979583,
+          "peerBytes": 14024704,
+          "receiverSeconds": 10.041,
+          "senderSeconds": 10.009435166663025
+        },
+        {
+          "bytes": 23199744,
+          "direction": "download",
+          "mbps": 18.55754239160778,
+          "peerBytes": 23199744,
+          "receiverSeconds": 10.0012139583705,
+          "senderSeconds": 10.002
+        }
+      ],
+      "pass": true,
+      "automatic_sleep_wake": true,
+      "diagnostic_counts": {
+        "fault": 0,
+        "allocation_failure": 0,
+        "stack_overflow": 0,
+        "macid_full": 0,
+        "cache_error": 0,
+        "tcp_abort": 0
+      }
+    },
+    {
+      "name": "pathdiag-test",
+      "startedAt": "2026-11-18T03:51:42Z",
+      "results": [
+        {
+          "bytes": 12779520,
+          "direction": "upload",
+          "mbps": 10.098395890952192,
+          "peerBytes": 12779520,
+          "receiverSeconds": 10.124,
+          "senderSeconds": 10.057938208337873
+        },
+        {
+          "bytes": 20971520,
+          "direction": "download",
+          "mbps": 16.755189418626138,
+          "peerBytes": 20971520,
+          "receiverSeconds": 10.013146124954801,
+          "senderSeconds": 10.016
+        }
+      ],
+      "pass": true,
+      "automatic_sleep_wake": true,
+      "diagnostic_counts": {
+        "fault": 0,
+        "allocation_failure": 0,
+        "stack_overflow": 0,
+        "macid_full": 0,
+        "cache_error": 0,
+        "tcp_abort": 0
+      }
+    }
+  ],
+  "diagnostic_profile": [
+    {
+      "run": "rxdiag-test",
+      "direction": "upload",
+      "rx_handler": {
+        "calls": 13707,
+        "prepare_us": 1206378,
+        "deliver_us": 4846508
+      }
+    },
+    {
+      "run": "rxdiag-test",
+      "direction": "download",
+      "rx_handler": {
+        "calls": 8079,
+        "prepare_us": 636035,
+        "deliver_us": 3050990
+      }
+    },
+    {
+      "run": "pathdiag-test",
+      "direction": "upload",
+      "rx_handler": {
+        "calls": 12484,
+        "prepare_us": 1108385,
+        "deliver_us": 4943179
+      },
+      "rx_path": {
+        "alloc_us": 242258,
+        "copy_us": 648464,
+        "submit_us": 3568464,
+        "tcp_us": 1559761,
+        "checksum_us": 447220
+      }
+    },
+    {
+      "run": "pathdiag-test",
+      "direction": "download",
+      "rx_handler": {
+        "calls": 7365,
+        "prepare_us": 583364,
+        "deliver_us": 3083287
+      },
+      "rx_path": {
+        "alloc_us": 154635,
+        "copy_us": 247158,
+        "submit_us": 2418574,
+        "tcp_us": 1229707,
+        "checksum_us": 827771
+      }
+    }
+  ],
+  "profile_limits": [
+    "Instrumentation affects throughput; compare profiles with like instrumentation.",
+    "Handler and submit timings include higher-priority IP-task preemption and overlap TCP/checksum timers; do not sum overlapping values or label them pure CPU utilization."
+  ],
+  "rejected_experiment": "Earlier ACK after eight MSS did not materially improve upload and was reverted.",
+  "candidate": {
+    "sha256": "33af6829b5c7999a69009f1a11414711c52aae1997980fef2874fe8fe36ffc17",
+    "bytes": 899872,
+    "changes": [
+      "Copy NAN RX directly from the shared skb into a FreeRTOS network buffer, avoiding an intermediate pbuf.",
+      "Submit existing RX bursts using linked network buffers; maximum eight frames; flush immediately on an empty WHC queue.",
+      "Discard queued frames after NDP generation changes and release every buffer on event-queue failure."
+    ],
+    "net_diag": false,
+    "nan_deep_sleep_ms": 30000,
+    "throughput_measured": false,
+    "firmware_path": "build/green2-upload-20261118/release/firmware.bin"
+  },
+  "validation": {
+    "native_asan_ubsan": {
+      "passed": 15,
+      "failed": 0
+    },
+    "nan_on_build": "PASS",
+    "nan_off_build": "PASS",
+    "git_diff_check": "PASS",
+    "flash": {
+      "returncode": 0,
+      "readback_pass": true,
+      "application_ready": true,
+      "nan_active": true
+    },
+    "release_diagnostic_symbols_absent": true
+  },
+  "blocker": "iPhone became unavailable to Mac CoreDevice before the receiver-path candidate could be tested. USB/foreground confirmation requested; no reply at report creation.",
+  "limitations": [
+    "No measured throughput gain or candidate sleep/reconnect regression result yet.",
+    "No App changes, pairing erasure or eFuse writes during the receiver investigation."
+  ]
+}

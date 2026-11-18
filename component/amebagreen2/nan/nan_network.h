@@ -9,6 +9,7 @@ void green2_nan_iid(uint8_t iid[8]);
 void green2_nan_net_up(const uint8_t own[6], const uint8_t peer[6], const uint8_t iid[8]);
 void green2_nan_net_down(void);
 void green2_nan_rx(const void *data, size_t len);
+void green2_nan_rx_flush(void);
 void green2_nan_server_start(void);
 void green2_nan_net_status(char *out, size_t len);
 #ifdef AT_NAN_AUTO_SLEEP

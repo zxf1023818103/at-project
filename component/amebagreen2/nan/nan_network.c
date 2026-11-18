@@ -6,6 +6,9 @@
 #include "FreeRTOS_ND.h"
 #include "FreeRTOS_Sockets.h"
 #include "task.h"
+#if ipconfigUSE_LINKED_RX_MESSAGES
+#include "nan_rx_batch.h"
+#endif
 #include <string.h>
 #include <stdio.h>
 #include <inttypes.h>
@@ -63,12 +66,13 @@ static void autosleep_poll(void)
 static struct {
     BaseType_t active;
     TickType_t started;
-    unsigned used, tx_packets, tx_data, rx_packets, send_calls;
+    unsigned used, tx_packets, tx_data, rx_packets, rx_data, send_calls, recv_calls;
     uint32_t whc_ms, whc_max_ms, send_ms, send_max_ms;
+    uint32_t recv_ms, recv_max_ms, recv_bytes;
     struct {
         uint32_t ms, seq, ack, cost_ms;
-        uint16_t bytes;
-        uint8_t tx;
+        uint16_t bytes, window;
+        uint8_t tx, flags;
     } packet[256];
 } net_diag;
 static uint32_t read_be32(const uint8_t *p)
@@ -89,15 +93,23 @@ static void diag_packet(const uint8_t *p, size_t size, BaseType_t tx,
             net_diag.whc_ms += cost * portTICK_PERIOD_MS;
             if (cost * portTICK_PERIOD_MS > net_diag.whc_max_ms)
                 net_diag.whc_max_ms = cost * portTICK_PERIOD_MS;
-        } else ++net_diag.rx_packets;
-        if (net_diag.used < sizeof(net_diag.packet) / sizeof(net_diag.packet[0])) {
+        } else {
+            ++net_diag.rx_packets;
+            net_diag.rx_data += payload > header;
+        }
+        /* Keep the initial exchange and another sample after slow start. */
+        uint32_t elapsed = (tick - net_diag.started) * portTICK_PERIOD_MS;
+        if (net_diag.used < sizeof(net_diag.packet) / sizeof(net_diag.packet[0]) &&
+            (net_diag.used < 128 || elapsed >= 1000u)) {
             unsigned n = net_diag.used++;
-            net_diag.packet[n].ms = (tick - net_diag.started) * portTICK_PERIOD_MS;
+            net_diag.packet[n].ms = elapsed;
             net_diag.packet[n].seq = read_be32(p + 58);
             net_diag.packet[n].ack = read_be32(p + 62);
             net_diag.packet[n].cost_ms = cost * portTICK_PERIOD_MS;
             net_diag.packet[n].bytes = payload - header;
+            net_diag.packet[n].window = (uint16_t)((uint16_t)p[68] << 8 | p[69]);
             net_diag.packet[n].tx = tx != pdFALSE;
+            net_diag.packet[n].flags = p[67];
         }
     }
     taskEXIT_CRITICAL();
@@ -121,11 +133,15 @@ static void diag_end(enum green2_nan_tcp_result result)
         net_diag.tx_packets, net_diag.tx_data, net_diag.rx_packets,
         (unsigned long)net_diag.whc_ms, (unsigned long)net_diag.whc_max_ms,
         net_diag.send_calls, (unsigned long)net_diag.send_ms, (unsigned long)net_diag.send_max_ms);
+    printf("[NAN-PERF] receive data=%u calls=%u bytes=%lu wait_ms=%lu max=%lu\n",
+        net_diag.rx_data, net_diag.recv_calls, (unsigned long)net_diag.recv_bytes,
+        (unsigned long)net_diag.recv_ms, (unsigned long)net_diag.recv_max_ms);
     for (unsigned i = 0; i < net_diag.used; ++i)
-        printf("[NAN-PERF] %c t=%lu seq=%lu ack=%lu len=%u cost=%lu\n",
+        printf("[NAN-PERF] %c t=%lu seq=%lu ack=%lu len=%u cost=%lu win=%u flags=%u\n",
             net_diag.packet[i].tx ? 'T' : 'R', (unsigned long)net_diag.packet[i].ms,
             (unsigned long)net_diag.packet[i].seq, (unsigned long)net_diag.packet[i].ack,
-            net_diag.packet[i].bytes, (unsigned long)net_diag.packet[i].cost_ms);
+            net_diag.packet[i].bytes, (unsigned long)net_diag.packet[i].cost_ms,
+            net_diag.packet[i].window, net_diag.packet[i].flags);
 }
 #endif
 
@@ -229,6 +245,20 @@ void green2_nan_net_down(void)
     taskEXIT_CRITICAL();
     FreeRTOS_NetworkDown(&iface);
 }
+#if ipconfigUSE_LINKED_RX_MESSAGES
+/* Owned by the WHC receive task. Flush on a full batch or before that task
+ * waits, so a lone SYN, ACK or discovery packet is never held for a timer. */
+static struct green2_nan_rx_batch rx_batch;
+static uint32_t rx_generation;
+void green2_nan_rx_flush(void)
+{
+    unsigned count = rx_batch.count;
+    unsigned lost = green2_nan_rx_batch_flush(&rx_batch,
+        link_up && rx_generation == link_generation);
+    rx_count += count - lost;
+    rx_dropped += lost;
+}
+#endif
 void green2_nan_rx(const void *data, size_t len)
 {
     if (!link_up || len < 14 || len > 1514) return;
@@ -241,11 +271,21 @@ void green2_nan_rx(const void *data, size_t len)
     if (!b) { rx_dropped++; return; }
     memcpy(b->pucEthernetBuffer, data, len); b->xDataLength = len;
     b->pxInterface = &iface; b->pxEndPoint = FreeRTOS_MatchingEndpoint(&iface, b->pucEthernetBuffer);
+#if ipconfigUSE_LINKED_RX_MESSAGES
+    if (rx_batch.count && rx_generation != link_generation) green2_nan_rx_flush();
+    if (!rx_batch.count) rx_generation = link_generation;
+    if (!green2_nan_rx_batch_push(&rx_batch, b)) {
+        ++rx_dropped;
+        vReleaseNetworkBufferAndDescriptor(b);
+    }
+    if (rx_batch.count == GREEN2_NAN_RX_BATCH_LIMIT) green2_nan_rx_flush();
+#else
     IPStackEvent_t e = {eNetworkRxEvent, b};
     if (xSendEventStructToIPTask(&e, 0) != pdPASS) {
         rx_dropped++; vReleaseNetworkBufferAndDescriptor(b);
     }
     else rx_count++;
+#endif
 }
 struct tcp_client {
     Socket_t socket;
@@ -302,6 +342,12 @@ static int tcp_io(struct tcp_client *client, void *data, size_t size,
             ++net_diag.send_calls;
             net_diag.send_ms += cost;
             if (cost > net_diag.send_max_ms) net_diag.send_max_ms = cost;
+        } else if (net_diag.active) {
+            uint32_t cost = tcp_now_ms(NULL) - before;
+            ++net_diag.recv_calls;
+            if (n > 0) net_diag.recv_bytes += (uint32_t)n;
+            net_diag.recv_ms += cost;
+            if (cost > net_diag.recv_max_ms) net_diag.recv_max_ms = cost;
         }
 #endif
         /* This FreeRTOS+TCP release reports a send timeout as ENOSPC,
@@ -409,6 +455,13 @@ static void server(void *arg)
                 result == GREEN2_NAN_TCP_UPLOAD ? "upload" : "download", stats.bytes,
                 (unsigned long)stats.elapsed_ms, kbps / 1000u, kbps % 1000u);
             const FreeRTOS_Socket_t *socket_state = (const FreeRTOS_Socket_t *)client;
+#ifdef AT_NAN_NET_DIAG
+            printf("[NAN-PERF] socket rxbuf=%lu rxwin=%lu low=%lu high=%lu\n",
+                (unsigned long)socket_state->u.xTCP.uxRxStreamSize,
+                (unsigned long)socket_state->u.xTCP.xTCPWindow.xSize.ulRxWindowLength,
+                (unsigned long)socket_state->u.xTCP.uxLittleSpace,
+                (unsigned long)socket_state->u.xTCP.uxEnoughSpace);
+#endif
             printf("[NAN] TCP MSS=%u txbuf=%lu txwin=%lu rxdrop=%u txdrop=%u\n",
                 socket_state->u.xTCP.usMSS, (unsigned long)socket_state->u.xTCP.uxTxStreamSize,
                 (unsigned long)socket_state->u.xTCP.xTCPWindow.xSize.ulTxWindowLength,
