@@ -1,0 +1,130 @@
+{
+  "date": "2026-11-18",
+  "branch": "test/bl618dg-native-whc-usb",
+  "firmware": {
+    "commit": "0232348f2f5175a51c00878f3d0260b8ccd1153e",
+    "sha256": "ff1b90cf5d70f3c95bc16ba7922471f029a99a5d0ea4602aa737a1d8cc327801",
+    "bytes": 897824,
+    "configuration": "NAN=ON NAN_DEEP_SLEEP=ON NAN_DEEP_SLEEP_MS=30000 NIMBLE=OFF BLE_NAN_WAKE=OFF BLE_POWER_TEST=OFF NAN_USB=OFF MINIMAL=ON IPERF=OFF TFM=OFF",
+    "port": "COM5",
+    "boot_port": "COM5",
+    "flash_scope": "firmware only; LittleFS preserved",
+    "flash_exit": 0,
+    "readback_pass": true
+  },
+  "hardware": {
+    "target": "AmebaGreen2 / RTL8711F",
+    "serial_adapter": "USB-SERIAL CH340",
+    "port": "COM5",
+    "baud": 1500000,
+    "reset": "same-port RTS",
+    "power_measurement": false
+  },
+  "build": {
+    "passed": true,
+    "native_tests": {
+      "passed": 6,
+      "total": 6,
+      "sanitizers": [
+        "AddressSanitizer",
+        "UndefinedBehaviorSanitizer"
+      ]
+    }
+  },
+  "manual_tests": [
+    {
+      "case": "timed_3",
+      "pass": true,
+      "setting_seconds": 3,
+      "boot_reason": "00000002",
+      "aon_reason": "00000008",
+      "entry_log_to_boot_reason_ms": 4531,
+      "entry_log_to_nan_active_ms": 4760,
+      "nan_startup_ms": 228
+    },
+    {
+      "case": "timed_10",
+      "pass": true,
+      "setting_seconds": 10,
+      "boot_reason": "00000002",
+      "aon_reason": "00000008",
+      "entry_log_to_boot_reason_ms": 14756,
+      "entry_log_to_nan_active_ms": 14987,
+      "nan_startup_ms": 226
+    },
+    {
+      "case": "no_timer_60s",
+      "pass": true,
+      "observation_seconds": 60,
+      "unexpected_boot_or_pending": false
+    },
+    {
+      "case": "RTS_reset_recovery",
+      "pass": true,
+      "boot_reason": "00000000",
+      "aon_reason": "00000000",
+      "nan_startup_ms": 229
+    }
+  ],
+  "deep_sleep_events": [
+    {
+      "capture": "manual",
+      "host_ms": 992,
+      "message": "[NAN-DEEP] entering DSLP wake_ms=3000 locks=00000001 deep_locks=00000001"
+    },
+    {
+      "capture": "manual",
+      "host_ms": 5523,
+      "message": "[NAN-DEEP] boot reason=00000002 aon=00000008 source=dslp next_sleep_ms=30000"
+    },
+    {
+      "capture": "manual",
+      "host_ms": 5752,
+      "message": "[NAN-DEEP] NAN active rc=0 startup_ms=228 uptime_ms=228"
+    },
+    {
+      "capture": "manual",
+      "host_ms": 6889,
+      "message": "[NAN-DEEP] entering DSLP wake_ms=10000 locks=00000001 deep_locks=00000001"
+    },
+    {
+      "capture": "manual",
+      "host_ms": 21645,
+      "message": "[NAN-DEEP] boot reason=00000002 aon=00000008 source=dslp next_sleep_ms=30000"
+    },
+    {
+      "capture": "manual",
+      "host_ms": 21876,
+      "message": "[NAN-DEEP] NAN active rc=0 startup_ms=226 uptime_ms=226"
+    },
+    {
+      "capture": "manual",
+      "host_ms": 23063,
+      "message": "[NAN-DEEP] entering DSLP wake_ms=0 locks=00000001 deep_locks=00000001"
+    },
+    {
+      "capture": "manual-reset-recovery",
+      "host_ms": 197,
+      "message": "[NAN-DEEP] boot reason=00000000 aon=00000000 source=reset/power next_sleep_ms=30000"
+    },
+    {
+      "capture": "manual-reset-recovery",
+      "host_ms": 424,
+      "message": "[NAN-DEEP] NAN active rc=0 startup_ms=229 uptime_ms=229"
+    }
+  ],
+  "observed_runtime_faults": 0,
+  "final_status": "nan: running=1 events=1 dropped=0 link=0 rx=0 tx=0 pong=0 up=0 down=0 err=0 rxdrop=0 txdrop=0",
+  "automatic_transfer_sleep_wake": {
+    "status": "blocked_before_transfer",
+    "reason": "Phone now available; discovery timed out. Fresh pairing authenticated but cache updates failed. See automatic-deep-sleep-attempts.json."
+  },
+  "limitations": [
+    "Host UART reception timestamps include the 100 ms serial drain and boot; these are not current-waveform sleep duration measurements.",
+    "AON timer delay remains longer than configured; no RC trim or empirical compensation applied.",
+    "No current meter on this bench; earlier COM43/COM17 current measurements do not qualify this COM5 run.",
+    "Pairing storage preserved by firmware-only flash; phone reconnection remains untested on this build."
+  ],
+  "private_evidence": "build/green2-nan-deep-20261118/test",
+  "final_state": "NAN active after RTS reset; serial capture stopped and COM5 released"
+}

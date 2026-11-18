@@ -42,9 +42,14 @@ void ap_clock_gate(void)
 	RCC_PeriphClockCmd(APBPeriph_NULL, APBPeriph_CPU0_CLOCK, DISABLE);
 
 	pmu_release_wakelock(PMU_CPU0_RUN);
+#ifdef AT_GREEN2_BLE_SLEEP
+	/* Opt-in non-TF-M BLE standby: permit the vendor whole-system CG/PG path. */
+	pmu_release_wakelock(PMU_OS);
+#else
 	/* This port supports AP retention SleepCG. Keep the NP OS awake for the
 	 * wireless/controller IPC and watchdog instead of cascading into whole-
 	 * chip sleep, whose SPIC/power sequence does not preserve TF-M ownership. */
+#endif
 }
 void ap_clock_on(void)
 {
@@ -99,6 +104,9 @@ void ap_resume(void)
 	}
 
 	pmu_acquire_wakelock(PMU_CPU0_RUN);
+#ifdef AT_GREEN2_BLE_SLEEP
+	pmu_acquire_wakelock(PMU_OS);
+#endif
 
 #if !defined(CONFIG_MP_SHRINK) && defined (CONFIG_FW_DRIVER_COEXIST) && CONFIG_FW_DRIVER_COEXIST
 	extern void wifi_hal_system_resume_wlan(void);
@@ -127,8 +135,9 @@ void ap_tickless_ipc_int(void *Data, u32 IrqStatus, u32 ChanNum)
 
 	if (psleep_param->dlps_enable) {
 		RCC_PeriphClockCmd(APBPeriph_ATIM, APBPeriph_ATIM_CLOCK, ENABLE);
-		if (psleep_param->sleep_time) {
-			AONTimer_ClearINT();
+		AONTimer_INT(DISABLE);
+		AONTimer_ClearINT();
+		if (psleep_param->sleep_time && psleep_param->sleep_time != PMU_SLEEP_FOREVER) {
 			AONTimer_Setting(psleep_param->sleep_time);
 			AONTimer_INT(ENABLE);
 		}

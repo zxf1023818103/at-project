@@ -11,4 +11,7 @@ void green2_nan_net_down(void);
 void green2_nan_rx(const void *data, size_t len);
 void green2_nan_server_start(void);
 void green2_nan_net_status(char *out, size_t len);
+#ifdef AT_NAN_AUTO_SLEEP
+void green2_nan_net_autosleep_reset(void);
+#endif
 #endif

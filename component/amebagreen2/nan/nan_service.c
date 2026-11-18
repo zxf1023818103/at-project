@@ -5,7 +5,7 @@
 #include "queue.h"
 #include "FreeRTOS_CLI.h"
 #include "whc_ipc_host_nan.h"
-#include "wifi_api_types.h"
+#include "nan_platform.h"
 #include "nan_pasn.h"
 #include "nan_network.h"
 #include "nan_wire.h"
@@ -25,10 +25,31 @@
 #include "rtw_nan_cmd.h"
 
 #define NAN_SERVICE "_flashstudio._tcp"
+#ifndef NAN_DEVICE_NAME
+#define NAN_DEVICE_NAME "Green2 FreeRTOS"
+#endif
 #define NAN_HEAP_LOG_INTERVAL_MS 10000u
+enum nan_internal_event {
+    NAN_EVENT_OOB_OPEN = 0xfffc,
+    NAN_EVENT_STANDBY = 0xfffd,
+    NAN_EVENT_STOP = 0xfffe,
+    NAN_EVENT_START = 0xffff,
+};
 struct nan_message { uint16_t id, len; uint8_t data[]; };
 static QueueHandle_t events;
 static volatile unsigned running, received, dropped;
+static volatile bool startup_waiting = true;
+#ifdef AT_NAN_AUTO_SLEEP
+static volatile bool parked, pause_requested;
+static unsigned init_count, radio_init_count, pause_count, resume_count;
+extern int green2_nan_power_can_pause(void);
+extern void green2_nan_power_wait(void);
+extern void green2_nan_power_resume_result(int rc);
+#endif
+/* Platforms may defer the existing NAN owner task until an external trigger.
+ * All radio, PASN and TCP work still runs in the shared implementation. */
+__attribute__((weak)) void green2_nan_wait_for_start(void) {}
+__attribute__((weak)) void green2_nan_start_result(int rc) { (void)rc; }
 static uint8_t peer_instance, active_ndp;
 static uint8_t active_peer[6], active_ndi[6];
 static bool datapath_active;
@@ -53,6 +74,11 @@ void green2_nan_authenticated(const unsigned char *peer, unsigned char type)
 
 static void nan_event(uint16_t id, void *data, uint32_t len)
 {
+#ifdef AT_NAN_AUTO_SLEEP
+    /* Ignore teardown notifications while parked; never replay them into a
+     * new radio session after wake. The owner drains events already queued. */
+    if (parked) return;
+#endif
     extern void green2_nan_heap_check(const char *where);
     if (id >= 29 && id <= 34) green2_nan_heap_check("event copy");
     if (len > 2048 || (len && !data)) { dropped++; return; }
@@ -104,7 +130,7 @@ static int publish(void)
     memcpy(p->service_specific_info.info, "\x50\x6f\x9a\x02", 4);
     p->service_specific_info.length = 4;
     append_info(&p->service_specific_info, 2, NAN_SERVICE);
-    append_info(&p->service_specific_info, 3, "Green2 FreeRTOS");
+    append_info(&p->service_specific_info, 3, NAN_DEVICE_NAME);
     /* DNS-SD TXT records used by the reference accessory advertisement. */
     append_info(&p->service_specific_info, 4,
         "\x0e" "vendorName=RTK" "\x15" "pairingName=Green2NAN" "\x12" "modelName=RTL8711F");
@@ -115,22 +141,9 @@ static int publish(void)
     vPortFree(p);
     return rc;
 }
-static int start(void)
+static int publish_service(void)
 {
-    extern int amebagreen2_wifi_ready(void);
-    if (!amebagreen2_wifi_ready()) return -1;
-    if (running) return 0;
-    int rc = whc_host_nan_init();
-    printf("[NAN] init rc=%d\n", rc);
-    if (rc) return rc;
-    rc = whc_host_nan_start(112, RTW_SUPPORT_BAND_2_4G_5G_BOTH);
-    printf("[NAN] start rc=%d\n", rc);
-    extern int green2_nan_read_mac(void);
-    if (!rc) rc = green2_nan_read_mac();
-    extern void green2_nan_p256_init(void);
-    if (!rc) green2_nan_p256_init();
-    if (!rc) rc = green2_pasn_init();
-    if (!rc) rc = publish();
+    int rc = publish();
     if (!rc) {
 #ifdef AT_NAN_BLE_OOB
         /* No reusable default PIN in this profile. BLE opens the window. */
@@ -142,10 +155,115 @@ static int start(void)
         mbedtls_platform_zeroize(&pw, sizeof(pw));
 #endif
     }
-    if (rc) { green2_pasn_stop(); whc_host_nan_stop(); whc_host_nan_deinit(); }
-    else { running = 1; printf("[NAN] published %s / Green2 FreeRTOS\n", NAN_SERVICE); }
+    if (!rc) {
+        running = 1;
+        printf("[NAN] published %s / %s\n", NAN_SERVICE, NAN_DEVICE_NAME);
+    }
     return rc;
 }
+static int start(void)
+{
+    if (!green2_nan_radio_ready()) return -1;
+    if (running) return 0;
+    int rc = whc_host_nan_init();
+    printf("[NAN] init rc=%d\n", rc);
+    if (rc) return rc;
+#ifdef AT_NAN_AUTO_SLEEP
+    ++init_count;
+    ++radio_init_count;
+#endif
+    rc = green2_nan_radio_start();
+    printf("[NAN] start rc=%d\n", rc);
+    extern int green2_nan_read_mac(void);
+    if (!rc) rc = green2_nan_read_mac();
+    extern void green2_nan_p256_init(void);
+    if (!rc) green2_nan_p256_init();
+    if (!rc) rc = green2_pasn_init();
+    if (!rc) rc = publish_service();
+    if (rc) { green2_pasn_stop(); whc_host_nan_stop(); whc_host_nan_deinit(); }
+    return rc;
+}
+#ifdef AT_NAN_AUTO_SLEEP
+int green2_nan_request_standby(void)
+{
+    if (!green2_nan_power_can_pause()) return -1;
+    taskENTER_CRITICAL();
+    bool allowed = running && !pause_requested;
+    if (allowed) pause_requested = true;
+    taskEXIT_CRITICAL();
+    if (!allowed) return -1;
+    struct nan_message *m = pvPortMalloc(sizeof(*m));
+    if (m) {
+        m->id = NAN_EVENT_STANDBY; m->len = 0;
+        if (xQueueSend(events, &m, 0) == pdPASS) return 0;
+        vPortFree(m);
+    }
+    pause_requested = false;
+    return -1;
+}
+static void standby(void)
+{
+    if (!running || !green2_nan_power_can_pause()) {
+        pause_requested = false;
+        printf("[NAN] standby rejected: NAN inactive or power policy busy\n");
+        return;
+    }
+    /* This ends the current NDP/TCP session, but keeps RF/IPC, the IP task,
+     * TCP listener and host identity cache. The vendor IPS check requires
+     * removal of the third WLAN interface, not just stopping NAN discovery. */
+    green2_nan_net_autosleep_reset();
+    parked = true;
+    int rc = whc_host_nan_stop();
+    if (rc) {
+        parked = pause_requested = false;
+        printf("[NAN] standby stop failed rc=%d\n", rc);
+        return;
+    }
+    running = 0;
+    datapath_active = request_pending = false;
+    peer_instance = 0;
+    memset(active_peer, 0, sizeof(active_peer));
+    memset(active_ndi, 0, sizeof(active_ndi));
+    memset(&accepted_request, 0, sizeof(accepted_request));
+    green2_nan_net_down();
+    green2_pasn_pause();
+    rc = whc_host_nan_deinit();
+    if (rc) {
+        parked = pause_requested = false;
+        printf("[NAN] standby deinit failed rc=%d\n", rc);
+        green2_nan_power_resume_result(rc);
+        return;
+    }
+    struct nan_message *old;
+    while (xQueueReceive(events, &old, 0) == pdPASS) {
+        mbedtls_platform_zeroize(old->data, old->len);
+        vPortFree(old);
+    }
+    ++pause_count;
+    printf("[NAN] paused host_inits=%u radio_inits=%u pauses=%u; entering standby\n",
+           init_count, radio_init_count, pause_count);
+    green2_nan_power_wait();
+    /* Reopen only the radio interface/schedule. Do not repeat RF/IPC bringup,
+     * the PKE self-test, PASN initialization or host IP/TCP task creation. */
+    parked = false;
+    rc = whc_host_nan_init();
+    if (!rc) ++radio_init_count;
+    printf("[NAN] radio interface restored rc=%d\n", rc);
+    if (!rc) rc = green2_nan_radio_start();
+    extern int green2_nan_read_mac(void);
+    if (!rc) rc = green2_nan_read_mac();
+    if (!rc) rc = green2_pasn_resume();
+    if (!rc) rc = publish_service();
+    if (!rc) ++resume_count;
+    else {
+        green2_pasn_stop(); whc_host_nan_stop(); whc_host_nan_deinit();
+    }
+    pause_requested = false;
+    printf("[NAN] retained resume rc=%d host_inits=%u radio_inits=%u pauses=%u resumes=%u\n",
+           rc, init_count, radio_init_count, pause_count, resume_count);
+    green2_nan_power_resume_result(rc);
+}
+#endif
 static void datapath_request(const void *data, size_t len)
 {
     struct rtw_nan_datapath_request_received_event_data req;
@@ -160,6 +278,11 @@ static void datapath_request(const void *data, size_t len)
         printf("[NAN] rejected NDP request id=%u pub=%u len=%u attrs=%u authenticated=%u\n",
             req.datapath_id, req.publish_id, (unsigned)len, req.attribute_list_length, authenticated); return;
     }
+#ifdef AT_NAN_AUTO_SLEEP
+    /* A newly authenticated connection takes precedence over the previous
+     * client's completed-transfer idle timer. */
+    green2_nan_net_autosleep_reset();
+#endif
     /* Respond once per transaction. Re-entering the vendor response API for
      * a queued retransmission can replace the security state before Confirm. */
     if (request_pending && token == request_token && req.datapath_id == accepted_request.datapath_id &&
@@ -225,10 +348,15 @@ static void datapath_established(const void *data, size_t len)
 static void nan_task(void *arg)
 {
     (void)arg;
-    extern int wifi_port_enable(void);
-    int rc = wifi_port_enable();
-    if (!rc) rc = start();
+    green2_nan_wait_for_start();
+    startup_waiting = false;
+    int rc = green2_nan_radio_enable();
+    if (!rc) {
+        green2_nan_server_start();
+        rc = start();
+    }
     printf("[NAN] standalone startup result=%d\n", rc);
+    green2_nan_start_result(rc);
     TickType_t last_heap_log = xTaskGetTickCount();
     for (;;) {
         /* Use elapsed time, rather than queue inactivity, so busy discovery
@@ -242,14 +370,21 @@ static void nan_task(void *arg)
         struct nan_message *m;
         green2_pasn_timers();
         if (xQueueReceive(events, &m, pdMS_TO_TICKS(100)) != pdPASS) continue;
-        if (m->id == 0xffff) printf("[NAN] start result=%d\n", start());
+        if (m->id == NAN_EVENT_START) {
+            int result = start();
+            printf("[NAN] start result=%d\n", result);
+            green2_nan_start_result(result);
+        }
+#ifdef AT_NAN_AUTO_SLEEP
+        else if (m->id == NAN_EVENT_STANDBY) standby();
+#endif
 #ifdef AT_NAN_BLE_OOB
-        else if (m->id == 0xfffd) {
+        else if (m->id == NAN_EVENT_OOB_OPEN) {
             if (running) green2_nan_oob_open();
             else green2_nan_oob_error();
         }
 #endif
-        else if (m->id == 0xfffe && running) {
+        else if (m->id == NAN_EVENT_STOP && running) {
 #ifdef AT_NAN_BLE_OOB
             green2_nan_oob_close();
 #endif
@@ -292,7 +427,7 @@ int green2_nan_oob_request(void)
     if (!green2_nan_oob_pending()) return 0;
     struct nan_message *m = pvPortMalloc(sizeof(*m));
     if (m) {
-        m->id = 0xfffd; m->len = 0;
+        m->id = NAN_EVENT_OOB_OPEN; m->len = 0;
         if (xQueueSend(events, &m, 0) == pdPASS) return 0;
         vPortFree(m);
     }
@@ -302,11 +437,40 @@ int green2_nan_oob_request(void)
 #endif
 static BaseType_t nan_command(char *out, size_t n, const char *cmd)
 {
-    if (!strcmp(cmd, "nan start")) { nan_event(0xffff, NULL, 0); snprintf(out, n, "nan: start queued\r\n"); }
-    else if (!strcmp(cmd, "nan stop")) { nan_event(0xfffe, NULL, 0); snprintf(out, n, "nan: stop queued\r\n"); }
+    if (startup_waiting) {
+        snprintf(out, n, "nan: running=0 waiting for startup trigger\r\n");
+        return pdFALSE;
+    }
+#ifdef AT_NAN_AUTO_SLEEP
+    if (parked || pause_requested) {
+        snprintf(out, n, "nan: running=%u parked=%u host_inits=%u radio_inits=%u pauses=%u resumes=%u; standby pending\r\n",
+                 running, parked, init_count, radio_init_count, pause_count, resume_count);
+        return pdFALSE;
+    }
+#endif
+#ifdef AT_ENABLE_NAN_DEEP_SLEEP
+    if (!strncmp(cmd, "nan sleep ", 10)) {
+        extern int green2_nan_deep_request(uint32_t seconds);
+        char *end;
+        unsigned long seconds = strtoul(cmd + 10, &end, 10);
+        if (cmd[10] < '0' || cmd[10] > '9' || *end || seconds > 3600) {
+            snprintf(out, n, "nan sleep <0..3600 seconds>: 0 disables timed wake\r\n");
+        } else {
+            int rc = green2_nan_deep_request((uint32_t)seconds);
+            snprintf(out, n, "nan: deep sleep %s; wake_seconds=%lu\r\n", rc ? "rejected" : "queued", seconds);
+        }
+        return pdFALSE;
+    }
+#endif
+    if (!strcmp(cmd, "nan start")) { nan_event(NAN_EVENT_START, NULL, 0); snprintf(out, n, "nan: start queued\r\n"); }
+    else if (!strcmp(cmd, "nan stop")) { nan_event(NAN_EVENT_STOP, NULL, 0); snprintf(out, n, "nan: stop queued\r\n"); }
     else {
         char network[160]; green2_nan_net_status(network, sizeof(network));
         snprintf(out, n, "nan: running=%u events=%u dropped=%u %s\r\n", running, received, dropped, network);
+#ifdef AT_NAN_AUTO_SLEEP
+        printf("[NAN] host_inits=%u radio_inits=%u pauses=%u resumes=%u\n",
+               init_count, radio_init_count, pause_count, resume_count);
+#endif
     }
     return pdFALSE;
 }
@@ -317,6 +481,5 @@ void green2_nan_cli_register(void)
     configASSERT(events);
     whc_host_nan_register_evt_cb(nan_event);
     configASSERT(xTaskCreate(nan_task, "nan", 4096, NULL, 3, NULL) == pdPASS);
-    green2_nan_server_start();
     FreeRTOS_CLIRegisterCommand(&def);
 }

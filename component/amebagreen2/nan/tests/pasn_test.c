@@ -18,6 +18,7 @@ static unsigned installations, authenticated;
 static unsigned expected_type = 1;
 static u8 nik_cache[500], stored[888];
 static int stored_valid, store_fail;
+static unsigned store_reads;
 static const u8 peer[6] = {2,1,2,3,4,5}, own[6] = {2,1,2,3,4,6};
 #ifdef AT_NAN_BLE_OOB
 static int window_open;
@@ -35,6 +36,7 @@ int green2_nan_store(void *p, size_t n, int write)
 {
     assert(n == sizeof(stored));
     if (write) { if (store_fail) return -1; memcpy(stored, p, n); stored_valid = 1; return 0; }
+    ++store_reads;
     if (!stored_valid) return -1;
     memcpy(p, stored, n); return 0;
 }
@@ -180,24 +182,39 @@ int main(int argc, char **argv)
     nik_cache[4] ^= 1;
     assert(green2_pasn_cache_update(nik_cache, 500, 7) < 0);
     nik_cache[4] ^= 1;
-    /* Two peers/re-pairings can reuse the same service instance. Reject two
-     * equal passwords; a different old password must not block the new bond. */
+    /* Instance IDs are reused by other peers and by re-pairing. Only bind
+     * the NPK when the successful setup credential identifies one entry. */
+    u8 old_stored[sizeof(stored)]; memcpy(old_stored, stored, sizeof(stored));
     memcpy(nik_cache + 80, nik_cache + 20, 60);
     memset(nik_cache + 91, 0x88, 16);
     assert(green2_pasn_cache_update(nik_cache, sizeof(nik_cache), 7) < 0);
+    assert(!memcmp(old_stored, stored, sizeof(stored)));
     memcpy(nik_cache + 124, "654321", 6);
     store_fail = 1;
     assert(green2_pasn_cache_update(nik_cache, sizeof(nik_cache), 7) < 0);
+    assert(!memcmp(old_stored, stored, sizeof(stored)));
     store_fail = 0;
     assert(!green2_pasn_cache_update(nik_cache, sizeof(nik_cache), 7));
     assert(!memcmp(stored + 504, nik_cache + 31, 16));
     assert(p->pmk_len == 32 && !memcmp(stored + 520, p->pmk, 32));
-    /* Ordinary PMKID/cache refreshes need no NPK binding and tolerate duplicate
-     * instance numbers even when a historical password also matches. */
+    assert(!memcmp(old_stored + 552, stored + 552, 48));
+    /* Ordinary cache refresh does not bind a new key. A historical credential
+     * with the same instance/password must not prevent the refresh. */
     memcpy(nik_cache + 124, "123456", 6);
     assert(!green2_pasn_cache_update(nik_cache, sizeof(nik_cache), 7));
+    /* Parking must revoke the old link's authorization. Resume restores the
+     * retained identity, without reading flash or authorizing a new link. */
+    unsigned reads = store_reads;
+    u8 retained_nik[500]; memcpy(retained_nik, nik_cache, sizeof(retained_nik));
+    green2_pasn_pause();
+    assert(!green2_pasn_peer_authorized(peer));
+    memset(nik_cache, 0, sizeof(nik_cache));
+    assert(!green2_pasn_resume() && store_reads == reads);
+    assert(!green2_pasn_peer_authorized(peer));
+    assert(!memcmp(nik_cache, retained_nik, sizeof(nik_cache)));
     green2_pasn_stop();
     assert(!green2_pasn_peer_authorized(peer));
+    assert(green2_pasn_resume() < 0); /* A full stop cannot use the resume path. */
     /* Reinitialization loads the same persistent identity without leaking a
      * second responder cache or authorizing a peer before verification. */
     assert(!green2_pasn_init() && !green2_pasn_peer_authorized(peer));

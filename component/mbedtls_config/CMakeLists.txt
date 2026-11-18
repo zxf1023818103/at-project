@@ -24,7 +24,10 @@ set(USE_STATIC_MBEDTLS_LIBRARY ON  CACHE BOOL "" FORCE)
 set(DISABLE_PACKAGE_CONFIG_AND_INSTALL ON CACHE BOOL "" FORCE)
 set(GEN_FILES            OFF CACHE BOOL "" FORCE)
 
-add_subdirectory(mbedtls "${CMAKE_BINARY_DIR}/at_mbedtls_build" EXCLUDE_FROM_ALL)
+if(NOT MBEDTLS_UPSTREAM_DIR)
+    set(MBEDTLS_UPSTREAM_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mbedtls")
+endif()
+add_subdirectory(${MBEDTLS_UPSTREAM_DIR} "${CMAKE_BINARY_DIR}/at_mbedtls_build" EXCLUDE_FROM_ALL)
 
 # Shared (non-vendored) mbedTLS glue that also lives here, for platform ports to consume:
 #   - threading_alt.h               : the FreeRTOS-friendly opaque mutex type (void*)

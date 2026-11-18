@@ -1,0 +1,5 @@
+mainmenu "BL618DG CherryUSB Bulk benchmark"
+source "$BL_SDK_BASE/Kconfig"
+config USB_BENCH_HOST
+    bool "Start USB in host mode"
+    default y

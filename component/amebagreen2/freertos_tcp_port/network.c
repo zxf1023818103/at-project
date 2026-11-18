@@ -130,11 +130,22 @@ int wifi_port_enable(void)
     amebagreen2_country_init();
     struct rtw_mac mac;
     if (wifi_get_mac_address(0, &mac, 0) == 0) memcpy(sta_mac, &mac, 6);
+#if !defined(AT_NAN_USB_BRIDGE) && !defined(AT_GREEN2_BLE_SLEEP)
     at_netif_set_ops(&ops); at_netif_bringup();
+#endif
     enabled = 1;
     printf("[WiFi] ready %02x:%02x:%02x:%02x:%02x:%02x\n", sta_mac[0],sta_mac[1],sta_mac[2],sta_mac[3],sta_mac[4],sta_mac[5]);
     return 0;
 }
+#ifdef AT_ENABLE_BLE_NAN_WAKE
+/* Called by the NAN owner task after BLE wake. RF/IPC was initialized at boot;
+ * defer the IP task and its periodic timers until NAN is actually needed. */
+void amebagreen2_nan_network_start(void)
+{
+    at_netif_set_ops(&ops);
+    at_netif_bringup();
+}
+#endif
 void wifi_port_autoreconnect_disable(void) {}
 int wifi_port_scan(const char *ssid, uint8_t *chan, int *sec)
 {

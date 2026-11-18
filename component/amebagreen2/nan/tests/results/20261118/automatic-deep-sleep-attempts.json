@@ -1,0 +1,65 @@
+{
+  "date": "2026-11-18",
+  "firmware": {
+    "commit": "0232348f2f5175a51c00878f3d0260b8ccd1153e",
+    "sha256": "ff1b90cf5d70f3c95bc16ba7922471f029a99a5d0ea4602aa737a1d8cc327801",
+    "bytes": 897824,
+    "configuration": "NAN=ON NAN_DEEP_SLEEP=ON NAN_DEEP_SLEEP_MS=30000 NIMBLE=OFF BLE_NAN_WAKE=OFF BLE_POWER_TEST=OFF NAN_USB=OFF MINIMAL=ON IPERF=OFF TFM=OFF",
+    "port": "COM5",
+    "boot_port": "COM5",
+    "flash_scope": "firmware only; LittleFS preserved",
+    "flash_exit": 0,
+    "readback_pass": true
+  },
+  "app_version": "1.0 (8.1), pre-BLE NAN pairing UI",
+  "attempts": [
+    {
+      "case": "attempt1",
+      "startedAt": "2026-11-18T00:58:04Z",
+      "discoverySeconds": null,
+      "readySeconds": null,
+      "finished": false,
+      "cancelled": false,
+      "error": "吞吐测试超时；请检查主机服务和 NDP 链路。",
+      "results": []
+    },
+    {
+      "case": "attempt2",
+      "startedAt": "2026-11-18T01:01:39Z",
+      "discoverySeconds": null,
+      "readySeconds": null,
+      "finished": false,
+      "cancelled": false,
+      "error": "吞吐测试超时；请检查主机服务和 NDP 链路。",
+      "results": []
+    },
+    {
+      "case": "attempt3",
+      "startedAt": "2026-11-18T01:09:00Z",
+      "discoverySeconds": null,
+      "readySeconds": null,
+      "finished": false,
+      "cancelled": false,
+      "error": "吞吐测试超时；请检查主机服务和 NDP 链路。",
+      "results": []
+    }
+  ],
+  "manual_pairing": {
+    "user_report": "success on final retry",
+    "firmware_setup_authenticated": 1,
+    "cache_write_rejections": 5,
+    "PASN_error_following_setup": true
+  },
+  "automatic_deep_sleep": {
+    "passed": false,
+    "triggered": false,
+    "reason": "No throughput completed; service discovery timed out, then successful re-pairing did not persist its cache."
+  },
+  "cache_fix": {
+    "description": "Authenticate the cache credential before binding NPK, tolerate reused instance IDs on ordinary refresh, and retain pending keys if storage fails.",
+    "new_regression_reproduces_old_failure": true,
+    "native_sanitizer_tests_passed": 6,
+    "firmware_build_or_flash_of_fix": false
+  },
+  "private_evidence": "build/green2-nan-deep-20261118/test"
+}

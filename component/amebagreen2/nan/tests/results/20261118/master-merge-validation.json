@@ -1,0 +1,81 @@
+{
+  "date": "2026-11-18",
+  "repository": "at-project",
+  "target_branch": "master",
+  "master_remote_base": "011a94b6f8c7475b16f850d17a8effe583418036",
+  "merged_branch_tips": {
+    "amebad-aws-ota": "2da5d22e39fcf34da1e5f24d98667d0efb3124a6",
+    "test/bl618dg-native-whc-usb": "744a87c3caa7694ee6749d22acfe14db457ee45b"
+  },
+  "integration": [
+    "Preserve BLE OOB and shared FreeRTOS NAN host, USB and sleep profiles",
+    "Separate internal OOB-open and standby event IDs",
+    "Reject incompatible BLE application, power and USB profiles",
+    "Retain credential-bound atomic pairing cache and NP peer/NDC cleanup",
+    "Include SHA-256 vector function declaration for both ARM and RISC-V compilers"
+  ],
+  "native_tests": {
+    "sanitizers": [
+      "address",
+      "undefined"
+    ],
+    "passed": 14,
+    "failed": 0
+  },
+  "additional_tests": {
+    "native_whc_codec_100000_malformed_frames": "passed",
+    "pairing_journal_reboot_and_power_cuts": "passed",
+    "oob_incompatible_profile_guards": {
+      "passed": 4,
+      "failed": 0
+    }
+  },
+  "green2_builds": [
+    {
+      "profile": "standalone",
+      "firmware_bytes": 896384,
+      "sha256": "071d603fb0e305a4a0530cd3d1d3b8d222ec35d1c6f70552a26720bc4d62d126",
+      "profile_symbols_present": true,
+      "np_ndc_cleanup_wrappers_present": true
+    },
+    {
+      "profile": "deep-sleep",
+      "firmware_bytes": 899072,
+      "sha256": "26f21f6ddbef5836408371c078a018f7d38328703d4adb39a8e28ff76b318fe5",
+      "profile_symbols_present": true,
+      "np_ndc_cleanup_wrappers_present": true
+    },
+    {
+      "profile": "ble-oob",
+      "firmware_bytes": 1008544,
+      "sha256": "22b8fbd63c41a09daccfed31d3cc45c953102e9b4e421eeb5bd6298d00d7caa0",
+      "profile_symbols_present": true,
+      "np_ndc_cleanup_wrappers_present": true
+    },
+    {
+      "profile": "ble-wake",
+      "firmware_bytes": 1019200,
+      "sha256": "a519436150e8e2248bfc0832cf7a03f68a897d0444970cbb241ef9b8a0f33439",
+      "profile_symbols_present": true,
+      "np_ndc_cleanup_wrappers_present": true
+    },
+    {
+      "profile": "usb-bridge",
+      "firmware_bytes": 785856,
+      "sha256": "3bcb1c1f5b92ad9fa4a874c2698252a520c5467193004bf2850e705498253ff1",
+      "profile_symbols_present": true,
+      "np_ndc_cleanup_wrappers_present": true
+    }
+  ],
+  "bl618dg_builds": {
+    "toolchain": "Zephyr SDK 1.0.1 / GCC 14.3.0 / picolibc",
+    "native_whc_usb": "passed",
+    "custom_usb_bridge": "passed"
+  },
+  "hardware_validation": {
+    "flashed_merged_firmware": false,
+    "automatic_deep_sleep_cycle": "pending",
+    "reason": "COM5 still runs the pre-fix ff1b90cf firmware; latest phone setup was not persisted by that firmware"
+  },
+  "private_logs": "build/nan-merge-master-20261118/"
+}

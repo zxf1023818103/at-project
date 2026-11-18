@@ -64,6 +64,11 @@ static struct hci_transport_cb callbacks = { .recv = receive };
 
 void nimble_platform_controller_bringup(void)
 {
+#ifdef AT_GREEN2_BLE_SLEEP
+    extern void hci_platform_set_tx_power_gain_index(uint32_t);
+    /* Controller gain configuration uses 0.5 dBm units: 0x10 = 8 dBm. */
+    hci_platform_set_tx_power_gain_index(0x10);
+#endif
     configASSERT(hci_controller_open());
 }
 void ble_transport_ll_init(void) {}

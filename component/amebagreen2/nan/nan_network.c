@@ -1,5 +1,6 @@
 #include "nan_network.h"
 #include "nan_tcp_protocol.h"
+#include "nan_platform.h"
 #include "at_netif.h"
 #include "FreeRTOS_IP_Private.h"
 #include "FreeRTOS_ND.h"
@@ -8,8 +9,6 @@
 #include <string.h>
 #include <stdio.h>
 #include <inttypes.h>
-struct eth_drv_sg;
-extern int whc_ipc_host_send(int, struct eth_drv_sg *, int, int, void *, uint8_t);
 static NetworkInterface_t iface;
 static NetworkEndPoint_t endpoint;
 static uint8_t own_mac[6], data_mac[6];
@@ -21,6 +20,42 @@ static unsigned rx_count, tx_count, requests, uploads, downloads, protocol_error
 static unsigned rx_dropped, tx_dropped;
 static TickType_t link_started;
 static uint32_t syn_rx_ms, syn_tx_ms;
+
+#ifdef AT_NAN_AUTO_SLEEP
+#define NAN_AUTO_STANDBY_MS 5000u
+static volatile BaseType_t autosleep_armed;
+static TickType_t transfer_finished;
+extern int green2_nan_request_standby(void);
+
+void green2_nan_net_autosleep_reset(void)
+{
+    taskENTER_CRITICAL();
+    autosleep_armed = pdFALSE;
+    taskEXIT_CRITICAL();
+}
+
+static BaseType_t autosleep_due(void)
+{
+    taskENTER_CRITICAL();
+    BaseType_t due = autosleep_armed &&
+        (TickType_t)(xTaskGetTickCount() - transfer_finished) >= pdMS_TO_TICKS(NAN_AUTO_STANDBY_MS);
+    taskEXIT_CRITICAL();
+    return due;
+}
+
+/* Called only by the TCP owner, after its client socket has been drained and
+ * closed. NAN's owner performs radio shutdown through the existing queue. */
+static void autosleep_poll(void)
+{
+    if (!autosleep_due()) return;
+    unsigned elapsed = (xTaskGetTickCount() - transfer_finished) * portTICK_PERIOD_MS;
+    if (!green2_nan_request_standby()) {
+        green2_nan_net_autosleep_reset();
+        printf("[NAN] auto standby queued after transfer idle_ms=%u up=%u down=%u err=%u\n",
+               elapsed, uploads, downloads, protocol_errors);
+    }
+}
+#endif
 
 #ifdef AT_NAN_NET_DIAG
 /* Bounded metadata only: no payloads, allocation or printing on the RX/IP tasks.
@@ -134,11 +169,10 @@ static BaseType_t output(NetworkInterface_t *i, NetworkBufferDescriptor_t *b, Ba
 {
     (void)i; BaseType_t rc = pdFALSE;
     if (link_up && b && b->xDataLength <= 1514) {
-        struct { unsigned int buf, len; } sg = {(unsigned int)b->pucEthernetBuffer, b->xDataLength};
 #ifdef AT_NAN_NET_DIAG
         TickType_t before = xTaskGetTickCount();
 #endif
-        rc = whc_ipc_host_send(2, (struct eth_drv_sg *)&sg, 1, b->xDataLength, NULL, 0) == 0 ? pdTRUE : pdFALSE;
+        rc = green2_nan_send(b->pucEthernetBuffer, b->xDataLength) == 0 ? pdTRUE : pdFALSE;
 #ifdef AT_NAN_NET_DIAG
         if (rc) diag_packet(b->pucEthernetBuffer, b->xDataLength, pdTRUE,
                             before, xTaskGetTickCount() - before);
@@ -163,6 +197,9 @@ void green2_nan_net_init(void)
 void green2_nan_net_up(const uint8_t own[6], const uint8_t peer[6], const uint8_t iid[8])
 {
     taskENTER_CRITICAL();
+#ifdef AT_NAN_AUTO_SLEEP
+    autosleep_armed = pdFALSE;
+#endif
     memcpy(data_mac, own, 6); memcpy(peer_mac.ucBytes, peer, 6);
     memset(&peer_ip, 0, sizeof(peer_ip)); peer_ip.ucBytes[0] = 0xfe; peer_ip.ucBytes[1] = 0x80;
     memcpy(peer_ip.ucBytes + 8, iid, 8);
@@ -213,6 +250,9 @@ void green2_nan_rx(const void *data, size_t len)
 struct tcp_client {
     Socket_t socket;
     uint32_t generation;
+#ifdef AT_NAN_AUTO_SLEEP
+    BaseType_t waiting_command;
+#endif
 };
 static uint32_t tcp_now_ms(void *context)
 {
@@ -224,9 +264,22 @@ static int tcp_io(struct tcp_client *client, void *data, size_t size,
 {
     uint32_t started = tcp_now_ms(NULL);
     while (link_up && client->generation == link_generation) {
+#ifdef AT_NAN_AUTO_SLEEP
+        /* Only the first read of a new command may time out into standby.
+         * An in-progress header/payload is governed by the protocol deadline.
+         * TX size includes unacknowledged bytes, so the final JSON cannot be
+         * discarded just because send() accepted it into the TCP buffer. */
+        if (!sending && client->waiting_command && autosleep_due() &&
+            FreeRTOS_tx_size(client->socket) == 0 && FreeRTOS_rx_size(client->socket) == 0)
+            return -1;
+#endif
         uint32_t elapsed = tcp_now_ms(NULL) - started;
         if (elapsed >= timeout_ms) break;
         uint32_t left = timeout_ms - elapsed;
+#ifdef AT_NAN_AUTO_SLEEP
+        if (!sending && client->waiting_command && autosleep_armed && left > 100u)
+            left = 100u;
+#endif
         /* Recheck NDP identity at least once a second during stalled I/O. */
         TickType_t ticks = pdMS_TO_TICKS(left < 1000u ? left : 1000u);
         if (!ticks) ticks = 1;
@@ -237,6 +290,12 @@ static int tcp_io(struct tcp_client *client, void *data, size_t size,
 #endif
         BaseType_t n = sending ? FreeRTOS_send(client->socket, data, size, 0) :
                                  FreeRTOS_recv(client->socket, data, size, 0);
+#ifdef AT_NAN_AUTO_SLEEP
+        if (n > 0 && !sending && client->waiting_command) {
+            client->waiting_command = pdFALSE;
+            green2_nan_net_autosleep_reset();
+        }
+#endif
 #ifdef AT_NAN_NET_DIAG
         if (sending && net_diag.active) {
             uint32_t cost = tcp_now_ms(NULL) - before;
@@ -286,20 +345,37 @@ static void server(void *arg)
     }
     printf("[NAN] FreeRTOS TCP port 8000 ready (PING + NAN-THROUGHPUT/1)\n");
     for (;;) {
+#ifdef AT_NAN_AUTO_SLEEP
+        /* Poll only while a completed transfer has an idle timer. Keeping
+         * the listener blocked during BLE standby preserves long PG sleeps. */
+        TickType_t accept_timeout = autosleep_armed ? pdMS_TO_TICKS(100) : portMAX_DELAY;
+        FreeRTOS_setsockopt(listener, 0, FREERTOS_SO_RCVTIMEO, &accept_timeout, sizeof(accept_timeout));
+#endif
         struct freertos_sockaddr peer = {0}; socklen_t peerlen = sizeof(peer);
         Socket_t client = FreeRTOS_accept(listener, &peer, &peerlen);
-        if (client == FREERTOS_INVALID_SOCKET) continue;
+        if (client == NULL || client == FREERTOS_INVALID_SOCKET) {
+#ifdef AT_NAN_AUTO_SLEEP
+            autosleep_poll();
+#endif
+            continue;
+        }
         printf("[NAN] TCP accepted peer_match=%u link=%ld\n", !memcmp(peer.sin_address.xIP_IPv6.ucBytes, peer_ip.ucBytes, 16), (long)link_up);
         if (!link_up || memcmp(peer.sin_address.xIP_IPv6.ucBytes, peer_ip.ucBytes, 16)) {
             FreeRTOS_closesocket(client); continue;
         }
+#ifdef AT_NAN_AUTO_SLEEP
+        green2_nan_net_autosleep_reset();
+#endif
         printf("[NAN] link age=%lu ms first SYN rx=%lu tx=%lu ms\n",
             (unsigned long)((xTaskGetTickCount() - link_started) * portTICK_PERIOD_MS),
             (unsigned long)syn_rx_ms, (unsigned long)syn_tx_ms);
-        struct tcp_client context = {client, link_generation};
+        struct tcp_client context = {.socket = client, .generation = link_generation};
         const struct green2_nan_tcp_io io = {&context, tcp_read, tcp_write, tcp_now_ms};
         for (;;) {
             struct green2_nan_tcp_stats stats;
+#ifdef AT_NAN_AUTO_SLEEP
+            context.waiting_command = pdTRUE;
+#endif
 #ifdef AT_NAN_NET_DIAG
             diag_begin();
 #endif
@@ -320,6 +396,14 @@ static void server(void *arg)
             }
             if (result == GREEN2_NAN_TCP_UPLOAD) ++uploads;
             else ++downloads;
+#ifdef AT_NAN_AUTO_SLEEP
+            taskENTER_CRITICAL();
+            if (link_up && context.generation == link_generation) {
+                transfer_finished = xTaskGetTickCount();
+                autosleep_armed = pdTRUE;
+            }
+            taskEXIT_CRITICAL();
+#endif
             uint64_t kbps = stats.bytes * 8u / stats.elapsed_ms;
             printf("[NAN] throughput %s bytes=%" PRIu64 " ms=%lu Mbps=%" PRIu64 ".%03" PRIu64 "\n",
                 result == GREEN2_NAN_TCP_UPLOAD ? "upload" : "download", stats.bytes,
@@ -342,6 +426,9 @@ static void server(void *arg)
             if (FreeRTOS_recv(client, discard, sizeof(discard), 0) < 0) break;
             vTaskDelay(pdMS_TO_TICKS(10));
         }
+#ifdef AT_NAN_AUTO_SLEEP
+        if (FreeRTOS_tx_size(client) != 0) green2_nan_net_autosleep_reset();
+#endif
         FreeRTOS_closesocket(client);
     }
 }

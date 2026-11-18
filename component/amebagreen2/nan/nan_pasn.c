@@ -5,6 +5,7 @@
 #include "common/nan_defs.h"
 #include "common/sae.h"
 #include "common/wpa_common.h"
+#include "crypto/crypto.h"
 #include "crypto/sha256.h"
 #include "pasn/pasn_common.h"
 
@@ -74,9 +75,9 @@ struct bridge {
 	size_t auth1_len, auth2_len;
 	struct os_reltime auth1_started;
 	bool keys_installed;
-    u8 setup_password_hash[32];
+	u8 setup_password_hash[32];
 #ifdef AT_NAN_BLE_OOB
-    uint32_t oob_generation;
+	uint32_t oob_generation;
 #endif
 };
 
@@ -299,7 +300,7 @@ static void reset_session(struct bridge *b)
 	b->auth2_sent = 0;
 	b->auth1_len = b->auth2_len = 0;
 	b->keys_installed = false;
-    forced_memzero(b->setup_password_hash, sizeof(b->setup_password_hash));
+	forced_memzero(b->setup_password_hash, sizeof(b->setup_password_hash));
 	memset(b->auth1_frame, 0, sizeof(b->auth1_frame));
 	memset(b->auth2_frame, 0, sizeof(b->auth2_frame));
 	b->pairing_type = 0;
@@ -540,9 +541,9 @@ static int on_start(struct bridge *b, const void *data, size_t len)
 	pasn_set_wpa_key_mgmt(b->pasn, WPA_KEY_MGMT_SAE);
 	pasn_enable_kdk_derivation(b->pasn);
 	if (e.pairing_type == PAIRING_SETUP) {
-        const u8 *parts[] = { &e.pass_len, (const u8 *)password };
-        size_t lengths[] = { 1, e.pass_len };
-        if (sha256_vector(2, parts, lengths, b->setup_password_hash)) goto done;
+		const u8 *parts[] = { &e.pass_len, (const u8 *)password };
+		size_t lengths[] = { 1, e.pass_len };
+		if (sha256_vector(2, parts, lengths, b->setup_password_hash)) goto done;
 		b->pt = sae_derive_pt(b->pasn->pasn_groups,
 				      (const u8 *) NAN_PASN_SSID,
 				      strlen(NAN_PASN_SSID),
@@ -669,12 +670,14 @@ int green2_pasn_cache_update(const void *data, size_t len, unsigned char peer_in
     if (next.version != 1 || memcmp(next.own_nik, persistent.nik.own_nik, 16)) {
         printf("[NAN] cache rejected: version=%u own_identity_changed=%u\n", next.version,
                !!memcmp(next.own_nik, persistent.nik.own_nik, 16));
+        forced_memzero(&next, sizeof(next));
         return -1;
     }
     int index = -1;
     for (unsigned i = 0; i < 8; ++i) {
         if (next.entries[i].pass_len > PASS_MAX) {
             printf("[NAN] cache rejected: invalid password length entry=%u\n", i);
+            forced_memzero(&next, sizeof(next));
             return -1;
         }
         /* Lifetime zero is unlimited, as used by iOS. auth/role mark occupancy. */
@@ -682,9 +685,8 @@ int green2_pasn_cache_update(const void *data, size_t len, unsigned char peer_in
             next.entries[i].auth == 1 && next.entries[i].role == 2 &&
             next.entries[i].peer_inst == peer_instance) {
             /* Service instance IDs are peer-local and reused on re-pairing.
-             * Only bind the new NPK to a driver-authenticated NIK cache entry
-             * carrying the password from this successful SAE setup. Never
-             * choose the first record solely by instance number. */
+             * Bind only to a driver-authenticated identity carrying the
+             * credential from this successful SAE setup, never the first ID. */
             u8 digest[32];
             const u8 *parts[] = { &next.entries[i].pass_len, next.entries[i].pass };
             size_t lengths[] = { 1, next.entries[i].pass_len };
@@ -694,6 +696,7 @@ int green2_pasn_cache_update(const void *data, size_t len, unsigned char peer_in
             if (!match) continue;
             if (index >= 0) {
                 printf("[NAN] cache rejected: ambiguous authenticated credential instance=%u\n", peer_instance);
+                forced_memzero(&next, sizeof(next));
                 return -1;
             }
             index = i;
@@ -722,4 +725,16 @@ void green2_pasn_stop(void)
     reset_session(&state);
     if (state.pmksa) pasn_responder_pmksa_cache_deinit(state.pmksa);
     state.pmksa = NULL;
+}
+void green2_pasn_pause(void)
+{
+    reset_session(&state);
+}
+int green2_pasn_resume(void)
+{
+    if (!state.pmksa || memcmp(persistent.magic, "GNP1", 4) ||
+        persistent.nik.version != 1) return -1;
+    /* Radio stop removes peer state. Restore only its identity cache from RAM;
+     * a new PASN exchange must authorize the next NDP. No flash reload or init. */
+    return green2_nan_vendor(0x190a, &persistent.nik, sizeof(persistent.nik));
 }

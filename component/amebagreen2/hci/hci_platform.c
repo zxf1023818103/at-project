@@ -417,7 +417,12 @@ bool rtk_bt_pre_enable(void)
 		return false;
 	}
 
+#ifdef AT_ENABLE_NAN
+	/* The NAN radio/IPC ABI renamed this shared BT calibration PS gate. */
+	wifi_ps_en_by_bt_state(DISABLE);
+#else
 	wifi_ps_en_by_bt_on(DISABLE);
+#endif
 #endif
 
 	return true;
@@ -426,7 +431,11 @@ bool rtk_bt_pre_enable(void)
 void rtk_bt_post_enable(void)
 {
 #if defined(CONFIG_WLAN) && CONFIG_WLAN
+#ifdef AT_ENABLE_NAN
+	wifi_ps_en_by_bt_state(ENABLE);
+#else
 	wifi_ps_en_by_bt_on(ENABLE);
+#endif
 #endif
 }
 
